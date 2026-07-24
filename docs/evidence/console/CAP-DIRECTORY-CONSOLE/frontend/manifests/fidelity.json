@@ -18,15 +18,16 @@
     "법인 count stat (design '법인 4'): no entity-enumeration endpoint and distinct-of-loaded-page would misstate the org (GAP-DIR-4 half: 임직원 total is live via EmployeePage.total)",
     "화면 구성(cfg)/시트로 열기 header buttons, 출입카드 toggle, 평가 RV- rows, 최근 업무·KPI, 민감정보 collapsed section, 인사 관리 모드, 휴대폰 inline edit: backend surfaces absent — controls omitted (no dead controls) and left to their owning charters",
     "employee rows have no 메시지 CTA (no user id on Employee — would require the forbidden name join)",
-    "employee headers are not sortable: server pages the register, and client-sorting a partial page would imply a global order (members, a complete branch set, sort client-side)"
+    "employee headers are not sortable: server pages the register, and client-sorting a partial page would imply a global order (members, a complete branch set, sort client-side)",
+    "member roster is a single page (limit 100): /api/messenger/members exposes no offset/total, so a branch beyond 100 members truncates silently and the 구성원 stat counts the loaded roster — same documented ceiling as composer/candidates.ts (GAP-DIR-5: roster paging/total is a backend charter)"
   ],
   "tests": {
-    "suite": "web/src/console/directory/DirectoryScreen.test.tsx (18 pass) — mocked at the typed ConsoleApiClient transport boundary (exemplar convention)",
-    "topology": ["denied-before-fetch (zero calls)", "audited person open + audit chip", "self view without audit/CTA", "404 no-leak blocked state", "DM via real endpoint + thread hand-off", "DM failure retry", "roster error retry", "roster 403 = denial not error", "empty + clear filter", "keyboard arrows + j/k", "stale person-card fencing", "HR surfaces absent for member tier (zero HR calls)", "HR register + lifecycle history + server company drill", "server-denied HR enhancement dropped", "selection restore + persistence callback", "drag ref-token payload", "capability derivation", "copy stays in i18n resource"],
+    "suite": "web/src/console/directory/DirectoryScreen.test.tsx (21 pass) — mocked at the typed ConsoleApiClient transport boundary (exemplar convention)",
+    "topology": ["denied-before-fetch (zero calls)", "audited person open + audit chip", "self view without audit/CTA", "404 no-leak blocked state", "DM via real endpoint + thread hand-off", "DM failure retry", "roster error retry", "roster 403 = denial not error", "empty + clear filter", "keyboard arrows + j/k", "stale person-card fencing", "HR surfaces absent for member tier (zero HR calls)", "HR register + lifecycle history + server company drill", "server-denied HR enhancement dropped", "selection restore + persistence callback", "employee restore through loading into card", "denied register clears employee selection + URL key", "register failure surfaced on the selected card + retry", "drag ref-token payload", "capability derivation", "copy stays in i18n resource"],
     "responsive": "CSS-level (flex-wrap panels, minmax+ellipsis grid, 720px media query) — not assertable in jsdom; browser pass owed at exposure review"
   },
   "verification": {
-    "vitest": "18/18 pass (npx vitest run src/console/directory)",
+    "vitest": "21/21 pass (npx vitest run src/console/directory)",
     "eslint": "clean (npx eslint src/console/directory src/i18n/directory.ts)",
     "tsc": "clean (npx tsc --noEmit, exit 0)",
     "check-console-purity": "clean (402 files)",

@@ -303,11 +303,13 @@ function DirectoryScreenInstance({
   }, [onPersonKeyChange, selected]);
 
   // A selected employee that the (re)loaded, server-filtered register no longer
-  // contains is no longer addressable — selection follows the authorized list.
+  // contains — or that a server-denied register can no longer address — is no
+  // longer selectable; selection follows the authorized list.
   useEffect(() => {
-    if (employeesState !== "ready") return;
+    if (employeesState !== "ready" && employeesState !== "denied") return;
     setSelected((current) => {
       if (current?.kind !== "employee") return current;
+      if (employeesState === "denied") return undefined;
       return employeesRef.current.some((row) => row.id === current.id) ? current : undefined;
     });
   }, [employees, employeesState]);
@@ -435,10 +437,11 @@ function DirectoryScreenInstance({
             <button type="button" aria-label={text.removeFilter} onClick={() => { setCompanyFilter(undefined); }}>×</button>
           </span>
         ) : null}
-        <label className="dir-search" aria-label={text.search}>
+        <label className="dir-search">
           <input
             ref={searchRef}
             value={query}
+            aria-label={text.search}
             placeholder={text.search}
             onChange={(event) => { setQuery(event.target.value); }}
           />
@@ -630,6 +633,17 @@ function DirectoryScreenInstance({
                 </>
               ) : null}
             </>
+          ) : null}
+
+          {selected?.kind === "employee" && !selectedEmployee ? (
+            employeesState === "error" ? (
+              <div className="dir-alert" role="alert">
+                <p>{text.detailError}</p>
+                <button type="button" className="dir-ghost" onClick={() => { void loadEmployees(false, query, companyFilter); }}>{text.retry}</button>
+              </div>
+            ) : employeesState !== "ready" ? (
+              <p className="dir-state" role="status">{text.detailLoading}</p>
+            ) : null
           ) : null}
 
           {selectedEmployee ? (

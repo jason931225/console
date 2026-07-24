@@ -44,7 +44,12 @@ function requireData<T>(response: { data?: T; error?: unknown; response: Respons
 /** Directory transport bound to the authenticated ConsoleApiClient. */
 export function createDirectoryApi(api: ConsoleApiClient) {
   return {
-    /** Branch member roster — the non-privileged people surface (id/name/team only). */
+    /**
+     * Branch member roster — the non-privileged people surface (id/name/team
+     * only). Single page: the endpoint has no offset/total, so a branch beyond
+     * `limit` truncates silently (same documented ceiling as
+     * `composer/candidates.ts`; paging is a backend charter, GAP-DIR-5).
+     */
     listMembers: async (branchId: string, signal?: AbortSignal) => {
       const response = await api.GET("/api/messenger/members", {
         params: { query: { branch_id: branchId, limit: 100 } },

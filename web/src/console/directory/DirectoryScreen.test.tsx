@@ -317,6 +317,38 @@ describe("DirectoryScreen", () => {
     });
   });
 
+  it("restores an employee selection through a truthful loading state into the card", async () => {
+    let resolveEmployees!: (value: unknown) => void;
+    const page = new Promise((resolve) => { resolveEmployees = resolve; });
+    const api = makeApi({ "/api/v1/employees": () => page });
+    renderScreen(api, FULL_CAPS, { initialPersonKey: `e:${EMP}` });
+    expect(await screen.findByText(text.detailLoading)).toBeVisible();
+    resolveEmployees({ response: new Response(), data: { items: [employee], total: 1, limit: 100, offset: 0 } });
+    expect(await screen.findByText(employee.hire_date)).toBeVisible();
+    expect(await screen.findByText(text.event.TRANSFER)).toBeVisible();
+  });
+
+  it("clears a restored employee selection when the server denies the register", async () => {
+    const api = makeApi({ "/api/v1/employees": () => fail(403) });
+    const onPersonKeyChange = vi.fn();
+    renderScreen(api, FULL_CAPS, { initialPersonKey: `e:${EMP}`, onPersonKeyChange });
+    expect(await screen.findByText(text.detailEmpty)).toBeVisible();
+    await waitFor(() => { expect(onPersonKeyChange).toHaveBeenCalledWith(undefined); });
+  });
+
+  it("surfaces a register failure on the selected employee card and recovers through retry", async () => {
+    let calls = 0;
+    const api = makeApi({
+      "/api/v1/employees": () =>
+        (calls++ === 0 ? fail(500) : ok({ items: [employee], total: 1, limit: 100, offset: 0 })),
+    });
+    renderScreen(api, FULL_CAPS, { initialPersonKey: `e:${EMP}` });
+    expect(await screen.findByText(text.detailError)).toBeVisible();
+    const retries = screen.getAllByRole("button", { name: text.retry });
+    fireEvent.click(retries[retries.length - 1]);
+    expect(await screen.findByText(employee.hire_date)).toBeVisible();
+  });
+
   it("attaches a draggable reference token to every row", async () => {
     const api = makeApi();
     renderScreen(api, FULL_CAPS);

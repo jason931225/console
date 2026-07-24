@@ -20,7 +20,6 @@
     "loadMore": "더 보기",
     "sortHint": "클릭 = 정렬",
     "rowHint": "클릭: 상세 · 드래그: 입력창에 참조 첨부",
-    "companyFilterLabel": "법인 필터",
     "removeFilter": "필터 제거",
     "cols.code": "사번",
     "cols.name": "이름",
