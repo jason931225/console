@@ -271,7 +271,7 @@ fn idem(key: &str) -> Result<(), PgLogisticsError> {
 fn fingerprint(v: &Value) -> String {
     let mut h = Sha256::new();
     h.update(v.to_string());
-    format!("{:x}", h.finalize())
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 fn audit(
     org: OrgId,
