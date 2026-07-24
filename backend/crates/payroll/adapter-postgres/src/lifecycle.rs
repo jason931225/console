@@ -409,6 +409,7 @@ fn json_internal(err: serde_json::Error) -> LifecycleError {
 // Calculation
 // ---------------------------------------------------------------------------
 
+#[derive(PartialEq, Eq)]
 struct SourceAmounts {
     gross_won: i64,
     pension_standard_monthly_income_won: Option<i64>,
@@ -421,6 +422,21 @@ struct SourceAmounts {
 /// `payroll.pension_standard_monthly_income_won` (optional),
 /// `payroll.nts_tax_row.{table_version, monthly_income_tax_won,
 /// local_income_tax_won}` — all figures verbatim from the verified source.
+/// Deterministically choose the payroll figures among a line's linked
+/// canonical rows. Byte-identical duplicates (re-imports of the same source)
+/// are fine; two DIFFERENT figure sets for one line mean the figure to pay is
+/// ambiguous — a truthful blocker, never an arbitrary row-order pick.
+fn select_source_amounts(canonical_rows: &[Value]) -> Result<SourceAmounts, &'static str> {
+    let mut found = canonical_rows.iter().filter_map(extract_source_amounts);
+    let Some(first) = found.next() else {
+        return Err("SOURCE_AMOUNTS_NOT_MATERIALIZED");
+    };
+    if found.any(|other| other != first) {
+        return Err("SOURCE_AMOUNTS_CONFLICTING");
+    }
+    Ok(first)
+}
+
 fn extract_source_amounts(canonical_row: &Value) -> Option<SourceAmounts> {
     let payroll = canonical_row.get("payroll")?;
     let tax = payroll.get("nts_tax_row")?;
@@ -516,12 +532,13 @@ pub async fn calculate_run_in_tx(
                     .fetch_all(tx.as_mut())
                     .await?
             };
-            amounts = canonical_rows.iter().find_map(extract_source_amounts);
-            if amounts.is_none() {
-                // The readiness flags promised a verified source but the
-                // linked ledger rows carry no payroll figures — truthful
-                // blocker, never an estimate.
-                blockers.push("SOURCE_AMOUNTS_NOT_MATERIALIZED".to_owned());
+            // The readiness flags promised a verified source; if the linked
+            // ledger rows carry no payroll figures (NOT_MATERIALIZED) or two
+            // different figure sets (CONFLICTING), that is a truthful blocker
+            // — never an estimate, never an arbitrary pick.
+            match select_source_amounts(&canonical_rows) {
+                Ok(selected) => amounts = Some(selected),
+                Err(blocker) => blockers.push(blocker.to_owned()),
             }
         }
 
@@ -1353,4 +1370,55 @@ pub async fn payslip_delivery_in_tx(
         limit,
         offset,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn payroll_row(gross: i64, income_tax: i64) -> Value {
+        json!({
+            "payroll": {
+                "monthly_gross_pay_won": gross,
+                "nts_tax_row": {
+                    "table_version": "v1",
+                    "monthly_income_tax_won": income_tax,
+                    "local_income_tax_won": income_tax / 10,
+                },
+            },
+        })
+    }
+
+    #[test]
+    fn source_amount_selection_is_deterministic_and_fail_closed() {
+        // No payroll-bearing row → truthful blocker.
+        assert_eq!(
+            select_source_amounts(&[]).err(),
+            Some("SOURCE_AMOUNTS_NOT_MATERIALIZED")
+        );
+        assert_eq!(
+            select_source_amounts(&[json!({"attendance": {}})]).err(),
+            Some("SOURCE_AMOUNTS_NOT_MATERIALIZED")
+        );
+
+        // Byte-identical duplicates (re-import of the same source) are fine.
+        let selected = select_source_amounts(&[
+            json!({"attendance": {}}),
+            payroll_row(3_000_000, 74_350),
+            payroll_row(3_000_000, 74_350),
+        ])
+        .unwrap();
+        assert_eq!(selected.gross_won, 3_000_000);
+        assert_eq!(selected.tax_row.monthly_income_tax_won, 74_350);
+
+        // Two DIFFERENT figure sets → ambiguity is a blocker, never a pick.
+        assert_eq!(
+            select_source_amounts(&[
+                payroll_row(3_000_000, 74_350),
+                payroll_row(3_100_000, 74_350)
+            ])
+            .err(),
+            Some("SOURCE_AMOUNTS_CONFLICTING")
+        );
+    }
 }
