@@ -12256,6 +12256,7 @@ buildscript_run(
     package_name = "openssl-sys",
     buildscript_rule = ":openssl-sys-0.9-build-script-main",
     env = {
+        "CARGO_MAKEFLAGS": "-j4",
         "CARGO_MANIFEST_LINKS": "openssl",
         "CARGO_PKG_AUTHORS": "Alex Crichton <alex@alexcrichton.com>:Steven Fackler <sfackler@gmail.com>",
         "CARGO_PKG_DESCRIPTION": "FFI bindings to OpenSSL",

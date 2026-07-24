@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Behavior locks for the repository-owned Reindeer bootstrap and closures."""
 
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -61,9 +62,39 @@ class ReindeerBootstrapTests(unittest.TestCase):
         graph = self.read("third-party/rust/BUCK")
 
         self.assertIn('openssl = { version = "0.10.80", features = ["vendored"] }', auth_manifest)
-        self.assertIn("OPENSSL_RUST_USE_NASM = \"0\"", openssl_sys)
-        self.assertIn("rustc_link_lib = true", openssl_sys)
-        self.assertIn("rustc_link_search = true", openssl_sys)
+        self.assertEqual(
+            tomllib.loads(openssl_sys)["buildscript"]["run"],
+            {
+                "env": {
+                    "CARGO_MAKEFLAGS": "-j4",
+                    "OPENSSL_RUST_USE_NASM": "0",
+                },
+                "rustc_link_lib": True,
+                "rustc_link_search": True,
+            },
+        )
+        openssl_sys_run = graph.split(
+            'name = "openssl-sys-0.9-build-script-main-run",', 1
+        )[1].split("    features = [", 1)[0]
+        generated_env = openssl_sys_run.split("    env = ", 1)[1]
+        self.assertEqual(
+            generated_env,
+            '{\n'
+            '        "CARGO_MAKEFLAGS": "-j4",\n'
+            '        "CARGO_MANIFEST_LINKS": "openssl",\n'
+            '        "CARGO_PKG_AUTHORS": "Alex Crichton <alex@alexcrichton.com>:Steven Fackler <sfackler@gmail.com>",\n'
+            '        "CARGO_PKG_DESCRIPTION": "FFI bindings to OpenSSL",\n'
+            '        "CARGO_PKG_HOMEPAGE": "",\n'
+            '        "CARGO_PKG_README": "README.md",\n'
+            '        "CARGO_PKG_REPOSITORY": "https://github.com/rust-openssl/rust-openssl",\n'
+            '        "CARGO_PKG_RUST_VERSION": "1.80.0",\n'
+            '        "CARGO_PKG_VERSION_MAJOR": "0",\n'
+            '        "CARGO_PKG_VERSION_MINOR": "9",\n'
+            '        "CARGO_PKG_VERSION_PATCH": "116",\n'
+            '        "CARGO_PKG_VERSION_PRE": "",\n'
+            '        "OPENSSL_RUST_USE_NASM": "0",\n'
+            "    },\n",
+        )
         self.assertIn('name = "openssl-src-300.6.1+3.6.3.crate"', graph)
         self.assertIn('name = "openssl-src-300"', graph)
         self.assertIn('osslconf="OPENSSL_NO_IDEA"', openssl)
