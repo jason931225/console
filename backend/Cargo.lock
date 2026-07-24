@@ -3462,6 +3462,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "mnt-evaluation-application"
+version = "0.1.0"
+dependencies = [
+ "mnt-evaluation-domain",
+ "mnt-kernel-core",
+ "serde",
+ "serde_json",
+ "time",
+ "uuid",
+]
+
+[[package]]
+name = "mnt-evaluation-domain"
+version = "0.1.0"
+dependencies = [
+ "mnt-kernel-core",
+ "serde",
+ "time",
+ "uuid",
+]
+
+[[package]]
 name = "mnt-facilities-rest"
 version = "0.1.0"
 dependencies = [
