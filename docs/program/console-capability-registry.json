@@ -343,9 +343,11 @@
     "CAP-SHARED-ONTOLOGY-WORKFLOW"
    ],
    "owner": "console-compliance",
-   "worktree": null,
-   "branch": null,
-   "commits": [],
+   "worktree": "/private/tmp/compliance-catalog-lifecycle-20260724",
+   "branch": "codex/compliance-catalog-lifecycle-20260724",
+   "commits": [
+    "25f6b8e0"
+   ],
    "integration_commits": [],
    "lane_assignments": {
     "backend": {
@@ -421,7 +423,8 @@
     "/api/v1/compliance/regulations",
     "/api/v1/compliance/frameworks",
     "/api/v1/compliance/controls",
-    "/api/v1/compliance/evidence-bindings"
+    "/api/v1/compliance/evidence-bindings",
+    "/api/v1/compliance/evidence-bindings/{id}/accept"
    ],
    "signature_story": {
     "id": "STORY-COMPLIANCE-001",
@@ -431,24 +434,33 @@
    "tests": {
     "files": [
      "web/src/console/compliance/ComplianceModuleScreenBody.test.tsx",
-     "backend/app/tests/compliance_catalog_api.rs"
+     "backend/app/tests/compliance_catalog_api.rs",
+     "web/src/console/compliance/EvidenceBindingWorkbench.test.tsx",
+     "web/src/console/compliance/complianceApi.test.ts",
+     "clients/ts/test/compliance-evidence-accept.contract.test.ts",
+     "scripts/check-compliance-catalog-openapi-contract.test.mjs",
+     "backend/crates/compliance/adapter-postgres/tests/location_store.rs",
+     "backend/crates/compliance/adapter-postgres/tests/location_consent_status_rls_as_runtime_role.rs"
     ],
     "leaf_commands": [
-     "npm --prefix web run test -- src/console/compliance/ComplianceModuleScreenBody.test.tsx",
-     "node web/scripts/check-ui-strings.mjs",
-     "npm run web:lint",
-     "npm run web:build",
+     "npm --workspace web test -- --run src/console/compliance/EvidenceBindingWorkbench.test.tsx src/console/compliance/complianceApi.test.ts",
+     "npm run test:api-client-contract:ts",
+     "node --test scripts/check-compliance-catalog-openapi-contract.test.mjs",
+     "npm run check:ts",
+     "npm run check:api-drift:portable",
+     "npm run check:api-drift:swift",
+     "rustfmt --edition 2024 --check backend/crates/compliance/adapter-postgres/tests/location_store.rs backend/crates/compliance/adapter-postgres/tests/location_consent_status_rls_as_runtime_role.rs",
      "git diff --check"
     ],
     "buck2_targets": []
    },
    "state": {
-    "design_contract": "research_mapped",
-    "backend": "writer_assigned_store_exists_rest_missing",
-    "frontend": "writer_assigned_production_stubs_present",
-    "e2e": "missing",
-    "runtime": "blocked",
-    "independent_review": "missing",
+    "design_contract": "openapi_and_generated_clients_updated_pending_integrated_review",
+    "backend": "evidence_accept_lifecycle_and_tenant_race_coverage_implemented_pending_central_buck",
+    "frontend": "typed_accept_action_authority_and_session_fences_implemented_pending_integrated_review",
+    "e2e": "component_and_contract_coverage_expanded_runtime_postgres_target_pending_central_buck",
+    "runtime": "not_run_in_this_isolated_lane",
+    "independent_review": "request_changes_addressed_pending_re_review",
     "production_exposure": "dark"
    },
    "resource_requirements": {

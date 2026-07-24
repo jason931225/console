@@ -612,6 +612,13 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/compliance/evidence-bindings`.
     /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/post(createComplianceEvidenceBinding)`.
     func createComplianceEvidenceBinding(_ input: Operations.CreateComplianceEvidenceBinding.Input) async throws -> Operations.CreateComplianceEvidenceBinding.Output
+    /// Accept a proposed compliance evidence binding
+    ///
+    /// Applies the immutable PROPOSED-to-ACCEPTED lifecycle action. The server preserves evidence identity and provenance and records an audit snapshot.
+    ///
+    /// - Remark: HTTP `POST /api/v1/compliance/evidence-bindings/{id}/accept`.
+    /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)`.
+    func acceptComplianceEvidenceBinding(_ input: Operations.AcceptComplianceEvidenceBinding.Input) async throws -> Operations.AcceptComplianceEvidenceBinding.Output
     /// Read the authenticated user's location consent status
     ///
     /// - Remark: HTTP `GET /api/v1/location-consent/status`.
@@ -4409,6 +4416,21 @@ extension APIProtocol {
         try await createComplianceEvidenceBinding(Operations.CreateComplianceEvidenceBinding.Input(
             headers: headers,
             body: body
+        ))
+    }
+    /// Accept a proposed compliance evidence binding
+    ///
+    /// Applies the immutable PROPOSED-to-ACCEPTED lifecycle action. The server preserves evidence identity and provenance and records an audit snapshot.
+    ///
+    /// - Remark: HTTP `POST /api/v1/compliance/evidence-bindings/{id}/accept`.
+    /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)`.
+    public func acceptComplianceEvidenceBinding(
+        path: Operations.AcceptComplianceEvidenceBinding.Input.Path,
+        headers: Operations.AcceptComplianceEvidenceBinding.Input.Headers = .init()
+    ) async throws -> Operations.AcceptComplianceEvidenceBinding.Output {
+        try await acceptComplianceEvidenceBinding(Operations.AcceptComplianceEvidenceBinding.Input(
+            path: path,
+            headers: headers
         ))
     }
     /// Read the authenticated user's location consent status
@@ -70589,6 +70611,297 @@ public enum Operations {
             /// Required storage or platform dependency is not configured.
             ///
             /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/post(createComplianceEvidenceBinding)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Accept a proposed compliance evidence binding
+    ///
+    /// Applies the immutable PROPOSED-to-ACCEPTED lifecycle action. The server preserves evidence identity and provenance and records an audit snapshot.
+    ///
+    /// - Remark: HTTP `POST /api/v1/compliance/evidence-bindings/{id}/accept`.
+    /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)`.
+    public enum AcceptComplianceEvidenceBinding {
+        public static let id: Swift.String = "acceptComplianceEvidenceBinding"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/compliance/evidence-bindings/{id}/accept/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/compliance/evidence-bindings/{id}/accept/POST/path/id`.
+                public var id: Components.Schemas.Uuid
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                public init(id: Components.Schemas.Uuid) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.AcceptComplianceEvidenceBinding.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/compliance/evidence-bindings/{id}/accept/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AcceptComplianceEvidenceBinding.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AcceptComplianceEvidenceBinding.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AcceptComplianceEvidenceBinding.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.AcceptComplianceEvidenceBinding.Input.Path,
+                headers: Operations.AcceptComplianceEvidenceBinding.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/compliance/evidence-bindings/{id}/accept/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/compliance/evidence-bindings/{id}/accept/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvidenceBinding)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvidenceBinding {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AcceptComplianceEvidenceBinding.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AcceptComplianceEvidenceBinding.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Accepted evidence binding.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.AcceptComplianceEvidenceBinding.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.AcceptComplianceEvidenceBinding.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Request failed validation.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationError)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationError {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/compliance/evidence-bindings/{id}/accept/post(acceptComplianceEvidenceBinding)/responses/503`.
             ///
             /// HTTP response code: `503 serviceUnavailable`.
             case serviceUnavailable(Components.Responses.ServiceUnavailable)

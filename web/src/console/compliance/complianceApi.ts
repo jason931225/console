@@ -41,7 +41,8 @@ const PAGE_SIZE = 100;
 export const EVIDENCE_READ_CONCURRENCY = 6;
 
 function throwIfAborted(signal: AbortSignal): void {
-  if (signal.aborted) throw new DOMException("Compliance read was aborted", "AbortError");
+  if (signal.aborted)
+    throw new DOMException("Compliance read was aborted", "AbortError");
 }
 
 /**
@@ -61,17 +62,26 @@ async function readAllPages<T>(
     throwIfAborted(signal);
     const page = await readPage(offset);
     throwIfAborted(signal);
-    if (!Number.isInteger(page.total) || page.total < 0 || !Number.isInteger(page.limit) || page.limit < 1) {
+    if (
+      !Number.isInteger(page.total) ||
+      page.total < 0 ||
+      !Number.isInteger(page.limit) ||
+      page.limit < 1
+    ) {
       throw new Error("compliance catalog returned an invalid page boundary");
     }
     if (total === undefined) total = page.total;
     if (page.total !== total) {
-      throw new Error("compliance catalog changed while paging; retry the read");
+      throw new Error(
+        "compliance catalog changed while paging; retry the read",
+      );
     }
     items.push(...page.items);
     offset += page.items.length;
     if (page.items.length === 0 && offset < total) {
-      throw new Error("compliance catalog page ended before its declared total");
+      throw new Error(
+        "compliance catalog page ended before its declared total",
+      );
     }
   } while (offset < total);
 
@@ -85,10 +95,15 @@ async function obligationPage(
   query: string,
 ): Promise<ApiPage<RawObligation>> {
   const result = await api.GET("/api/v1/compliance/obligations", {
-    params: { query: { limit: PAGE_SIZE, offset, ...(query ? { q: query } : {}) } },
+    params: {
+      query: { limit: PAGE_SIZE, offset, ...(query ? { q: query } : {}) },
+    },
     signal,
   });
-  return requireGeneratedRead(result, "compliance obligations read returned no data");
+  return requireGeneratedRead(
+    result,
+    "compliance obligations read returned no data",
+  );
 }
 
 async function regulationPage(
@@ -98,10 +113,15 @@ async function regulationPage(
   query: string,
 ): Promise<ApiPage<RawRegulation>> {
   const result = await api.GET("/api/v1/compliance/regulations", {
-    params: { query: { limit: PAGE_SIZE, offset, ...(query ? { q: query } : {}) } },
+    params: {
+      query: { limit: PAGE_SIZE, offset, ...(query ? { q: query } : {}) },
+    },
     signal,
   });
-  return requireGeneratedRead(result, "compliance regulations read returned no data");
+  return requireGeneratedRead(
+    result,
+    "compliance regulations read returned no data",
+  );
 }
 
 async function frameworkPage(
@@ -111,10 +131,15 @@ async function frameworkPage(
   query: string,
 ): Promise<ApiPage<RawFramework>> {
   const result = await api.GET("/api/v1/compliance/frameworks", {
-    params: { query: { limit: PAGE_SIZE, offset, ...(query ? { q: query } : {}) } },
+    params: {
+      query: { limit: PAGE_SIZE, offset, ...(query ? { q: query } : {}) },
+    },
     signal,
   });
-  return requireGeneratedRead(result, "compliance frameworks read returned no data");
+  return requireGeneratedRead(
+    result,
+    "compliance frameworks read returned no data",
+  );
 }
 
 async function controlPage(
@@ -127,7 +152,10 @@ async function controlPage(
     params: { query: { framework_id: frameworkId, limit: PAGE_SIZE, offset } },
     signal,
   });
-  return requireGeneratedRead(result, "compliance framework controls read returned no data");
+  return requireGeneratedRead(
+    result,
+    "compliance framework controls read returned no data",
+  );
 }
 
 async function evidencePage(
@@ -140,7 +168,10 @@ async function evidencePage(
     params: { query: { control_id: controlId, limit: PAGE_SIZE, offset } },
     signal,
   });
-  return requireGeneratedRead(result, "compliance evidence bindings read returned no data");
+  return requireGeneratedRead(
+    result,
+    "compliance evidence bindings read returned no data",
+  );
 }
 
 function normalizedQuery(query: string): string {
@@ -149,63 +180,127 @@ function normalizedQuery(query: string): string {
 
 function obligation(raw: RawObligation): ComplianceObligation {
   return {
-    kind: "obligation", id: raw.id, code: raw.code, title: raw.title, description: raw.description,
-    obligationType: raw.obligation_type, scopeKind: raw.scope.kind,
+    kind: "obligation",
+    id: raw.id,
+    code: raw.code,
+    title: raw.title,
+    description: raw.description,
+    obligationType: raw.obligation_type,
+    scopeKind: raw.scope.kind,
     scope: {
       kind: raw.scope.kind,
       scopeRef: raw.scope.scope_ref ?? undefined,
       branchId: raw.scope.branch_id ?? undefined,
       siteId: raw.scope.site_id ?? undefined,
     },
-    ownerUserId: raw.owner_user_id ?? undefined, severity: raw.severity, status: raw.status,
-    effectiveFrom: raw.effective_from ?? undefined, effectiveTo: raw.effective_to ?? undefined,
-    reviewCadence: raw.review_cadence ?? undefined, nextReviewOn: raw.next_review_on ?? undefined,
-    metadata: raw.metadata, createdBy: raw.created_by, updatedBy: raw.updated_by,
-    createdAt: raw.created_at, updatedAt: raw.updated_at,
+    ownerUserId: raw.owner_user_id ?? undefined,
+    severity: raw.severity,
+    status: raw.status,
+    effectiveFrom: raw.effective_from ?? undefined,
+    effectiveTo: raw.effective_to ?? undefined,
+    reviewCadence: raw.review_cadence ?? undefined,
+    nextReviewOn: raw.next_review_on ?? undefined,
+    metadata: raw.metadata,
+    createdBy: raw.created_by,
+    updatedBy: raw.updated_by,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
   };
 }
 
 function regulation(raw: RawRegulation): RegulationImpact {
   return {
-    kind: "regulation", id: raw.id, code: raw.code, title: raw.title, jurisdiction: raw.jurisdiction,
-    regulator: raw.regulator ?? undefined, citation: raw.citation, sourceUrl: raw.source_url ?? undefined,
-    impactArea: raw.impact_area, impactSummary: raw.impact_summary, riskLevel: raw.risk_level,
-    status: raw.status, effectiveFrom: raw.effective_from ?? undefined, effectiveTo: raw.effective_to ?? undefined,
-    reviewDueOn: raw.review_due_on ?? undefined, ownerUserId: raw.owner_user_id ?? undefined,
-    metadata: raw.metadata, createdBy: raw.created_by, updatedBy: raw.updated_by,
-    createdAt: raw.created_at, updatedAt: raw.updated_at,
+    kind: "regulation",
+    id: raw.id,
+    code: raw.code,
+    title: raw.title,
+    jurisdiction: raw.jurisdiction,
+    regulator: raw.regulator ?? undefined,
+    citation: raw.citation,
+    sourceUrl: raw.source_url ?? undefined,
+    impactArea: raw.impact_area,
+    impactSummary: raw.impact_summary,
+    riskLevel: raw.risk_level,
+    status: raw.status,
+    effectiveFrom: raw.effective_from ?? undefined,
+    effectiveTo: raw.effective_to ?? undefined,
+    reviewDueOn: raw.review_due_on ?? undefined,
+    ownerUserId: raw.owner_user_id ?? undefined,
+    metadata: raw.metadata,
+    createdBy: raw.created_by,
+    updatedBy: raw.updated_by,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
   };
 }
 
-function framework(raw: RawFramework, controls: ComplianceControl[] = []): ComplianceFramework {
+function framework(
+  raw: RawFramework,
+  controls: ComplianceControl[] = [],
+): ComplianceFramework {
   return {
-    kind: "framework", id: raw.id, code: raw.code, title: raw.name, versionLabel: raw.version_label,
-    frameworkKind: raw.framework_kind, status: raw.status, ownerUserId: raw.owner_user_id ?? undefined,
-    effectiveFrom: raw.effective_from ?? undefined, effectiveTo: raw.effective_to ?? undefined,
-    metadata: raw.metadata, createdBy: raw.created_by, updatedBy: raw.updated_by,
-    createdAt: raw.created_at, updatedAt: raw.updated_at, controls,
+    kind: "framework",
+    id: raw.id,
+    code: raw.code,
+    title: raw.name,
+    versionLabel: raw.version_label,
+    frameworkKind: raw.framework_kind,
+    status: raw.status,
+    ownerUserId: raw.owner_user_id ?? undefined,
+    effectiveFrom: raw.effective_from ?? undefined,
+    effectiveTo: raw.effective_to ?? undefined,
+    metadata: raw.metadata,
+    createdBy: raw.created_by,
+    updatedBy: raw.updated_by,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    controls,
   };
 }
 
 function evidence(raw: RawEvidence): EvidenceBinding {
   return {
-    id: raw.id, controlId: raw.control_id, obligationId: raw.obligation_id ?? undefined,
-    evidenceTargetType: raw.evidence_target_type, evidenceTargetId: raw.evidence_target_id,
-    sourceAuditEventId: raw.source_audit_event_id ?? undefined, status: raw.status, confidence: raw.confidence,
-    collectedAt: raw.collected_at ?? undefined, collectedBy: raw.collected_by ?? undefined,
-    validFrom: raw.valid_from ?? undefined, validTo: raw.valid_to ?? undefined, hashSha256: raw.hash_sha256 ?? undefined,
-    metadata: raw.metadata, createdBy: raw.created_by, updatedBy: raw.updated_by,
-    createdAt: raw.created_at, updatedAt: raw.updated_at,
+    id: raw.id,
+    controlId: raw.control_id,
+    obligationId: raw.obligation_id ?? undefined,
+    evidenceTargetType: raw.evidence_target_type,
+    evidenceTargetId: raw.evidence_target_id,
+    sourceAuditEventId: raw.source_audit_event_id ?? undefined,
+    status: raw.status,
+    confidence: raw.confidence,
+    collectedAt: raw.collected_at ?? undefined,
+    collectedBy: raw.collected_by ?? undefined,
+    validFrom: raw.valid_from ?? undefined,
+    validTo: raw.valid_to ?? undefined,
+    hashSha256: raw.hash_sha256 ?? undefined,
+    metadata: raw.metadata,
+    createdBy: raw.created_by,
+    updatedBy: raw.updated_by,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
   };
 }
 
-function control(raw: RawControl, evidenceBindings: EvidenceBinding[]): ComplianceControl {
+function control(
+  raw: RawControl,
+  evidenceBindings: EvidenceBinding[],
+): ComplianceControl {
   return {
-    id: raw.id, frameworkId: raw.framework_id, controlKey: raw.control_key, title: raw.title,
-    objective: raw.objective, controlType: raw.control_type, cadence: raw.cadence,
-    status: raw.status, evidenceRequirements: raw.evidence_requirements,
-    ownerUserId: raw.owner_user_id ?? undefined, createdBy: raw.created_by, updatedBy: raw.updated_by,
-    createdAt: raw.created_at, updatedAt: raw.updated_at, evidenceBindings,
+    id: raw.id,
+    frameworkId: raw.framework_id,
+    controlKey: raw.control_key,
+    title: raw.title,
+    objective: raw.objective,
+    controlType: raw.control_type,
+    cadence: raw.cadence,
+    status: raw.status,
+    evidenceRequirements: raw.evidence_requirements,
+    ownerUserId: raw.owner_user_id ?? undefined,
+    createdBy: raw.created_by,
+    updatedBy: raw.updated_by,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    evidenceBindings,
   };
 }
 
@@ -217,11 +312,21 @@ export async function readComplianceCatalog(
 ): Promise<ComplianceCatalogItem[]> {
   const q = normalizedQuery(query);
   const [obligations, regulations, frameworks] = await Promise.all([
-    readable.obligations ? readAllPages(signal, (offset) => obligationPage(api, signal, offset, q)) : Promise.resolve([] as RawObligation[]),
-    readable.regulations ? readAllPages(signal, (offset) => regulationPage(api, signal, offset, q)) : Promise.resolve([] as RawRegulation[]),
-    readable.frameworks ? readAllPages(signal, (offset) => frameworkPage(api, signal, offset, q)) : Promise.resolve([] as RawFramework[]),
+    readable.obligations
+      ? readAllPages(signal, (offset) => obligationPage(api, signal, offset, q))
+      : Promise.resolve([] as RawObligation[]),
+    readable.regulations
+      ? readAllPages(signal, (offset) => regulationPage(api, signal, offset, q))
+      : Promise.resolve([] as RawRegulation[]),
+    readable.frameworks
+      ? readAllPages(signal, (offset) => frameworkPage(api, signal, offset, q))
+      : Promise.resolve([] as RawFramework[]),
   ]);
-  return [...obligations.map(obligation), ...regulations.map(regulation), ...frameworks.map((item) => framework(item))];
+  return [
+    ...obligations.map(obligation),
+    ...regulations.map(regulation),
+    ...frameworks.map((item) => framework(item)),
+  ];
 }
 
 async function mapWithConcurrency<T, R>(
@@ -240,7 +345,9 @@ async function mapWithConcurrency<T, R>(
       results[index] = await work(values[index]);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()));
+  await Promise.all(
+    Array.from({ length: Math.min(limit, values.length) }, () => worker()),
+  );
   return results;
 }
 
@@ -249,20 +356,27 @@ export async function readFrameworkDetail(
   frameworkRow: ComplianceFramework,
   signal: AbortSignal,
 ): Promise<ComplianceFramework> {
-  const rawControls = await readAllPages(signal, (offset) => controlPage(api, signal, frameworkRow.id, offset));
+  const rawControls = await readAllPages(signal, (offset) =>
+    controlPage(api, signal, frameworkRow.id, offset),
+  );
   const controlsWithEvidence = await mapWithConcurrency(
     rawControls,
     signal,
     EVIDENCE_READ_CONCURRENCY,
     async (rawControl) => {
-      const bindings = await readAllPages(signal, (offset) => evidencePage(api, signal, rawControl.id, offset));
+      const bindings = await readAllPages(signal, (offset) =>
+        evidencePage(api, signal, rawControl.id, offset),
+      );
       return control(rawControl, bindings.map(evidence));
     },
   );
   return { ...frameworkRow, controls: controlsWithEvidence };
 }
 
-export function kindForRowId(items: ComplianceCatalogItem[], id: string): ComplianceCatalogItem | undefined {
+export function kindForRowId(
+  items: ComplianceCatalogItem[],
+  id: string,
+): ComplianceCatalogItem | undefined {
   return items.find((item) => item.id === id);
 }
 
@@ -298,7 +412,10 @@ async function allEvidencePage(
     params: { query: { limit: PAGE_SIZE, offset } },
     signal,
   });
-  return requireGeneratedRead(result, "compliance evidence bindings read returned no data");
+  return requireGeneratedRead(
+    result,
+    "compliance evidence bindings read returned no data",
+  );
 }
 
 /**
@@ -321,9 +438,8 @@ export async function readEvidenceBindingWorkspace(
     signal,
     EVIDENCE_READ_CONCURRENCY,
     async (rawFramework) => {
-      const rawControls = await readAllPages(
-        signal,
-        (offset) => controlPage(api, signal, rawFramework.id, offset),
+      const rawControls = await readAllPages(signal, (offset) =>
+        controlPage(api, signal, rawFramework.id, offset),
       );
       return rawControls.map<EvidenceWorkbenchControl>((rawControl) => ({
         id: rawControl.id,
@@ -339,12 +455,17 @@ export async function readEvidenceBindingWorkspace(
   );
   return {
     controls: controlPages.flat(),
-    obligations: rawObligations.map((raw) => ({ id: raw.id, code: raw.code, title: raw.title })),
+    obligations: rawObligations.map((raw) => ({
+      id: raw.id,
+      code: raw.code,
+      title: raw.title,
+    })),
     bindings: rawBindings.map(evidence),
   };
 }
 
-export type CreateEvidenceBindingRequest = components["schemas"]["CreateEvidenceBindingRequest"];
+export type CreateEvidenceBindingRequest =
+  components["schemas"]["CreateEvidenceBindingRequest"];
 
 /** Create a PROPOSED evidence binding through the generated contract. The
  * backend owns the initial status, audit event, authorization, and tenant RLS. */
@@ -356,6 +477,22 @@ export async function createEvidenceBinding(
   const { data, error, response } = await api.POST(
     "/api/v1/compliance/evidence-bindings",
     { body: request, signal },
+  );
+  if (!data) throw new ApiCallError(response.status, error);
+  return evidence(data);
+}
+
+/** Accept one server-visible PROPOSED binding through the generated lifecycle
+ * operation. It never applies an optimistic status locally; callers must reread
+ * the authoritative workspace after the command succeeds. */
+export async function acceptEvidenceBinding(
+  api: ConsoleApiClient,
+  id: string,
+  signal?: AbortSignal,
+): Promise<EvidenceBinding> {
+  const { data, error, response } = await api.POST(
+    "/api/v1/compliance/evidence-bindings/{id}/accept",
+    { params: { path: { id } }, signal },
   );
   if (!data) throw new ApiCallError(response.status, error);
   return evidence(data);
