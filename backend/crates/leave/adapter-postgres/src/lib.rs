@@ -212,6 +212,15 @@ impl PgLeaveStore {
         self
     }
 
+    /// Whether the isolated leave command capability is bound. Callers that
+    /// must fail closed BEFORE creating dependent rows (employee creation and
+    /// the recruiting hire handshake pre-check home-branch assignability) use
+    /// this instead of discovering `CommandUnavailable` after a partial write.
+    #[must_use]
+    pub fn has_leave_command_pool(&self) -> bool {
+        self.leave_command_pool.is_some()
+    }
+
     fn command_pool(&self) -> Result<&PgPool, PgLeaveError> {
         self.leave_command_pool
             .as_ref()

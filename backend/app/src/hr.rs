@@ -243,18 +243,18 @@ struct EmployeeResponse {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct CreateEmployeeRequest {
-    employee_number: String,
-    name: String,
-    company: String,
-    employment_type: String,
-    phone: String,
-    org_unit: String,
-    position: String,
-    site: String,
-    home_branch_id: Uuid,
-    base_pay: String,
-    idempotency_key: String,
+pub(crate) struct CreateEmployeeRequest {
+    pub(crate) employee_number: String,
+    pub(crate) name: String,
+    pub(crate) company: String,
+    pub(crate) employment_type: String,
+    pub(crate) phone: String,
+    pub(crate) org_unit: String,
+    pub(crate) position: String,
+    pub(crate) site: String,
+    pub(crate) home_branch_id: Uuid,
+    pub(crate) base_pay: String,
+    pub(crate) idempotency_key: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -266,9 +266,26 @@ struct EmployeeEmploymentDetail {
 }
 
 #[derive(Debug, Serialize)]
-struct EmployeeDetailResponse {
+pub(crate) struct EmployeeDetailResponse {
     employee: EmployeeResponse,
     employment: EmployeeEmploymentDetail,
+}
+
+impl EmployeeDetailResponse {
+    /// The created (or replayed) employee id, for callers that link the
+    /// employee object without re-reading the row.
+    pub(crate) fn employee_id(&self) -> Uuid {
+        self.employee.id
+    }
+
+    pub(crate) fn employee_home_branch_id(&self) -> Option<Uuid> {
+        self.employee.home_branch_id
+    }
+
+    /// CAS token for the command-side home-branch assignment.
+    pub(crate) fn employee_updated_at(&self) -> time::OffsetDateTime {
+        self.employee.updated_at
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -850,16 +867,262 @@ async fn create_employee(
 ) -> Result<(StatusCode, Json<EmployeeDetailResponse>), HrError> {
     authorize_hr_org_wide(&principal, Feature::EmployeeDirectoryManage)?;
     let request = normalize_create_employee_request(body)?;
+    // Fail closed BEFORE any write: since 0166 the employee home-branch
+    // authority is command-only (leave_api.set_employee_home_branch as
+    // mnt_leave_cmd); an employee we could never route must not be created.
+    let command_store = require_home_branch_command_store(&state)?;
     let org = principal.org_id;
     let org_uuid = *org.as_uuid();
     let actor = principal.user_id;
+    let home_branch_id = request.home_branch_id;
     let request_hash = sha256_hex(
         serde_json::to_string(&request)
             .map_err(|_| HrError::validation("employee request could not be serialized"))?
             .as_bytes(),
     );
     let employee_id = Uuid::new_v4();
-    let audit = AuditEvent::new(
+
+    let (detail, replayed) = with_audits::<_, _, HrError>(&state.pool, org, |tx| {
+        Box::pin(async move {
+            let (detail, replayed) =
+                create_employee_core(tx, org_uuid, actor, &request, &request_hash, employee_id)
+                    .await?;
+            let audits = if replayed {
+                Vec::new()
+            } else {
+                vec![employee_create_audit(org, actor, &request, employee_id)?]
+            };
+            Ok(((detail, replayed), audits))
+        })
+    })
+    .await?;
+    let detail = assign_home_branch_if_unset(
+        &state.pool,
+        &command_store,
+        org,
+        detail.employee_id(),
+        home_branch_id,
+        actor,
+    )
+    .await?;
+    Ok((
+        if replayed {
+            StatusCode::OK
+        } else {
+            StatusCode::CREATED
+        },
+        Json(detail),
+    ))
+}
+
+/// The home-branch command capability both employee-creating surfaces
+/// (People & Workforce create, recruiting hire) must hold BEFORE writing.
+pub(crate) fn require_home_branch_command_store(state: &HrState) -> Result<PgLeaveStore, HrError> {
+    state
+        .leave_command_store
+        .clone()
+        .filter(PgLeaveStore::has_leave_command_pool)
+        .ok_or_else(|| {
+            HrError::unavailable(
+                "leave command database is not configured; employee creation requires the home-branch command capability",
+            )
+        })
+}
+
+/// Establish the employee's first home-branch routing authority through the
+/// isolated leave command capability (`leave_api.set_employee_home_branch`,
+/// which CASes on `updated_at`, re-validates the branch, requires the
+/// org-wide admin capability for a first assignment, and writes its own
+/// `employee.home_branch_set` audit). Idempotent and race-convergent: an
+/// already-assigned employee (replay) is returned untouched, and losing a
+/// concurrent first-assignment race to the SAME branch is success.
+pub(crate) async fn assign_home_branch_if_unset(
+    pool: &PgPool,
+    command_store: &PgLeaveStore,
+    org: OrgId,
+    employee_id: Uuid,
+    home_branch_id: Uuid,
+    actor: UserId,
+) -> Result<EmployeeDetailResponse, HrError> {
+    let load = |pool: &PgPool| {
+        let pool = pool.clone();
+        async move {
+            with_org_conn::<_, _, HrError>(&pool, org, move |tx| {
+                Box::pin(async move { load_employee_detail(tx, *org.as_uuid(), employee_id).await })
+            })
+            .await
+        }
+    };
+    let detail = load(pool).await?;
+    if detail.employee_home_branch_id().is_some() {
+        // Replayed create: the routing authority is already established and a
+        // replay must never clobber a later reassignment.
+        return Ok(detail);
+    }
+    match command_store
+        .set_employee_home_branch(
+            employee_id,
+            home_branch_id,
+            detail.employee_updated_at(),
+            actor,
+            TraceContext::generate(),
+        )
+        .await
+    {
+        Ok(_) => load(pool).await,
+        Err(PgLeaveError::ConcurrentModification) => {
+            let current = load(pool).await?;
+            if current.employee_home_branch_id() == Some(home_branch_id) {
+                // A same-key race partner won the identical first assignment.
+                Ok(current)
+            } else {
+                Err(HrError::from_leave_store(
+                    PgLeaveError::ConcurrentModification,
+                ))
+            }
+        }
+        Err(error) => Err(HrError::from_leave_store(error)),
+    }
+}
+
+/// The transactional core of employee creation — the ONLY write path into
+/// `employees` + `employee_employment_profiles`. Shared by the People &
+/// Workforce endpoint above and the recruiting hire handshake
+/// (`recruiting_hire`), which calls it inside its own `with_audits`
+/// transaction so the employee row and the recruiting linkage commit
+/// atomically. Same idempotency reservation, same tables, same lifecycle
+/// event. Callers own authorization and append the `employee.create` audit
+/// (from [`employee_create_audit`]) only when `replayed` is false.
+pub(crate) async fn create_employee_core(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    org_uuid: Uuid,
+    actor: UserId,
+    request: &NormalizedCreateEmployeeRequest,
+    request_hash: &str,
+    employee_id: Uuid,
+) -> Result<(EmployeeDetailResponse, bool), HrError> {
+    sqlx::query(
+        "INSERT INTO employee_create_idempotency (org_id, idempotency_key, request_hash) VALUES ($1, $2, $3) ON CONFLICT (org_id, idempotency_key) DO NOTHING",
+    )
+    .bind(org_uuid)
+    .bind(&request.idempotency_key)
+    .bind(request_hash)
+    .execute(tx.as_mut())
+    .await
+    .map_err(employee_create_db_error)?;
+    let reservation = sqlx::query(
+        "SELECT request_hash, employee_id FROM employee_create_idempotency WHERE org_id = $1 AND idempotency_key = $2 FOR UPDATE",
+    )
+    .bind(org_uuid)
+    .bind(&request.idempotency_key)
+    .fetch_one(tx.as_mut())
+    .await?;
+    let stored_hash: String = reservation.try_get("request_hash")?;
+    if stored_hash != request_hash {
+        return Err(HrError::from_kernel(KernelError::conflict(
+            "idempotency key already used with a different employee payload",
+        )));
+    }
+    if let Some(existing_id) = reservation.try_get::<Option<Uuid>, _>("employee_id")? {
+        return Ok((load_employee_detail(tx, org_uuid, existing_id).await?, true));
+    }
+    let branch_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM branches WHERE org_id = $1 AND id = $2 AND deactivated_at IS NULL)",
+    )
+    .bind(org_uuid)
+    .bind(request.home_branch_id)
+    .fetch_one(tx.as_mut())
+    .await?;
+    if !branch_exists {
+        return Err(HrError::from_kernel(KernelError::not_found(
+            "active home branch was not found in this organization",
+        )));
+    }
+
+    // home_branch_id is intentionally NOT inserted: since 0166 the branch
+    // routing authority is command-only (the mnt_rt guard rejects it), so the
+    // caller establishes it post-commit via [`assign_home_branch_if_unset`].
+    sqlx::query(
+        r#"INSERT INTO employees (
+            id, org_id, company, name, employee_number, org_unit, position,
+            worksite_name, source_filename, source_sheet,
+            source_row, source_key, raw_row, source_metadata,
+            identity_resolution_strategy, identity_resolution_confidence,
+            identity_review_required, identity_name_only_merge
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, 'console', 'people', 1,
+            $9, '{}'::jsonb, '{}'::jsonb, 'employee_number', 'high', FALSE, FALSE
+        )"#,
+    )
+    .bind(employee_id)
+    .bind(org_uuid)
+    .bind(&request.company)
+    .bind(&request.name)
+    .bind(&request.employee_number)
+    .bind(&request.org_unit)
+    .bind(&request.position)
+    .bind(&request.site)
+    .bind(format!("console:{}", request.employee_number))
+    .execute(tx.as_mut())
+    .await
+    .map_err(employee_create_db_error)?;
+    sqlx::query(
+        r#"INSERT INTO employee_employment_profiles (
+            employee_id, org_id, employment_type, phone_e164, base_pay,
+            idempotency_key, request_hash, created_by
+        ) VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8)"#,
+    )
+    .bind(employee_id)
+    .bind(org_uuid)
+    .bind(&request.employment_type)
+    .bind(&request.phone_e164)
+    .bind(&request.base_pay)
+    .bind(&request.idempotency_key)
+    .bind(request_hash)
+    .bind(*actor.as_uuid())
+    .execute(tx.as_mut())
+    .await
+    .map_err(employee_create_db_error)?;
+    sqlx::query(
+        r#"INSERT INTO employee_lifecycle_events (
+            id, org_id, employee_id, event_type, to_status, to_company,
+            to_org_unit, to_position, effective_date, comment, signoffs, created_by
+        ) VALUES ($1, $2, $3, 'ONBOARD', 'ACTIVE', $4, $5, $6, $7,
+            'Created through People & Workforce',
+            '{}'::jsonb,
+            $8)"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(org_uuid)
+    .bind(employee_id)
+    .bind(&request.company)
+    .bind(&request.org_unit)
+    .bind(&request.position)
+    .bind(OffsetDateTime::now_utc().date().to_string())
+    .bind(*actor.as_uuid())
+    .execute(tx.as_mut())
+    .await
+    .map_err(employee_create_db_error)?;
+    sqlx::query(
+        "UPDATE employee_create_idempotency SET employee_id = $3 WHERE org_id = $1 AND idempotency_key = $2",
+    )
+    .bind(org_uuid).bind(&request.idempotency_key).bind(employee_id)
+    .execute(tx.as_mut()).await?;
+    Ok((
+        load_employee_detail(tx, org_uuid, employee_id).await?,
+        false,
+    ))
+}
+
+/// The `employee.create` audit event that accompanies a non-replayed
+/// [`create_employee_core`] call, identical for both write paths.
+pub(crate) fn employee_create_audit(
+    org: OrgId,
+    actor: UserId,
+    request: &NormalizedCreateEmployeeRequest,
+    employee_id: Uuid,
+) -> Result<AuditEvent, HrError> {
+    Ok(AuditEvent::new(
         Some(actor),
         AuditAction::new("employee.create").map_err(HrError::from_kernel)?,
         "employee",
@@ -874,106 +1137,10 @@ async fn create_employee(
         Some(json!({
             "employee_number": &request.employee_number,
             "employment_type": &request.employment_type,
-            "home_branch_id": request.home_branch_id,
+            "requested_home_branch_id": request.home_branch_id,
             "compensation_recorded": true,
             "phone_recorded": true
         })),
-    );
-
-    let (detail, replayed) = with_audits::<_, _, HrError>(&state.pool, org, |tx| {
-        Box::pin(async move {
-            sqlx::query(
-                "INSERT INTO employee_create_idempotency (org_id, idempotency_key, request_hash) VALUES ($1, $2, $3) ON CONFLICT (org_id, idempotency_key) DO NOTHING",
-            )
-            .bind(org_uuid)
-            .bind(&request.idempotency_key)
-            .bind(&request_hash)
-            .execute(tx.as_mut())
-            .await
-            .map_err(employee_create_db_error)?;
-            let reservation = sqlx::query(
-                "SELECT request_hash, employee_id FROM employee_create_idempotency WHERE org_id = $1 AND idempotency_key = $2 FOR UPDATE",
-            )
-            .bind(org_uuid)
-            .bind(&request.idempotency_key)
-            .fetch_one(tx.as_mut())
-            .await?;
-            let stored_hash: String = reservation.try_get("request_hash")?;
-            if stored_hash != request_hash {
-                return Err(HrError::from_kernel(KernelError::conflict(
-                    "idempotency key already used with a different employee payload",
-                )));
-            }
-            if let Some(existing_id) = reservation.try_get::<Option<Uuid>, _>("employee_id")? {
-                return Ok(((load_employee_detail(tx, org_uuid, existing_id).await?, true), Vec::new()));
-            }
-            let branch_exists: bool = sqlx::query_scalar(
-                "SELECT EXISTS(SELECT 1 FROM branches WHERE org_id = $1 AND id = $2 AND deactivated_at IS NULL)",
-            )
-            .bind(org_uuid)
-            .bind(request.home_branch_id)
-            .fetch_one(tx.as_mut())
-            .await?;
-            if !branch_exists {
-                return Err(HrError::from_kernel(KernelError::not_found(
-                    "active home branch was not found in this organization",
-                )));
-            }
-
-            sqlx::query(
-                r#"INSERT INTO employees (
-                    id, org_id, company, name, employee_number, org_unit, position,
-                    worksite_name, home_branch_id, source_filename, source_sheet,
-                    source_row, source_key, raw_row, source_metadata,
-                    identity_resolution_strategy, identity_resolution_confidence,
-                    identity_review_required, identity_name_only_merge
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, 'console', 'people', 1,
-                    $10, '{}'::jsonb, '{}'::jsonb, 'employee_number', 'high', FALSE, FALSE
-                )"#,
-            )
-            .bind(employee_id).bind(org_uuid).bind(&request.company).bind(&request.name)
-            .bind(&request.employee_number).bind(&request.org_unit).bind(&request.position)
-            .bind(&request.site).bind(request.home_branch_id)
-            .bind(format!("console:{}", request.employee_number))
-            .execute(tx.as_mut()).await.map_err(employee_create_db_error)?;
-            sqlx::query(
-                r#"INSERT INTO employee_employment_profiles (
-                    employee_id, org_id, employment_type, phone_e164, base_pay,
-                    idempotency_key, request_hash, created_by
-                ) VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8)"#,
-            )
-            .bind(employee_id).bind(org_uuid).bind(&request.employment_type).bind(&request.phone_e164)
-            .bind(&request.base_pay).bind(&request.idempotency_key).bind(&request_hash).bind(*actor.as_uuid())
-            .execute(tx.as_mut()).await.map_err(employee_create_db_error)?;
-            sqlx::query(
-                r#"INSERT INTO employee_lifecycle_events (
-                    id, org_id, employee_id, event_type, to_status, to_company,
-                    to_org_unit, to_position, effective_date, comment, signoffs, created_by
-                ) VALUES ($1, $2, $3, 'ONBOARD', 'ACTIVE', $4, $5, $6, $7,
-                    'Created through People & Workforce',
-                    '{}'::jsonb,
-                    $8)"#,
-            )
-            .bind(Uuid::new_v4()).bind(org_uuid).bind(employee_id).bind(&request.company)
-            .bind(&request.org_unit).bind(&request.position).bind(OffsetDateTime::now_utc().date().to_string())
-            .bind(*actor.as_uuid()).execute(tx.as_mut()).await.map_err(employee_create_db_error)?;
-            sqlx::query(
-                "UPDATE employee_create_idempotency SET employee_id = $3 WHERE org_id = $1 AND idempotency_key = $2",
-            )
-            .bind(org_uuid).bind(&request.idempotency_key).bind(employee_id)
-            .execute(tx.as_mut()).await?;
-            Ok(((load_employee_detail(tx, org_uuid, employee_id).await?, false), vec![audit]))
-        })
-    })
-    .await?;
-    Ok((
-        if replayed {
-            StatusCode::OK
-        } else {
-            StatusCode::CREATED
-        },
-        Json(detail),
     ))
 }
 
@@ -5736,7 +5903,7 @@ async fn compute_employee_import_dry_run(
     })
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hex::encode(hasher.finalize())
@@ -7455,7 +7622,7 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
 }
 
 #[derive(Debug, Serialize)]
-struct NormalizedCreateEmployeeRequest {
+pub(crate) struct NormalizedCreateEmployeeRequest {
     employee_number: String,
     name: String,
     company: String,
@@ -7522,7 +7689,7 @@ fn employee_create_db_error(error: sqlx::Error) -> HrError {
     HrError::from(error)
 }
 
-fn normalize_create_employee_request(
+pub(crate) fn normalize_create_employee_request(
     body: CreateEmployeeRequest,
 ) -> Result<NormalizedCreateEmployeeRequest, HrError> {
     let employment_type = normalize_enum_text(body.employment_type);
@@ -8039,14 +8206,14 @@ fn normalize_optional_limited_text(
 }
 
 #[derive(Debug)]
-struct HrError {
+pub(crate) struct HrError {
     status: StatusCode,
     code: &'static str,
     message: String,
 }
 
 impl HrError {
-    fn from_kernel(error: KernelError) -> Self {
+    pub(crate) fn from_kernel(error: KernelError) -> Self {
         let status = match error.kind {
             ErrorKind::Validation => StatusCode::UNPROCESSABLE_ENTITY,
             ErrorKind::NotFound => StatusCode::NOT_FOUND,
@@ -8061,7 +8228,7 @@ impl HrError {
         }
     }
 
-    fn validation(message: impl Into<String>) -> Self {
+    pub(crate) fn validation(message: impl Into<String>) -> Self {
         Self::from_kernel(KernelError::validation(message.into()))
     }
 
@@ -8089,7 +8256,7 @@ impl HrError {
         }
     }
 
-    fn from_leave_store(error: PgLeaveError) -> Self {
+    pub(crate) fn from_leave_store(error: PgLeaveError) -> Self {
         match error {
             PgLeaveError::CommandUnavailable => Self::unavailable(
                 "leave command database is not configured; protected employee leave changes are unavailable",
