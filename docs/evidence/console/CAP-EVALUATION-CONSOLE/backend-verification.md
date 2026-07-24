@@ -2,7 +2,9 @@
 
 Date: 2026-07-24 · Verifier: independent stage-3 lane (did not author the code)
 Scope: commits `07d3fb9c..52210fb4` on `claude/console-evaluation-backend-20260724`
-plus two verification-pass commits (dead-code completion, audit-readback widening).
+plus three verification-pass commits (dead-code completion, audit-readback
+widening, rustfmt normalization of two unformatted cross-lane mnt-app tests —
+the latter verified token-identical modulo whitespace/trailing-commas).
 
 Verdict: **PASS** — all claims in the build report were re-verified against the
 actual code and re-executed tests. Two issues found and fixed during
