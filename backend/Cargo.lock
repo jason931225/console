@@ -4838,12 +4838,14 @@ dependencies = [
 name = "mnt-support-adapter-postgres"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "mnt-kernel-core",
  "mnt-platform-db",
  "mnt-platform-request-context",
  "mnt-support-application",
  "mnt-support-domain",
  "serde_json",
+ "sha2 0.11.0",
  "sqlx 0.9.0",
  "thiserror 2.0.18",
  "time",
