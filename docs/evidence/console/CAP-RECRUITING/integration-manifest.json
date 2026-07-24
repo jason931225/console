@@ -1,0 +1,39 @@
+{
+  "lane": "CAP-RECRUITING",
+  "stage": "scout",
+  "generated": "2026-07-24",
+  "shared_root_entries": [
+    {
+      "file": "web/src/console/shell/nav.ts",
+      "change": "Add \"recruit\" to MOUNTED_SCREEN_KEYS (nav item already exists at line ~159 with gate DIRECTORY_ROLES + employee_directory_read; optionally widen gate features to [\"employee_directory_read\", \"recruiting_read\"]). Do NOT touch EXPOSED_SCREEN_KEYS — module lands DARK per ADR-0025."
+    },
+    {
+      "file": "web/src/console/screens/registry.ts",
+      "change": "Add `recruit: RecruitingScreenBody` (prop-less ComponentType) imported from \"../recruiting\"."
+    },
+    {
+      "file": "web/src/i18n/ko.ts",
+      "change": "None. console.shell.nav.recruit already exists (\"채용\", line ~970). Module strings live in the new module-owned web/src/i18n/recruiting.ts (not a collision root)."
+    },
+    {
+      "file": "backend/openapi/openapi.yaml",
+      "change": "Add the 21 recruiting operations from design-contract.md section 2. Every operation MUST carry `tags: [recruiting]` (per-domain tag rule — kotlinc OOM regression otherwise). Then regenerate and commit clients/{ts,kotlin,swift} (3 independent CI drift gates)."
+    },
+    {
+      "file": "backend/crates/platform/db/migrations/",
+      "change": "Migration provisionally numbered 0187_create_recruiting.sql (DDL in design-contract.md section 4). Highest committed is 0180; renumber to the next free number immediately before push."
+    },
+    {
+      "file": "backend/crates/platform/authz/src/lib.rs",
+      "change": "Add Feature::RecruitingRead [D,D,D,A,A,A] (\"recruiting_read\") and Feature::RecruitingManage [D,D,D,A,D,A] (\"recruiting_manage\") to the deny-by-default matrix. Backend-lane owned but coordinate: other lanes may extend the same enum this week."
+    },
+    {
+      "file": "backend/app/src/lib.rs",
+      "change": "build_router: merge recruiting rest router (one line, backend-lane owned, follows hr::router merge at ~line 2829)."
+    }
+  ],
+  "cross_lane_dependencies": [
+    "backend/app/src/hr.rs: extract create_employee_core for the hire handshake (backend lane; additive refactor of the existing create_employee handler)",
+    "ontology posting→employee link binding (POSTING_EMPLOYEE_LINK_KEY) stays unresolved — separately governed compatibility change, out of this lane"
+  ]
+}
