@@ -410,7 +410,7 @@ async fn source_system_lifecycle_context(
     id: Uuid,
 ) -> Result<
     (
-        sqlx::Transaction<'_, sqlx::Postgres>,
+        sqlx::Transaction<'static, sqlx::Postgres>,
         Principal,
         mnt_kernel_core::OrgId,
         Uuid,
@@ -649,7 +649,7 @@ async fn ingest_source(
             SourceIngressReceipt {
                 kind: "demand".to_owned(),
                 id: persisted_id,
-                source_version,
+                source_version: source_version.clone(),
             }
         }
         SourceIngress::Capacity {
@@ -672,7 +672,7 @@ async fn ingest_source(
             SourceIngressReceipt {
                 kind: "capacity".to_owned(),
                 id,
-                source_version,
+                source_version: source_version.clone(),
             }
         }
         SourceIngress::Material {
@@ -692,7 +692,7 @@ async fn ingest_source(
             SourceIngressReceipt {
                 kind: "material".to_owned(),
                 id: persisted_id,
-                source_version,
+                source_version: source_version.clone(),
             }
         }
     };
@@ -1157,6 +1157,7 @@ fn plan_summary(r: sqlx::postgres::PgRow) -> Result<PlanSummary, RestError> {
         first_operation_id: r.try_get("first_operation_id").map_err(RestError::db)?,
         created_at: r.try_get("created_at").map_err(RestError::db)?,
         due_at: r.try_get("due_at").map_err(RestError::db)?,
+        plan_digest: r.try_get("plan_digest").map_err(RestError::db)?,
     })
 }
 fn capacity_slot(r: sqlx::postgres::PgRow) -> Result<CapacitySlot, RestError> {
