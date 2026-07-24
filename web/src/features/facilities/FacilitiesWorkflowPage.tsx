@@ -71,9 +71,21 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
   const [acceptanceReason, setAcceptanceReason] = useState("");
   const listEpoch = useRef(0);
   const detailEpoch = useRef(0);
-  const listController = useRef<AbortController>();
-  const detailController = useRef<AbortController>();
-  const commandController = useRef<AbortController>();
+  const listController = useRef<AbortController | null>(null);
+  const detailController = useRef<AbortController | null>(null);
+  const commandController = useRef<AbortController | null>(null);
+  const selectedIdRef = useRef<string | undefined>(undefined);
+
+  const selectCase = useCallback((nextId: string | undefined) => {
+    if (selectedIdRef.current === nextId) return;
+    selectedIdRef.current = nextId;
+    commandController.current?.abort();
+    detailController.current?.abort();
+    detailEpoch.current += 1;
+    setSelected(undefined);
+    setDetailLoading(Boolean(nextId));
+    setSelectedId(nextId);
+  }, []);
 
   const refreshList = useCallback(async () => {
     listController.current?.abort();
@@ -90,13 +102,16 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
       }
       setCases(result.data);
       setNotice(undefined);
-      setSelectedId((current) => current ?? result.data[0]?.id);
+      const currentId = selectedIdRef.current;
+      if (!currentId || !result.data.some((item) => item.id === currentId)) {
+        selectCase(result.data[0]?.id);
+      }
     } catch (error) {
       if (!controller.signal.aborted && epoch === listEpoch.current) setNotice({ kind: "error", text: errorText(error, copy.listLoadFailed) });
     } finally {
       if (!controller.signal.aborted && epoch === listEpoch.current) setLoading(false);
     }
-  }, [api]);
+  }, [api, selectCase]);
 
   const refreshDetail = useCallback(async (caseId: string) => {
     detailController.current?.abort();
@@ -150,7 +165,7 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
     try {
       const result = await operation(controller.signal);
       if (controller.signal.aborted) return false;
-      if (!result.data && result.error) {
+      if (!result.data) {
         setNotice({ kind: "error", text: errorText(result.error, copy.requestFailed) });
         return false;
       }
@@ -175,15 +190,16 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
       if (controller.signal.aborted) return;
       if (!result.data) { setNotice({ kind: "error", text: errorText(result.error, copy.createFailed) }); return; }
       setObligationId("");
-      setSelectedId(result.data.id);
+      selectCase(result.data.id);
       await refreshCase(result.data.id);
     } catch (error) { if (!controller.signal.aborted) setNotice({ kind: "error", text: errorText(error, copy.createFailed) }); }
     finally { if (!controller.signal.aborted && commandController.current === controller) setPending(undefined); }
   }
 
+  const isCurrentDetail = selected?.id === selectedId && !detailLoading;
   const can = useMemo(
-    () => deriveFacilitiesCapabilities(authz, selected, actorId),
-    [actorId, authz, selected],
+    () => deriveFacilitiesCapabilities(authz, isCurrentDetail ? selected : undefined, actorId),
+    [actorId, authz, isCurrentDetail, selected],
   );
 
   return <main className="mx-auto grid w-full max-w-[1800px] gap-4 px-4 py-5 lg:px-6" aria-labelledby="facilities-title">
@@ -213,7 +229,7 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
         <div className="max-h-[58vh] overflow-auto p-2" aria-busy={loading}>
           {loading ? <p className="p-3 text-sm text-steel">{copy.loadingCases}</p> : null}
           {!loading && cases.length === 0 ? <p className="p-3 text-sm text-steel">{copy.emptyCases}</p> : null}
-          {cases.map((item) => <button key={item.id} type="button" aria-label={`${copy.caseLabel} ${item.id}`} aria-pressed={selectedId === item.id} onClick={() => { setSelectedId(item.id); }} className={`grid w-full gap-2 rounded-lg p-3 text-left hover:bg-muted-panel ${selectedId === item.id ? "bg-brand-teal/10 ring-1 ring-brand-teal" : ""}`}>
+          {cases.map((item) => <button key={item.id} type="button" aria-label={`${copy.caseLabel} ${item.id}`} aria-pressed={selectedId === item.id} onClick={() => { selectCase(item.id); }} className={`grid w-full gap-2 rounded-lg p-3 text-left hover:bg-muted-panel ${selectedId === item.id ? "bg-brand-teal/10 ring-1 ring-brand-teal" : ""}`}>
             <span className="flex items-center justify-between gap-3"><strong className="font-mono text-sm text-ink">{item.id.slice(0, 8)}</strong><span className="rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink">{STATUS_LABEL[item.status]}</span></span>
             <span className={`rounded border px-2 py-1 text-xs ${dueTone(item.completionDueAt)}`}>{copy.completionSla} {displayDate(item.completionDueAt)}</span>
             <span className="text-xs text-steel">{item.assigneeId ? `${copy.assigneePrefix} ${item.assigneeId.slice(0, 8)}` : copy.unassigned}</span>
@@ -224,7 +240,7 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
       <section className="rounded-xl border border-line bg-white p-4 shadow-sm" aria-live="polite" aria-busy={detailLoading}>
         {!selectedId ? <p className="text-sm text-steel">{copy.selectCase}</p> : null}
         {selectedId && detailLoading && !selected ? <p className="text-sm text-steel">{copy.loadingDetail}</p> : null}
-        {selected ? <div className="grid gap-5">
+        {isCurrentDetail && selected ? <div className="grid gap-5">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-steel">{copy.caseLabel} {selected.id}</p><h2 className="mt-1 text-xl font-bold text-ink">{STATUS_LABEL[selected.status]}</h2></div><span className={`rounded-md border px-3 py-2 text-sm font-semibold ${dueTone(selected.completionDueAt)}`}>{copy.completionSla} {displayDate(selected.completionDueAt)}</span></div>
           <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Metric label={copy.responseSla} value={displayDate(selected.responseDueAt)} /><Metric label={copy.acceptanceSla} value={displayDate(selected.acceptanceDueAt)} /><Metric label={copy.assignee} value={selected.assigneeId ?? copy.unassignedShort} mono /><Metric label={copy.energyDelta} value={selected.energyDeltaKwh ? `${selected.energyDeltaKwh} ${copy.energyUnit}` : copy.notObserved} /><Metric label={copy.totalCost} value={`${selected.totalCostKrw.toLocaleString("ko-KR")} ${copy.currencyUnit}`} /></dl>
           {can.canTriage ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); if (!scheduledFor) return; void command("triage", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/triage", { params: { path: { case_id: selected.id } }, body: { scheduledFor: new Date(scheduledFor).toISOString() }, signal }), selected.id); }}><h3 className="font-bold text-ink">{copy.triageTitle}</h3><label className="mt-3 grid max-w-sm gap-1 text-sm font-medium">{copy.scheduledFor}<input type="datetime-local" required value={scheduledFor} onChange={(event) => { setScheduledFor(event.target.value); }} className="rounded-md border border-line px-3 py-2" /></label><ActionButton pending={pending === "triage"}>{copy.schedule}</ActionButton></form> : null}

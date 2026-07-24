@@ -179,6 +179,56 @@ describe("FacilitiesWorkflowPage", () => {
     expect(initialListCall?.[1]?.signal.aborted).toBe(true);
   });
 
+  it("clears the old detail and cannot post to it while a new case detail is pending", async () => {
+    const secondCaseId = "55555555-5555-5555-5555-555555555555";
+    const first = caseView("DUE");
+    const second = caseView("DUE", { id: secondCaseId });
+    let resolveSecondDetail: (() => void) | undefined;
+    const secondDetail = new Promise<{ data: typeof second; response: Response }>((resolve) => {
+      resolveSecondDetail = () => { resolve({ data: second, response: new Response() }); };
+    });
+    const GET = vi.fn((path: string, options?: { params?: { path?: { case_id?: string } } }) => {
+      if (path === "/api/v1/facilities/cases") return Promise.resolve({ data: [first, second], response: new Response() });
+      return options?.params?.path?.case_id === secondCaseId
+        ? secondDetail
+        : Promise.resolve({ data: first, response: new Response() });
+    });
+    const POST = vi.fn().mockResolvedValue({ data: {}, response: new Response() });
+    useAuth.mockReturnValue({ api: { GET, POST }, session: { access_token: "token", org_id: "org", user_id: actorId, client_session_incarnation: "session" } });
+    const user = userEvent.setup();
+    render(<FacilitiesWorkflowPage />);
+
+    await screen.findByRole("heading", { name: "접수 대기" });
+    await user.click(screen.getByRole("button", { name: `사례 ${secondCaseId}` }));
+    expect(screen.queryByRole("button", { name: "일정 확정" })).not.toBeInTheDocument();
+    expect(POST).not.toHaveBeenCalled();
+
+    resolveSecondDetail?.();
+    await screen.findByRole("heading", { name: "접수 대기" });
+    await user.click(screen.getByRole("button", { name: "일정 확정" }));
+    await waitFor(() => {
+      expect(POST).toHaveBeenCalledTimes(1);
+    });
+    expect(POST).toHaveBeenCalledWith(
+      "/api/v1/facilities/cases/{case_id}/triage",
+      expect.objectContaining({ params: { path: { case_id: secondCaseId } } }),
+    );
+  });
+
+  it("fails closed when a lifecycle response omits data and does not reread", async () => {
+    const { GET, POST } = setupApi();
+    POST.mockResolvedValueOnce({ response: new Response() });
+    const user = userEvent.setup();
+    render(<FacilitiesWorkflowPage />);
+
+    await screen.findByRole("heading", { name: "접수 대기" });
+    const readsBefore = GET.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "일정 확정" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("서버가 요청을 처리하지 못했습니다.");
+    expect(GET).toHaveBeenCalledTimes(readsBefore);
+    expect(screen.getByRole("heading", { name: "접수 대기" })).toBeInTheDocument();
+  });
+
   it("does not send a submission without both mandatory evidence records", async () => {
     const { POST } = setupApi("IN_PROGRESS");
     render(<FacilitiesWorkflowPage />);
