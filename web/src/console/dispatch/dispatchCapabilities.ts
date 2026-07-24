@@ -1,7 +1,6 @@
 export type DispatchFeature =
   | "work_order_read_all"
   | "work_order_create"
-  | "work_order_start"
   | "assignee_manage"
   | "audit_log_read";
 
@@ -19,8 +18,6 @@ export interface DispatchCapabilities {
   canRead: boolean;
   /** Start a P1 dispatch broadcast (work_order_create). */
   canRequest: boolean;
-  /** Accept/decline an own offer (work_order_start) — technician persona. */
-  canRespond: boolean;
   /** Candidates read + force-assign (assignee_manage). */
   canAssign: boolean;
   /** Platform audit history layer (audit_log_read). */
@@ -41,7 +38,6 @@ export function deriveDispatchCapabilities(
   return {
     canRead: allows("work_order_read_all"),
     canRequest: allows("work_order_create"),
-    canRespond: allows("work_order_start"),
     canAssign: allows("assignee_manage"),
     canReadHistory: allows("audit_log_read"),
   };

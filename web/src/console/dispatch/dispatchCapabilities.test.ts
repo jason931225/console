@@ -22,7 +22,6 @@ describe("deriveDispatchCapabilities", () => {
     expect(deriveDispatchCapabilities(gate)).toEqual({
       canRead: true,
       canRequest: false,
-      canRespond: false,
       canAssign: true,
       canReadHistory: false,
     });

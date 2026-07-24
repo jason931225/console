@@ -2,10 +2,8 @@ import type { components } from "@maintenance/api-client-ts";
 
 import type { ConsoleApiClient } from "../../api/client";
 
-export type P1DispatchSummary = components["schemas"]["P1DispatchSummary"];
 export type DispatchStatus = components["schemas"]["DispatchStatus"];
 export type WorkOrderStatus = components["schemas"]["WorkOrderStatus"];
-export type UserSummary = components["schemas"]["UserSummary"];
 export type ObjectHead = components["schemas"]["ObjectHead"];
 
 /**
@@ -210,13 +208,6 @@ export function createDispatchApi(api: ConsoleApiClient) {
         { signal },
       );
       return requireItems(result, "responses") as DispatchResponsePage;
-    },
-    dispatch: async (dispatchId: string, signal?: AbortSignal) => {
-      const response = await api.GET("/api/v1/p1-dispatches/{dispatchId}", {
-        params: { path: { dispatchId } },
-        signal,
-      });
-      return requireData(response);
     },
     startDispatch: async (workOrderId: string, signal?: AbortSignal) => {
       const response = await api.POST("/api/v1/work-orders/{workOrderId}/p1-dispatch", {
