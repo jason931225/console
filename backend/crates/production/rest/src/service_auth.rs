@@ -5,6 +5,7 @@
 //! single feature this credential may exercise.
 
 use base64::Engine as _;
+use hmac::digest::KeyInit;
 use hmac::{Hmac, Mac};
 use mnt_kernel_core::{BranchId, OrgId, ServicePrincipalId};
 use sha2::Sha256;
