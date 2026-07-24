@@ -34,6 +34,14 @@ const ACTIONS = {
   withdrawRevision: "console.automate.schedule.revision.withdraw",
 } as const;
 
+const INITIAL_FORM: WorkflowScheduleCreate = {
+  label: "",
+  cron_expr: "0 9 * * 1-5",
+  timezone: "Asia/Seoul",
+  definition_id: "",
+  enabled: true,
+};
+
 
 const shell: CSSProperties = {
   display: "grid",
@@ -120,13 +128,7 @@ export function WorkflowScheduleOperations() {
   const [error, setError] = useState<string>();
   const [acceptedScope, setAcceptedScope] = useState<string>();
   const [definitions, setDefinitions] = useState<WorkflowDefinitionResponse[]>([]);
-  const [form, setForm] = useState<WorkflowScheduleCreate>({
-    label: "",
-    cron_expr: "0 9 * * 1-5",
-    timezone: "Asia/Seoul",
-    definition_id: "",
-    enabled: true,
-  });
+  const [form, setForm] = useState<WorkflowScheduleCreate>(INITIAL_FORM);
   const [editing, setEditing] = useState(false);
   const scheduleRequest = useRef(0);
   const detailRequest = useRef(0);
@@ -183,6 +185,9 @@ export function WorkflowScheduleOperations() {
     setSelectedId(undefined);
     setRuns([]);
     setPreview([]);
+    setForm(INITIAL_FORM);
+    setEditing(false);
+    setPendingId(undefined);
     setError(undefined);
     const controller = new AbortController();
     void loadSchedules(scopeKey, controller.signal);
@@ -292,7 +297,7 @@ export function WorkflowScheduleOperations() {
         await createWorkflowSchedule(api, form);
       }
       setEditing(false);
-      setForm((current) => ({ ...current, label: "" }));
+      setForm(INITIAL_FORM);
       await loadSchedules(scopeKey);
     } catch (caught) {
       await loadSchedules(scopeKey);
@@ -338,6 +343,15 @@ export function WorkflowScheduleOperations() {
   const revise = useCallback(
     async (action: "approve" | "withdraw") => {
       if (!selectedDefinition?.pending_version || pendingId) return;
+      if (
+        action === "approve" &&
+        session?.user_id &&
+        selectedDefinition.pending_staged_by?.toLowerCase() ===
+          session.user_id.toLowerCase()
+      ) {
+        setError("자신이 올린 개정은 승인할 수 없습니다.");
+        return;
+      }
       setPendingId(selected?.id);
       setError(undefined);
       try {
@@ -363,12 +377,16 @@ export function WorkflowScheduleOperations() {
         setPendingId(undefined);
       }
     },
-    [api, loadSchedules, pendingId, scopeKey, selected?.id, selectedDefinition],
+    [api, loadSchedules, pendingId, scopeKey, selected?.id, selectedDefinition, session?.user_id],
   );
 
   const canViewSchedules = gate.can(ACTIONS.viewSchedules, {
     kind: "automate_tab",
     id: "schedules",
+  });
+  const canCreateSchedules = gate.can(ACTIONS.create, {
+    kind: "workflow_schedule",
+    id: "new",
   });
 
   return (
@@ -386,7 +404,7 @@ export function WorkflowScheduleOperations() {
       ) : (
         <>
           {error ? <p role="alert">{error}</p> : null}
-          <form
+          {canCreateSchedules ? <form
             aria-label={editing ? "예약 작업 편집" : "예약 작업 추가"}
             style={card}
             onSubmit={(event) => {
@@ -460,14 +478,14 @@ export function WorkflowScheduleOperations() {
                   style={button}
                   onClick={() => {
                     setEditing(false);
-                    setForm((current) => ({ ...current, label: "" }));
+                    setForm(INITIAL_FORM);
                   }}
                 >
                   취소
                 </button>
               ) : null}
             </div>
-          </form>
+          </form> : null}
           <div style={grid}>
             <section aria-label="예약 목록" style={card}>
               <div style={row}>

@@ -64,7 +64,7 @@ function api(): ConsoleApiClient {
   return { GET, POST, PATCH } as unknown as ConsoleApiClient;
 }
 
-function renderPanel(client = api()) {
+function renderPanel(client = api(), can: (action: string) => boolean = () => true) {
   const result = render(
     <AuthTestProvider
       session={{
@@ -76,7 +76,7 @@ function renderPanel(client = api()) {
       }}
       overrides={{ api: client }}
     >
-      <PolicyGateProvider gate={{ can: () => true }}>
+      <PolicyGateProvider gate={{ can }}>
         <WorkflowScheduleOperations />
       </PolicyGateProvider>
     </AuthTestProvider>,
@@ -187,6 +187,50 @@ describe("WorkflowScheduleOperations", () => {
       }),
     );
   });
+
+  it("omits schedule creation controls for a view-only policy", async () => {
+    renderPanel(api(), (action) => action !== "console.automate.schedule.create");
+    await screen.findByRole("button", { name: "평일 KPI 스냅샷 선택" });
+    expect(screen.queryByRole("form", { name: "예약 작업 추가" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "예약 작업 추가" })).toBeNull();
+  });
+
+  it("blocks self-approval of a pending definition revision before a request", async () => {
+    const GET = vi.fn(async (path: string) => {
+      if (path === "/api/v1/workflow-studio/schedules")
+        return { data: { items: [schedule] }, response: new Response() };
+      if (path === "/api/v1/workflow-studio/definitions")
+        return {
+          data: {
+            items: [
+              {
+                id: schedule.definition_id,
+                display_name: "KPI 정의",
+                pending_version: 4,
+                pending_staged_by: "u-1",
+              },
+            ],
+          },
+          response: new Response(),
+        };
+      if (path === "/api/v1/workflow-studio/schedules/{id}/runs")
+        return { data: { items: [] }, response: new Response() };
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const POST = vi.fn(async () => ({
+      data: { cron_expr: schedule.cron_expr, timezone: schedule.timezone, fire_times: [] },
+      response: new Response(),
+    }));
+    renderPanel({ GET, POST, PATCH: vi.fn() } as unknown as ConsoleApiClient);
+
+    await userEvent.click(await screen.findByRole("button", { name: "개정 승인" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "자신이 올린 개정은 승인할 수 없습니다.",
+    );
+    expect(
+      POST.mock.calls.some(([path]) => String(path).includes("/revisions/")),
+    ).toBe(false);
+  });
 });
 
 function deferred<T>() {
@@ -198,6 +242,31 @@ function deferred<T>() {
 }
 
 describe("WorkflowScheduleOperations scope fences", () => {
+  it("clears an A-session edit form before B can inherit it", async () => {
+    const client = api();
+    const sessionA = { access_token: "token-a", org_id: "org-a", user_id: "a", roles: ["SUPER_ADMIN"], feature_grants: [] };
+    const sessionB = { ...sessionA, access_token: "token-b", org_id: "org-b", user_id: "b" };
+    const view = render(
+      <AuthTestProvider session={sessionA} overrides={{ api: client }}>
+        <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
+      </AuthTestProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "예약 편집" }));
+    expect(screen.getByRole("form", { name: "예약 작업 편집" })).toBeVisible();
+    expect(screen.getByLabelText("이름")).toHaveValue("평일 KPI 스냅샷");
+
+    view.rerender(
+      <AuthTestProvider session={sessionB} overrides={{ api: client }}>
+        <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
+      </AuthTestProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("form", { name: "예약 작업 추가" })).toBeVisible(),
+    );
+    expect(screen.getByLabelText("이름")).toHaveValue("");
+    expect(screen.getByLabelText("연결된 워크플로 정의")).toHaveValue("");
+  });
+
   it("rejects a deferred prior-session schedule list after an A→B switch", async () => {
     const first = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
     const second = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
