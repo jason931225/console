@@ -388,16 +388,18 @@ describe("EvidenceBindingWorkbench acceptance", () => {
       screen.getByRole("button", { name: /POL-2026-17 details/ }),
     );
     await user.click(screen.getByRole("button", { name: "Accept evidence" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(POST).toHaveBeenCalledWith(
         "/api/v1/compliance/evidence-bindings/{id}/accept",
         {
           params: { path: { id: proposed.id } },
           signal: expect.any(AbortSignal),
         },
-      ),
-    );
-    await waitFor(() => expect(GET).toHaveBeenCalledTimes(8));
+      );
+    });
+    await waitFor(() => {
+      expect(GET).toHaveBeenCalledTimes(8);
+    });
   });
 
   it("aborts a pending acceptance and clears the action state on an authority switch", async () => {
@@ -421,7 +423,9 @@ describe("EvidenceBindingWorkbench acceptance", () => {
           acceptSignal = init.signal;
           init.signal?.addEventListener(
             "abort",
-            () => reject(new DOMException("aborted", "AbortError")),
+            () => {
+              reject(new DOMException("aborted", "AbortError"));
+            },
             { once: true },
           );
         }) as never,
@@ -488,12 +492,12 @@ describe("EvidenceBindingWorkbench acceptance", () => {
     await user.selectOptions(screen.getByLabelText("Control"), control.id);
     await user.type(screen.getByLabelText("Evidence ID"), "POL-2026-LINK");
     await user.click(screen.getByRole("button", { name: "Propose binding" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(POST).toHaveBeenCalledWith(
         "/api/v1/compliance/evidence-bindings",
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      ),
-    );
+      );
+    });
     await user.click(
       screen.getByRole("button", { name: /POL-2026-17 details/ }),
     );
@@ -528,15 +532,15 @@ describe("EvidenceBindingWorkbench acceptance", () => {
       screen.getByRole("button", { name: /POL-2026-17 details/ }),
     );
     await user.click(screen.getByRole("button", { name: "Accept evidence" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(POST).toHaveBeenCalledWith(
         "/api/v1/compliance/evidence-bindings/{id}/accept",
         {
           params: { path: { id: proposed.id } },
           signal: expect.any(AbortSignal),
         },
-      ),
-    );
+      );
+    });
   });
 
   it("omits the acceptance action for a caller without write authority", async () => {

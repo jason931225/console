@@ -178,9 +178,10 @@ describe("ComplianceModuleScreenBody", () => {
       await screen.findByRole("button", { name: "Propose binding" }),
     ).toBeInTheDocument();
     await screen.findByRole("button", { name: /POL-MANAGE details/ });
-    await screen
-      .findByRole("button", { name: /POL-MANAGE details/ })
-      .then((button) => button.click());
+    const details = await screen.findByRole("button", {
+      name: /POL-MANAGE details/,
+    });
+    details.click();
     expect(
       screen.queryByRole("button", { name: "Accept evidence" }),
     ).not.toBeInTheDocument();
