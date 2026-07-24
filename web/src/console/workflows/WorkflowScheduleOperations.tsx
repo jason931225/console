@@ -10,8 +10,9 @@ import { runIdempotencyKey } from "../../api/automate";
 import { ApiCallError } from "../../api/ontologyActions";
 import type { WorkflowDefinitionResponse } from "../../api/types";
 import { assertPasskeyStepUp } from "../../auth/webauthn";
-import { useAuth } from "../../context/auth";
-import { PolicyGated, usePolicyGate } from "../policy";
+import { useAuth, type AuthSession } from "../../context/auth";
+import type { ConsoleApiClient } from "../../api/client";
+import { PolicyGated, usePolicyGate, type PolicyGate } from "../policy";
 import "../tokens.css";
 import {
   createWorkflowSchedule,
@@ -120,10 +121,29 @@ function errorMessage(error: unknown): string {
 export function WorkflowScheduleOperations() {
   const { api, session } = useAuth();
   const gate = usePolicyGate();
+  const scopeKey = session
+    ? `${session.access_token}:${session.org_id ?? "platform"}`
+    : "anonymous";
+
+  // A scope-keyed child unmounts all retained data before another tenant can
+  // render it. Async work is additionally fenced by the child lifetime.
+  return <WorkflowScheduleScope key={scopeKey} api={api} gate={gate} session={session} />;
+}
+
+interface WorkflowScheduleScopeProps {
+  api: ConsoleApiClient;
+  gate: PolicyGate;
+  session: AuthSession | undefined;
+}
+
+function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProps) {
   const [schedules, setSchedules] = useState<WorkflowSchedule[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
-  const [runs, setRuns] = useState<WorkflowScheduleRun[]>([]);
-  const [preview, setPreview] = useState<string[]>([]);
+  const [detail, setDetail] = useState<{
+    scheduleId: string;
+    preview: string[];
+    runs: WorkflowScheduleRun[];
+  }>();
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string>();
   const [error, setError] = useState<string>();
@@ -133,13 +153,18 @@ export function WorkflowScheduleOperations() {
   const [editing, setEditing] = useState(false);
   const scheduleRequest = useRef(0);
   const detailRequest = useRef(0);
-  const scopeKey = session ? `${session.access_token}:${session.org_id}` : "anonymous";
-  const scopeRef = useRef(scopeKey);
-  scopeRef.current = scopeKey;
+  const active = useRef(true);
+  const scopeKey = session
+    ? `${session.access_token}:${session.org_id ?? "platform"}`
+    : "anonymous";
+
+  useEffect(() => () => {
+    active.current = false;
+  }, []);
+  const isActive = useCallback(() => active.current, []);
 
   const loadSchedules = useCallback(
-    async (expectedScope: string, signal?: AbortSignal) => {
-      if (scopeRef.current !== expectedScope) return;
+    async (signal?: AbortSignal) => {
       const request = ++scheduleRequest.current;
       setLoading(true);
       try {
@@ -149,56 +174,32 @@ export function WorkflowScheduleOperations() {
         ]);
         if (!definitionResponse.data)
           throw new ApiCallError(definitionResponse.response.status, definitionResponse.error);
-        if (
-          request !== scheduleRequest.current ||
-          signal?.aborted ||
-          scopeRef.current !== expectedScope
-        ) return;
+        if (request !== scheduleRequest.current || signal?.aborted) return;
         setSchedules(next);
         setDefinitions(definitionResponse.data.items);
-        setAcceptedScope(expectedScope);
+        setAcceptedScope(scopeKey);
         setSelectedId((current) =>
-          current && next.some((item) => item.id === current)
-            ? current
-            : next[0]?.id,
+          current && next.some((item) => item.id === current) ? current : next[0]?.id,
         );
         setError(undefined);
       } catch (caught) {
-        if (
-          signal?.aborted ||
-          request !== scheduleRequest.current ||
-          scopeRef.current !== expectedScope
-        ) return;
+        if (signal?.aborted || request !== scheduleRequest.current) return;
         setError(errorMessage(caught));
       } finally {
-        if (
-          request === scheduleRequest.current &&
-          !signal?.aborted &&
-          scopeRef.current === expectedScope
-        )
-          setLoading(false);
+        if (request === scheduleRequest.current && !signal?.aborted) setLoading(false);
       }
     },
-    [api],
+    [api, scopeKey],
   );
 
   useEffect(() => {
-    // A tenant/session switch invalidates all in-memory schedule data before
-    // the new request settles; the scope token also rejects late A responses.
-    setAcceptedScope(undefined);
-    setSchedules([]);
-    setDefinitions([]);
-    setSelectedId(undefined);
-    setRuns([]);
-    setPreview([]);
-    setForm(INITIAL_FORM);
-    setEditing(false);
-    setPendingId(undefined);
-    setError(undefined);
     const controller = new AbortController();
-    void loadSchedules(scopeKey, controller.signal);
-    return () => controller.abort();
-  }, [loadSchedules, scopeKey]);
+    // Defer the load so this effect does not synchronously cascade state updates.
+    void Promise.resolve().then(() => loadSchedules(controller.signal));
+    return () => {
+      controller.abort();
+    };
+  }, [loadSchedules]);
 
   const scopedSchedules = acceptedScope === scopeKey ? schedules : [];
   const selected = scopedSchedules.find((item) => item.id === selectedId);
@@ -207,53 +208,32 @@ export function WorkflowScheduleOperations() {
   );
 
   useEffect(() => {
-    if (!selected || acceptedScope !== scopeKey) {
-      setRuns([]);
-      setPreview([]);
-      return;
-    }
-    // A selected schedule never inherits preview/history from a prior id or scope.
-    setRuns([]);
-    setPreview([]);
+    if (!selected || acceptedScope !== scopeKey) return;
     const controller = new AbortController();
     const request = ++detailRequest.current;
     void Promise.all([
-      previewWorkflowSchedule(
-        api,
-        selected.cron_expr,
-        selected.timezone,
-        controller.signal,
-      ),
+      previewWorkflowSchedule(api, selected.cron_expr, selected.timezone, controller.signal),
       listScheduleRuns(api, selected.id, controller.signal),
     ])
       .then(([nextPreview, nextRuns]) => {
-        if (
-          controller.signal.aborted ||
-          request !== detailRequest.current ||
-          scopeRef.current !== scopeKey
-        ) return;
-        setPreview(nextPreview.fire_times);
-        setRuns(nextRuns);
+        if (controller.signal.aborted || request !== detailRequest.current) return;
+        setDetail({ scheduleId: selected.id, preview: nextPreview.fire_times, runs: nextRuns });
       })
       .catch((caught: unknown) => {
-        if (
-          controller.signal.aborted ||
-          request !== detailRequest.current ||
-          scopeRef.current !== scopeKey
-        ) return;
-        setRuns([]);
-        setPreview([]);
+        if (controller.signal.aborted || request !== detailRequest.current) return;
+        setDetail({ scheduleId: selected.id, preview: [], runs: [] });
         setError(errorMessage(caught));
       });
-    return () => controller.abort();
-  }, [
-    api,
-    selected?.id,
-    selected?.cron_expr,
-    selected?.timezone,
-    acceptedScope,
-    scopeKey,
-  ]);
+    return () => {
+      controller.abort();
+    };
+  }, [acceptedScope, api, scopeKey, selected]);
+
+  // Detail visibility is derived from its owning schedule, so prior previews
+  // and history cannot flash while a new selected schedule is loading.
+  const visibleDetail = detail?.scheduleId === selected?.id ? detail : undefined;
+  const preview = visibleDetail?.preview ?? [];
+  const runs = visibleDetail?.runs ?? [];
 
   const toggle = useCallback(async () => {
     if (
@@ -262,28 +242,27 @@ export function WorkflowScheduleOperations() {
       !gate.can(ACTIONS.toggle, { kind: "workflow_schedule", id: selected.id })
     )
       return;
-    const expectedScope = scopeKey;
     setPendingId(selected.id);
     setError(undefined);
     try {
       const updated = await updateWorkflowSchedule(api, selected.id, {
         enabled: !selected.enabled,
       });
-      if (scopeRef.current !== expectedScope) return;
+      if (!isActive()) return;
       setSchedules((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
       // Read again after the mutation; the backend remains the lifecycle authority.
-      await loadSchedules(expectedScope);
+      await loadSchedules();
     } catch (caught) {
-      if (scopeRef.current !== expectedScope) return;
-      await loadSchedules(expectedScope);
-      if (scopeRef.current !== expectedScope) return;
+      if (!isActive()) return;
+      await loadSchedules();
+      if (!isActive()) return;
       setError(errorMessage(caught));
     } finally {
-      if (scopeRef.current === expectedScope) setPendingId(undefined);
+      if (isActive()) setPendingId(undefined);
     }
-  }, [api, gate, loadSchedules, pendingId, scopeKey, selected]);
+  }, [api, gate, isActive, loadSchedules, pendingId, selected]);
 
   const save = useCallback(async () => {
     if (
@@ -294,7 +273,6 @@ export function WorkflowScheduleOperations() {
       })
     )
       return;
-    const expectedScope = scopeKey;
     setError(undefined);
     setPendingId(selected?.id ?? "creating");
     try {
@@ -307,19 +285,19 @@ export function WorkflowScheduleOperations() {
       } else {
         await createWorkflowSchedule(api, form);
       }
-      if (scopeRef.current !== expectedScope) return;
+      if (!isActive()) return;
       setEditing(false);
       setForm(INITIAL_FORM);
-      await loadSchedules(expectedScope);
+      await loadSchedules();
     } catch (caught) {
-      if (scopeRef.current !== expectedScope) return;
-      await loadSchedules(expectedScope);
-      if (scopeRef.current !== expectedScope) return;
+      if (!isActive()) return;
+      await loadSchedules();
+      if (!isActive()) return;
       setError(errorMessage(caught));
     } finally {
-      if (scopeRef.current === expectedScope) setPendingId(undefined);
+      if (isActive()) setPendingId(undefined);
     }
-  }, [api, editing, form, gate, loadSchedules, pendingId, scopeKey, selected]);
+  }, [api, editing, form, gate, isActive, loadSchedules, pendingId, selected]);
 
   const startEdit = useCallback(() => {
     if (
@@ -339,7 +317,6 @@ export function WorkflowScheduleOperations() {
 
   const runNow = useCallback(async () => {
     if (!selected || pendingId) return;
-    const expectedScope = scopeKey;
     setPendingId(selected.id);
     setError(undefined);
     try {
@@ -351,15 +328,15 @@ export function WorkflowScheduleOperations() {
         },
       });
       if (!response.data) throw new ApiCallError(response.response.status, response.error);
-      if (scopeRef.current !== expectedScope) return;
-      await loadSchedules(expectedScope);
+      if (!isActive()) return;
+      await loadSchedules();
     } catch (caught) {
-      if (scopeRef.current !== expectedScope) return;
+      if (!isActive()) return;
       setError(errorMessage(caught));
     } finally {
-      if (scopeRef.current === expectedScope) setPendingId(undefined);
+      if (isActive()) setPendingId(undefined);
     }
-  }, [api, loadSchedules, pendingId, scopeKey, selected]);
+  }, [api, isActive, loadSchedules, pendingId, selected]);
 
   const revise = useCallback(
     async (action: "approve" | "withdraw") => {
@@ -373,12 +350,11 @@ export function WorkflowScheduleOperations() {
         setError("자신이 올린 개정은 승인할 수 없습니다.");
         return;
       }
-      const expectedScope = scopeKey;
-      setPendingId(selected?.id);
+        setPendingId(selected?.id);
       setError(undefined);
       try {
         const stepUp = action === "approve" ? await assertPasskeyStepUp(api) : undefined;
-        if (scopeRef.current !== expectedScope) return;
+        if (!isActive()) return;
         const params = {
           path: { id: selectedDefinition.id, rev: selectedDefinition.pending_version },
         };
@@ -393,16 +369,16 @@ export function WorkflowScheduleOperations() {
               params,
               );
         if (!response.data) throw new ApiCallError(response.response.status, response.error);
-        if (scopeRef.current !== expectedScope) return;
-        await loadSchedules(expectedScope);
+        if (!isActive()) return;
+        await loadSchedules();
       } catch (caught) {
-        if (scopeRef.current !== expectedScope) return;
+        if (!isActive()) return;
         setError(errorMessage(caught));
       } finally {
-        if (scopeRef.current === expectedScope) setPendingId(undefined);
+        if (isActive()) setPendingId(undefined);
       }
     },
-    [api, loadSchedules, pendingId, scopeKey, selected?.id, selectedDefinition, session?.user_id],
+    [api, isActive, loadSchedules, pendingId, selected?.id, selectedDefinition, session],
   );
 
   const canViewSchedules = gate.can(ACTIONS.viewSchedules, {
@@ -536,7 +512,7 @@ export function WorkflowScheduleOperations() {
                     aria-pressed={item.id === selected?.id}
                     aria-label={`${item.label} 선택`}
                     style={item.id === selected?.id ? selectedButton : button}
-                    onClick={() => setSelectedId(item.id)}
+                    onClick={() => { setSelectedId(item.id); }}
                   >
                     {item.label} · {statusLabel(item)}
                   </button>

@@ -28,7 +28,7 @@ const schedule = {
 };
 
 function api(): ConsoleApiClient {
-  const GET = vi.fn(async (path: string) => {
+  const GET = vi.fn((path: string) => {
     if (path === "/api/v1/workflow-studio/schedules")
       return { data: { items: [schedule] }, response: new Response() };
     if (path === "/api/v1/workflow-studio/definitions")
@@ -54,7 +54,7 @@ function api(): ConsoleApiClient {
       };
     throw new Error(`unexpected GET ${path}`);
   });
-  const POST = vi.fn(async () => ({
+  const POST = vi.fn(() => ({
     data: {
       cron_expr: schedule.cron_expr,
       timezone: schedule.timezone,
@@ -62,7 +62,7 @@ function api(): ConsoleApiClient {
     },
     response: new Response(),
   }));
-  const PATCH = vi.fn(async () => ({
+  const PATCH = vi.fn(() => ({
     data: { ...schedule, enabled: true, next_run_at: "2026-07-27T00:00:00Z" },
     response: new Response(),
   }));
@@ -105,7 +105,7 @@ describe("WorkflowScheduleOperations", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "예약 활성화" }),
     );
-    await waitFor(() => expect(client.PATCH).toHaveBeenCalledTimes(1));
+    await waitFor(() => { expect(client.PATCH).toHaveBeenCalledTimes(1); });
     expect(client.PATCH).toHaveBeenCalledWith(
       "/api/v1/workflow-studio/schedules/{id}",
       {
@@ -113,7 +113,7 @@ describe("WorkflowScheduleOperations", () => {
         body: { enabled: true },
       },
     );
-    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(5));
+    await waitFor(() => { expect(client.GET).toHaveBeenCalledTimes(5); });
     expect(screen.getByRole("button", { name: "예약 활성화" })).toBeVisible();
   });
 
@@ -123,7 +123,7 @@ describe("WorkflowScheduleOperations", () => {
       data: undefined,
       error: { error: { message: "denied", code: "forbidden" } },
       response: new Response(undefined, { status: 403 }),
-    } as never);
+    });
     renderPanel(client);
     await userEvent.click(
       await screen.findByRole("button", { name: "예약 활성화" }),
@@ -140,7 +140,7 @@ describe("WorkflowScheduleOperations", () => {
       data: undefined,
       error: { error: { message: "conflict", code: "conflict" } },
       response: new Response(undefined, { status: 409 }),
-    } as never);
+    });
     renderPanel(client);
     await userEvent.click(
       await screen.findByRole("button", { name: "예약 활성화" }),
@@ -149,13 +149,13 @@ describe("WorkflowScheduleOperations", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "예약 상태가 변경되었습니다",
     );
-    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(5));
+    await waitFor(() => { expect(client.GET).toHaveBeenCalledTimes(5); });
     expect(screen.getByRole("button", { name: "예약 활성화" })).toBeVisible();
   });
 
   it("creates a durable schedule from a selected workflow definition", async () => {
     const client = api();
-    vi.mocked(client.POST).mockImplementation(async (path) => {
+    vi.mocked(client.POST).mockImplementation((path) => {
       if (path === "/api/v1/workflow-studio/schedules")
         return {
           data: { ...schedule, label: "월말 KPI", enabled: true },
@@ -181,7 +181,7 @@ describe("WorkflowScheduleOperations", () => {
     await user.click(screen.getByRole("button", { name: "예약 작업 추가" }));
 
     await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith("/api/v1/workflow-studio/schedules", {
+      { expect(client.POST).toHaveBeenCalledWith("/api/v1/workflow-studio/schedules", {
         body: {
           label: "월말 KPI",
           cron_expr: "0 9 * * 1-5",
@@ -189,7 +189,7 @@ describe("WorkflowScheduleOperations", () => {
           definition_id: schedule.definition_id,
           enabled: true,
         },
-      }),
+      }); },
     );
   });
 
@@ -234,7 +234,7 @@ describe("WorkflowScheduleOperations", () => {
   });
 
   it("blocks self-approval of a pending definition revision before a request", async () => {
-    const GET = vi.fn(async (path: string) => {
+    const GET = vi.fn((path: string) => {
       if (path === "/api/v1/workflow-studio/schedules")
         return { data: { items: [schedule] }, response: new Response() };
       if (path === "/api/v1/workflow-studio/definitions")
@@ -255,7 +255,7 @@ describe("WorkflowScheduleOperations", () => {
         return { data: { items: [] }, response: new Response() };
       throw new Error(`unexpected GET ${path}`);
     });
-    const POST = vi.fn(async () => ({
+    const POST = vi.fn(() => ({
       data: { cron_expr: schedule.cron_expr, timezone: schedule.timezone, fire_times: [] },
       response: new Response(),
     }));
@@ -286,7 +286,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
       credential: { id: string; type: string };
     }>();
     mockAssertPasskeyStepUp.mockReturnValueOnce(stepUp.promise);
-    const GET = vi.fn(async (path: string) => {
+    const GET = vi.fn((path: string) => {
       if (path === "/api/v1/workflow-studio/schedules")
         return { data: { items: [schedule] }, response: new Response() };
       if (path === "/api/v1/workflow-studio/definitions")
@@ -307,7 +307,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
         return { data: { items: [] }, response: new Response() };
       throw new Error(`unexpected GET ${path}`);
     });
-    const POST = vi.fn(async () => ({
+    const POST = vi.fn(() => ({
       data: { cron_expr: schedule.cron_expr, timezone: schedule.timezone, fire_times: [] },
       response: new Response(),
     }));
@@ -337,7 +337,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
   it("does not reload or mutate B after an A toggle resolves late", async () => {
     const write = deferred<{ data: typeof schedule; response: Response }>();
     let scheduleLists = 0;
-    const GET = vi.fn(async (path: string) => {
+    const GET = vi.fn((path: string) => {
       if (path === "/api/v1/workflow-studio/schedules") {
         scheduleLists += 1;
         return {
@@ -358,7 +358,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
         return { data: { items: [] }, response: new Response() };
       throw new Error(`unexpected GET ${path}`);
     });
-    const POST = vi.fn(async () => ({
+    const POST = vi.fn(() => ({
       data: { cron_expr: schedule.cron_expr, timezone: schedule.timezone, fire_times: [] },
       response: new Response(),
     }));
@@ -405,7 +405,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
       </AuthTestProvider>,
     );
     await waitFor(() =>
-      expect(screen.getByRole("form", { name: "예약 작업 추가" })).toBeVisible(),
+      { expect(screen.getByRole("form", { name: "예약 작업 추가" })).toBeVisible(); },
     );
     expect(screen.getByLabelText("이름")).toHaveValue("");
     expect(screen.getByLabelText("연결된 워크플로 정의")).toHaveValue("");
@@ -415,11 +415,13 @@ describe("WorkflowScheduleOperations scope fences", () => {
     const first = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
     const second = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
     let scheduleRequests = 0;
-    const GET = vi.fn().mockImplementation((path: string) => {
+    let firstListSignal: AbortSignal | undefined;
+    const GET = vi.fn().mockImplementation((path: string, options?: { signal?: AbortSignal }) => {
       if (path === "/api/v1/workflow-studio/definitions")
         return Promise.resolve({ data: { items: [] }, response: new Response() });
       if (path !== "/api/v1/workflow-studio/schedules") throw new Error(`unexpected GET ${path}`);
       scheduleRequests += 1;
+      if (scheduleRequests === 1) firstListSignal = options?.signal;
       return scheduleRequests === 1 ? first.promise : second.promise;
     });
     const client = { GET, POST: vi.fn(), PATCH: vi.fn() } as unknown as ConsoleApiClient;
@@ -430,18 +432,14 @@ describe("WorkflowScheduleOperations scope fences", () => {
         <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
       </AuthTestProvider>,
     );
-    await waitFor(() => expect(GET).toHaveBeenCalledTimes(2));
-    const firstListSignal = GET.mock.calls.find(
-      ([path]) => path === "/api/v1/workflow-studio/schedules",
-    )?.[1]?.signal as AbortSignal;
-
+    await waitFor(() => { expect(GET).toHaveBeenCalledTimes(2); });
     view.rerender(
       <AuthTestProvider session={sessionB} overrides={{ api: client }}>
         <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
       </AuthTestProvider>,
     );
-    await waitFor(() => expect(GET).toHaveBeenCalledTimes(4));
-    expect(firstListSignal.aborted).toBe(true);
+    await waitFor(() => { expect(GET).toHaveBeenCalledTimes(4); });
+    expect(firstListSignal?.aborted).toBe(true);
     first.resolve({ data: { items: [{ ...schedule, label: "A 전용 예약" }] }, response: new Response() });
     await Promise.resolve();
     expect(screen.queryByText("A 전용 예약")).toBeNull();
@@ -452,13 +450,13 @@ describe("WorkflowScheduleOperations scope fences", () => {
   });
 
   it("clears preview and history together when the selected schedule detail request fails", async () => {
-    const GET = vi.fn(async (path: string) => {
+    const GET = vi.fn((path: string) => {
       if (path === "/api/v1/workflow-studio/schedules") return { data: { items: [schedule] }, response: new Response() };
       if (path === "/api/v1/workflow-studio/definitions") return { data: { items: [] }, response: new Response() };
       if (path === "/api/v1/workflow-studio/schedules/{id}/runs") return { data: undefined, error: { error: { message: "conflict", code: "conflict" } }, response: new Response(undefined, { status: 409 }) };
       throw new Error(`unexpected GET ${path}`);
     });
-    const POST = vi.fn(async () => ({ data: { cron_expr: schedule.cron_expr, timezone: schedule.timezone, fire_times: ["2026-07-30T00:00:00Z"] }, response: new Response() }));
+    const POST = vi.fn(() => ({ data: { cron_expr: schedule.cron_expr, timezone: schedule.timezone, fire_times: ["2026-07-30T00:00:00Z"] }, response: new Response() }));
     const client = { GET, POST, PATCH: vi.fn() } as unknown as ConsoleApiClient;
     renderPanel(client);
 
@@ -493,7 +491,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
     renderPanel(client);
 
     await screen.findByRole("button", { name: "월말 정산 선택" });
-    await waitFor(() => expect(POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => { expect(POST).toHaveBeenCalledTimes(1); });
     const firstPreviewSignal = POST.mock.calls[0]?.[1]?.signal as AbortSignal;
     const firstHistorySignal = GET.mock.calls.find(
       ([path, options]) =>
@@ -501,7 +499,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
         options?.params?.path?.id === schedule.id,
     )?.[1]?.signal as AbortSignal;
     await userEvent.click(screen.getByRole("button", { name: "월말 정산 선택" }));
-    await waitFor(() => expect(POST).toHaveBeenCalledTimes(2));
+    await waitFor(() => { expect(POST).toHaveBeenCalledTimes(2); });
     expect(firstPreviewSignal.aborted).toBe(true);
     expect(firstHistorySignal.aborted).toBe(true);
 
