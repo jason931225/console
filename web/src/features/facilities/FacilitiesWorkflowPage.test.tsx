@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,7 +36,8 @@ function caseView(status: string, overrides = {}) {
 function setupApi(initial = "DUE", userId = actorId) {
   let status = initial;
   let value = caseView(status);
-  const GET = vi.fn((path: string) => {
+  const GET = vi.fn((path: string, options?: { signal?: AbortSignal }) => {
+    void options;
     if (path === "/api/v1/facilities/cases") return Promise.resolve({ data: [value], response: new Response() });
     return Promise.resolve({ data: value, response: new Response() });
   });
@@ -161,6 +162,21 @@ describe("FacilitiesWorkflowPage", () => {
 
     await screen.findByRole("heading", { name: "접수 대기" });
     expect(screen.getByRole("button", { name: `사례 ${caseId}` })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("aborts a superseded authoritative list read before issuing a refresh", async () => {
+    const { GET } = setupApi();
+    const user = userEvent.setup();
+    render(<FacilitiesWorkflowPage />);
+
+    await screen.findByRole("heading", { name: "접수 대기" });
+    const initialListCall = GET.mock.calls.find(([path]) => path === "/api/v1/facilities/cases");
+    expect(initialListCall?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    await user.click(screen.getByRole("button", { name: "새로 고침" }));
+    await waitFor(() => {
+      expect(GET.mock.calls.filter(([path]) => path === "/api/v1/facilities/cases")).toHaveLength(2);
+    });
+    expect(initialListCall?.[1]?.signal.aborted).toBe(true);
   });
 
   it("does not send a submission without both mandatory evidence records", async () => {

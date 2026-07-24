@@ -249,6 +249,19 @@ async fn rls_pbac_and_terminal_case_protect_facilities_mutations(pool: PgPool) {
     let case_id = fixture.only_case().await;
     let service = fixture.router();
 
+    let before_start_observation = post(
+        service.clone(),
+        &format!("/api/v1/facilities/cases/{case_id}/observations"),
+        &fixture.tech,
+        json!({"preKwh":"1.000","observedAt":OffsetDateTime::now_utc()}),
+    )
+    .await;
+    assert_eq!(
+        before_start_observation.status,
+        StatusCode::CONFLICT,
+        "observations must not be accepted before the assigned technician starts work"
+    );
+
     let other_branch = fixture.other_branch().await;
     let scoped_admin = fixture
         .token_for(UserId::new(), vec!["ADMIN"], vec![other_branch])
@@ -311,6 +324,19 @@ async fn rls_pbac_and_terminal_case_protect_facilities_mutations(pool: PgPool) {
         .status,
         StatusCode::OK
     );
+    let rejected_without_reason = post(
+        service.clone(),
+        &format!("/api/v1/facilities/cases/{case_id}/acceptance"),
+        &fixture.admin,
+        json!({"decision":"REJECTED"}),
+    )
+    .await;
+    assert_eq!(
+        rejected_without_reason.status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a rework decision must preserve a non-empty reason for the technician"
+    );
+
     assert_eq!(
         post(
             service.clone(),

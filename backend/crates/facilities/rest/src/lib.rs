@@ -398,10 +398,9 @@ fn legal(from: &str, to: &str) -> bool {
             | ("TRIAGED", "SCHEDULED")
             | ("SCHEDULED", "ASSIGNED")
             | ("ASSIGNED", "IN_PROGRESS")
-            | ("IN_PROGRESS", "SUBMITTED")
-            | ("SUBMITTED", "AWAITING_ACCEPTANCE")
-            | ("SUBMITTED", "REWORK_REQUIRED")
             | ("REWORK_REQUIRED", "IN_PROGRESS")
+            | ("IN_PROGRESS", "AWAITING_ACCEPTANCE")
+            | ("AWAITING_ACCEPTANCE", "REWORK_REQUIRED")
             | ("AWAITING_ACCEPTANCE", "CLOSED")
     )
 }
@@ -416,8 +415,7 @@ mod transition_tests {
             ("DUE", "SCHEDULED"),
             ("SCHEDULED", "ASSIGNED"),
             ("ASSIGNED", "IN_PROGRESS"),
-            ("IN_PROGRESS", "SUBMITTED"),
-            ("SUBMITTED", "AWAITING_ACCEPTANCE"),
+            ("IN_PROGRESS", "AWAITING_ACCEPTANCE"),
             ("AWAITING_ACCEPTANCE", "CLOSED"),
         ] {
             assert!(legal(transition.0, transition.1));
@@ -430,9 +428,16 @@ mod transition_tests {
     }
 
     #[test]
-    fn permits_rework_only_from_a_rejected_submission() {
-        assert!(legal("SUBMITTED", "REWORK_REQUIRED"));
+    fn permits_rework_only_from_a_rejected_acceptance() {
+        assert!(legal("AWAITING_ACCEPTANCE", "REWORK_REQUIRED"));
         assert!(legal("REWORK_REQUIRED", "IN_PROGRESS"));
+        assert!(!legal("IN_PROGRESS", "REWORK_REQUIRED"));
+    }
+
+    #[test]
+    fn rejected_acceptance_requires_a_non_blank_reason() {
+        assert!(super::acceptance_target("REJECTED", None).is_err());
+        assert!(super::acceptance_target("REJECTED", Some("   ")).is_err());
     }
 }
 async fn triage(
@@ -529,28 +534,41 @@ async fn submit(
     })).await?;
     get_case_view(&s.pool, &p, id).await.map(Json)
 }
+fn acceptance_target(
+    decision: &str,
+    reason: Option<&str>,
+) -> Result<(&'static str, Option<String>), RestError> {
+    let reason = reason
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+    match decision {
+        "ACCEPTED" => Ok(("CLOSED", reason)),
+        "REJECTED" if reason.is_some() => Ok(("REWORK_REQUIRED", reason)),
+        "REJECTED" => Err(RestError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "validation",
+            "a rejection reason is required",
+        )),
+        _ => Err(RestError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "validation",
+            "decision must be ACCEPTED or REJECTED",
+        )),
+    }
+}
+
 async fn acceptance(
     State(s): State<FacilitiesRestState>,
     h: HeaderMap,
     Path(id): Path<Uuid>,
     Json(b): Json<AcceptanceBody>,
 ) -> Result<Json<CaseView>, RestError> {
-    let to = match b.decision.as_str() {
-        "ACCEPTED" => "CLOSED",
-        "REJECTED" => "REWORK_REQUIRED",
-        _ => {
-            return Err(RestError::new(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "validation",
-                "decision must be ACCEPTED or REJECTED",
-            ));
-        }
-    };
+    let (to, reason) = acceptance_target(&b.decision, b.reason.as_deref())?;
     let p = principal(&s, &h).await?;
     let org = p.org_id;
     let actor = p.clone();
     let decision = b.decision.clone();
-    let reason = b.reason.clone();
     with_audits::<_, _, RestError>(&s.pool, org, move |tx| Box::pin(async move {
         let row = sqlx::query("SELECT status,branch_id FROM facilities_cases WHERE id=$1 AND org_id=$2 FOR UPDATE")
             .bind(id).bind(*org.as_uuid()).fetch_optional(tx.as_mut()).await.map_err(RestError::db)?
@@ -585,11 +603,11 @@ async fn observe(
         let branch: Uuid = row.try_get("branch_id").map_err(RestError::db)?;
         require_feature(&actor, Feature::FacilitiesObserve, branch)?;
         let status: String = row.try_get("status").map_err(RestError::db)?;
-        if status == "CLOSED" {
+        if status != "IN_PROGRESS" {
             return Err(RestError::new(
                 StatusCode::CONFLICT,
-                "terminal_case",
-                "observations cannot be added to a closed facilities case",
+                "illegal_transition",
+                "observations can be recorded only while work is in progress",
             ));
         }
         for (phase, value) in [("PRE", b.pre_kwh), ("POST", b.post_kwh)] {

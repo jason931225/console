@@ -71,13 +71,19 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
   const [acceptanceReason, setAcceptanceReason] = useState("");
   const listEpoch = useRef(0);
   const detailEpoch = useRef(0);
+  const listController = useRef<AbortController>();
+  const detailController = useRef<AbortController>();
+  const commandController = useRef<AbortController>();
 
   const refreshList = useCallback(async () => {
+    listController.current?.abort();
+    const controller = new AbortController();
+    listController.current = controller;
     const epoch = ++listEpoch.current;
     setLoading(true);
     try {
-      const result = await api.GET("/api/v1/facilities/cases");
-      if (epoch !== listEpoch.current) return;
+      const result = await api.GET("/api/v1/facilities/cases", { signal: controller.signal });
+      if (controller.signal.aborted || epoch !== listEpoch.current) return;
       if (!result.data) {
         setNotice({ kind: "error", text: errorText(result.error, copy.listLoadFailed) });
         return;
@@ -86,18 +92,21 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
       setNotice(undefined);
       setSelectedId((current) => current ?? result.data[0]?.id);
     } catch (error) {
-      if (epoch === listEpoch.current) setNotice({ kind: "error", text: errorText(error, copy.listLoadFailed) });
+      if (!controller.signal.aborted && epoch === listEpoch.current) setNotice({ kind: "error", text: errorText(error, copy.listLoadFailed) });
     } finally {
-      if (epoch === listEpoch.current) setLoading(false);
+      if (!controller.signal.aborted && epoch === listEpoch.current) setLoading(false);
     }
   }, [api]);
 
   const refreshDetail = useCallback(async (caseId: string) => {
+    detailController.current?.abort();
+    const controller = new AbortController();
+    detailController.current = controller;
     const epoch = ++detailEpoch.current;
     setDetailLoading(true);
     try {
-      const result = await api.GET("/api/v1/facilities/cases/{case_id}", { params: { path: { case_id: caseId } } });
-      if (epoch !== detailEpoch.current) return;
+      const result = await api.GET("/api/v1/facilities/cases/{case_id}", { params: { path: { case_id: caseId } }, signal: controller.signal });
+      if (controller.signal.aborted || epoch !== detailEpoch.current) return;
       if (!result.data) {
         setSelected(undefined);
         setNotice({ kind: "error", text: errorText(result.error, copy.detailLoadFailed) });
@@ -105,11 +114,19 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
       }
       setSelected(result.data);
     } catch (error) {
-      if (epoch === detailEpoch.current) setNotice({ kind: "error", text: errorText(error, copy.detailLoadFailed) });
+      if (!controller.signal.aborted && epoch === detailEpoch.current) setNotice({ kind: "error", text: errorText(error, copy.detailLoadFailed) });
     } finally {
-      if (epoch === detailEpoch.current) setDetailLoading(false);
+      if (!controller.signal.aborted && epoch === detailEpoch.current) setDetailLoading(false);
     }
   }, [api]);
+
+  useEffect(() => () => {
+    listController.current?.abort();
+    detailController.current?.abort();
+    commandController.current?.abort();
+    listEpoch.current += 1;
+    detailEpoch.current += 1;
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refreshList(); }, 0);
@@ -125,35 +142,43 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
     await Promise.all([refreshList(), refreshDetail(caseId)]);
   }, [refreshDetail, refreshList]);
 
-  const command = useCallback(async (key: string, operation: () => Promise<{ data?: unknown; error?: unknown }>, caseId: string) => {
+  const command = useCallback(async (key: string, operation: (signal: AbortSignal) => Promise<{ data?: unknown; error?: unknown }>, caseId: string) => {
+    commandController.current?.abort();
+    const controller = new AbortController();
+    commandController.current = controller;
     setPending(key); setNotice(undefined);
     try {
-      const result = await operation();
+      const result = await operation(controller.signal);
+      if (controller.signal.aborted) return false;
       if (!result.data && result.error) {
         setNotice({ kind: "error", text: errorText(result.error, copy.requestFailed) });
         return false;
       }
       await refreshCase(caseId);
-      return true;
+      return !controller.signal.aborted;
     } catch (error) {
-      setNotice({ kind: "error", text: errorText(error, copy.networkFailed) });
+      if (!controller.signal.aborted) setNotice({ kind: "error", text: errorText(error, copy.networkFailed) });
       return false;
-    } finally { setPending(undefined); }
+    } finally { if (!controller.signal.aborted && commandController.current === controller) setPending(undefined); }
   }, [refreshCase]);
 
   async function createCase(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!obligationId.trim()) { setNotice({ kind: "error", text: copy.obligationRequired }); return; }
     const key = `create:${obligationId}`;
+    commandController.current?.abort();
+    const controller = new AbortController();
+    commandController.current = controller;
     setPending(key); setNotice(undefined);
     try {
-      const result = await api.POST("/api/v1/facilities/cases", { body: { obligationId: obligationId.trim(), idempotencyKey: crypto.randomUUID() } });
+      const result = await api.POST("/api/v1/facilities/cases", { body: { obligationId: obligationId.trim(), idempotencyKey: crypto.randomUUID() }, signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (!result.data) { setNotice({ kind: "error", text: errorText(result.error, copy.createFailed) }); return; }
       setObligationId("");
       setSelectedId(result.data.id);
       await refreshCase(result.data.id);
-    } catch (error) { setNotice({ kind: "error", text: errorText(error, copy.createFailed) }); }
-    finally { setPending(undefined); }
+    } catch (error) { if (!controller.signal.aborted) setNotice({ kind: "error", text: errorText(error, copy.createFailed) }); }
+    finally { if (!controller.signal.aborted && commandController.current === controller) setPending(undefined); }
   }
 
   const can = useMemo(
@@ -202,12 +227,12 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
         {selected ? <div className="grid gap-5">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-steel">{copy.caseLabel} {selected.id}</p><h2 className="mt-1 text-xl font-bold text-ink">{STATUS_LABEL[selected.status]}</h2></div><span className={`rounded-md border px-3 py-2 text-sm font-semibold ${dueTone(selected.completionDueAt)}`}>{copy.completionSla} {displayDate(selected.completionDueAt)}</span></div>
           <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Metric label={copy.responseSla} value={displayDate(selected.responseDueAt)} /><Metric label={copy.acceptanceSla} value={displayDate(selected.acceptanceDueAt)} /><Metric label={copy.assignee} value={selected.assigneeId ?? copy.unassignedShort} mono /><Metric label={copy.energyDelta} value={selected.energyDeltaKwh ? `${selected.energyDeltaKwh} ${copy.energyUnit}` : copy.notObserved} /><Metric label={copy.totalCost} value={`${selected.totalCostKrw.toLocaleString("ko-KR")} ${copy.currencyUnit}`} /></dl>
-          {can.canTriage ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); if (!scheduledFor) return; void command("triage", () => api.POST("/api/v1/facilities/cases/{case_id}/triage", { params: { path: { case_id: selected.id } }, body: { scheduledFor: new Date(scheduledFor).toISOString() } }), selected.id); }}><h3 className="font-bold text-ink">{copy.triageTitle}</h3><label className="mt-3 grid max-w-sm gap-1 text-sm font-medium">{copy.scheduledFor}<input type="datetime-local" required value={scheduledFor} onChange={(event) => { setScheduledFor(event.target.value); }} className="rounded-md border border-line px-3 py-2" /></label><ActionButton pending={pending === "triage"}>{copy.schedule}</ActionButton></form> : null}
-          {can.canAssign ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); if (!assigneeId.trim()) return; void command("assign", () => api.POST("/api/v1/facilities/cases/{case_id}/assign", { params: { path: { case_id: selected.id } }, body: { assigneeId: assigneeId.trim() } }), selected.id); }}><h3 className="font-bold text-ink">{copy.assignTitle}</h3><label className="mt-3 grid max-w-xl gap-1 text-sm font-medium">{copy.assigneeId}<input required value={assigneeId} onChange={(event) => { setAssigneeId(event.target.value); }} className="rounded-md border border-line px-3 py-2 font-mono" /></label><ActionButton pending={pending === "assign"}>{copy.assign}</ActionButton></form> : null}
-          {can.canStart ? <section className="rounded-lg border border-line bg-muted-panel p-4"><h3 className="font-bold text-ink">{copy.startTitle}</h3><p className="mt-1 text-sm text-steel">{copy.startDescription}</p><ActionButton pending={pending === "start"} onClick={() => void command("start", () => api.POST("/api/v1/facilities/cases/{case_id}/start", { params: { path: { case_id: selected.id } } }), selected.id)}>{copy.start}</ActionButton></section> : null}
-          {can.canObserve ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); const cost = costKrw.trim() ? Number(costKrw) : undefined; if (cost !== undefined && (!Number.isSafeInteger(cost) || cost < 0)) { setNotice({ kind: "error", text: copy.invalidCost }); return; } void command("observe", () => api.POST("/api/v1/facilities/cases/{case_id}/observations", { params: { path: { case_id: selected.id } }, body: { observedAt: new Date().toISOString(), ...(preKwh.trim() ? { preKwh: preKwh.trim() } : {}), ...(postKwh.trim() ? { postKwh: postKwh.trim() } : {}), ...(cost !== undefined ? { costKrw: cost } : {}) } }), selected.id); }}><h3 className="font-bold text-ink">{copy.observeTitle}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><Input label={copy.preKwh} value={preKwh} onChange={setPreKwh} /><Input label={copy.postKwh} value={postKwh} onChange={setPostKwh} /><Input label={copy.costKrw} value={costKrw} onChange={setCostKrw} inputMode="numeric" /></div><ActionButton pending={pending === "observe"}>{copy.observe}</ActionButton></form> : null}
-          {can.canSubmit ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); if (!safetyEvidenceId.trim() || !reportEvidenceId.trim()) { setNotice({ kind: "error", text: copy.evidenceRequired }); return; } void command("submit", () => api.POST("/api/v1/facilities/cases/{case_id}/submit", { params: { path: { case_id: selected.id } }, body: { safetyChecklistEvidenceId: safetyEvidenceId.trim(), serviceReportEvidenceId: reportEvidenceId.trim(), ...(photoEvidenceId.trim() ? { photoEvidenceId: photoEvidenceId.trim() } : {}) } }), selected.id); }}><h3 className="font-bold text-ink">{copy.submitTitle}</h3><div className="mt-3 grid gap-3 lg:grid-cols-3"><Input label={copy.safetyEvidenceId} value={safetyEvidenceId} onChange={setSafetyEvidenceId} required /><Input label={copy.reportEvidenceId} value={reportEvidenceId} onChange={setReportEvidenceId} required /><Input label={copy.photoEvidenceId} value={photoEvidenceId} onChange={setPhotoEvidenceId} /></div><ActionButton pending={pending === "submit"}>{copy.submit}</ActionButton></form> : null}
-          {can.canAccept ? <section className="rounded-lg border border-line bg-muted-panel p-4"><h3 className="font-bold text-ink">{copy.acceptanceTitle}</h3><label className="mt-3 grid max-w-2xl gap-1 text-sm font-medium">{copy.rejectionReason}<textarea value={acceptanceReason} onChange={(event) => { setAcceptanceReason(event.target.value); }} className="min-h-20 rounded-md border border-line px-3 py-2" maxLength={1000} /></label><div className="mt-3 flex flex-wrap gap-2"><ActionButton pending={pending === "accepted"} onClick={() => void command("accepted", () => api.POST("/api/v1/facilities/cases/{case_id}/acceptance", { params: { path: { case_id: selected.id } }, body: { decision: "ACCEPTED" } }), selected.id)}>{copy.accept}</ActionButton><button type="button" disabled={Boolean(pending) || !acceptanceReason.trim()} onClick={() => void command("rejected", () => api.POST("/api/v1/facilities/cases/{case_id}/acceptance", { params: { path: { case_id: selected.id } }, body: { decision: "REJECTED", reason: acceptanceReason.trim() } }), selected.id)} className="rounded-md border border-rose-300 bg-white px-3 py-2 text-sm font-semibold text-rose-800 disabled:opacity-60">{pending === "rejected" ? copy.rejecting : copy.reject}</button></div></section> : null}
+          {can.canTriage ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); if (!scheduledFor) return; void command("triage", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/triage", { params: { path: { case_id: selected.id } }, body: { scheduledFor: new Date(scheduledFor).toISOString() }, signal }), selected.id); }}><h3 className="font-bold text-ink">{copy.triageTitle}</h3><label className="mt-3 grid max-w-sm gap-1 text-sm font-medium">{copy.scheduledFor}<input type="datetime-local" required value={scheduledFor} onChange={(event) => { setScheduledFor(event.target.value); }} className="rounded-md border border-line px-3 py-2" /></label><ActionButton pending={pending === "triage"}>{copy.schedule}</ActionButton></form> : null}
+          {can.canAssign ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); if (!assigneeId.trim()) return; void command("assign", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/assign", { params: { path: { case_id: selected.id } }, body: { assigneeId: assigneeId.trim() }, signal }), selected.id); }}><h3 className="font-bold text-ink">{copy.assignTitle}</h3><label className="mt-3 grid max-w-xl gap-1 text-sm font-medium">{copy.assigneeId}<input required value={assigneeId} onChange={(event) => { setAssigneeId(event.target.value); }} className="rounded-md border border-line px-3 py-2 font-mono" /></label><ActionButton pending={pending === "assign"}>{copy.assign}</ActionButton></form> : null}
+          {can.canStart ? <section className="rounded-lg border border-line bg-muted-panel p-4"><h3 className="font-bold text-ink">{copy.startTitle}</h3><p className="mt-1 text-sm text-steel">{copy.startDescription}</p><ActionButton pending={pending === "start"} onClick={() => void command("start", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/start", { params: { path: { case_id: selected.id } }, signal }), selected.id)}>{copy.start}</ActionButton></section> : null}
+          {can.canObserve ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); const cost = costKrw.trim() ? Number(costKrw) : undefined; if (cost !== undefined && (!Number.isSafeInteger(cost) || cost < 0)) { setNotice({ kind: "error", text: copy.invalidCost }); return; } void command("observe", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/observations", { params: { path: { case_id: selected.id } }, body: { observedAt: new Date().toISOString(), ...(preKwh.trim() ? { preKwh: preKwh.trim() } : {}), ...(postKwh.trim() ? { postKwh: postKwh.trim() } : {}), ...(cost !== undefined ? { costKrw: cost } : {}) }, signal }), selected.id); }}><h3 className="font-bold text-ink">{copy.observeTitle}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><Input label={copy.preKwh} value={preKwh} onChange={setPreKwh} /><Input label={copy.postKwh} value={postKwh} onChange={setPostKwh} /><Input label={copy.costKrw} value={costKrw} onChange={setCostKrw} inputMode="numeric" /></div><ActionButton pending={pending === "observe"}>{copy.observe}</ActionButton></form> : null}
+          {can.canSubmit ? <form className="rounded-lg border border-line bg-muted-panel p-4" onSubmit={(event) => { event.preventDefault(); if (!safetyEvidenceId.trim() || !reportEvidenceId.trim()) { setNotice({ kind: "error", text: copy.evidenceRequired }); return; } void command("submit", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/submit", { params: { path: { case_id: selected.id } }, body: { safetyChecklistEvidenceId: safetyEvidenceId.trim(), serviceReportEvidenceId: reportEvidenceId.trim(), ...(photoEvidenceId.trim() ? { photoEvidenceId: photoEvidenceId.trim() } : {}) }, signal }), selected.id); }}><h3 className="font-bold text-ink">{copy.submitTitle}</h3><div className="mt-3 grid gap-3 lg:grid-cols-3"><Input label={copy.safetyEvidenceId} value={safetyEvidenceId} onChange={setSafetyEvidenceId} required /><Input label={copy.reportEvidenceId} value={reportEvidenceId} onChange={setReportEvidenceId} required /><Input label={copy.photoEvidenceId} value={photoEvidenceId} onChange={setPhotoEvidenceId} /></div><ActionButton pending={pending === "submit"}>{copy.submit}</ActionButton></form> : null}
+          {can.canAccept ? <section className="rounded-lg border border-line bg-muted-panel p-4"><h3 className="font-bold text-ink">{copy.acceptanceTitle}</h3><label className="mt-3 grid max-w-2xl gap-1 text-sm font-medium">{copy.rejectionReason}<textarea value={acceptanceReason} onChange={(event) => { setAcceptanceReason(event.target.value); }} className="min-h-20 rounded-md border border-line px-3 py-2" maxLength={1000} /></label><div className="mt-3 flex flex-wrap gap-2"><ActionButton pending={pending === "accepted"} onClick={() => void command("accepted", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/acceptance", { params: { path: { case_id: selected.id } }, body: { decision: "ACCEPTED" }, signal }), selected.id)}>{copy.accept}</ActionButton><button type="button" disabled={Boolean(pending) || !acceptanceReason.trim()} onClick={() => void command("rejected", (signal) => api.POST("/api/v1/facilities/cases/{case_id}/acceptance", { params: { path: { case_id: selected.id } }, body: { decision: "REJECTED", reason: acceptanceReason.trim() }, signal }), selected.id)} className="rounded-md border border-rose-300 bg-white px-3 py-2 text-sm font-semibold text-rose-800 disabled:opacity-60">{pending === "rejected" ? copy.rejecting : copy.reject}</button></div></section> : null}
           {selected.status === "CLOSED" ? <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"><h3 className="font-bold">{copy.closedTitle}</h3><p className="mt-1 text-sm">{copy.closedDescription}</p></section> : null}
         </div> : null}
       </section>
