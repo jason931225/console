@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ConsoleApiClient } from "../../api/client";
 import { ko } from "../../i18n/ko";
+import { PolicyGateProvider, type PolicyGate } from "../policy";
 import { WindowManagerProvider } from "../window";
 import { EvidenceRecords } from "./EvidenceRecords";
 import { evidenceFixtures } from "./evidenceFixtures";
 
 const T = ko.console.evidence;
 const [heldWire, plainWire] = evidenceFixtures();
+const allowGate: PolicyGate = { can: () => true };
 
 interface ApiResult {
   data?: unknown;
@@ -290,5 +292,75 @@ describe("EvidenceRecords detail opening", () => {
 
     fireEvent.click(screen.getByRole("button", { name: T.records.close }));
     expect(screen.queryByLabelText(T.detailAria(heldWire.code))).toBeNull();
+  });
+
+  it("reports a successful release with a failed authoritative reread and retries that reread", async () => {
+    let detailReads = 0;
+    const releasedWire = {
+      ...heldWire,
+      holds: heldWire.holds.map((hold) => ({
+        ...hold,
+        status: "RELEASED" as const,
+        releasedAt: "2026-07-24T01:00:00Z",
+      })),
+    };
+    const GET = vi.fn((path: string): Promise<ApiResult> => {
+      if (path === "/api/v1/evidence/objects") {
+        return Promise.resolve({
+          data: { items: [listRow(heldWire)], limit: 200, offset: 0, total: 1 },
+          response: { ok: true, status: 200 },
+        });
+      }
+      if (path === "/api/v1/evidence/objects/{id}") {
+        detailReads += 1;
+        if (detailReads === 2) {
+          return Promise.resolve({ data: undefined, response: { ok: false, status: 503 } });
+        }
+        return Promise.resolve({
+          data: detailWire(detailReads === 1 ? heldWire : releasedWire),
+          response: { ok: true, status: 200 },
+        });
+      }
+      if (path === "/api/v1/users") {
+        return Promise.resolve({ data: { items: [] }, response: { ok: true, status: 200 } });
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false, status: 404 } });
+    });
+    const POST = vi.fn((path: string): Promise<ApiResult> => {
+      if (path === "/api/v1/governance/approvals") {
+        return Promise.resolve({ data: { request_ref: "req-1", requested_by: "user-a" }, response: { ok: true, status: 200 } });
+      }
+      if (path === "/api/v1/governance/approvals/decide") {
+        return Promise.resolve({ data: {}, response: { ok: true, status: 200 } });
+      }
+      if (path === "/api/v1/evidence/objects/{id}/hold") {
+        return Promise.resolve({
+          data: { id: heldWire.holds[0]?.id, case_ref: heldWire.holds[0]?.caseRef, status: "RELEASED", applied_at: heldWire.holds[0]?.appliedAt },
+          response: { ok: true, status: 200 },
+        });
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false, status: 404 } });
+    });
+    const api = { GET, POST } as unknown as ConsoleApiClient;
+
+    render(
+      <PolicyGateProvider gate={allowGate}>
+        <EvidenceRecords api={api} currentUserId="user-b" sessionIncarnation="release-refresh-failure" />
+      </PolicyGateProvider>,
+    );
+    await screen.findByText(heldWire.code);
+    fireEvent.click(screen.getAllByRole("button", { name: T.records.open(heldWire.code, heldWire.title) })[0]);
+    const detail = await screen.findByLabelText(T.detailAria(heldWire.code));
+    fireEvent.click(within(detail).getByRole("button", { name: T.hold.requestRelease }));
+    await waitFor(() => expect(within(detail).getByRole("button", { name: T.hold.decideApprove })).toBeTruthy());
+    fireEvent.click(within(detail).getByRole("button", { name: T.hold.decideApprove }));
+    await waitFor(() => expect(within(detail).getByRole("button", { name: T.hold.release })).toBeTruthy());
+    fireEvent.click(within(detail).getByRole("button", { name: T.hold.release }));
+
+    await waitFor(() => expect(within(detail).getByText(T.hold.releaseRefreshFailed)).toBeTruthy());
+    expect(within(detail).getByText(T.hold.active)).toBeTruthy();
+    fireEvent.click(within(detail).getByRole("button", { name: T.hold.refreshRetry }));
+    await waitFor(() => expect(detailReads).toBe(3));
+    await waitFor(() => expect(screen.queryByText(T.hold.active)).toBeNull());
   });
 });

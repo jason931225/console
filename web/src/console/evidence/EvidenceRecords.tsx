@@ -315,7 +315,7 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
         decideHoldReleaseApproval(api, requestRef, requestedBy, decision),
       releaseHold: async (body) => {
         await releaseLegalHold(api, id, body);
-        await refreshDetail(id);
+        await refreshAfterMutation(id);
       },
     };
   }
