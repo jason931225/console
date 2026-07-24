@@ -159,4 +159,53 @@ describe("root npm workspace integrity", () => {
       'package.json local override target "tools/npm/callable-compat" must resolve to an existing non-symlink directory',
     ]);
   });
+
+  it("fails closed when a local override escapes through a parent symlink", () => {
+    const root = createRoot(["clients/ts"]);
+    addWorkspace(root, "clients/ts");
+    const outside = mkdtempSync(join(tmpdir(), "maintenance-root-workspaces-outside-"));
+    mkdirSync(join(outside, "npm/callable-compat"), { recursive: true });
+    writeFileSync(
+      join(outside, "npm/callable-compat/package.json"),
+      JSON.stringify({
+        name: "dependency",
+        version: "1.2.3-maintenance.1",
+        private: true,
+      }),
+    );
+    symlinkSync(outside, join(root, "tools"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({
+        private: true,
+        workspaces: ["clients/ts"],
+        overrides: {
+          "@vendor/tool@1.2.3": {
+            dependency: "file:../../../tools/npm/callable-compat",
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(root, "package-lock.json"),
+      JSON.stringify({
+        packages: {
+          "": { workspaces: ["clients/ts"] },
+          "clients/ts": { name: "@test/clients-ts", version: "0.0.0" },
+          "tools/npm/callable-compat": {
+            name: "dependency",
+            version: "1.2.3-maintenance.1",
+          },
+          "node_modules/@vendor/tool/node_modules/dependency": {
+            resolved: "tools/npm/callable-compat",
+            link: true,
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(evaluateRootWorkspaces(root).failures, [
+      'package.json local override target "tools/npm/callable-compat" must resolve to an existing non-symlink directory',
+    ]);
+  });
 });
