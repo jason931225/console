@@ -26,6 +26,7 @@ import {
   type AutomateTab,
 } from "../../../pages/AutomatePage";
 import { PolicyGateProvider, type PolicyGate } from "../../policy";
+import { WorkflowScheduleOperations } from "../../workflows/WorkflowScheduleOperations";
 
 // System-tier surface — mirrors the nav's ROLE_MANAGE_ROLES gate on "workflow".
 const AUTOMATE_MANAGE_ROLES = new Set(["SUPER_ADMIN"]);
@@ -100,7 +101,11 @@ export function AutomateBody() {
 
   return (
     <PolicyGateProvider gate={gate}>
-      <AutomateHub tab={routeTab} onTabChange={navigateToTab} />
+      {routeTab === "schedules" ? (
+        <WorkflowScheduleOperations onTabChange={navigateToTab} />
+      ) : (
+        <AutomateHub tab={routeTab} onTabChange={navigateToTab} />
+      )}
     </PolicyGateProvider>
   );
 }
