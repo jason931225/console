@@ -242,7 +242,7 @@ type DetailState =
   | { state: "idle" | "loading" }
   | { state: "denied" | "missing" }
   | { state: "error"; error: string }
-  | { state: "ready"; value: WorkOrderDetail; settlement: WorkOrderSettlement | undefined };
+  | { state: "ready"; value: WorkOrderDetail; settlement: WorkOrderSettlement | "denied" | undefined };
 
 /**
  * Re-mount synchronously whenever effective authority changes. Effects run too
@@ -332,9 +332,16 @@ function MaintenanceScreenBody({ api, branchId, actorId, capabilities, sessionKe
         setDetail({ state: "missing" });
         return;
       }
-      let settlement: WorkOrderSettlement | undefined;
+      let settlement: WorkOrderSettlement | "denied" | undefined;
       if (SETTLEMENT_STATUSES.has(value.status)) {
-        settlement = await maintenanceApi.settlement(selectedId, controller.signal);
+        try {
+          settlement = await maintenanceApi.settlement(selectedId, controller.signal);
+        } catch (cause) {
+          // A settlement-only denial must not deny the authorized detail read;
+          // deny-by-omission renders the detail without the settlement zone.
+          if (!(cause instanceof MaintenanceApiError && cause.status === 403)) throw cause;
+          settlement = "denied";
+        }
         if (detailGeneration.current !== token) return;
       }
       setDetail({ state: "ready", value, settlement });
@@ -482,7 +489,8 @@ function MaintenanceScreenBody({ api, branchId, actorId, capabilities, sessionKe
     writeStore(draftKey, JSON.stringify(Object.fromEntries(entries)));
   };
 
-  const draft = useMemo(() => {
+  /** Read at render time so a draft cleared after create cannot resurrect. */
+  const readDraft = (): Record<string, string> | undefined => {
     const raw = readStore(draftKey);
     if (!raw) return undefined;
     try {
@@ -490,7 +498,7 @@ function MaintenanceScreenBody({ api, branchId, actorId, capabilities, sessionKe
     } catch {
       return undefined;
     }
-  }, [draftKey]);
+  };
 
   if (!capabilities.canRead) {
     return (
@@ -585,7 +593,7 @@ function MaintenanceScreenBody({ api, branchId, actorId, capabilities, sessionKe
         </div>
       )}
       {composerOpen && capabilities.canCreate && (
-        <ComposerForm draft={draft} busy={busy} onSubmit={create} onInput={persistDraft} onClose={() => { setComposerOpen(false); }} />
+        <ComposerForm draft={readDraft()} busy={busy} onSubmit={create} onInput={persistDraft} onClose={() => { setComposerOpen(false); }} />
       )}
       {lens && (
         <div className="maintenance__filters" aria-label={text.facets.heading}>
@@ -701,6 +709,7 @@ function MaintenanceScreenBody({ api, branchId, actorId, capabilities, sessionKe
           )}
           {detail.state === "ready" && (
             <DetailPanel
+              key={detail.value.id}
               detail={detail.value}
               settlement={detail.settlement}
               capabilities={capabilities}
@@ -819,7 +828,7 @@ type Act = (work: (signal: AbortSignal) => Promise<unknown>) => Promise<unknown>
 
 function DetailPanel({ detail, settlement, capabilities, actorId, busy, maintenanceApi, act, applyFilters }: {
   detail: WorkOrderDetail;
-  settlement: WorkOrderSettlement | undefined;
+  settlement: WorkOrderSettlement | "denied" | undefined;
   capabilities: MaintenanceCapabilities;
   actorId: string | undefined;
   busy: boolean;
@@ -844,7 +853,7 @@ function DetailPanel({ detail, settlement, capabilities, actorId, busy, maintena
           {detail.evidence_verified ? text.evidence.verified : text.evidence.notVerified}
         </span>
       </header>
-      <FlowStepper status={detail.status} settlement={settlement} />
+      <FlowStepper status={detail.status} settlement={settlement === "denied" ? undefined : settlement} />
       {(detail.maintenance_type ?? detail.maintenance_cause) && (
         <div className="maintenance__links">
           {detail.maintenance_type && (
@@ -995,7 +1004,7 @@ function DetailPanel({ detail, settlement, capabilities, actorId, busy, maintena
         </button>
       </div>
       <ActionsSection detail={detail} capabilities={capabilities} busy={busy} maintenanceApi={maintenanceApi} act={act} />
-      {SETTLEMENT_STATUSES.has(detail.status) && (
+      {SETTLEMENT_STATUSES.has(detail.status) && settlement !== "denied" && (
         <SettlementSection
           detail={detail}
           settlement={settlement}
@@ -1200,7 +1209,7 @@ function ActionsSection({ detail, capabilities, busy, maintenanceApi, act }: {
       {canReviewNow && (
         <div>
           <label htmlFor={`${id}-comment`}>
-            {text.actions.approveComment}
+            {text.actions.reviewComment}
             <textarea id={`${id}-comment`} ref={commentRef} maxLength={2000} aria-invalid={reviewError !== undefined} />
           </label>
           <button type="button" className="maintenance__action" disabled={busy} onClick={() => void review("approve")}>

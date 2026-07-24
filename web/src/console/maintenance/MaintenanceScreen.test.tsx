@@ -269,13 +269,50 @@ describe("MaintenanceScreen", () => {
     await userEvent.click(reject);
     expect(screen.getByText(text.actions.rejectMemoRequired)).toBeVisible();
     expect(post).not.toHaveBeenCalled();
-    await userEvent.type(screen.getByLabelText(text.actions.approveComment), "insufficient evidence");
+    await userEvent.type(screen.getByLabelText(text.actions.reviewComment), "insufficient evidence");
     await userEvent.click(reject);
     await waitFor(() => {
       expect(post).toHaveBeenCalledWith("/api/v1/work-orders/{workOrderId}/reject", expect.objectContaining({
         body: { memo: "insufficient evidence" },
       }));
     });
+  });
+
+  it("does not carry a review memo typed for one order into the next selected order", async () => {
+    const first = row({ id: "wo-a", request_no: "20260724-001", status: "REPORT_SUBMITTED" });
+    const second = row({ id: "wo-b", request_no: "20260724-002", status: "REPORT_SUBMITTED" });
+    const details: Record<string, WorkOrderDetail> = {
+      "wo-a": detailOf({ id: "wo-a", request_no: "20260724-001", status: "REPORT_SUBMITTED" }),
+      "wo-b": detailOf({ id: "wo-b", request_no: "20260724-002", status: "REPORT_SUBMITTED" }),
+    };
+    const get = vi.fn((url: string, init?: { params?: { path?: { workOrderId?: string } } }) => {
+      if (url === "/api/v1/work-orders") return Promise.resolve(page([first, second]));
+      if (url === "/api/v1/work-orders/{workOrderId}") {
+        return Promise.resolve(ok(details[init?.params?.path?.workOrderId ?? ""]));
+      }
+      return Promise.resolve(fail(404, "no settlement"));
+    });
+    const { api } = client(get);
+    renderScreen(reviewer, api);
+    await userEvent.click(await findListRow(/20260724-001/));
+    await userEvent.type(await screen.findByLabelText(text.actions.reviewComment), "memo for A");
+    await userEvent.click(await findListRow(/20260724-002/));
+    await screen.findByRole("heading", { name: "20260724-002" });
+    expect(screen.getByLabelText(text.actions.reviewComment)).toHaveValue("");
+  });
+
+  it("keeps an authorized detail readable when only the settlement read is denied", async () => {
+    const { api } = client(router({
+      "/api/v1/work-orders": page([row({ status: "REPORT_SUBMITTED" })]),
+      "/api/v1/work-orders/{workOrderId}": ok(detailOf({ status: "REPORT_SUBMITTED" })),
+      "/api/v1/work-orders/{workOrderId}/settlement": fail(403, "settlement denied"),
+    }));
+    renderScreen(viewer, api);
+    await userEvent.click(await findListRow(/20260724-001/));
+    expect(await screen.findByRole("heading", { name: "20260724-001" })).toBeVisible();
+    expect(screen.queryByText(text.detailDenied)).toBeNull();
+    expect(screen.queryByRole("region", { name: text.settlement.heading })).toBeNull();
+    expect(screen.queryByText(text.settlement.none)).toBeNull();
   });
 
   it("drafts a settlement after report submission and reconciles the backend table", async () => {
