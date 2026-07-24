@@ -2,9 +2,12 @@
 
 use mnt_compliance_adapter_postgres::PgComplianceStore;
 use mnt_compliance_application::{
-    ArrivalEventQuery, ConsentTransitionCommand, ConsentTransitionKind,
+    AcceptEvidenceBindingCommand, ArrivalEventQuery, ConsentTransitionCommand,
+    ConsentTransitionKind, CreateEvidenceBindingCommand,
 };
-use mnt_compliance_domain::{LocationPing, PingVolumeBound};
+use mnt_compliance_domain::{
+    EvidenceConfidence, EvidenceTargetType, LocationPing, PingVolumeBound,
+};
 use mnt_kernel_core::{BranchId, BranchScope, LocationPingId, OrgId, TraceContext, UserId};
 use sqlx::{PgPool, Row};
 use std::collections::BTreeSet;
@@ -286,6 +289,81 @@ async fn consented_user_can_ping_a_different_branch(pool: PgPool) {
     .await;
 }
 
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn accepting_proposed_evidence_is_tenant_scoped_audited_and_not_replayable(pool: PgPool) {
+    mnt_platform_request_context::scope_org(OrgId::knl(), async move {
+        let (actor, _branch) = seed_user_and_branch(&pool, "Evidence Approver").await;
+        let control_id = seed_compliance_control(&pool, actor).await;
+        let store = PgComplianceStore::new(pool.clone());
+        let created = store
+            .create_evidence_binding(CreateEvidenceBindingCommand {
+                actor,
+                control_id,
+                obligation_id: None,
+                evidence_target_type: EvidenceTargetType::ExternalDocument,
+                evidence_target_id: "K-ISMS-2026-001".to_owned(),
+                source_audit_event_id: None,
+                confidence: EvidenceConfidence::High,
+                collected_at: None,
+                collected_by: None,
+                valid_from: None,
+                valid_to: None,
+                hash_sha256: None,
+                metadata: serde_json::json!({"source": "audited-test"}),
+                trace: TraceContext::generate(),
+                occurred_at: datetime!(2026-07-24 09:00:00 UTC),
+            })
+            .await
+            .unwrap();
+
+        let accepted = store
+            .accept_evidence_binding(AcceptEvidenceBindingCommand {
+                actor,
+                id: created.id,
+                trace: TraceContext::generate(),
+                occurred_at: datetime!(2026-07-24 10:00:00 UTC),
+            })
+            .await
+            .unwrap();
+        assert_eq!(accepted.status.as_db_str(), "ACCEPTED");
+        assert_eq!(accepted.evidence_target_id, "K-ISMS-2026-001");
+        assert_eq!(accepted.metadata, serde_json::json!({"source": "audited-test"}));
+
+        let audit: (Option<serde_json::Value>, Option<serde_json::Value>) = sqlx::query_as(
+            "SELECT before_snap, after_snap FROM audit_events WHERE action = 'compliance.evidence_binding.accept' AND target_id = $1",
+        )
+        .bind(created.id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let before = audit.0.expect("accept audit records the prior binding snapshot");
+        let after = audit.1.expect("accept audit records the accepted binding snapshot");
+        assert_eq!(before["status"], "PROPOSED");
+        assert_eq!(after["status"], "ACCEPTED");
+        assert_eq!(after["evidence_target_id"], "K-ISMS-2026-001");
+
+        let replay = store
+            .accept_evidence_binding(AcceptEvidenceBindingCommand {
+                actor,
+                id: created.id,
+                trace: TraceContext::generate(),
+                occurred_at: datetime!(2026-07-24 10:01:00 UTC),
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(replay.kind(), mnt_kernel_core::ErrorKind::Conflict);
+        let accept_audits: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'compliance.evidence_binding.accept' AND target_id = $1",
+        )
+        .bind(created.id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(accept_audits, 1);
+    })
+    .await;
+}
+
 fn command(
     kind: ConsentTransitionKind,
     user_id: UserId,
@@ -300,6 +378,34 @@ fn command(
         trace: TraceContext::generate(),
         occurred_at,
     }
+}
+
+async fn seed_compliance_control(pool: &PgPool, actor: UserId) -> uuid::Uuid {
+    let framework_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO compliance_frameworks (org_id, code, name, version_label, framework_kind, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id",
+    )
+    .bind(*OrgId::knl().as_uuid())
+    .bind("FW-9001")
+    .bind("Evidence acceptance test framework")
+    .bind("2026.07")
+    .bind("INTERNAL_CONTROL")
+    .bind(*actor.as_uuid())
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    sqlx::query_scalar(
+        "INSERT INTO compliance_controls (org_id, framework_id, control_key, title, objective, control_type, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $7) RETURNING id",
+    )
+    .bind(*OrgId::knl().as_uuid())
+    .bind(framework_id)
+    .bind("EVIDENCE.ACCEPT")
+    .bind("Accept immutable evidence")
+    .bind("Accept an evidence binding through the audited lifecycle action.")
+    .bind("DETECTIVE")
+    .bind(*actor.as_uuid())
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 async fn seed_user_and_branch(pool: &PgPool, display_name: &str) -> (UserId, BranchId) {
