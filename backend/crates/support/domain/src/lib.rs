@@ -374,17 +374,17 @@ impl CaseEvent {
 /// Internal case aggregate sharing the persisted ticket identifier and status
 /// enum. It adds no migration-facing status values and therefore preserves the
 /// current `/api/v1/support/tickets` contract.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SupportCase {
-    pub id: SupportTicketId,
-    pub scope: CaseScope,
-    pub priority: TicketPriority,
-    pub status: TicketStatus,
-    pub due_at: Timestamp,
-    pub version: u64,
-    pub dispatch_handoff: Option<DispatchHandoff>,
-    pub evidence_bindings: Vec<CaseEvidenceBinding>,
-    pub history: Vec<CaseHistoryEntry>,
+    id: SupportTicketId,
+    scope: CaseScope,
+    priority: TicketPriority,
+    status: TicketStatus,
+    due_at: Timestamp,
+    version: u64,
+    dispatch_handoff: Option<DispatchHandoff>,
+    evidence_bindings: Vec<CaseEvidenceBinding>,
+    history: Vec<CaseHistoryEntry>,
 }
 
 impl SupportCase {
@@ -406,6 +406,105 @@ impl SupportCase {
             evidence_bindings: Vec::new(),
             history: Vec::new(),
         })
+    }
+
+    pub fn rehydrate(
+        id: SupportTicketId,
+        scope: CaseScope,
+        priority: TicketPriority,
+        status: TicketStatus,
+        due_at: Timestamp,
+        version: u64,
+        dispatch_handoff: Option<DispatchHandoff>,
+        evidence_bindings: Vec<CaseEvidenceBinding>,
+        history: Vec<CaseHistoryEntry>,
+    ) -> Result<Self, KernelError> {
+        if history.len()
+            != usize::try_from(version)
+                .map_err(|_| KernelError::validation("support case version is too large"))?
+        {
+            return Err(KernelError::validation(
+                "support case history must contain every version",
+            ));
+        }
+        for (index, entry) in history.iter().enumerate() {
+            let expected_version = u64::try_from(index + 1)
+                .map_err(|_| KernelError::validation("support case history is too large"))?;
+            if entry.version != expected_version {
+                return Err(KernelError::validation(
+                    "support case history versions must be contiguous",
+                ));
+            }
+        }
+        let mut seen_evidence = std::collections::BTreeSet::new();
+        if evidence_bindings
+            .iter()
+            .any(|binding| !seen_evidence.insert(binding.evidence_object_id))
+        {
+            return Err(KernelError::validation(
+                "support case evidence bindings must be unique",
+            ));
+        }
+        if let Some(handoff) = &dispatch_handoff {
+            if handoff.status.is_terminal() != handoff.resolved_at.is_some()
+                || handoff.resolved_at.is_some() != handoff.resolved_by.is_some()
+            {
+                return Err(KernelError::validation(
+                    "support case handoff resolution fields are inconsistent",
+                ));
+            }
+        }
+        Ok(Self {
+            id,
+            scope,
+            priority,
+            status,
+            due_at,
+            version,
+            dispatch_handoff,
+            evidence_bindings,
+            history,
+        })
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> SupportTicketId {
+        self.id
+    }
+
+    #[must_use]
+    pub const fn scope(&self) -> CaseScope {
+        self.scope
+    }
+
+    #[must_use]
+    pub const fn priority(&self) -> TicketPriority {
+        self.priority
+    }
+
+    #[must_use]
+    pub const fn status(&self) -> TicketStatus {
+        self.status
+    }
+
+    #[must_use]
+    pub const fn due_at(&self) -> Timestamp {
+        self.due_at
+    }
+
+    #[must_use]
+    pub fn dispatch_handoff(&self) -> Option<&DispatchHandoff> {
+        self.dispatch_handoff.as_ref()
+    }
+
+    #[must_use]
+    pub fn evidence_bindings(&self) -> &[CaseEvidenceBinding] {
+        &self.evidence_bindings
+    }
+
+    #[must_use]
+    pub fn history(&self) -> &[CaseHistoryEntry] {
+        &self.history
     }
 
     #[must_use]
@@ -757,5 +856,49 @@ mod tests {
         assert!(case
             .transition(0, actor, TicketStatus::Resolved, now)
             .is_err());
+    }
+
+    #[test]
+    fn rehydration_rejects_non_contiguous_history() {
+        let now = datetime!(2026-07-24 09:00 UTC);
+        let result = SupportCase::rehydrate(
+            SupportTicketId::new(),
+            CaseScope::new(OrgId::new(), BranchId::new()),
+            TicketPriority::Medium,
+            TicketStatus::Open,
+            now,
+            1,
+            None,
+            Vec::new(),
+            Vec::new(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rehydration_preserves_valid_case_through_read_only_accessors() {
+        let now = datetime!(2026-07-24 09:00 UTC);
+        let opened = SupportCase::open(
+            SupportTicketId::new(),
+            CaseScope::new(OrgId::new(), BranchId::new()),
+            TicketPriority::Medium,
+            now,
+            SlaPolicy::default(),
+        )
+        .unwrap();
+        let rehydrated = SupportCase::rehydrate(
+            opened.id(),
+            opened.scope(),
+            opened.priority(),
+            opened.status(),
+            opened.due_at(),
+            opened.version(),
+            opened.dispatch_handoff().cloned(),
+            opened.evidence_bindings().to_vec(),
+            opened.history().to_vec(),
+        )
+        .unwrap();
+        assert_eq!(rehydrated.id(), opened.id());
+        assert_eq!(rehydrated.status(), TicketStatus::Open);
     }
 }
