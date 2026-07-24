@@ -205,22 +205,15 @@ describe("EvidenceRecords list (real-wired)", () => {
   });
 });
 
-describe("EvidenceRecords filtering", () => {
-  it("filters to legal-hold rows and toggles back to all", async () => {
+describe("EvidenceRecords list truthfulness", () => {
+  it("does not synthesize a hold from a list-row flag before detail is fetched", async () => {
     const api = makeApi();
     render(<EvidenceRecords api={api} sessionIncarnation="evidence-records-test" />);
     await waitFor(() => {
       expect(screen.getByText(heldWire.code)).toBeTruthy();
     });
-    const bar = screen.getByRole("group", { name: T.records.statBar });
-    const holdButton = within(bar).getByRole("button", { name: new RegExp(T.hold.active) });
-
-    fireEvent.click(holdButton);
-    expect(screen.getByText(heldWire.code)).toBeTruthy();
-    expect(screen.queryByText(plainWire.code)).toBeNull();
-
-    fireEvent.click(holdButton);
-    expect(screen.getByText(plainWire.code)).toBeTruthy();
+    expect(screen.queryByText(T.hold.active)).toBeNull();
+    expect(screen.queryByRole("button", { name: new RegExp(T.hold.active) })).toBeNull();
   });
 });
 
@@ -243,6 +236,43 @@ describe("EvidenceRecords detail opening", () => {
     });
     const detail = screen.getByLabelText(T.detailAria(heldWire.code));
     expect(within(detail).getByText(T.worm.sealed)).toBeTruthy();
+  });
+
+  it("loads authoritative custody and hold detail, then invokes the real verify endpoint", async () => {
+    const api = makeApi();
+    const POST = api.POST as unknown as ReturnType<typeof vi.fn>;
+    POST.mockResolvedValue({
+      data: {
+        evidence_object_id: heldWire.id,
+        verified_at: "2026-07-24T00:00:00Z",
+        outcome: "VERIFIED",
+        copies: heldWire.copies.map((copy) => ({
+          copy_id: copy.id,
+          copy_kind: copy.kind,
+          status: "MATCH",
+        })),
+      },
+      response: { ok: true, status: 200 },
+    });
+
+    render(<EvidenceRecords api={api} sessionIncarnation="evidence-records-test" />);
+    await screen.findByText(heldWire.code);
+    expect(screen.queryByText(T.hold.active)).toBeNull();
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: T.records.open(heldWire.code, heldWire.title) })[0],
+    );
+    const detail = await screen.findByLabelText(T.detailAria(heldWire.code));
+    expect(within(detail).getByText(T.hold.active)).toBeTruthy();
+    expect(within(detail).getByText(T.custody.stages.LEGAL_HOLD_APPLIED)).toBeTruthy();
+
+    fireEvent.click(within(detail).getByRole("button", { name: T.actions.verify }));
+    await waitFor(() => {
+      expect(POST).toHaveBeenCalledWith("/api/v1/evidence/objects/{id}/verify", {
+        params: { path: { id: heldWire.id } },
+      });
+    });
+    expect(await within(detail).findByText(T.actions.verifyOk)).toBeTruthy();
   });
 
   it("opens the EvidenceCard inline when no window shell is mounted", async () => {

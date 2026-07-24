@@ -25,7 +25,6 @@ import {
   admissibilityLabel,
   admissibilityTone,
   custodyStageLabel,
-  holdActive,
   originalOf,
   shortDigest,
 } from "./evidenceModel";
@@ -35,7 +34,7 @@ import "../tokens.css";
 const T = ko.console.evidence;
 const TA = ko.console.audit;
 
-type RecordsFilter = "ALL" | AdmissibilityStatus | "HOLD";
+type RecordsFilter = "ALL" | AdmissibilityStatus;
 type ListState = "loading" | "ready" | "error";
 
 const ADMISSIBILITY_ORDER: readonly AdmissibilityStatus[] = [
@@ -272,17 +271,14 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
 
   const counts = useMemo(() => {
     const byStatus = new Map<AdmissibilityStatus, number>();
-    let hold = 0;
     for (const row of rows) {
       byStatus.set(row.admissibility, (byStatus.get(row.admissibility) ?? 0) + 1);
-      if (holdActive(row.holds)) hold += 1;
     }
-    return { byStatus, hold };
+    return { byStatus };
   }, [rows]);
 
   const visible = useMemo(() => {
     if (filter === "ALL") return rows;
-    if (filter === "HOLD") return rows.filter((row) => holdActive(row.holds));
     return rows.filter((row) => row.admissibility === filter);
   }, [rows, filter]);
 
@@ -396,7 +392,6 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
         {ADMISSIBILITY_ORDER.map((status) =>
           statButton(status, admissibilityLabel(status), counts.byStatus.get(status) ?? 0),
         )}
-        {statButton("HOLD", T.hold.active, counts.hold)}
       </div>
 
       {openError ? (
@@ -438,9 +433,6 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
                       <StatusChip tone={admissibilityTone(row.admissibility)}>
                         {admissibilityLabel(row.admissibility)}
                       </StatusChip>
-                      {holdActive(row.holds) ? (
-                        <StatusChip tone="purple">{T.hold.active}</StatusChip>
-                      ) : null}
                       <StatusChip tone="neutral">{custodyStageLabel(row.custodyStage)}</StatusChip>
                       {original ? (
                         <span style={monoStyle}>{shortDigest(original.digestSha256)}</span>

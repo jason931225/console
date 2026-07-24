@@ -27,11 +27,7 @@ export type TsaStatus =
 /** SHA-256 fixity of the original lineage, server-derived. */
 export type FixityStatus = "VERIFIED" | "PENDING" | "MISMATCH";
 
-/**
- * Custody ledger stages — mirrors the wire CustodyStage enum exactly, plus
- * ACCESSED which is a client-side synthesis for read/view-shaped audit
- * actions (no such wire stage exists; see custodyStageOfAudit).
- */
+/** Custody ledger stages — mirrors the generated wire CustodyStage enum exactly. */
 export type CustodyStage =
   | "REGISTERED"
   | "HASH_RECORDED"
@@ -45,7 +41,6 @@ export type CustodyStage =
   | "LEGAL_HOLD_RELEASED"
   | "EXPORTED"
   | "ARCHIVED"
-  | "ACCESSED"
   | "DISPOSAL_REQUESTED"
   | "DISPOSED";
 
@@ -163,8 +158,8 @@ export type ReleaseFlowState =
   | { stage: "releasing"; holdId: string; requestRef: string }
   | { stage: "error"; message: string };
 
-// PBAC actions (deny-by-omission via PolicyGated — absent, never disabled-with-
-// excuse, except the hold⇒dispose gate which is a deliberate fail-closed lock).
+// Policy action identifiers remain shared with IntegrityPage. This module renders
+// only actions that have a typed evidence backend endpoint.
 export const EVIDENCE_ACTIONS = {
   read: "evidence.read",
   custodyManage: "evidence.custody.manage",

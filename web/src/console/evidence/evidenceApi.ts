@@ -166,15 +166,10 @@ export function mapEvidenceObjectSummary(view: EvidenceObjectView): EvidenceObje
     disposed: view.disposed_at != null,
     source: mapSource(view),
     copies: [],
-    // The list row only carries a legal_hold_state flag, not the full
-    // LegalHoldRecordView[] — synthesize a status-only placeholder so
-    // holdActive()/the stat bar work before the row is opened. caseRef is
-    // empty here on purpose: the list row never renders it, only the fetched
-    // detail (which carries the real case_ref) does.
-    holds:
-      view.legal_hold_state === "ACTIVE"
-        ? [{ id: `${view.id}-hold`, caseRef: "", status: "ACTIVE", appliedAt: view.updated_at }]
-        : [],
+    // List rows carry only a coarse legal_hold_state flag. Do not turn it into
+    // a fake LegalHoldRecord: the detail endpoint is the authority for hold
+    // id, case reference, and lifecycle facts.
+    holds: [],
     custody: [],
   };
 }

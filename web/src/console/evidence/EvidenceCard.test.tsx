@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiCallError } from "../../api/ontologyActions";
@@ -27,7 +27,7 @@ function noopHoldProps(): Pick<
 
 function renderCard(
   gate?: PolicyGate,
-  verify?: VerifyEvidence,
+  verify: VerifyEvidence = vi.fn().mockResolvedValue({ state: "unavailable", copyVerdicts: new Map() }),
   detail = heldEvidence,
   overrides: Partial<EvidenceCardProps> = {},
 ) {
@@ -48,23 +48,19 @@ describe("EvidenceCard chips", () => {
 });
 
 describe("EvidenceCard WORM split", () => {
-  it("badges the original as WORM-sealed and lists derivatives as linked copies", () => {
+  it("badges the original as WORM-sealed and lists derivatives as immutable linked copies", () => {
     renderCard(allowGate);
     expect(screen.getByText(T.worm.sealed)).toBeTruthy();
     expect(screen.getByText(T.derivativeKinds.TRANSCODED)).toBeTruthy();
     expect(screen.getByText(T.derivativeKinds.THUMBNAIL)).toBeTruthy();
   });
 
-  it("denies access to the original and never streams it", () => {
+  it("does not render original, derivative, or ZIP preview controls without a real read endpoint", () => {
     renderCard(allowGate);
-    fireEvent.click(screen.getByRole("button", { name: T.worm.viewOriginal }));
-    expect(screen.getByRole("alert")).toHaveTextContent(T.worm.accessDenied);
-  });
-
-  it("shows the wire-pending derived-preview state on open", () => {
-    renderCard(allowGate);
-    fireEvent.click(screen.getAllByRole("button", { name: T.worm.viewDerived })[0]);
-    expect(screen.getByText(T.worm.previewPending)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: T.worm.viewOriginal })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.worm.viewDerived })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.worm.zip.title })).toBeNull();
+    expect(screen.queryByText(T.worm.previewPending)).toBeNull();
   });
 });
 
@@ -73,7 +69,7 @@ describe("EvidenceCard custody timeline", () => {
     renderCard(allowGate);
     expect(screen.getByText(T.custody.stages.REGISTERED)).toBeTruthy();
     expect(screen.getByText(T.custody.stages.WORM_REPLICATED)).toBeTruthy();
-    expect(screen.getByText(T.custody.stages.ACCESSED)).toBeTruthy();
+    expect(screen.getByText(T.custody.stages.LEGAL_HOLD_APPLIED)).toBeTruthy();
   });
 });
 
@@ -89,14 +85,6 @@ describe("EvidenceCard verify affordance", () => {
     });
     expect(screen.getByText(T.copyVerdict.MATCH)).toBeTruthy();
     expect(verify).toHaveBeenCalledTimes(1);
-  });
-
-  it("reports 검증 대기 when no real verify path applies", async () => {
-    renderCard(allowGate, undefined);
-    fireEvent.click(screen.getByRole("button", { name: T.actions.verify }));
-    await waitFor(() => {
-      expect(screen.getByText(T.actions.verifyPending)).toBeTruthy();
-    });
   });
 
   it("clears a prior MATCH verdict chip when a later verify comes back unavailable", async () => {
@@ -186,71 +174,17 @@ describe("EvidenceCard verify affordance", () => {
 });
 
 describe("EvidenceCard PBAC (deny-by-omission)", () => {
-  it("hides custody/hold/disposal controls without a gate (read-only persona)", () => {
+  it("hides mutable legal-hold controls without a gate while retaining the real verify action", () => {
     renderCard(undefined);
-    expect(screen.queryByRole("button", { name: T.actions.transfer })).toBeNull();
     expect(screen.queryByRole("button", { name: T.hold.requestRelease })).toBeNull();
-    expect(screen.queryByRole("button", { name: T.actions.dispose })).toBeNull();
-    // verify remains available to viewers of this already-gated route.
     expect(screen.getByRole("button", { name: T.actions.verify })).toBeTruthy();
   });
 
-  it("shows custody + hold controls for the compliance persona", () => {
+  it("shows only backed legal-hold controls for the compliance persona", () => {
     renderCard(allowGate);
-    expect(screen.getByRole("button", { name: T.actions.transfer })).toBeTruthy();
     expect(screen.getByRole("button", { name: T.hold.requestRelease })).toBeTruthy();
-  });
-});
-
-describe("EvidenceCard legal-hold disposal gate (fail-closed)", () => {
-  it("disables disposal while a hold is active", () => {
-    renderCard(allowGate);
-    expect(
-      screen.getByRole("button", { name: T.actions.disposeBlockedAria }).hasAttribute("disabled"),
-    ).toBe(true);
-  });
-
-  it("keeps disposal disabled with a wire-pending reason even without a hold (no disposal REST)", () => {
-    renderCard(allowGate, undefined, plainEvidence);
-    expect(
-      screen.getByRole("button", { name: T.actions.dispose }).hasAttribute("disabled"),
-    ).toBe(true);
-    expect(screen.getByText(T.actions.disposeWirePending)).toBeTruthy();
-  });
-});
-
-describe("EvidenceCard custody transfer / disposal (wire-pending, never fabricated)", () => {
-  function custodyTimeline() {
-    return screen.getByRole("region", { name: T.custody.title });
-  }
-
-  it("renders the transfer affordance disabled with a reason and stages no custody event", () => {
-    renderCard(allowGate, undefined, plainEvidence);
-    const transfer = screen.getByRole("button", { name: T.actions.transfer });
-    expect(transfer.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(T.actions.transferWirePending)).toBeTruthy();
-    // The chain-of-custody timeline shows only the real fetched events — no
-    // synthetic "staged" row is ever prepended (§4-25-⑥).
-    expect(within(custodyTimeline()).getAllByRole("listitem")).toHaveLength(
-      plainEvidence.custody.length,
-    );
-    // A disabled control fires no handler; clicking never mutates state, so the
-    // timeline row count stays exactly the fetched events (no staged prepend).
-    fireEvent.click(transfer);
-    expect(within(custodyTimeline()).getAllByRole("listitem")).toHaveLength(
-      plainEvidence.custody.length,
-    );
-  });
-
-  it("renders the disposal affordance disabled with a reason and stages no custody event", () => {
-    renderCard(allowGate, undefined, plainEvidence);
-    const dispose = screen.getByRole("button", { name: T.actions.dispose });
-    expect(dispose.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(T.actions.disposeWirePending)).toBeTruthy();
-    fireEvent.click(dispose);
-    expect(within(custodyTimeline()).getAllByRole("listitem")).toHaveLength(
-      plainEvidence.custody.length,
-    );
+    expect(screen.queryByRole("button", { name: T.actions.transfer })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.actions.dispose })).toBeNull();
   });
 });
 
@@ -261,7 +195,7 @@ describe("EvidenceCard hold-release four-eyes flow (fail-closed)", () => {
       .mockResolvedValue({ requestRef: "req-1", requestedBy: "user-a" });
     const decideHoldRelease = vi.fn().mockResolvedValue(undefined);
     const releaseHold = vi.fn().mockResolvedValue(undefined);
-    renderCard(allowGate, undefined, heldEvidence, {
+    renderCard(allowGate, vi.fn().mockResolvedValue({ state: "unavailable", copyVerdicts: new Map() }), heldEvidence, {
       currentUserId: "user-a",
       requestHoldRelease,
       decideHoldRelease,
@@ -285,7 +219,7 @@ describe("EvidenceCard hold-release four-eyes flow (fail-closed)", () => {
       .mockResolvedValue({ requestRef: "req-1", requestedBy: "user-a" });
     const decideHoldRelease = vi.fn().mockResolvedValue(undefined);
     const releaseHold = vi.fn().mockResolvedValue(undefined);
-    renderCard(allowGate, undefined, heldEvidence, {
+    renderCard(allowGate, vi.fn().mockResolvedValue({ state: "unavailable", copyVerdicts: new Map() }), heldEvidence, {
       currentUserId: "user-b",
       requestHoldRelease,
       decideHoldRelease,
