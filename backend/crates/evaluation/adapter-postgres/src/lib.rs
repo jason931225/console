@@ -16,9 +16,7 @@ use mnt_evaluation_domain::{
     CycleKind, CycleStage, CycleTransition, EvidenceKind, Grade, MetricKind, ReviewKind,
     ReviewStatus, derive_subject_state,
 };
-use mnt_kernel_core::{
-    AuditAction, AuditEvent, ErrorKind, KernelError, OrgId, TraceContext, UserId,
-};
+use mnt_kernel_core::{AuditAction, AuditEvent, KernelError, OrgId, TraceContext, UserId};
 use mnt_platform_db::{DbError, with_audits, with_org_conn};
 use mnt_platform_request_context::current_org;
 use serde_json::json;
@@ -37,22 +35,6 @@ pub enum PgEvaluationError {
 impl From<sqlx::Error> for PgEvaluationError {
     fn from(value: sqlx::Error) -> Self {
         Self::Db(DbError::Sqlx(value))
-    }
-}
-
-impl PgEvaluationError {
-    #[must_use]
-    pub fn kind(&self) -> ErrorKind {
-        match self {
-            Self::Domain(error) => error.kind,
-            Self::Db(DbError::Sqlx(sqlx::Error::RowNotFound)) => ErrorKind::NotFound,
-            Self::Db(DbError::Sqlx(sqlx::Error::Database(db)))
-                if db.code().as_deref() == Some("23505") =>
-            {
-                ErrorKind::Conflict
-            }
-            _ => ErrorKind::Internal,
-        }
     }
 }
 
