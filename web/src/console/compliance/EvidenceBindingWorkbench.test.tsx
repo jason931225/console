@@ -91,7 +91,8 @@ function page(items: unknown[]) {
 
 function renderWorkbench(
   options: {
-    canWrite?: boolean;
+    canLink?: boolean;
+    canAccept?: boolean;
     getImpl?: (path: string, init: unknown) => Promise<unknown>;
   } = {},
 ) {
@@ -118,7 +119,8 @@ function renderWorkbench(
       <EvidenceBindingWorkbench
         api={api}
         authorityKey="tenant-a:user-a:incarnation-a"
-        canWrite={options.canWrite ?? true}
+        canLink={options.canLink ?? true}
+        canAccept={options.canAccept ?? true}
       />,
     ),
   };
@@ -252,7 +254,8 @@ describe("EvidenceBindingWorkbench", () => {
         api={api}
         authorityKey="tenant-a:user-a:incarnation-a"
         canRead={false}
-        canWrite={false}
+        canLink={false}
+        canAccept={false}
       />,
     );
     expect(
@@ -293,7 +296,8 @@ describe("EvidenceBindingWorkbench", () => {
         key="tenant-a:user-a:incarnation-a"
         api={api}
         authorityKey="tenant-a:user-a:incarnation-a"
-        canWrite
+        canLink
+        canAccept
       />,
     );
     await screen.findByRole("region", { name: "Evidence bindings" });
@@ -309,7 +313,8 @@ describe("EvidenceBindingWorkbench", () => {
         key="tenant-b:user-b:incarnation-b"
         api={api}
         authorityKey="tenant-b:user-b:incarnation-b"
-        canWrite
+        canLink
+        canAccept
       />,
     );
     expect(writeSignal?.aborted).toBe(true);
@@ -335,7 +340,8 @@ describe("EvidenceBindingWorkbench", () => {
       <EvidenceBindingWorkbench
         api={api}
         authorityKey="tenant-a:user-a:incarnation-a"
-        canWrite
+        canLink
+        canAccept
       />,
     );
     await waitFor(() => {
@@ -346,7 +352,8 @@ describe("EvidenceBindingWorkbench", () => {
       <EvidenceBindingWorkbench
         api={api}
         authorityKey="tenant-b:user-b:incarnation-b"
-        canWrite
+        canLink
+        canAccept
       />,
     );
     expect(first.signal?.aborted).toBe(true);
@@ -424,27 +431,112 @@ describe("EvidenceBindingWorkbench acceptance", () => {
         key="tenant-a:user-a:incarnation-a"
         api={api}
         authorityKey="tenant-a:user-a:incarnation-a"
-        canWrite
+        canLink
+        canAccept
       />,
     );
     const user = userEvent.setup();
     await screen.findByRole("region", { name: "Evidence bindings" });
-    await user.click(screen.getByRole("button", { name: /POL-2026-17 details/ }));
+    await user.click(
+      screen.getByRole("button", { name: /POL-2026-17 details/ }),
+    );
     await user.click(screen.getByRole("button", { name: "Accept evidence" }));
-    expect(await screen.findByRole("button", { name: "Accepting…" })).toBeDisabled();
+    expect(
+      await screen.findByRole("button", { name: "Accepting…" }),
+    ).toBeDisabled();
 
     view.rerender(
       <EvidenceBindingWorkbench
         key="tenant-b:user-b:incarnation-b"
         api={api}
         authorityKey="tenant-b:user-b:incarnation-b"
-        canWrite
+        canLink
+        canAccept
       />,
     );
     expect(acceptSignal?.aborted).toBe(true);
-    await user.click(await screen.findByRole("button", { name: /POL-2026-17 details/ }));
-    expect(await screen.findByRole("button", { name: "Accept evidence" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "Accepting…" })).not.toBeInTheDocument();
+    await user.click(
+      await screen.findByRole("button", { name: /POL-2026-17 details/ }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Accept evidence" }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: "Accepting…" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("allows an evidence-link-only operator to propose but never exposes acceptance", async () => {
+    const proposed = { ...evidence, status: "PROPOSED" as const };
+    const { POST } = renderWorkbench({
+      canLink: true,
+      canAccept: false,
+      getImpl: (path: string) => {
+        if (path === "/api/v1/compliance/frameworks")
+          return Promise.resolve({ data: page([framework]) });
+        if (path === "/api/v1/compliance/obligations")
+          return Promise.resolve({ data: page([obligation]) });
+        if (path === "/api/v1/compliance/framework-controls")
+          return Promise.resolve({ data: page([control]) });
+        if (path === "/api/v1/compliance/evidence-bindings")
+          return Promise.resolve({ data: page([proposed]) });
+        return Promise.reject(new Error(`unexpected ${path}`));
+      },
+    });
+    const user = userEvent.setup();
+    await screen.findByRole("region", { name: "Evidence bindings" });
+    await user.selectOptions(screen.getByLabelText("Control"), control.id);
+    await user.type(screen.getByLabelText("Evidence ID"), "POL-2026-LINK");
+    await user.click(screen.getByRole("button", { name: "Propose binding" }));
+    await waitFor(() =>
+      expect(POST).toHaveBeenCalledWith(
+        "/api/v1/compliance/evidence-bindings",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /POL-2026-17 details/ }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Accept evidence" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("allows a domain-manage-only operator to accept but never exposes proposal", async () => {
+    const proposed = { ...evidence, status: "PROPOSED" as const };
+    const { POST } = renderWorkbench({
+      canLink: false,
+      canAccept: true,
+      getImpl: (path: string) => {
+        if (path === "/api/v1/compliance/frameworks")
+          return Promise.resolve({ data: page([framework]) });
+        if (path === "/api/v1/compliance/obligations")
+          return Promise.resolve({ data: page([obligation]) });
+        if (path === "/api/v1/compliance/framework-controls")
+          return Promise.resolve({ data: page([control]) });
+        if (path === "/api/v1/compliance/evidence-bindings")
+          return Promise.resolve({ data: page([proposed]) });
+        return Promise.reject(new Error(`unexpected ${path}`));
+      },
+    });
+    const user = userEvent.setup();
+    await screen.findByRole("region", { name: "Evidence bindings" });
+    expect(
+      screen.queryByRole("button", { name: "Propose binding" }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /POL-2026-17 details/ }),
+    );
+    await user.click(screen.getByRole("button", { name: "Accept evidence" }));
+    await waitFor(() =>
+      expect(POST).toHaveBeenCalledWith(
+        "/api/v1/compliance/evidence-bindings/{id}/accept",
+        {
+          params: { path: { id: proposed.id } },
+          signal: expect.any(AbortSignal),
+        },
+      ),
+    );
   });
 
   it("omits the acceptance action for a caller without write authority", async () => {
@@ -465,7 +557,8 @@ describe("EvidenceBindingWorkbench acceptance", () => {
       <EvidenceBindingWorkbench
         api={api}
         authorityKey="tenant-a:user-a:incarnation-a"
-        canWrite={false}
+        canLink={false}
+        canAccept={false}
       />,
     );
     await screen.findByRole("region", { name: "Evidence bindings" });

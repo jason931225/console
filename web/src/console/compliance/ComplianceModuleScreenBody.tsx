@@ -59,19 +59,30 @@ export function ComplianceModuleScreenBody() {
   // The backend permits this org-wide action to SUPER_ADMIN or an org-wide
   // custom grant. This is a conservative UI hint; the REST boundary remains
   // authoritative for every submission.
-  const canWriteEvidence =
-    (roles?.includes("SUPER_ADMIN") ?? false) ||
-    (featureGrants?.includes(COMPLIANCE_ACTIONS.evidenceLink) ?? false);
+  const isOrgWideAdmin = roles?.includes("SUPER_ADMIN") ?? false;
+  const canLinkEvidence =
+    canRead &&
+    (isOrgWideAdmin ||
+      (featureGrants?.includes(COMPLIANCE_ACTIONS.evidenceLink) ?? false));
+  const canAcceptEvidence =
+    canRead &&
+    (isOrgWideAdmin ||
+      (featureGrants?.includes(COMPLIANCE_ACTIONS.domainManage) ?? false));
 
   return (
     <PolicyGateProvider gate={gate}>
-      <GenericModuleScreen config={complianceModuleScreen} api={api} authorityKey={authorityKey} />
+      <GenericModuleScreen
+        config={complianceModuleScreen}
+        api={api}
+        authorityKey={authorityKey}
+      />
       <EvidenceBindingWorkbench
         key={authorityKey ?? "no-authority"}
         api={api}
         authorityKey={authorityKey}
         canRead={canRead}
-        canWrite={canWriteEvidence}
+        canLink={canLinkEvidence}
+        canAccept={canAcceptEvidence}
       />
     </PolicyGateProvider>
   );

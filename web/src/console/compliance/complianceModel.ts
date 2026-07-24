@@ -23,6 +23,7 @@ export const COMPLIANCE_ACTIONS = {
   frameworkRead: "compliance_framework_read",
   frameworkManage: "compliance_framework_manage",
   evidenceLink: "compliance_evidence_link",
+  domainManage: "compliance_domain_manage",
   audit: "audit_log_read",
 } as const;
 

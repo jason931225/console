@@ -79,19 +79,22 @@ function newestFirst(bindings: EvidenceBinding[]): EvidenceBinding[] {
 /**
  * Evidence workbench: a policy-gated control→evidence proposal surface.
  * It deliberately renders statuses only as returned by the backend. This API
- * has no evidence-status transition route, so it never presents fictional
- * accept/reject/expire actions.
+ * offers only the server-backed PROPOSED-to-ACCEPTED action. Evidence
+ * identity/provenance stays immutable; reject and expire have no route and
+ * therefore no UI action.
  */
 export function EvidenceBindingWorkbench({
   api,
   authorityKey,
   canRead = true,
-  canWrite,
+  canLink,
+  canAccept,
 }: {
   api: ConsoleApiClient;
   authorityKey: string | undefined;
   canRead?: boolean;
-  canWrite: boolean;
+  canLink: boolean;
+  canAccept: boolean;
 }) {
   const controllerRef = useRef<AbortController | null>(null);
   const writeControllerRef = useRef<AbortController | null>(null);
@@ -174,7 +177,13 @@ export function EvidenceBindingWorkbench({
   );
 
   const acceptSelected = useCallback(async () => {
-    if (!selectedBinding || selectedBinding.status !== "PROPOSED") return;
+    if (
+      !canRead ||
+      !canAccept ||
+      !selectedBinding ||
+      selectedBinding.status !== "PROPOSED"
+    )
+      return;
     const authorityEpoch = authorityEpochRef.current;
     const controller = new AbortController();
     writeControllerRef.current?.abort();
@@ -210,9 +219,10 @@ export function EvidenceBindingWorkbench({
       )
         setBusy(false);
     }
-  }, [api, refresh, selectedBinding]);
+  }, [api, canAccept, canRead, refresh, selectedBinding]);
 
   const submit = useCallback(async () => {
+    if (!canRead || !canLink) return;
     const trimmedTargetId = targetId.trim();
     if (!controlId || !trimmedTargetId) {
       setIssue("invalid");
@@ -275,6 +285,8 @@ export function EvidenceBindingWorkbench({
     }
   }, [
     api,
+    canLink,
+    canRead,
     confidence,
     controlId,
     obligationId,
@@ -328,7 +340,7 @@ export function EvidenceBindingWorkbench({
           </button>
         </div>
       ) : null}
-      {canWrite ? (
+      {canLink ? (
         <form
           className="evidence-workbench__form"
           onSubmit={(event) => {
@@ -514,7 +526,7 @@ export function EvidenceBindingWorkbench({
               className="evidence-workbench__detail"
             >
               <h3>Evidence details</h3>
-              {canWrite && selectedBinding.status === "PROPOSED" ? (
+              {canAccept && selectedBinding.status === "PROPOSED" ? (
                 <button
                   type="button"
                   onClick={() => void acceptSelected()}
