@@ -2830,6 +2830,8 @@ dependencies = [
  "mnt-notifications-rest",
  "mnt-ontology-adapter-postgres",
  "mnt-ontology-rest",
+ "mnt-orgchange-adapter-postgres",
+ "mnt-orgchange-rest",
  "mnt-payroll-adapter-postgres",
  "mnt-payroll-domain",
  "mnt-payroll-rest",
@@ -4228,6 +4230,52 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "mnt-orgchange-adapter-postgres"
+version = "0.1.0"
+dependencies = [
+ "mnt-governance-domain",
+ "mnt-kernel-core",
+ "mnt-orgchange-domain",
+ "mnt-platform-db",
+ "mnt-platform-group",
+ "mnt-platform-request-context",
+ "serde_json",
+ "sha2 0.11.0",
+ "sqlx 0.9.0",
+ "thiserror 2.0.18",
+ "time",
+ "uuid",
+]
+
+[[package]]
+name = "mnt-orgchange-domain"
+version = "0.1.0"
+dependencies = [
+ "mnt-kernel-core",
+ "serde",
+ "serde_json",
+ "time",
+ "uuid",
+]
+
+[[package]]
+name = "mnt-orgchange-rest"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "mnt-kernel-core",
+ "mnt-orgchange-adapter-postgres",
+ "mnt-orgchange-domain",
+ "mnt-platform-auth",
+ "mnt-platform-authz",
+ "mnt-platform-request-context",
+ "serde",
+ "serde_json",
+ "time",
  "uuid",
 ]
 

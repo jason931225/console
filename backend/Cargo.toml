@@ -21,6 +21,7 @@ members = [
   "crates/inventory/*",
   "crates/logistics/*",
   "crates/ontology/*",
+  "crates/orgchange/*",
   "crates/registry/*",
   "crates/reporting/*",
   "crates/sales/*",
@@ -298,6 +299,9 @@ mnt-governance-domain = { path = "crates/governance/domain" }
 mnt-governance-application = { path = "crates/governance/application" }
 mnt-governance-adapter-postgres = { path = "crates/governance/adapter-postgres" }
 mnt-governance-rest = { path = "crates/governance/rest" }
+mnt-orgchange-domain = { path = "crates/orgchange/domain" }
+mnt-orgchange-adapter-postgres = { path = "crates/orgchange/adapter-postgres" }
+mnt-orgchange-rest = { path = "crates/orgchange/rest" }
 mnt-platform-request-context = { path = "crates/platform/request-context" }
 mnt-platform-realtime = { path = "crates/platform/realtime" }
 mnt-platform-excel = { path = "crates/platform/excel" }
