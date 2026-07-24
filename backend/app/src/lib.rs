@@ -5445,6 +5445,7 @@ mod command_database_config_tests {
         );
     }
 
+    #[cfg(not(feature = "test-postgres"))]
     #[test]
     fn api_rejects_command_urls_equal_to_runtime_or_each_other() {
         let leave_equals_runtime = AppConfig::from_pairs([
