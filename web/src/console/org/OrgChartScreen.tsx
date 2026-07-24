@@ -137,7 +137,7 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
   const [siteCard, setSiteCard] = useState<OrgTreeSite>();
   const [teamCard, setTeamCard] = useState<{ column: OrgTreeColumn; unit: HrOrgChartUnit }>();
   const [modal, setModal] = useState<OrgChangeModalMode | undefined>(() => {
-    const restored = readSandbox(actorId)?.openChangeId;
+    const restored = capabilities.canReadChanges ? readSandbox(actorId)?.openChangeId : undefined;
     return restored ? { kind: "existing", id: restored } : undefined;
   });
   const [addSiteOpen, setAddSiteOpen] = useState(false);

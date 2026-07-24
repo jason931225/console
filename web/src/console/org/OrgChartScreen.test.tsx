@@ -168,8 +168,21 @@ describe("OrgChartScreen", () => {
     expect(await screen.findByText(text.changesUnavailable)).toBeVisible();
   });
 
-  it("opens a team card via keyboard and closes it with Escape", async () => {
-    renderScreen(reader);
+  it("does not restore a persisted change modal after the read capability is revoked", async () => {
+    window.sessionStorage.setItem(
+      "console.org.sandbox",
+      JSON.stringify({ actorId: "actor-1", ops: [], openChangeId: "oc-1" }),
+    );
+    const api = apiWith(happyRoutes);
+    renderScreen({ ...reader, canReadChanges: false }, api);
+    await screen.findByRole("button", { name: entityCardName });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(vi.mocked(api.GET)).not.toHaveBeenCalledWith("/api/v1/org-changes/{id}", expect.anything());
+    expect(vi.mocked(api.GET)).not.toHaveBeenCalledWith("/api/v1/org-changes", expect.anything());
+  });
+
+  it("opens a team card via keyboard, drills to messenger/people, and closes with Escape", async () => {
+    const { onNavigate } = renderScreen(reader);
     const entity = await screen.findByRole("button", { name: entityCardName });
     await userEvent.click(entity);
     const team = await screen.findByRole("button", { name: /운영팀/ });
@@ -180,6 +193,10 @@ describe("OrgChartScreen", () => {
     // 김하나 appears twice by design: 책임자 link + position roster entry.
     expect(screen.getAllByText("김하나")).toHaveLength(2);
     expect(screen.getByText(text.headDerived)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: text.teamChannel }));
+    expect(onNavigate).toHaveBeenLastCalledWith("messenger");
+    await userEvent.click(screen.getByRole("button", { name: text.teamRoster }));
+    expect(onNavigate).toHaveBeenLastCalledWith("people");
     await userEvent.keyboard("{Escape}");
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: text.teamInfo })).toBeNull();
@@ -297,7 +314,7 @@ describe("OrgChartScreen", () => {
   });
 
   it("hides every approval and draft affordance from a read-only capability set", async () => {
-    renderScreen(reader);
+    const { onNavigate } = renderScreen(reader);
     await userEvent.click(await screen.findByRole("button", { name: /OC-2026-0001/ }));
     await screen.findByRole("dialog");
     await waitFor(() => {
@@ -305,6 +322,8 @@ describe("OrgChartScreen", () => {
     });
     expect(screen.queryByRole("button", { name: text.ocApprove })).toBeNull();
     expect(screen.queryByRole("button", { name: text.edit })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: text.ocEventsAudit }));
+    expect(onNavigate).toHaveBeenLastCalledWith("audit");
   });
 
   it("keeps the tree inside a horizontally scrollable canvas for narrow viewports", async () => {

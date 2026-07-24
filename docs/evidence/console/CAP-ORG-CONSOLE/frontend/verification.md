@@ -1,17 +1,17 @@
 # CAP-ORG-CONSOLE frontend — Stage-3 fresh-eyes adversarial verification
 
-Verifier: independent session, 2026-07-24. Scope: `web/src/console/org/**`, `web/src/i18n/org.ts`,
-evidence manifests. The verifier did not write the module; every claim below was re-derived from
-the code, the design mirror (`docs/design/oyatie-console/"Oyatie Console.dc.html"`, change-log 190),
-and fresh gate runs.
+Verifier: independent sessions, 2026-07-24 (pass A) and 2026-07-25 (pass B). Scope:
+`web/src/console/org/**`, `web/src/i18n/org.ts`, evidence manifests. Neither verifier wrote the
+module; every claim below was re-derived from the code, the design mirror
+(`docs/design/oyatie-console/"Oyatie Console.dc.html"`, change-log 190), and fresh gate runs.
 
 ## Verdict
 
-PASS with fixes applied in this pass (5 findings, all fixed and re-verified) and honest open
-items listed at the end. No stubs, no TODO/FIXME, no test.skip/.only, no dead controls, no raw
-colors, no inline Hangul in components, no fabricated data found.
+PASS with fixes applied (pass A: 5 findings; pass B: 3 findings — all fixed and re-verified) and
+honest open items listed at the end. No stubs, no TODO/FIXME, no test.skip/.only, no dead
+controls, no raw colors, no inline Hangul in components, no fabricated data found.
 
-## Findings fixed in this pass
+## Findings fixed — pass A
 
 | # | Finding | Fix |
 |---|---------|-----|
@@ -20,6 +20,14 @@ colors, no inline Hangul in components, no fabricated data found.
 | 3 | Leaving edit mode kept a stale "삭제 차단" guard banner on screen | `closeEdit` clears the guard, `OrgChartScreen.tsx` |
 | 4 | Non-conforming ARIA: `role="tree"`/`role="treeitem"` on non-focusable divs without arrow-key management | replaced with `role="group"` container + `aria-expanded` on the entity toggle button (standard disclosure pattern) |
 | 5 | Test gap: settlement gating (폐지 보관 blocked until every checklist item settled) had no test | added evidence-topology test at the fetch boundary asserting the real completion route and CTA gating |
+
+## Findings fixed — pass B (second independent verifier)
+
+| # | Finding | Fix |
+|---|---------|-----|
+| 6 | 10 dead i18n keys (`offline`, `ocNew`, `ocDrafter`, `ocSupersedes`, `ocDetailError`, `collapseTeams`, `entitySlug`, `entityStatus`, `team`, `ocStage.unknown`) — `offline` in particular implied an offline UI state that is not wired (network failures surface through the repo-standard `Error.message` path, same as the production exemplar) | deleted from `web/src/i18n/org.ts` and the `i18n.json` manifest; no dead strings remain |
+| 7 | Persisted `openChangeId` restored the org-change modal even when `canReadChanges` was revoked between sessions — rendered a denied affordance as an error dialog instead of absence | restore now gated on `capabilities.canReadChanges` (`OrgChartScreen.tsx`); new test proves no dialog and zero org-change fetches |
+| 8 | Traversable-link contract point had no test: no assertion that team → messenger/people and events → audit drills fire the real navigation targets | drill assertions added to the team-card and read-only-modal tests (`onNavigate` called with `"messenger"`, `"people"`, `"audit"`) |
 
 ## 9-point module completion contract
 
@@ -106,16 +114,19 @@ Deliberate, truthful deviations (design simulates data the backend does not have
   mutation adopts the server readback; `AbortSignal` threaded through every call; stale responses
   fenced by generation tokens and whole-screen session fences.
 
-## Gates (fresh runs, this session)
+## Gates (fresh runs, pass B)
 
-- `npx vitest run src/console/org src/i18n` → **27/27 passed** (5 files)
+- `npx vitest run src/console/org src/i18n` → **28/28 passed** (5 files)
 - `npx eslint src/console/org src/i18n/org.ts --max-warnings 0` → clean
 - `npx tsc --noEmit -p tsconfig.json` → clean
 - `node scripts/check-console-purity.mjs` → 410 files clean
 - `node scripts/check-ui-strings.mjs` → fails **only** on pre-existing out-of-lane
   `src/features/facilities/FacilitiesWorkflowPage.tsx` (spine commit fd93fbdd); no org file flagged
 - grep sweeps: no TODO/FIXME/HACK, no `test.skip`/`.only`, no raw colors (`#hex`/`rgb`/`hsl`) in
-  `org.css`, no `cn(`/`clsx`, no inline Hangul outside tests/i18n
+  `org.css`, no `cn(`/`clsx`, no inline Hangul outside tests/i18n, no unused i18n keys
+- mount.json integrator claims re-verified against the spine: `orgchart` nav item + gate
+  `g(DIRECTORY_ROLES, [EMPLOYEE_DIRECTORY_READ])` at `nav.ts:164-169`, ko label at `ko.ts:971`,
+  and `orgchart` absent from both `MOUNTED_SCREEN_KEYS` and `SCREEN_REGISTRY` (dark, as declared)
 
 ## Open items (honest)
 

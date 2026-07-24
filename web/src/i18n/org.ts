@@ -10,7 +10,6 @@ export const orgStrings = {
   retry: "다시 시도",
   empty: "표시할 조직이 없습니다.",
   actionError: "요청을 처리하지 못했습니다.",
-  offline: "네트워크에 연결할 수 없습니다.",
 
   tree: "조직 트리",
   rootMeta: "재직",
@@ -19,7 +18,6 @@ export const orgStrings = {
   expandAll: "클릭: 전체 조직 펼치기",
   collapseAll: "클릭: 3단계 보기로 접기",
   expandTeams: "클릭: 팀 펼치기",
-  collapseTeams: "클릭: 팀 접기",
   entityInfo: "법인 정보 카드",
   teamInfo: "팀 정보 카드",
   edit: "편집",
@@ -47,8 +45,6 @@ export const orgStrings = {
   changesUnavailable: "조직 변경 API가 아직 배포되지 않았습니다.",
 
   entity: "법인",
-  entitySlug: "식별자",
-  entityStatus: "상태",
   entityOrg: "조직",
   entityOrgSites: "개 사업장",
   entityOrgTeams: "개 팀",
@@ -57,7 +53,6 @@ export const orgStrings = {
   entityRoster: "소속 명부",
   close: "닫기",
 
-  team: "팀",
   teamHead: "책임자",
   teamHeadcount: "인원",
   teamPositions: "직급 구성",
@@ -70,7 +65,6 @@ export const orgStrings = {
   siteDeactivated: "중지",
 
   ocTitle: "조직 변경",
-  ocNew: "새 조직 변경 기안",
   ocKind: "변경 유형",
   ocKinds: { NEW: "신설", REORG: "개편", DISSOLVE: "폐지" },
   ocStage: {
@@ -83,7 +77,6 @@ export const orgStrings = {
     ARCHIVED: "보관됨",
     REJECTED: "반려됨",
     CANCELLED: "취소됨",
-    unknown: "상태 확인 필요",
   },
   ocSteps: { draft: "초안", precheck: "사전점검", approval: "결재", effect: "발효", settle: "정산", archive: "보관" },
   ocEffectiveDate: "발효일",
@@ -137,8 +130,5 @@ export const orgStrings = {
   ocEvents: "활동 이력 — 감사 체인",
   ocEventsAudit: "감사 로그",
   ocCreate: "초안 저장",
-  ocDrafter: "기안자",
-  ocSupersedes: "재기안 원본",
   ocReasonRequired: "사유를 입력하세요.",
-  ocDetailError: "조직 변경 내용을 불러오지 못했습니다.",
 } as const;
