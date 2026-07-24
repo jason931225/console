@@ -150,6 +150,17 @@ describe("ComplianceModuleScreenBody", () => {
     expect((await screen.findAllByText("CP-0001")).length).toBeGreaterThan(0);
   });
 
+  it("shows the audit trail to a built-in SUPER_ADMIN without custom grants", async () => {
+    renderBody(["SUPER_ADMIN"]);
+    expect(await screen.findByText("감사")).toBeInTheDocument();
+  });
+
+  it("keeps audit trail hidden from a non-admin reader without the audit grant", async () => {
+    renderBody(["EXECUTIVE"]);
+    await screen.findAllByText("CP-0001");
+    expect(screen.queryByText("감사")).not.toBeInTheDocument();
+  });
+
   it("denies the whole surface by omission for an unauthorized role", async () => {
     renderBody(["MEMBER"]);
     // GenericModuleScreen gates its entire content plane on the read action;

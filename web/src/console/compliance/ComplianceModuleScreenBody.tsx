@@ -19,6 +19,7 @@ import { complianceModuleScreen } from "./complianceModuleScreen";
 import { EvidenceBindingWorkbench } from "./EvidenceBindingWorkbench";
 
 const COMPLIANCE_READ_ROLES = new Set(["EXECUTIVE", "SUPER_ADMIN"]);
+const AUDIT_LOG_READ_ROLES = new Set(["ADMIN", "SUPER_ADMIN"]);
 
 export function ComplianceModuleScreenBody() {
   const { api, session } = useAuth();
@@ -35,6 +36,9 @@ export function ComplianceModuleScreenBody() {
   const canRead =
     (roles?.some((role) => COMPLIANCE_READ_ROLES.has(role)) ?? false) ||
     (featureGrants?.includes(COMPLIANCE_ACTIONS.read) ?? false);
+  const canReadAuditLog =
+    (roles?.some((role) => AUDIT_LOG_READ_ROLES.has(role)) ?? false) ||
+    (featureGrants?.includes(COMPLIANCE_ACTIONS.audit) ?? false);
   const gate = useMemo<PolicyGate>(
     () => ({
       can: (action) => {
@@ -44,10 +48,11 @@ export function ComplianceModuleScreenBody() {
           action === COMPLIANCE_ACTIONS.frameworkRead
         )
           return canRead;
+        if (action === COMPLIANCE_ACTIONS.audit) return canReadAuditLog;
         return featureGrants?.includes(action) ?? false;
       },
     }),
-    [canRead, featureGrants],
+    [canRead, canReadAuditLog, featureGrants],
   );
   // The backend permits this org-wide action to SUPER_ADMIN or an org-wide
   // custom grant. This is a conservative UI hint; the REST boundary remains
