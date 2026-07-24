@@ -76,10 +76,10 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
   const commandController = useRef<AbortController | null>(null);
   const selectedIdRef = useRef<string | undefined>(undefined);
 
-  const selectCase = useCallback((nextId: string | undefined) => {
+  const selectCase = useCallback((nextId: string | undefined, preservedCommand?: AbortController) => {
     if (selectedIdRef.current === nextId) return;
     selectedIdRef.current = nextId;
-    commandController.current?.abort();
+    if (commandController.current !== preservedCommand) commandController.current?.abort();
     detailController.current?.abort();
     detailEpoch.current += 1;
     setSelected(undefined);
@@ -190,7 +190,7 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
       if (controller.signal.aborted) return;
       if (!result.data) { setNotice({ kind: "error", text: errorText(result.error, copy.createFailed) }); return; }
       setObligationId("");
-      selectCase(result.data.id);
+      selectCase(result.data.id, controller);
       await refreshCase(result.data.id);
     } catch (error) { if (!controller.signal.aborted) setNotice({ kind: "error", text: errorText(error, copy.createFailed) }); }
     finally { if (!controller.signal.aborted && commandController.current === controller) setPending(undefined); }

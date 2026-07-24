@@ -179,6 +179,33 @@ describe("FacilitiesWorkflowPage", () => {
     expect(initialListCall?.[1]?.signal.aborted).toBe(true);
   });
 
+  it("clears a successful create pending state and permits a second idempotent intake", async () => {
+    const { POST } = setupApi();
+    const user = userEvent.setup();
+    render(<FacilitiesWorkflowPage />);
+
+    await screen.findByRole("heading", { name: "접수 대기" });
+    const obligation = screen.getByLabelText("활성 HVAC 의무 ID");
+    const create = screen.getByRole("button", { name: "사례 접수" });
+    await user.type(obligation, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    await user.click(create);
+    await waitFor(() => {
+      expect(POST).toHaveBeenCalledTimes(1);
+      expect(create).toBeEnabled();
+    });
+    expect(obligation).toHaveValue("");
+
+    await user.type(obligation, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    await user.click(create);
+    await waitFor(() => {
+      expect(POST).toHaveBeenCalledTimes(2);
+    });
+    expect(POST.mock.calls.map(([path]) => path)).toEqual([
+      "/api/v1/facilities/cases",
+      "/api/v1/facilities/cases",
+    ]);
+  });
+
   it("clears the old detail and cannot post to it while a new case detail is pending", async () => {
     const secondCaseId = "55555555-5555-5555-5555-555555555555";
     const first = caseView("DUE");
