@@ -32,6 +32,17 @@ export function BoardReceiptsPanel({ boardApi, notice, onClose }: Props) {
   const [attempt, setAttempt] = useState(0);
   const abortRef = useRef<AbortController | undefined>(undefined);
   const dialogLabelId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Move focus into the dialog on open (Escape is handled on the overlay, so it
+  // must contain focus) and hand it back to the opener on close.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.focus();
+    return () => {
+      opener?.focus();
+    };
+  }, []);
 
   useEffect(() => {
     abortRef.current?.abort();
@@ -104,7 +115,14 @@ export function BoardReceiptsPanel({ boardApi, notice, onClose }: Props) {
 
   return (
     <div className="board-overlay" onKeyDown={onKeyDown}>
-      <div className="board-panel" role="dialog" aria-modal="true" aria-labelledby={dialogLabelId}>
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="board-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dialogLabelId}
+      >
         <header className="board-panel__header">
           <h3 id={dialogLabelId} className="board-panel__title">
             <span className="board-code">{notice.code ?? "—"}</span> {text.receipts.title}

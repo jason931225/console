@@ -290,6 +290,48 @@ describe("BoardScreenBody", () => {
     });
   });
 
+  it("closes the receipts dialog with Escape straight after opening and hands focus back to the opener", async () => {
+    const api = makeApi({
+      "/api/v1/notices": ok([notice({ progress: { total: 3, acknowledged: 1 } })]),
+      "/api/v1/notices/{id}/progress": ok({ total: 3, acknowledged: 1 }),
+      "/api/v1/notices/{id}/receipts": ok({ items: [], total: 0 }),
+    });
+    renderBody(api, ["notice_manage"]);
+    await userEvent.click(await screen.findByText("취업규칙 개정 통지"));
+    const opener = await screen.findByRole("button", { name: text.actions.receipts });
+    await userEvent.click(opener);
+    const dialog = await screen.findByRole("dialog");
+    // Focus moved INTO the dialog on open, so Escape reaches the overlay handler
+    // without any prior click inside.
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("opens the composer with the title focused, closes on Escape, and restores the opener's focus", async () => {
+    const api = makeApi({ "/api/v1/notices": ok([]), "/api/v1/branches": ok([]) });
+    renderBody(api, ["notice_manage"]);
+    const opener = await screen.findByTestId("module-primary-action");
+    await userEvent.click(opener);
+    const dialog = await screen.findByRole("dialog", { name: text.composer.createTitle });
+    expect(document.activeElement).toBe(within(dialog).getByLabelText(text.composer.titleLabel));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("filters the list by a status-chip label typed into search", async () => {
+    const api = makeApi({ "/api/v1/notices": ok([notice(), draftRow]) });
+    renderBody(api, ["notice_manage"]);
+    await screen.findByText("NT-0707");
+    await userEvent.type(screen.getByRole("searchbox"), text.status.draft);
+    await waitFor(() => {
+      expect(screen.queryByText("NT-0707")).toBeNull();
+    });
+    expect(screen.getByText("7월 안전교육 안내")).toBeVisible();
+  });
+
   it("drills the list to an audience branch through its link chip", async () => {
     const branchRow = notice({
       id: "n5",

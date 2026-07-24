@@ -76,6 +76,18 @@ export function BoardComposer({ boardApi, draft, storageKey, onClose, onSaved }:
   const categoryId = useId();
   const dialogLabelId = useId();
   const abortRef = useRef<AbortController | undefined>(undefined);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  // Move focus onto the title input on open (the overlay Escape handler needs
+  // focus inside the dialog) and hand it back to the opener on close. Explicit
+  // (not autoFocus) so the opener is captured before focus moves.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    titleRef.current?.focus();
+    return () => {
+      opener?.focus();
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -185,11 +197,11 @@ export function BoardComposer({ boardApi, draft, storageKey, onClose, onSaved }:
           <label className="board-field" htmlFor={titleId}>
             <span className="board-field__label">{text.composer.titleLabel}</span>
             <input
+              ref={titleRef}
               id={titleId}
               className="board-field__input"
               value={form.title}
               maxLength={300}
-              autoFocus
               onChange={(event) => {
                 update({ title: event.target.value });
               }}

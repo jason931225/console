@@ -117,8 +117,18 @@ export function buildBoardModuleConfig(deps: BoardConfigDeps): ModuleConfig<Boar
       }
       return stats;
     },
+    // Haystack mirrors the prototype MOD search: code + title + published day +
+    // audience + status chip + category (+ body, richer than the mock).
     search: (row) =>
-      [row.code ?? "", row.title, row.body, categoryLabel(row.category), audienceLabel(row)]
+      [
+        row.code ?? "",
+        row.title,
+        row.body,
+        publishedDayLabel(row.published_at),
+        categoryLabel(row.category),
+        audienceLabel(row),
+        noticeStatusChip(row).label,
+      ]
         .join(" ")
         .toLowerCase(),
     detail: {

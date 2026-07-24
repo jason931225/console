@@ -105,6 +105,18 @@ describe("buildBoardModuleConfig", () => {
     expect(member.detail.actions(acknowledged)).toEqual([]);
   });
 
+  it("search haystack covers code, title, published day, category, audience, and status label", () => {
+    const config = buildBoardModuleConfig(deps(true));
+    const draft = notice({ status: "draft", code: null, published_at: null });
+    expect(config.search(draft)).toContain(text.status.draft.toLowerCase());
+    const inProgress = notice({ progress: { total: 1284, acknowledged: 1192 } });
+    const haystack = config.search(inProgress);
+    expect(haystack).toContain("nt-0707");
+    expect(haystack).toContain(text.status.ackInProgress.toLowerCase());
+    expect(haystack).toContain(text.category.legal.toLowerCase());
+    expect(haystack).toContain(text.audienceOrg.toLowerCase());
+  });
+
   it("links audience branches as drillable object chips", () => {
     const config = buildBoardModuleConfig(deps(false));
     const row = notice({
