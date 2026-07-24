@@ -1,0 +1,35 @@
+{
+  "lane": "CAP-PAYROLL-CONSOLE",
+  "stage": "scout",
+  "shared_root_requests": [
+    {
+      "file": "web/src/console/shell/nav.ts",
+      "change": "Add \"payroll\" to MOUNTED_SCREEN_KEYS. Nav item already exists (payroll group, labelKey console.shell.nav.payroll, icon calc, gate DIRECTORY_ROLES + EMPLOYEE_DIRECTORY_READ) — no item edit. Do NOT add to EXPOSED_SCREEN_KEYS (ADR-0025 dark)."
+    },
+    {
+      "file": "web/src/console/screens/registry.ts",
+      "change": "Add entry: payroll: PayrollScreenBody (import { PayrollScreenBody } from \"../payroll\")."
+    },
+    {
+      "file": "web/src/i18n/ko.ts",
+      "change": "Ensure keys console.shell.nav.groups.payroll and console.shell.nav.payroll exist (nav.ts already references them; verify, add only if missing)."
+    },
+    {
+      "file": "backend/crates/platform/authz/src/lib.rs",
+      "change": "Add Feature::PayrollRunManage (code \"payroll_run_manage\"), matrix row and org-wide gating identical to PayrollRunRead; include in the feature-code parse match and the org-wide feature list."
+    },
+    {
+      "file": "backend/openapi/openapi.yaml",
+      "change": "Add 8 operations under /api/v1/payroll/runs/{id}/* per design-contract.md section 2, all with tags: [payroll]; extend PayrollRunSummary/PayrollRunDetail schemas per section 3; then regenerate clients/{ts,kotlin,swift} (three drift gates)."
+    },
+    {
+      "file": "backend/crates/platform/db/migrations",
+      "change": "Migration 0186_payroll_run_lifecycle.sql (provisional number — latest on branch is 0180; take next free number immediately before push)."
+    }
+  ],
+  "module_owned": {
+    "backend": "backend/crates/payroll/{domain,adapter-postgres,rest}",
+    "frontend": "web/src/console/payroll/**, web/src/i18n/payroll.ts",
+    "evidence": "docs/evidence/console/CAP-PAYROLL-CONSOLE/**"
+  }
+}
