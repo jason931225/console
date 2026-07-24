@@ -429,7 +429,9 @@ async fn recruiting_pipeline_publish_offer_hire_with_full_audit_lineage(pool: Pg
         "publish must audit once with its snapshot"
     );
 
-    // Close remains available from PUBLISHED.
+    // Close remains available from PUBLISHED — and posting detail serves
+    // applicant SUMMARIES only: the PII surfaces (profile, provenance, note,
+    // assessment signature) live exclusively behind the audited detail read.
     let (_, current) = send(
         &service,
         "GET",
@@ -438,6 +440,21 @@ async fn recruiting_pipeline_publish_offer_hire_with_full_audit_lineage(pool: Pg
         None,
     )
     .await;
+    let summary = &current["applicants"][0];
+    assert_eq!(summary["applicant_no"], "APL-0001");
+    assert_eq!(summary["stage"], "HIRED");
+    assert_eq!(summary["assessed"], true);
+    for pii_field in [
+        "profile_lines",
+        "source_document",
+        "reject_note",
+        "assessment",
+    ] {
+        assert!(
+            summary.get(pii_field).is_none(),
+            "posting detail must not leak the unaudited PII surface {pii_field}: {summary}"
+        );
+    }
     let (status, closed) = send(
         &service,
         "POST",

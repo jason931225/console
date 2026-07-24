@@ -166,15 +166,22 @@ impl PgRecruitingStore {
         .await
     }
 
+    /// Posting detail carries applicant SUMMARY rows only. The PII surfaces
+    /// (profile lines, source document, reject note, assessment signature) are
+    /// served exclusively by [`Self::applicant_detail`], which records the
+    /// audited `recruiting.applicant.view` event — returning them here would
+    /// bypass that audit. `assessed` is the existence flag the pipeline row
+    /// needs to route its next action; the score itself stays behind the
+    /// audited read.
     pub async fn get_posting(&self, posting_id: Uuid) -> Result<Value, PgRecruitingError> {
         let org = current_org().map_err(KernelError::from)?;
         with_org_conn(&self.pool, org, |tx| {
             Box::pin(async move {
                 let posting = load_posting(tx, posting_id).await?;
                 let rows = sqlx::query(
-                    "SELECT id, posting_id, applicant_no, name, profile, source_document, stage, \
-                     hold, doc_requested, rejected_at, reject_reason, reject_note, assessment_score, \
-                     assessed_by, assessed_at, hired_employee_id, created_at, updated_at \
+                    "SELECT id, posting_id, applicant_no, name, stage, hold, doc_requested, \
+                     rejected_at, reject_reason, assessment_score IS NOT NULL AS assessed, \
+                     hired_employee_id, created_at, updated_at \
                      FROM recruit_applicants WHERE posting_id = $1 \
                      ORDER BY created_at ASC, applicant_no ASC",
                 )
@@ -183,7 +190,7 @@ impl PgRecruitingStore {
                 .await?;
                 let applicants = rows
                     .iter()
-                    .map(applicant_json)
+                    .map(applicant_summary_json)
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(json!({ "posting": posting, "applicants": applicants }))
             })
@@ -1640,6 +1647,26 @@ fn applicant_json(row: &PgRow) -> Result<Value, PgRecruitingError> {
         "reject_reason": row.try_get::<Option<String>, _>("reject_reason")?,
         "reject_note": row.try_get::<Option<String>, _>("reject_note")?,
         "assessment": assessment,
+        "hired_employee_id": row.try_get::<Option<Uuid>, _>("hired_employee_id")?,
+        "created_at": ts(row.try_get("created_at")?)?,
+        "updated_at": ts(row.try_get("updated_at")?)?,
+    }))
+}
+
+/// The non-PII applicant projection for posting detail: pipeline routing
+/// state only — no profile, provenance, note, or assessment signature.
+fn applicant_summary_json(row: &PgRow) -> Result<Value, PgRecruitingError> {
+    Ok(json!({
+        "id": row.try_get::<Uuid, _>("id")?,
+        "posting_id": row.try_get::<Uuid, _>("posting_id")?,
+        "applicant_no": row.try_get::<String, _>("applicant_no")?,
+        "name": row.try_get::<String, _>("name")?,
+        "stage": row.try_get::<String, _>("stage")?,
+        "hold": row.try_get::<bool, _>("hold")?,
+        "doc_requested": row.try_get::<bool, _>("doc_requested")?,
+        "rejected_at": opt_ts(row.try_get("rejected_at")?)?,
+        "reject_reason": row.try_get::<Option<String>, _>("reject_reason")?,
+        "assessed": row.try_get::<bool, _>("assessed")?,
         "hired_employee_id": row.try_get::<Option<Uuid>, _>("hired_employee_id")?,
         "created_at": ts(row.try_get("created_at")?)?,
         "updated_at": ts(row.try_get("updated_at")?)?,
