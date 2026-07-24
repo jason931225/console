@@ -956,7 +956,10 @@ impl PgOrgChangeStore {
         validate_proposal(&command.proposal)?;
         bounded_text(&command.reason, "reason", 4000)?;
         let key = command.idempotency_key.trim();
-        if key.len() < 16 || key.len() > 200 {
+        // Characters, not bytes — the DB CHECK is char_length(); a byte count
+        // would let a short multibyte key through to a raw CHECK violation.
+        let key_chars = key.chars().count();
+        if !(16..=200).contains(&key_chars) {
             return Err(
                 KernelError::validation("Idempotency-Key must be 16..200 characters").into(),
             );
@@ -1021,19 +1024,16 @@ impl PgOrgChangeStore {
 
                 let year = today_kst().year();
                 let prefix = format!("OC-{year}-");
-                let last: Option<String> = sqlx::query_scalar(
-                    "SELECT code FROM org_change_requests WHERE code LIKE $1 \
-                     ORDER BY code DESC LIMIT 1",
+                // Numeric max, not lexicographic: 'OC-2026-9999' > 'OC-2026-10000'
+                // as text, which would repeat 10000 forever (permanent 409s).
+                let last: Option<i64> = sqlx::query_scalar(
+                    "SELECT max((substring(code FROM 9))::bigint) \
+                     FROM org_change_requests WHERE code LIKE $1",
                 )
                 .bind(format!("{prefix}%"))
-                .fetch_optional(tx.as_mut())
+                .fetch_one(tx.as_mut())
                 .await?;
-                let next = last
-                    .as_deref()
-                    .and_then(|code| code.strip_prefix(&prefix))
-                    .and_then(|n| n.parse::<u32>().ok())
-                    .unwrap_or(0)
-                    + 1;
+                let next = last.unwrap_or(0) + 1;
                 let code = format!("{prefix}{next:04}");
 
                 let id = Uuid::new_v4();

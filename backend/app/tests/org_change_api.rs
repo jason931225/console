@@ -871,6 +871,61 @@ async fn authorization_denies_without_leakage_and_conceals_other_tenants(pool: P
     .await;
     assert_eq!(status, StatusCode::OK, "entities: {entities}");
     assert_eq!(entities, json!([]), "fail-closed empty: {entities}");
+
+    // With a live group grant the SECURITY DEFINER resolvers surface the
+    // member 법인 — the positive path, not just the fail-closed one.
+    let group_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO groups (slug, name) VALUES ('knl-holdings', '지주회사') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO group_memberships (group_id, org_id) VALUES ($1, $2)")
+        .bind(group_id)
+        .bind(*org.as_uuid())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO group_role_grants (group_id, user_id, group_role) \
+         VALUES ($1, $2, 'GROUP_VIEWER')",
+    )
+    .bind(group_id)
+    .bind(*drafter.as_uuid())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (status, entities) = send(
+        &rt,
+        &keys,
+        "GET",
+        "/api/v1/org-entities",
+        &draft_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "granted entities: {entities}");
+    let listed = entities.as_array().unwrap();
+    assert!(
+        listed
+            .iter()
+            .any(|e| e["orgId"].as_str() == Some(&org.as_uuid().to_string())),
+        "granted 법인 listed: {entities}"
+    );
+    // The outsider's grant-less token still sees nothing.
+    let (status, outsider_entities) = send(
+        &rt,
+        &keys,
+        "GET",
+        "/api/v1/org-entities",
+        &outsider_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "outsider entities");
+    assert_eq!(outsider_entities, json!([]), "no grant, no 법인 list");
 }
 
 struct Keys {
