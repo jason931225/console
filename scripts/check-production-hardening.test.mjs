@@ -842,6 +842,8 @@ const validProductionEvidenceText = `${JSON.stringify(
 
 const validWorkflowFiles = {
   "scripts/check-production-authority-blocked.mjs": "#!/usr/bin/env node\n",
+  "scripts/check-openapi-toolchain-security.test.mjs":
+    "import { test } from 'node:test';\ntest('compatibility', () => {});\n",
   "package.json": JSON.stringify({
     scripts: {
       "test:production-hardening":
@@ -910,6 +912,8 @@ jobs:
         run: cargo deny --manifest-path backend/Cargo.toml check
   node-advisories:
     steps:
+      - name: OpenAPI toolchain compatibility
+        run: npm run test:openapi-toolchain-security
       - name: npm audit
         run: npm audit --audit-level=high
 `,
@@ -1103,6 +1107,27 @@ describe("production hardening workflow gates", () => {
   });
   it("accepts active CI, security, and image-release workflow gates", () => {
     assert.deepEqual(evaluateWorkflows().failures, []);
+  });
+
+  it("rejects removing the OpenAPI toolchain compatibility regression", () => {
+    const pkg = JSON.parse(validWorkflowFiles["package.json"]);
+    delete pkg.scripts["test:openapi-toolchain-security"];
+    assertHasFailure(
+      evaluateWorkflows({ "package.json": JSON.stringify(pkg) }),
+      "OpenAPI toolchain security regression test and exact package CLI wiring",
+    );
+
+    assertHasFailure(
+      evaluateWorkflows({
+        ".github/workflows/security.yml": validWorkflowFiles[
+          ".github/workflows/security.yml"
+        ].replace(
+          "        run: npm run test:openapi-toolchain-security\n",
+          "        run: echo compatibility gate removed\n",
+        ),
+      }),
+      "security workflow must actively run npm run test:openapi-toolchain-security",
+    );
   });
 
   it("binds the documented GitHub environment Team response shape exactly", () => {

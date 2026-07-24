@@ -43,6 +43,7 @@
     "test:employee-import-contract": "node --test scripts/check-employee-import-replay-contract.test.mjs",
     "test:consulting-conflict-contract": "node --test scripts/check-consulting-conflict-contract.test.mjs",
     "test:ontology-write-precondition": "node --test scripts/check-ontology-write-precondition.test.mjs",
+    "test:openapi-toolchain-security": "node --test scripts/check-openapi-toolchain-security.test.mjs",
     "check:pr473-migration-operational": "python3 scripts/check-pr473-migration-operational.py",
     "test:pr473-migration-operational": "python3 scripts/check-pr473-migration-operational.test.py",
     "test:production-hardening": "npm run test:pr473-migration-operational && python3 scripts/check-production-promotion-authority.test.py && node --test scripts/check-production-authority-blocked.test.mjs scripts/check-production-hardening.test.mjs",
@@ -99,6 +100,10 @@
   },
   "overrides": {
     "js-yaml@4.x": "4.3.0",
-    "shell-quote": "1.10.0"
+    "shell-quote": "1.10.0",
+    "@redocly/openapi-core@1.34.17": {
+      "minimatch": "file:../../../tools/npm/minimatch-callable-compat"
+    },
+    "brace-expansion": "5.0.8"
   }
 }

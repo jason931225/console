@@ -1085,6 +1085,15 @@ export function evaluateWorkflowHardeningChecks(readText) {
     "production authority blocked evaluator: explicit-SHA CLI wiring present",
     "production authority blocked evaluator and exact package CLI wiring must be present",
   );
+  requirement(
+    result,
+    packageJson?.scripts?.["test:openapi-toolchain-security"] ===
+      "node --test scripts/check-openapi-toolchain-security.test.mjs" &&
+      readText("scripts/check-openapi-toolchain-security.test.mjs").trim()
+        .length > 0,
+    "OpenAPI toolchain security regression: exact package test wiring present",
+    "OpenAPI toolchain security regression test and exact package CLI wiring must be present",
+  );
 
   requirement(
     result,
@@ -1438,6 +1447,14 @@ export function evaluateWorkflowHardeningChecks(readText) {
     ]),
     "security workflow portable gate: active cargo deny",
     "security workflow must actively run cargo deny --manifest-path backend/Cargo.toml check",
+  );
+  requirement(
+    result,
+    workflowHasRun(securityWorkflow, [
+      /\bnpm\s+run\s+test:openapi-toolchain-security\b/,
+    ]),
+    "security workflow portable gate: active OpenAPI toolchain regression",
+    "security workflow must actively run npm run test:openapi-toolchain-security",
   );
   requirement(
     result,
