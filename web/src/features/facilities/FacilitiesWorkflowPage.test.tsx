@@ -206,6 +206,81 @@ describe("FacilitiesWorkflowPage", () => {
     ]);
   });
 
+  it("clears a canceled lifecycle command without applying its late result", async () => {
+    const secondCaseId = "55555555-5555-5555-5555-555555555555";
+    const first = caseView("DUE");
+    const second = caseView("DUE", { id: secondCaseId });
+    let resolveTriage: ((value: { data: object; response: Response }) => void) | undefined;
+    const triage = new Promise<{ data: object; response: Response }>((resolve) => {
+      resolveTriage = resolve;
+    });
+    const GET = vi.fn((path: string, options?: { params?: { path?: { case_id?: string } } }) => {
+      if (path === "/api/v1/facilities/cases") return Promise.resolve({ data: [first, second], response: new Response() });
+      return Promise.resolve({ data: options?.params?.path?.case_id === secondCaseId ? second : first, response: new Response() });
+    });
+    const POST = vi.fn((path: string) => path.endsWith("/triage") ? triage : Promise.resolve({ data: {}, response: new Response() }));
+    useAuth.mockReturnValue({ api: { GET, POST }, session: { access_token: "token", org_id: "org", user_id: actorId, client_session_incarnation: "session" } });
+    const user = userEvent.setup();
+    render(<FacilitiesWorkflowPage />);
+
+    await screen.findByRole("heading", { name: "접수 대기" });
+    const create = screen.getByRole("button", { name: "사례 접수" });
+    await user.click(screen.getByRole("button", { name: "일정 확정" }));
+    await waitFor(() => { expect(POST).toHaveBeenCalledTimes(1); });
+    expect(create).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: `사례 ${secondCaseId}` }));
+    await waitFor(() => { expect(screen.getByRole("button", { name: `사례 ${secondCaseId}` })).toHaveAttribute("aria-pressed", "true"); });
+    expect(POST.mock.calls[0]?.[1]?.signal).toMatchObject({ aborted: true });
+    expect(create).toBeDisabled();
+    const readsBeforeLateResult = GET.mock.calls.length;
+
+    resolveTriage?.({ data: {}, response: new Response() });
+    await waitFor(() => { expect(create).toBeEnabled(); });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(GET).toHaveBeenCalledTimes(readsBeforeLateResult);
+    expect(screen.getByRole("button", { name: `사례 ${secondCaseId}` })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("clears a canceled intake without selecting or clearing from its late result", async () => {
+    const secondCaseId = "55555555-5555-5555-5555-555555555555";
+    const createdCaseId = "66666666-6666-4666-8666-666666666666";
+    const first = caseView("DUE");
+    const second = caseView("DUE", { id: secondCaseId });
+    let resolveCreate: ((value: { data: typeof first; response: Response }) => void) | undefined;
+    const createResult = new Promise<{ data: typeof first; response: Response }>((resolve) => {
+      resolveCreate = resolve;
+    });
+    const GET = vi.fn((path: string, options?: { params?: { path?: { case_id?: string } } }) => {
+      if (path === "/api/v1/facilities/cases") return Promise.resolve({ data: [first, second], response: new Response() });
+      return Promise.resolve({ data: options?.params?.path?.case_id === secondCaseId ? second : first, response: new Response() });
+    });
+    const POST = vi.fn(() => createResult);
+    useAuth.mockReturnValue({ api: { GET, POST }, session: { access_token: "token", org_id: "org", user_id: actorId, client_session_incarnation: "session" } });
+    const user = userEvent.setup();
+    render(<FacilitiesWorkflowPage />);
+
+    await screen.findByRole("heading", { name: "접수 대기" });
+    const obligation = screen.getByLabelText("활성 HVAC 의무 ID");
+    const create = screen.getByRole("button", { name: "사례 접수" });
+    await user.type(obligation, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    await user.click(create);
+    await waitFor(() => { expect(POST).toHaveBeenCalledTimes(1); });
+    expect(create).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: `사례 ${secondCaseId}` }));
+    await waitFor(() => { expect(screen.getByRole("button", { name: `사례 ${secondCaseId}` })).toHaveAttribute("aria-pressed", "true"); });
+    expect(POST.mock.calls[0]?.[1]?.signal).toMatchObject({ aborted: true });
+    const readsBeforeLateResult = GET.mock.calls.length;
+
+    resolveCreate?.({ data: caseView("DUE", { id: createdCaseId }), response: new Response() });
+    await waitFor(() => { expect(create).toBeEnabled(); });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(obligation).toHaveValue("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    expect(GET).toHaveBeenCalledTimes(readsBeforeLateResult);
+    expect(screen.getByRole("button", { name: `사례 ${secondCaseId}` })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("clears the old detail and cannot post to it while a new case detail is pending", async () => {
     const secondCaseId = "55555555-5555-5555-5555-555555555555";
     const first = caseView("DUE");

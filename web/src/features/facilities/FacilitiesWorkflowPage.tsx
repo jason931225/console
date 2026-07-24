@@ -174,7 +174,7 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
     } catch (error) {
       if (!controller.signal.aborted) setNotice({ kind: "error", text: errorText(error, copy.networkFailed) });
       return false;
-    } finally { if (!controller.signal.aborted && commandController.current === controller) setPending(undefined); }
+    } finally { if (commandController.current === controller) setPending(undefined); }
   }, [refreshCase]);
 
   async function createCase(event: SyntheticEvent<HTMLFormElement>) {
@@ -193,7 +193,7 @@ export function FacilitiesWorkflowSession({ api, actorId }: { api: FacilitiesApi
       selectCase(result.data.id, controller);
       await refreshCase(result.data.id);
     } catch (error) { if (!controller.signal.aborted) setNotice({ kind: "error", text: errorText(error, copy.createFailed) }); }
-    finally { if (!controller.signal.aborted && commandController.current === controller) setPending(undefined); }
+    finally { if (commandController.current === controller) setPending(undefined); }
   }
 
   const isCurrentDetail = selected?.id === selectedId && !detailLoading;
