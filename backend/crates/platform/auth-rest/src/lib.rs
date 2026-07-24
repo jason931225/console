@@ -2266,7 +2266,8 @@ async fn start_group_admin_tenant_context(
     let services = state.services()?;
     let actor = authenticated_group_actor(services, &headers)?;
     let (group_id, target) =
-        resolve_group_admin_target_org(&state.pool, actor.id, OrgId::from_uuid(body.org_id)).await?;
+        resolve_group_admin_target_org(&state.pool, actor.id, OrgId::from_uuid(body.org_id))
+            .await?;
 
     // Source REAL subject freshness for the token's OWN (target subsidiary org,
     // actor) so a promoted Cedar guard — which re-reads exactly that (org, user)
@@ -2342,7 +2343,8 @@ async fn exit_group_admin_tenant_context(
     let services = state.services()?;
     let actor = authenticated_group_actor(services, &headers)?;
     let (group_id, target) =
-        resolve_group_admin_target_org(&state.pool, actor.id, OrgId::from_uuid(body.org_id)).await?;
+        resolve_group_admin_target_org(&state.pool, actor.id, OrgId::from_uuid(body.org_id))
+            .await?;
 
     record_group_tenant_context_audit(
         &state.pool,
