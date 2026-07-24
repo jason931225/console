@@ -1,27 +1,27 @@
 {
   "lane": "CAP-ORG-CONSOLE",
-  "stage": "scout",
+  "stage": "implement",
   "date": "2026-07-24",
   "shared_root_requests": [
     {
       "root": "backend/openapi/openapi.yaml",
       "action": "add",
-      "detail": "tag 'orgchange'; paths /api/v1/org-changes (+/{id}, /preflight, /submit, /approval-steps/{stepId}/decision, /effectuate, /settlement-items/{itemId}/complete, /archive, /cancel) and /api/v1/org-entities; schemas CreateOrgChangeRequest, UpdateOrgChangeDraftRequest, OrgProposalOp, OrgChangeSummary, OrgChangeDetail, OrgChangePreflightReport, OrgChangePage, OrgChangeDecisionRequest, OrgEntitySummary. Every operation carries tags: [orgchange] (client-gen requirement). Regenerate clients/{ts,kotlin,swift}."
+      "detail": "Splice manifests/openapi-fragment.yaml (this directory): paths /api/v1/org-changes (+/{id}, /preflight, /submit, /approval-steps/{stepId}/decision, /effectuate, /settlement-items/{itemId}/complete, /archive, /cancel) and /api/v1/org-entities + all OrgChange* schemas. Every operation carries tags: [org] (client-gen requirement). Regenerate clients/{ts,kotlin,swift} (three CI drift gates). MUST land in the same commit as the route-census entry below."
     },
     {
       "root": "backend/crates/platform/authz",
       "action": "add",
-      "detail": "Feature variants OrgChangeRead [D,D,D,A,A,A], OrgChangeDraft [D,D,D,A,A,A], OrgChangeApprove [D,D,D,D,A,A], OrgChangeApply [D,D,D,D,A,A]; as_str keys org_change_read/org_change_draft/org_change_approve/org_change_apply; from_str arms; ALL list."
+      "detail": "Feature variants OrgChangeRead [D,D,D,A,A,A], OrgChangeDraft [D,D,D,A,A,A], OrgChangeApprove [D,D,D,D,A,A], OrgChangeApply [D,D,D,D,A,A]; as_str keys org_change_read/org_change_draft/org_change_approve/org_change_apply; from_str arms; ALL list. Until then the built-in role floors in orgchange/rest are the complete surface (byte-equal to those matrices); swapping the allow_* helpers to authorize(...) is mechanical."
     },
     {
-      "root": "backend platform-rest build_router",
+      "root": "backend/app/src/lib.rs route census + backend/app/tests/openapi_drift.rs",
       "action": "add",
-      "detail": "mount mnt_orgchange_rest::router(state) and append ORG_CHANGE_ROUTE_PATHS to the route census (build_router touch, mirrors governance/rest mounting)."
+      "detail": "Router mount is DONE by this lane (build_router merges mnt_orgchange_rest::router after governance; routes are live behind role floors). Remaining integrator step, in the SAME commit as the openapi.yaml splice: add ConfiguredRouteSurface { name: 'orgchange', paths: mnt_orgchange_rest::ORG_CHANGE_ROUTE_PATHS } to CONFIGURED_ROUTE_SURFACES (marker comment sits after the governance entry) and a RouteSource for crates/orgchange/rest to openapi_drift.rs — a lane-side census entry would trip the census-subset-of-openapi gate before the splice."
     },
     {
       "root": "backend/crates/platform/db/migrations",
       "action": "reserve",
-      "detail": "0189_create_org_change.sql (provisional; repo head 0180 at scout time — renumber to next free immediately before push). DDL in design-contract.md section 6; inserts feature_catalog keys org_change_*."
+      "detail": "0189_create_org_change.sql exists in this lane (provisional number; repo head 0180 at scout time — renumber to next free immediately before push; cross-lane migration-number collisions are a known hazard). Inserts feature_catalog keys org_change_*."
     },
     {
       "root": "web/src/console/shell/nav.ts",
