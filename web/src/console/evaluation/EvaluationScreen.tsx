@@ -753,19 +753,25 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                           <span className={`${CHIP_CLASS[due.tone]} evaluation__mono`}>
                             {due.label}
                           </span>
-                          <button
-                            type="button"
-                            className="evaluation__task-title"
-                            onClick={() => {
-                              setView({
-                                kind: "person",
-                                employeeId: task.employee_id,
-                                employeeName: task.employee_name,
-                              });
-                            }}
-                          >
-                            {`${task.employee_name} · ${text.reviewKind[task.kind]} — ${task.cycle_name}`}
-                          </button>
+                          {capabilities.canRead ? (
+                            <button
+                              type="button"
+                              className="evaluation__task-title"
+                              onClick={() => {
+                                setView({
+                                  kind: "person",
+                                  employeeId: task.employee_id,
+                                  employeeName: task.employee_name,
+                                });
+                              }}
+                            >
+                              {`${task.employee_name} · ${text.reviewKind[task.kind]} — ${task.cycle_name}`}
+                            </button>
+                          ) : (
+                            <span className="evaluation__task-title">
+                              {`${task.employee_name} · ${text.reviewKind[task.kind]} — ${task.cycle_name}`}
+                            </span>
+                          )}
                           <button
                             type="button"
                             className="evaluation__solid"
@@ -877,6 +883,8 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                 {ledger.error ? (
                   ledger.error.status === 403 ? (
                     <p role="status">{text.forbidden}</p>
+                  ) : ledger.error.status === 404 ? (
+                    <p role="status">{text.notFound}</p>
                   ) : (
                     <div className="evaluation__alert" role="alert">
                       <span>{ledger.error.message}</span>
@@ -1410,15 +1418,17 @@ function SubjectZone({
         <button type="button" onClick={onBack}>
           {text.back}
         </button>
-        <button
-          type="button"
-          className="evaluation__link"
-          onClick={() => {
-            onOpenPerson(data.employee_id, data.employee_name);
-          }}
-        >
-          <h2>{data.employee_name}</h2>
-        </button>
+        <h2>
+          <button
+            type="button"
+            className="evaluation__link"
+            onClick={() => {
+              onOpenPerson(data.employee_id, data.employee_name);
+            }}
+          >
+            {data.employee_name}
+          </button>
+        </h2>
         {data.org_unit && <span className={CHIP_CLASS.muted}>{data.org_unit}</span>}
         <span className={CHIP_CLASS[SUBJECT_STATE_TONE[data.state]]}>
           {stateLabel(data.state)}

@@ -218,12 +218,12 @@
   font-weight: var(--fw-medium);
   text-align: left;
   padding: 0;
-  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.evaluation__task-title:hover { color: var(--teal); }
+button.evaluation__task-title { cursor: pointer; }
+button.evaluation__task-title:hover { color: var(--teal); }
 
 .evaluation__teams {
   display: grid;
@@ -299,7 +299,7 @@
   padding: 0;
   cursor: pointer;
 }
-.evaluation__link h2 { display: inline; font-size: var(--text-card-title); }
+.evaluation__zone-head h2 .evaluation__link { font-weight: inherit; }
 .evaluation__link:hover { text-decoration: underline; }
 
 .evaluation__form {
@@ -331,8 +331,8 @@
 .evaluation button {
   font: inherit;
 }
-.evaluation__card button,
-.evaluation__dialog button {
+/* Zero-specificity defaults so every classed button variant wins the cascade. */
+:where(.evaluation__card, .evaluation__dialog) :where(button) {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--sp-1) var(--sp-3);
@@ -341,10 +341,14 @@
   font-weight: var(--fw-medium);
   cursor: pointer;
 }
-.evaluation__card button:hover:not(:disabled),
-.evaluation__dialog button:hover:not(:disabled) { background: var(--muted); color: var(--ink); }
-.evaluation__card button:disabled,
-.evaluation__dialog button:disabled { cursor: not-allowed; opacity: 0.55; }
+:where(.evaluation__card, .evaluation__dialog) :where(button:hover):where(:not(:disabled)) {
+  background: var(--muted);
+  color: var(--ink);
+}
+:where(.evaluation__card, .evaluation__dialog) :where(button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 .evaluation button:focus-visible,
 .evaluation input:focus-visible,
 .evaluation select:focus-visible,

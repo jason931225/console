@@ -33,6 +33,12 @@ const submitter: EvaluationCapabilities = {
   canSubmit: true,
   canCalibrate: false,
 };
+const submitOnly: EvaluationCapabilities = {
+  canRead: false,
+  canManage: false,
+  canSubmit: true,
+  canCalibrate: false,
+};
 const denied: EvaluationCapabilities = {
   canRead: false,
   canManage: false,
@@ -385,6 +391,32 @@ describe("EvaluationScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: /RV-2501/ }));
     const zone = await screen.findByRole("region", { name: "조이슨" });
     expect(within(zone).getByText(text.subjectState.FINALIZED)).toBeVisible();
+  });
+
+  it("renders a denied-by-omission ledger 404 as a status, not a retryable error", async () => {
+    const routes = defaultRoutes();
+    routes["/api/v1/evaluation/employees/{employeeId}/reviews"] = () =>
+      reject(404, "not found");
+    const { api } = client(routes);
+    renderScreen(submitter, api);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /조이슨 · 관리자 평가/ }),
+    );
+    expect(await screen.findByText(text.notFound)).toBeVisible();
+    expect(screen.queryByRole("button", { name: text.retry })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("renders the task subject as plain text for a submit-only capability instead of a dead drill", async () => {
+    const { impl, api } = client(defaultRoutes());
+    renderScreen(submitOnly, api);
+    const tasks = await screen.findByRole("list", { name: text.myTasks });
+    expect(within(tasks).getByText(/조이슨 · 관리자 평가/)).toBeVisible();
+    expect(
+      within(tasks).queryByRole("button", { name: /조이슨 · 관리자 평가/ }),
+    ).toBeNull();
+    expect(within(tasks).getByRole("button", { name: text.write })).toBeEnabled();
+    expect(impl.GET).not.toHaveBeenCalledWith("/api/v1/evaluation/cycles", expect.anything());
   });
 
   it("fences stale responses when the authenticated API client is replaced", async () => {
