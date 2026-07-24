@@ -12,7 +12,7 @@
 DRAFT --open--> OPEN --start-calibration--> CALIBRATION --finalize--> FINALIZED --archive--> ARCHIVED
 ```
 
-There are no reverse transitions. Every cycle mutation has an expected version. The following timestamps are set once at their transition: `opened_at`, `calibration_started_at`, `finalized_at`, `archived_at`; finalization additionally records `finalized_by`.
+There are no reverse transitions. Every cycle mutation has an expected version. Calibration uses the selected **subject aggregate** version; review edit/submit uses the selected **review** version; cycle transitions use the cycle version. The following timestamps are set once at their transition: `opened_at`, `calibration_started_at`, `finalized_at`, `archived_at`; finalization additionally records `finalized_by`.
 
 * Opening requires one or more subjects, every subject has one or more goals, and each subject's goal weights total **exactly 100**. Opening freezes subject identity, manager, home branch, org unit, position, team, rubric, and goals.
 * Calibration starts only when every subject has both SELF and MANAGER reviews in `SUBMITTED` state.
@@ -22,7 +22,7 @@ There are no reverse transitions. Every cycle mutation has an expected version. 
 
 ## Reviews, evidence, and rubric
 
-A review moves only `DRAFT -> SUBMITTED`; an expected-version mismatch is a conflict and submitted content is immutable. Evidence links use only a server-resolved, tenant-visible governed-object id of kind `ATTENDANCE`, `WORK_ORDER`, `APPROVAL`, or `KPI`; there is intentionally no arbitrary `OTHER`/free-text pseudo-link.
+A review moves only `DRAFT -> SUBMITTED`; an expected-version mismatch is a conflict and submitted content is immutable. Domain fields are private: adapters must use the actor-bound edit/submit application commands, which require `evaluation_submit` and the authenticated actor to equal the selected review evaluator. Evidence links use only a server-resolved, tenant-visible governed-object id of kind `ATTENDANCE`, `WORK_ORDER`, `APPROVAL`, or `KPI`; there is intentionally no arbitrary `OTHER`/free-text pseudo-link.
 
 Rubric codes are fixed `S, A, B, C, D`. A tenant rubric supplies a label, description, one or more behavioral anchors, and canonical order for every code; it cannot add or remove a code.
 
@@ -48,7 +48,7 @@ The adapter will expose authenticated, tenant-scoped routes:
 * `POST /api/v1/evaluation/subjects/{subjectId}/calibrate`
 * `POST /api/v1/evaluation/cycles/{cycleId}/finalize`
 
-Every mutating request supplies `expected_version` and an idempotency key. The server calculates a canonical request fingerprint. A tenant/action/key with the same fingerprint replays the stored exact response; the same key with a changed fingerprint returns conflict. The receipt contains tenant, action, key, fingerprint, exact response, and timestamp.
+Every mutating request supplies `expected_version` and an idempotency key. The server calculates a canonical request fingerprint. A tenant/action/key with the same fingerprint replays the stored exact response; the same key with a changed fingerprint returns conflict. The receipt contains tenant, action, key, fingerprint, exact response, and timestamp. The application invokes only `EvaluationRepository::transaction` and a single `EvaluationUnitOfWork::commit`: the adapter must place cycle/subject writes, RV reservation, audit write, and receipt write in that one physical transaction or roll all of them back.
 
 ## Acceptance stories and required proof
 
@@ -58,5 +58,6 @@ Every mutating request supplies `expected_version` and an idempotency key. The s
 4. Calibration rejects missing reviews and either self/manager as calibrator; accepted calibration requires grade/rationale.
 5. Finalization either commits every final grade/RV/audit intent and receipt or commits none.
 6. A retry with the exact tenant/action/key/fingerprint returns the prior response; a changed payload conflicts.
+7. A stale subject calibration version conflicts; failure to reserve RV, persist audit, or persist receipt leaves cycle, subjects, RV counter, audit, and receipt unchanged.
 
 This foundation has unit coverage for FSM/weights/freeze/OCC/review immutability/visibility/four-eyes/idempotency. Future adapter integration tests must exercise RLS cross-tenant concealment, governed-object resolution, transactional RV allocation, and audit persistence against Postgres.

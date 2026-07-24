@@ -141,7 +141,7 @@ pub struct SubjectSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvaluationGoal {
-    pub id: EvaluationGoalId,
+    id: EvaluationGoalId,
     pub metric_kind: GoalMetricKind,
     pub target: String,
     pub weight_percent: u8,
@@ -173,7 +173,7 @@ impl EvaluationGoal {
 /// Tenant-configurable presentation for the fixed grading codes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RubricDefinition {
-    pub id: EvaluationRubricId,
+    id: EvaluationRubricId,
     pub levels: Vec<RubricDefinitionLevel>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -223,7 +223,7 @@ impl RubricDefinition {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvaluationEvidenceLink {
-    pub id: EvaluationEvidenceLinkId,
+    id: EvaluationEvidenceLinkId,
     pub governed_object_kind: GovernedObjectKind,
     pub governed_object_id: GovernedObjectId,
     pub label: String,
@@ -249,15 +249,15 @@ impl EvaluationEvidenceLink {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvaluationReview {
-    pub id: EvaluationReviewId,
-    pub kind: ReviewKind,
-    pub evaluator_user_id: UserId,
-    pub state: EvaluationReviewState,
-    pub grade: Option<RubricLevel>,
-    pub rationale: Option<String>,
-    pub evidence_links: Vec<EvaluationEvidenceLink>,
-    pub version: u64,
-    pub submitted_at: Option<Timestamp>,
+    id: EvaluationReviewId,
+    kind: ReviewKind,
+    evaluator_user_id: UserId,
+    state: EvaluationReviewState,
+    grade: Option<RubricLevel>,
+    rationale: Option<String>,
+    evidence_links: Vec<EvaluationEvidenceLink>,
+    version: u64,
+    submitted_at: Option<Timestamp>,
 }
 impl EvaluationReview {
     #[must_use]
@@ -274,6 +274,19 @@ impl EvaluationReview {
             submitted_at: None,
         }
     }
+    #[must_use]
+    pub const fn evaluator_user_id(&self) -> UserId {
+        self.evaluator_user_id
+    }
+    #[must_use]
+    pub const fn state(&self) -> EvaluationReviewState {
+        self.state
+    }
+    #[must_use]
+    pub const fn version(&self) -> u64 {
+        self.version
+    }
+
     pub fn edit(
         &mut self,
         expected_version: u64,
@@ -317,20 +330,20 @@ impl EvaluationReview {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvaluationSubject {
-    pub id: EvaluationSubjectId,
-    pub snapshot: SubjectSnapshot,
-    pub goals: Vec<EvaluationGoal>,
-    pub self_review: EvaluationReview,
-    pub manager_review: EvaluationReview,
-    pub task_state: SubjectTaskState,
-    pub calibrated_grade: Option<RubricLevel>,
-    pub calibration_rationale: Option<String>,
-    pub calibrated_by: Option<UserId>,
-    pub calibrated_at: Option<Timestamp>,
-    pub final_grade: Option<RubricLevel>,
-    pub rv_code: Option<String>,
-    pub finalized_at: Option<Timestamp>,
-    pub version: u64,
+    id: EvaluationSubjectId,
+    snapshot: SubjectSnapshot,
+    goals: Vec<EvaluationGoal>,
+    self_review: EvaluationReview,
+    manager_review: EvaluationReview,
+    task_state: SubjectTaskState,
+    calibrated_grade: Option<RubricLevel>,
+    calibration_rationale: Option<String>,
+    calibrated_by: Option<UserId>,
+    calibrated_at: Option<Timestamp>,
+    final_grade: Option<RubricLevel>,
+    rv_code: Option<String>,
+    finalized_at: Option<Timestamp>,
+    version: u64,
     frozen: bool,
 }
 impl EvaluationSubject {
@@ -375,17 +388,70 @@ impl EvaluationSubject {
         self.frozen = true;
         Ok(())
     }
+    #[must_use]
+    pub const fn id(&self) -> EvaluationSubjectId {
+        self.id
+    }
+    #[must_use]
+    pub fn review_evaluator(&self, kind: ReviewKind) -> UserId {
+        match kind {
+            ReviewKind::SelfReview => self.self_review.evaluator_user_id(),
+            ReviewKind::Manager => self.manager_review.evaluator_user_id(),
+        }
+    }
+    #[must_use]
+    pub fn review_version(&self, kind: ReviewKind) -> u64 {
+        match kind {
+            ReviewKind::SelfReview => self.self_review.version(),
+            ReviewKind::Manager => self.manager_review.version(),
+        }
+    }
+    #[must_use]
+    pub const fn version(&self) -> u64 {
+        self.version
+    }
+    #[must_use]
+    pub const fn task_state(&self) -> SubjectTaskState {
+        self.task_state
+    }
+    #[must_use]
+    pub fn rv_code(&self) -> Option<&str> {
+        self.rv_code.as_deref()
+    }
+    pub fn edit_review(
+        &mut self,
+        kind: ReviewKind,
+        expected_review_version: u64,
+        grade: RubricLevel,
+        rationale: impl Into<String>,
+        evidence_links: Vec<EvaluationEvidenceLink>,
+    ) -> Result<(), KernelError> {
+        match kind {
+            ReviewKind::SelfReview => {
+                self.self_review
+                    .edit(expected_review_version, grade, rationale, evidence_links)?
+            }
+            ReviewKind::Manager => self.manager_review.edit(
+                expected_review_version,
+                grade,
+                rationale,
+                evidence_links,
+            )?,
+        }
+        self.version += 1;
+        Ok(())
+    }
     pub fn submit_review(
         &mut self,
         kind: ReviewKind,
-        expected_version: u64,
+        expected_review_version: u64,
         at: Timestamp,
     ) -> Result<(), KernelError> {
         match kind {
-            ReviewKind::SelfReview => self.self_review.submit(expected_version, at)?,
-            ReviewKind::Manager => self.manager_review.submit(expected_version, at)?,
+            ReviewKind::SelfReview => self.self_review.submit(expected_review_version, at)?,
+            ReviewKind::Manager => self.manager_review.submit(expected_review_version, at)?,
         }
-        self.task_state = match (self.self_review.state, self.manager_review.state) {
+        self.task_state = match (self.self_review.state(), self.manager_review.state()) {
             (EvaluationReviewState::Submitted, EvaluationReviewState::Submitted) => {
                 SubjectTaskState::ReadyForCalibration
             }
@@ -398,11 +464,13 @@ impl EvaluationSubject {
     }
     pub fn calibrate(
         &mut self,
+        expected_version: u64,
         actor: UserId,
         grade: RubricLevel,
         rationale: impl Into<String>,
         at: Timestamp,
     ) -> Result<(), KernelError> {
+        self.require_version(expected_version)?;
         if self.task_state != SubjectTaskState::ReadyForCalibration {
             return Err(KernelError::conflict(
                 "calibration requires both submitted reviews",
@@ -492,16 +560,16 @@ impl EvaluationSubject {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvaluationCycle {
-    pub id: EvaluationCycleId,
+    id: EvaluationCycleId,
     pub name: String,
-    pub state: EvaluationCycleState,
+    state: EvaluationCycleState,
     pub effective_from: time::Date,
     pub effective_until: time::Date,
     pub rubric_id: EvaluationRubricId,
-    pub version: u64,
+    version: u64,
     pub opened_at: Option<Timestamp>,
     pub calibration_started_at: Option<Timestamp>,
-    pub finalized_at: Option<Timestamp>,
+    finalized_at: Option<Timestamp>,
     pub finalized_by: Option<UserId>,
     pub archived_at: Option<Timestamp>,
 }
@@ -563,7 +631,7 @@ impl EvaluationCycle {
         self.require_version(expected_version)?;
         if subjects
             .iter()
-            .any(|subject| subject.task_state != SubjectTaskState::ReadyForCalibration)
+            .any(|subject| subject.task_state() != SubjectTaskState::ReadyForCalibration)
         {
             return Err(KernelError::conflict(
                 "calibration requires both reviews submitted for every subject",
@@ -586,7 +654,7 @@ impl EvaluationCycle {
         if subjects.is_empty()
             || subjects
                 .iter()
-                .any(|subject| subject.task_state != SubjectTaskState::Calibrated)
+                .any(|subject| subject.task_state() != SubjectTaskState::Calibrated)
         {
             return Err(KernelError::conflict(
                 "finalization requires every subject calibrated",
@@ -727,19 +795,31 @@ mod tests {
         cycle
             .open(0, std::slice::from_mut(&mut subject), now)
             .unwrap();
-        assert!(cycle
-            .start_calibration(1, std::slice::from_ref(&subject), now)
-            .is_err());
+        assert!(
+            cycle
+                .start_calibration(1, std::slice::from_ref(&subject), now)
+                .is_err()
+        );
         subject
-            .self_review
-            .edit(0, RubricLevel::A, "self evidence", vec![])
+            .edit_review(
+                ReviewKind::SelfReview,
+                0,
+                RubricLevel::A,
+                "self evidence",
+                vec![],
+            )
             .unwrap();
         subject
             .submit_review(ReviewKind::SelfReview, 1, now)
             .unwrap();
         subject
-            .manager_review
-            .edit(0, RubricLevel::A, "manager evidence", vec![])
+            .edit_review(
+                ReviewKind::Manager,
+                0,
+                RubricLevel::A,
+                "manager evidence",
+                vec![],
+            )
             .unwrap();
         subject.submit_review(ReviewKind::Manager, 1, now).unwrap();
         cycle
@@ -747,6 +827,7 @@ mod tests {
             .unwrap();
         subject
             .calibrate(
+                subject.version(),
                 UserId::new(),
                 RubricLevel::A,
                 "cross-functional calibration",
@@ -759,7 +840,40 @@ mod tests {
         subject.finalize("RV-2500", now).unwrap();
         cycle.archive(3, now).unwrap();
         assert_eq!(cycle.state, EvaluationCycleState::Archived);
-        assert_eq!(subject.rv_code.as_deref(), Some("RV-2500"));
+        assert_eq!(subject.rv_code(), Some("RV-2500"));
+    }
+
+    #[test]
+    fn calibration_is_subject_occ_controlled() {
+        let now = Timestamp::now_utc();
+        let mut subject = subject();
+        subject.replace_goals(0, vec![goal(100, 0)]).unwrap();
+        subject
+            .edit_review(ReviewKind::SelfReview, 0, RubricLevel::A, "self", vec![])
+            .unwrap();
+        subject
+            .submit_review(ReviewKind::SelfReview, 1, now)
+            .unwrap();
+        subject
+            .edit_review(ReviewKind::Manager, 0, RubricLevel::A, "manager", vec![])
+            .unwrap();
+        subject.submit_review(ReviewKind::Manager, 1, now).unwrap();
+        let stale = subject.version() - 1;
+        assert!(
+            subject
+                .calibrate(stale, UserId::new(), RubricLevel::A, "cross-check", now)
+                .is_err()
+        );
+        subject
+            .calibrate(
+                subject.version(),
+                UserId::new(),
+                RubricLevel::A,
+                "cross-check",
+                now,
+            )
+            .unwrap();
+        assert_eq!(subject.task_state(), SubjectTaskState::Calibrated);
     }
 
     #[test]
@@ -779,32 +893,57 @@ mod tests {
         let mut subject = subject();
         subject.replace_goals(0, vec![goal(100, 0)]).unwrap();
         subject
-            .self_review
-            .edit(0, RubricLevel::A, "self result", vec![])
+            .edit_review(
+                ReviewKind::SelfReview,
+                0,
+                RubricLevel::A,
+                "self result",
+                vec![],
+            )
             .unwrap();
-        subject.self_review.submit(1, now).unwrap();
-        let manager = subject.manager_review.evaluator_user_id;
+        subject
+            .submit_review(ReviewKind::SelfReview, 1, now)
+            .unwrap();
+        let manager = subject.review_evaluator(ReviewKind::Manager);
         assert!(!subject.can_read_self_content(subject.visibility(
             manager,
             false,
             EvaluationCycleState::Open
         )));
         subject
-            .manager_review
-            .edit(0, RubricLevel::A, "manager result", vec![])
+            .edit_review(
+                ReviewKind::Manager,
+                0,
+                RubricLevel::A,
+                "manager result",
+                vec![],
+            )
             .unwrap();
-        subject.manager_review.submit(1, now).unwrap();
-        subject.task_state = SubjectTaskState::ReadyForCalibration;
+        subject.submit_review(ReviewKind::Manager, 1, now).unwrap();
         assert!(subject.can_read_self_content(subject.visibility(
             manager,
             false,
             EvaluationCycleState::Open
         )));
-        assert!(subject
-            .calibrate(manager, RubricLevel::A, "calibration", now)
-            .is_err());
+        assert!(
+            subject
+                .calibrate(
+                    subject.version(),
+                    manager,
+                    RubricLevel::A,
+                    "calibration",
+                    now
+                )
+                .is_err()
+        );
         subject
-            .calibrate(UserId::new(), RubricLevel::A, "calibration", now)
+            .calibrate(
+                subject.version(),
+                UserId::new(),
+                RubricLevel::A,
+                "calibration",
+                now,
+            )
             .unwrap();
     }
 }
