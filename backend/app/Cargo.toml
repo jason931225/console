@@ -100,6 +100,8 @@ mnt-ontology-rest = { workspace = true }
 mnt-governance-adapter-postgres = { workspace = true }
 mnt-governance-domain = { workspace = true }
 mnt-governance-rest = { workspace = true }
+mnt-orgchange-adapter-postgres = { workspace = true }
+mnt-orgchange-rest = { workspace = true }
 mnt-docs-adapter-postgres = { workspace = true }
 mnt-docs-rest = { workspace = true }
 mnt-platform-request-context = { workspace = true }

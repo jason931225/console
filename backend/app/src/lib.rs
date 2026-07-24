@@ -69,6 +69,8 @@ use mnt_ontology_adapter_postgres::instances::PgInstanceStore;
 use mnt_ontology_rest::{
     ActionError, OntologyRestState, ProjectedDispatch, ProjectedDispatchRegistry, ProjectedHandler,
 };
+use mnt_orgchange_adapter_postgres::PgOrgChangeStore;
+use mnt_orgchange_rest::OrgChangeRestState;
 use mnt_payroll_adapter_postgres::PgPayrollStore;
 use mnt_payroll_rest::PayrollRestState;
 use mnt_platform_audit_chain::{
@@ -315,6 +317,11 @@ pub const CONFIGURED_ROUTE_SURFACES: &[ConfiguredRouteSurface] = &[
         name: "governance",
         paths: mnt_governance_rest::GOVERNANCE_ROUTE_PATHS,
     },
+    // NOTE(CAP-ORG-CONSOLE): the mounted orgchange surface
+    // (`mnt_orgchange_rest::ORG_CHANGE_ROUTE_PATHS`) joins this census in the
+    // SAME integrator commit that adds its paths to backend/openapi/openapi.yaml
+    // and its RouteSource to openapi_drift.rs — the census⊆openapi gate makes a
+    // lane-side entry red until then (see the lane's integration-manifest.json).
     ConfiguredRouteSurface {
         name: "policy",
         paths: mnt_platform_authz_rest::CEDAR_POLICY_ROUTE_PATHS,
@@ -3020,6 +3027,12 @@ pub fn build_router(state: AppState) -> Router {
                 ))
                 .merge(mnt_governance_rest::router(GovernanceRestState::new(
                     governance_store,
+                    state.jwt_verifier.clone(),
+                )))
+                // Org-change lifecycle engine (조직 개편 결재): draft → preflight
+                // → ordered SoD approval → effective-dated apply (§15/§16).
+                .merge(mnt_orgchange_rest::router(OrgChangeRestState::new(
+                    PgOrgChangeStore::new(pool.clone()),
                     state.jwt_verifier.clone(),
                 )))
                 .merge(mnt_platform_authz_rest::router(CedarPolicyRestState::new(
