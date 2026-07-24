@@ -6,7 +6,7 @@ import { ko } from "../../i18n/ko";
 import { PolicyGateProvider, type PolicyGate } from "../policy";
 import { EvidenceCard, type EvidenceCardProps } from "./EvidenceCard";
 import { evidenceFixtures } from "./evidenceFixtures";
-import type { VerifyEvidence } from "./types";
+import { EvidenceDetailRefreshError, type VerifyEvidence } from "./types";
 
 const T = ko.console.evidence;
 const allowGate: PolicyGate = { can: () => true };
@@ -246,4 +246,49 @@ describe("EvidenceCard hold-release four-eyes flow (fail-closed)", () => {
       );
     });
   });
+
+  it("keeps hold-apply inputs and exposes an authoritative reread retry after a successful mutation refresh fails", async () => {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    const applyHold = vi.fn().mockRejectedValue(new EvidenceDetailRefreshError(retry));
+    renderCard(allowGate, vi.fn().mockResolvedValue({ state: "unavailable", copyVerdicts: new Map() }), plainEvidence, {
+      applyHold,
+    });
+
+    fireEvent.change(screen.getByRole("textbox", { name: T.hold.caseRef }), { target: { value: "CASE-1" } });
+    fireEvent.change(screen.getByRole("textbox", { name: T.hold.basisLabel }), { target: { value: "law" } });
+    fireEvent.change(screen.getByRole("textbox", { name: T.hold.reasonLabel }), { target: { value: "preserve" } });
+    fireEvent.click(screen.getByRole("button", { name: T.hold.apply }));
+
+    await waitFor(() => expect(screen.getByText(T.hold.applyRefreshFailed)).toBeTruthy());
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: T.hold.caseRef }).value).toBe("CASE-1");
+    fireEvent.click(screen.getByRole("button", { name: T.hold.refreshRetry }));
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole<HTMLInputElement>("textbox", { name: T.hold.caseRef }).value).toBe(""));
+  });
+
+  it("keeps a successful hold release explicit and retryable when its authoritative reread fails", async () => {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    const requestHoldRelease = vi.fn().mockResolvedValue({ requestRef: "req-1", requestedBy: "user-a" });
+    const decideHoldRelease = vi.fn().mockResolvedValue(undefined);
+    const releaseHold = vi.fn().mockRejectedValue(new EvidenceDetailRefreshError(retry));
+    renderCard(allowGate, vi.fn().mockResolvedValue({ state: "unavailable", copyVerdicts: new Map() }), heldEvidence, {
+      currentUserId: "user-b",
+      requestHoldRelease,
+      decideHoldRelease,
+      releaseHold,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: T.hold.requestRelease }));
+    await waitFor(() => expect(screen.getByRole("button", { name: T.hold.decideApprove })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: T.hold.decideApprove }));
+    await waitFor(() => expect(screen.getByRole("button", { name: T.hold.release })).toBeTruthy());
+    fireEvent.change(screen.getByRole("textbox", { name: T.hold.reasonLabel }), { target: { value: "approved release" } });
+    fireEvent.click(screen.getByRole("button", { name: T.hold.release }));
+
+    await waitFor(() => expect(screen.getByText(T.hold.releaseRefreshFailed)).toBeTruthy());
+    expect(screen.queryByText(T.hold.active)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: T.hold.refreshRetry }));
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+  });
+
 });

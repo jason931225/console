@@ -39,6 +39,7 @@ import {
   EVIDENCE_ACTIONS,
   type CopyFixityStatus,
   type CopyVerdictMap,
+  EvidenceDetailRefreshError,
   type EvidenceObjectDetail,
   type ReleaseFlowState,
   type VerifyEvidence,
@@ -237,9 +238,11 @@ export function EvidenceCard({
   const [basis, setBasis] = useState("");
   const [applyReason, setApplyReason] = useState("");
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [applyRefreshRetry, setApplyRefreshRetry] = useState<(() => Promise<void>) | null>(null);
   const [applying, setApplying] = useState(false);
   const [releaseFlow, setReleaseFlow] = useState<ReleaseFlowState>({ stage: "idle" });
   const [releaseReason, setReleaseReason] = useState("");
+  const [releaseRefreshRetry, setReleaseRefreshRetry] = useState<(() => Promise<void>) | null>(null);
 
   const original = originalOf(detail.copies);
   const derivatives = derivativesOf(detail.copies);
@@ -278,20 +281,44 @@ export function EvidenceCard({
       return;
     }
     setApplyError(null);
+    setApplyRefreshRetry(null);
     setApplying(true);
     try {
       await applyHold({ caseRef: ref, basis: basisTrimmed, reason: reasonTrimmed });
       setCaseRef("");
       setBasis("");
       setApplyReason("");
+    } catch (error) {
+      if (error instanceof EvidenceDetailRefreshError) {
+        setApplyError(T.hold.applyRefreshFailed);
+        setApplyRefreshRetry(() => error.retry);
+      } else {
+        setApplyError(T.hold.applyFailed);
+      }
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  async function retryApplyRefresh(): Promise<void> {
+    if (!applyRefreshRetry) return;
+    setApplying(true);
+    try {
+      await applyRefreshRetry();
+      setApplyError(null);
+      setApplyRefreshRetry(null);
+      setCaseRef("");
+      setBasis("");
+      setApplyReason("");
     } catch {
-      setApplyError(T.hold.applyFailed);
+      setApplyError(T.hold.applyRefreshFailed);
     } finally {
       setApplying(false);
     }
   }
 
   async function startReleaseRequest(holdId: string): Promise<void> {
+    setReleaseRefreshRetry(null);
     setReleaseFlow({ stage: "requesting" });
     try {
       const { requestRef, requestedBy } = await requestHoldRelease(holdId);
@@ -321,12 +348,30 @@ export function EvidenceCard({
     if (releaseFlow.stage !== "releasing") return;
     const { holdId, requestRef } = releaseFlow;
     const reason = releaseReason.trim() || T.hold.defaultReleaseReason;
+    setReleaseRefreshRetry(null);
     try {
       await releaseHold({ holdId, reason, fourEyesRequestRef: requestRef });
       setReleaseFlow({ stage: "idle" });
       setReleaseReason("");
+    } catch (error) {
+      if (error instanceof EvidenceDetailRefreshError) {
+        setReleaseRefreshRetry(() => error.retry);
+        setReleaseFlow({ stage: "error", message: T.hold.releaseRefreshFailed });
+      } else {
+        setReleaseFlow({ stage: "error", message: T.hold.releaseFailed });
+      }
+    }
+  }
+
+  async function retryReleaseRefresh(): Promise<void> {
+    if (!releaseRefreshRetry) return;
+    try {
+      await releaseRefreshRetry();
+      setReleaseRefreshRetry(null);
+      setReleaseFlow({ stage: "idle" });
+      setReleaseReason("");
     } catch {
-      setReleaseFlow({ stage: "error", message: T.hold.releaseFailed });
+      setReleaseFlow({ stage: "error", message: T.hold.releaseRefreshFailed });
     }
   }
 
@@ -526,7 +571,14 @@ export function EvidenceCard({
                 </div>
               ) : null}
               {releaseFlow.stage === "error" ? (
-                <StatusChip tone="danger" role="alert">{releaseFlow.message}</StatusChip>
+                <div style={chipRowStyle}>
+                  <StatusChip tone="danger" role="alert">{releaseFlow.message}</StatusChip>
+                  {releaseRefreshRetry ? (
+                    <button type="button" style={buttonStyle} onClick={() => { void retryReleaseRefresh(); }}>
+                      {T.hold.refreshRetry}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           ) : (
@@ -569,7 +621,14 @@ export function EvidenceCard({
                 {T.hold.apply}
               </button>
               {applyError ? (
-                <StatusChip tone="danger" role="alert">{applyError}</StatusChip>
+                <div style={chipRowStyle}>
+                  <StatusChip tone="danger" role="alert">{applyError}</StatusChip>
+                  {applyRefreshRetry ? (
+                    <button type="button" style={buttonStyle} disabled={applying} onClick={() => { void retryApplyRefresh(); }}>
+                      {T.hold.refreshRetry}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           )}

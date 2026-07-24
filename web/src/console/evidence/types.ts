@@ -143,6 +143,14 @@ export type VerifyEvidence = (
   detail: EvidenceObjectDetail,
 ) => Promise<VerifyOutcome>;
 
+/** A mutation committed, but its mandatory authoritative detail reread failed. */
+export class EvidenceDetailRefreshError extends Error {
+  constructor(readonly retry: () => Promise<void>) {
+    super("Evidence mutation succeeded but the authoritative detail reread failed.");
+    this.name = "EvidenceDetailRefreshError";
+  }
+}
+
 /**
  * Hold-release four-eyes state (contract: hold-release requires a distinct-
  * approver approval opened via governance/approvals then decided via

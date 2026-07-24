@@ -28,7 +28,7 @@ import {
   originalOf,
   shortDigest,
 } from "./evidenceModel";
-import type { AdmissibilityStatus, EvidenceObjectDetail } from "./types";
+import { EvidenceDetailRefreshError, type AdmissibilityStatus, type EvidenceObjectDetail } from "./types";
 import "../tokens.css";
 
 const T = ko.console.evidence;
@@ -289,13 +289,16 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
   // declaration hoisting instead of fighting the hooks lint's forward-
   // reference rule.
   async function refreshDetail(id: string): Promise<void> {
+    const fresh = resolveNames(await getEvidenceObjectDetail(api, id));
+    setRows((current) => current.map((row) => (row.id === id ? fresh : row)));
+    mountEntry(fresh);
+  }
+
+  async function refreshAfterMutation(id: string): Promise<void> {
     try {
-      const fresh = resolveNames(await getEvidenceObjectDetail(api, id));
-      setRows((current) => current.map((row) => (row.id === id ? fresh : row)));
-      mountEntry(fresh);
+      await refreshDetail(id);
     } catch {
-      // Best-effort refresh — the mutation itself already surfaced its own
-      // error to the caller; the row keeps showing the last-known state.
+      throw new EvidenceDetailRefreshError(() => refreshDetail(id));
     }
   }
 
@@ -305,7 +308,7 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
       verify: (detail) => verifyEvidenceObject(api, detail.id),
       applyHold: async (body) => {
         await applyLegalHold(api, id, body);
-        await refreshDetail(id);
+        await refreshAfterMutation(id);
       },
       requestHoldRelease: (holdId) => requestHoldReleaseApproval(api, id, holdId),
       decideHoldRelease: (requestRef, requestedBy, decision) =>
