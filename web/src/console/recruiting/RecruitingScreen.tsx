@@ -767,7 +767,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
           <div role="dialog" aria-modal="true" aria-label={text.title} className="recruiting__card">
             <div className="recruiting__banner recruiting__banner--danger recruiting__banner--row" role="alert">
               <span className="recruiting__banner-grow">{text.card.cardError}</span>
-              <button type="button" className="recruiting__ghost" onClick={() => { openCard(card.postingId, card.applicantId); }}>{text.retry}</button>
+              <button type="button" className="recruiting__ghost" autoFocus onClick={() => { openCard(card.postingId, card.applicantId); }}>{text.retry}</button>
               <button type="button" className="recruiting__ghost" onClick={closeCard}>{text.card.close}</button>
             </div>
           </div>

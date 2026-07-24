@@ -75,7 +75,7 @@ export function PreflightModal({ preflight, busy, onToggleAttest, onPublish, onR
           <div className="recruiting__banner recruiting__banner--warn">{text.preflight.blocked}</div>
         )}
         <div className="recruiting__preflight-foot">
-          <button type="button" className="recruiting__ghost" onClick={onClose}>{text.preflight.cancel}</button>
+          <button type="button" className="recruiting__ghost" autoFocus onClick={onClose}>{text.preflight.cancel}</button>
           {publishable && preflight.attest && (
             <button type="button" className="recruiting__primary" disabled={busy} onClick={onPublish}>{text.preflight.publish}</button>
           )}

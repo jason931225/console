@@ -179,7 +179,7 @@ export function CandidateCard(props: Props) {
               )}
             </div>
           </div>
-          <button type="button" className="recruiting__icon-button" aria-label={text.card.close} onClick={props.onClose}>
+          <button type="button" className="recruiting__icon-button" aria-label={text.card.close} autoFocus onClick={props.onClose}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18 M6 6l12 12" /></svg>
           </button>
         </div>
@@ -234,8 +234,10 @@ export function CandidateCard(props: Props) {
             <div className="recruiting__chip-row">
               {SCORES.map((score) => {
                 const active = applicant.assessment?.score === score;
-                const tone = score === "SUITABLE" ? "ok" : score === "UNSUITABLE" ? "danger" : "warn";
-                const className = active ? `recruiting__score recruiting__score--${tone}` : "recruiting__score";
+                const className = !active ? "recruiting__score"
+                  : score === "SUITABLE" ? "recruiting__score recruiting__score--ok"
+                    : score === "UNSUITABLE" ? "recruiting__score recruiting__score--danger"
+                      : "recruiting__score recruiting__score--warn";
                 return capabilities.canManage && !applicant.rejected ? (
                   <button key={score} type="button" className={className} aria-pressed={active} disabled={busy} onClick={() => { props.onAssess(score); }}>{scoreLabel(score)}</button>
                 ) : (

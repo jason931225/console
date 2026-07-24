@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -257,6 +257,74 @@ describe("RecruitingScreen", () => {
     expect(await screen.findByRole("button", { name: "지게차 정비 기사" })).toBeVisible();
     resolveOld?.(ok({ items: [posting({ role_title: "품질관리 매니저" })] }));
     await waitFor(() => { expect(screen.queryByRole("button", { name: "품질관리 매니저" })).toBeNull(); });
+  });
+
+  it("moves focus into the candidate card so Escape closes it", async () => {
+    const api = client({
+      [LIST]: [ok({ items: [posting()] })],
+      [POOL]: [ok({ items: [] })],
+      [POSTING]: [ok({ posting: posting(), applicants: [applicant()] })],
+      [APPLICANT]: [ok({ applicant: applicant(), offers: [], events: [] })],
+    });
+    renderScreen(api);
+    await userEvent.click(await screen.findByRole("button", { name: "품질관리 매니저" }));
+    await userEvent.click(await screen.findByRole("button", { name: "한지원" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => { expect(screen.queryByRole("dialog")).toBeNull(); });
+  });
+
+  it("hires an accepted-offer applicant through the handshake and links the created employee", async () => {
+    const offered = applicant({ stage: "OFFER" });
+    const hired = applicant({ stage: "HIRED", hired_employee_id: "emp-7" });
+    const acceptedOffer = {
+      id: "ofr-1", version: 2, amount: "3400000", amount_period: "MONTHLY" as const,
+      reply_deadline: null, status: "ACCEPTED" as const, created_at: "2026-07-22T00:00:00Z",
+    };
+    const onNavigate = vi.fn();
+    const api = client(
+      {
+        [LIST]: [ok({ items: [posting()] })],
+        [POOL]: [ok({ items: [] })],
+        [POSTING]: [
+          ok({ posting: posting(), applicants: [offered] }),
+          ok({ posting: posting({ hired_count: 1 }), applicants: [hired] }),
+        ],
+        [APPLICANT]: [
+          ok({ applicant: offered, offers: [acceptedOffer], events: [] }),
+          ok({ applicant: hired, offers: [acceptedOffer], events: [] }),
+        ],
+        "/api/v1/branches": [ok([{ id: "br-1", name: "안산지점" }])],
+      },
+      { "/api/v1/recruiting/applicants/{id}/hire": [ok({ employee_id: "emp-7", applicant: hired, posting: posting({ hired_count: 1 }) })] },
+    );
+    render(
+      <RecruitingScreen api={api} actorId="actor-1" capabilities={manager} sessionKey="session-a" onNavigate={onNavigate} />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "품질관리 매니저" }));
+    await userEvent.click(await screen.findByRole("button", { name: "한지원" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: text.card.ctaHire }));
+    const form = await screen.findByRole("region", { name: text.hire.title });
+    await userEvent.type(within(form).getByLabelText(text.hire.employeeNumber), "24-1187");
+    await userEvent.type(within(form).getByLabelText(text.hire.phone), "010-1234-5678");
+    await userEvent.type(within(form).getByLabelText(text.hire.orgUnit), "품질관리팀");
+    await userEvent.selectOptions(
+      within(form).getByLabelText(text.hire.homeBranch),
+      await within(form).findByRole("option", { name: "안산지점" }),
+    );
+    await userEvent.click(within(form).getByRole("button", { name: text.hire.submit }));
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/applicants/{id}/hire", expect.objectContaining({
+      params: { path: { id: "apl-1" } },
+      body: {
+        employee_number: "24-1187", phone: "010-1234-5678", org_unit: "품질관리팀",
+        position: "품질관리 매니저", site: "안산공장 품질관리팀", home_branch_id: "br-1", base_pay: "3400000",
+      },
+    }));
+    expect(await screen.findByText(text.toast.hired("한지원", "1 / 2"))).toBeVisible();
+    await userEvent.click(await screen.findByRole("button", { name: text.hire.openEmployee }));
+    expect(onNavigate).toHaveBeenCalledWith("/console/people");
   });
 
   it("lists the talent pool as the rejection downstream", async () => {
