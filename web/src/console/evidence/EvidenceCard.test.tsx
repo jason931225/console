@@ -259,11 +259,17 @@ describe("EvidenceCard hold-release four-eyes flow (fail-closed)", () => {
     fireEvent.change(screen.getByRole("textbox", { name: T.hold.reasonLabel }), { target: { value: "preserve" } });
     fireEvent.click(screen.getByRole("button", { name: T.hold.apply }));
 
-    await waitFor(() => expect(screen.getByText(T.hold.applyRefreshFailed)).toBeTruthy());
+    await waitFor(() => {
+      expect(screen.getByText(T.hold.applyRefreshFailed)).toBeTruthy();
+    });
     expect(screen.getByRole<HTMLInputElement>("textbox", { name: T.hold.caseRef }).value).toBe("CASE-1");
     fireEvent.click(screen.getByRole("button", { name: T.hold.refreshRetry }));
-    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByRole<HTMLInputElement>("textbox", { name: T.hold.caseRef }).value).toBe(""));
+    await waitFor(() => {
+      expect(retry).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLInputElement>("textbox", { name: T.hold.caseRef }).value).toBe("");
+    });
   });
 
   it("keeps a successful hold release explicit and retryable when its authoritative reread fails", async () => {
@@ -279,16 +285,24 @@ describe("EvidenceCard hold-release four-eyes flow (fail-closed)", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: T.hold.requestRelease }));
-    await waitFor(() => expect(screen.getByRole("button", { name: T.hold.decideApprove })).toBeTruthy());
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: T.hold.decideApprove })).toBeTruthy();
+    });
     fireEvent.click(screen.getByRole("button", { name: T.hold.decideApprove }));
-    await waitFor(() => expect(screen.getByRole("button", { name: T.hold.release })).toBeTruthy());
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: T.hold.release })).toBeTruthy();
+    });
     fireEvent.change(screen.getByRole("textbox", { name: T.hold.reasonLabel }), { target: { value: "approved release" } });
     fireEvent.click(screen.getByRole("button", { name: T.hold.release }));
 
-    await waitFor(() => expect(screen.getByText(T.hold.releaseRefreshFailed)).toBeTruthy());
+    await waitFor(() => {
+      expect(screen.getByText(T.hold.releaseRefreshFailed)).toBeTruthy();
+    });
     expect(screen.queryByText(T.hold.active)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: T.hold.refreshRetry }));
-    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(retry).toHaveBeenCalledTimes(1);
+    });
   });
 
 });

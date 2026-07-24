@@ -352,15 +352,25 @@ describe("EvidenceRecords detail opening", () => {
     fireEvent.click(screen.getAllByRole("button", { name: T.records.open(heldWire.code, heldWire.title) })[0]);
     const detail = await screen.findByLabelText(T.detailAria(heldWire.code));
     fireEvent.click(within(detail).getByRole("button", { name: T.hold.requestRelease }));
-    await waitFor(() => expect(within(detail).getByRole("button", { name: T.hold.decideApprove })).toBeTruthy());
+    await waitFor(() => {
+      expect(within(detail).getByRole("button", { name: T.hold.decideApprove })).toBeTruthy();
+    });
     fireEvent.click(within(detail).getByRole("button", { name: T.hold.decideApprove }));
-    await waitFor(() => expect(within(detail).getByRole("button", { name: T.hold.release })).toBeTruthy());
+    await waitFor(() => {
+      expect(within(detail).getByRole("button", { name: T.hold.release })).toBeTruthy();
+    });
     fireEvent.click(within(detail).getByRole("button", { name: T.hold.release }));
 
-    await waitFor(() => expect(within(detail).getByText(T.hold.releaseRefreshFailed)).toBeTruthy());
+    await waitFor(() => {
+      expect(within(detail).getByText(T.hold.releaseRefreshFailed)).toBeTruthy();
+    });
     expect(within(detail).getByText(T.hold.active)).toBeTruthy();
     fireEvent.click(within(detail).getByRole("button", { name: T.hold.refreshRetry }));
-    await waitFor(() => expect(detailReads).toBe(3));
-    await waitFor(() => expect(screen.queryByText(T.hold.active)).toBeNull());
+    await waitFor(() => {
+      expect(detailReads).toBe(3);
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(T.hold.active)).toBeNull();
+    });
   });
 });

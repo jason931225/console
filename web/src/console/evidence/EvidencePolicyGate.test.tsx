@@ -74,7 +74,9 @@ describe("Evidence legal-hold server authorization", () => {
       .fn()
       .mockResolvedValue(effects("deny", "deny", "deny", "deny"));
     mount(post);
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledTimes(1);
+    });
     expect(
       screen.queryByRole("button", { name: T.hold.requestRelease }),
     ).toBeNull();
@@ -83,7 +85,9 @@ describe("Evidence legal-hold server authorization", () => {
 
   it("fails closed on an authorization error and omits legal-hold controls", async () => {
     mount(vi.fn().mockResolvedValue({ error: { message: "unavailable" } }));
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+    });
     expect(
       screen.queryByRole("button", { name: T.hold.requestRelease }),
     ).toBeNull();
