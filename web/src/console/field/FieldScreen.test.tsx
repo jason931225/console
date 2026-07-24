@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createConsoleApiClient } from "../../api/client";
 import { fieldStrings as text } from "../../i18n/field";
+import { ko } from "../../i18n/ko";
 import type {
   FieldSiteDetail,
   FieldSiteRow,
@@ -303,7 +304,8 @@ describe("FieldScreen", () => {
     const workOrderLink = within(detail).getByRole("link", {
       name: text.workOrder.open("WO-2638"),
     });
-    expect(workOrderLink).toHaveAttribute("href", "/dispatch?source=field&wo=wo-1");
+    // The dispatch deep-link param the dispatch page actually parses.
+    expect(workOrderLink).toHaveAttribute("href", "/dispatch?around_work_order_id=wo-1");
     expect(within(detail).getByText("김성호")).toBeVisible();
     const acceptSection = within(detail).getByRole("region", { name: text.detail.acceptances });
     expect(within(acceptSection).getByText(text.detail.sectionEmpty)).toBeVisible();
@@ -363,6 +365,95 @@ describe("FieldScreen", () => {
     });
     const request = acceptanceCalls[0] as Request;
     expect(request.method).toBe("POST");
+    // Business outcome: the form's collected answers reach the wire verbatim.
+    expect(await request.json()).toMatchObject({
+      kind: "CUSTOMER_ACCEPTED",
+      channel: "IN_PERSON",
+      accepted_by: "이종호",
+    });
+  });
+
+  it("reconciles the list from the server after a mutation instead of stranding it in loading", async () => {
+    let listCalls = 0;
+    const comment = {
+      id: "comment-1",
+      ticket_id: "ticket-1",
+      author_user_id: "user-1",
+      author_name: "정하늘",
+      body: "대근 편성 완료",
+      is_internal_note: false,
+      created_at: "2026-07-23T03:00:00Z",
+    };
+    const posted: (typeof comment)[] = [];
+    stubRoutes({
+      "/api/v1/field/sites": () => {
+        listCalls += 1;
+        return jsonResponse({ items: [siteRow()], next_cursor: null, total: 1 });
+      },
+      "/api/v1/field/sites/site-1": () => jsonResponse(siteDetail()),
+      "/api/v1/support/tickets/ticket-1": () =>
+        jsonResponse(ticketDetail({ comments: [...posted] })),
+      "/api/v1/support/tickets/ticket-1/comments": () => {
+        posted.push(comment);
+        return jsonResponse(comment, 201);
+      },
+    });
+    renderScreen(operator);
+    await userEvent.click(await screen.findByText("대원강업 상주"));
+    await userEvent.click(
+      await screen.findByRole("button", { name: text.ticket.open("경비 결원 대근 요청") }),
+    );
+    const comments = await screen.findByRole("region", { name: ko.support.comments.title });
+    await userEvent.type(within(comments).getByLabelText(ko.support.comments.title), "대근 편성 완료");
+    await userEvent.click(within(comments).getByRole("button", { name: ko.support.comments.add }));
+    // The refreshed ticket carries the comment and the list pane re-renders rows.
+    expect(await within(comments).findByText("대근 편성 완료")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.queryByText(text.loading)).toBeNull();
+    });
+    expect(listCalls).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps a created ticket when site-linking fails instead of risking a duplicate intake", async () => {
+    let createCalls = 0;
+    const created = () =>
+      ticketSummary({
+        id: "ticket-9",
+        status: "OPEN",
+        title: "결원 보충",
+        site_id: null,
+        site_name: null,
+        resolved_at: null,
+      });
+    stubRoutes({
+      "/api/v1/field/sites": () =>
+        jsonResponse({ items: [siteRow()], next_cursor: null, total: 1 }),
+      "/api/v1/field/sites/site-1": () => jsonResponse(siteDetail()),
+      "/api/v1/support/tickets": (request) => {
+        if (request.method !== "POST") {
+          return jsonResponse({ items: [], next_cursor: null, total: 0 });
+        }
+        createCalls += 1;
+        return jsonResponse(created(), 201);
+      },
+      "/api/v1/support/tickets/ticket-9": () =>
+        jsonResponse(ticketDetail({ ticket: created() })),
+      "/api/v1/support/tickets/ticket-9/link": () =>
+        jsonResponse({ error: { code: "conflict", message: "site link rejected" } }, 409),
+    });
+    renderScreen(operator);
+    await userEvent.click(await screen.findByText("대원강업 상주"));
+    await screen.findByRole("heading", { name: "대원강업 상주" });
+    await userEvent.click(screen.getByRole("button", { name: text.intake }));
+    const intakeForm = screen.getByRole("form", { name: text.intake });
+    await userEvent.type(within(intakeForm).getByLabelText(/제목/), "결원 보충");
+    await userEvent.type(within(intakeForm).getByLabelText(/내용/), "야간 결원 대근 필요");
+    await userEvent.click(within(intakeForm).getByRole("button", { name: text.intakeForm.submit }));
+    // The link failure surfaces, but the created ticket is kept and offers the
+    // manual link action — resubmitting the intake would duplicate the ticket.
+    expect(await screen.findByRole("alert")).toHaveTextContent("site link rejected");
+    expect(await screen.findByRole("button", { name: text.ticket.linkSite })).toBeVisible();
+    expect(createCalls).toBe(1);
   });
 
   it("hides triage, acceptance, and comment affordances from a read-only viewer", async () => {

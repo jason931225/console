@@ -72,6 +72,20 @@ function formText(data: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
+interface OpSlot {
+  current: AbortController | undefined;
+}
+
+/**
+ * An async op may settle state only while it is still its pane's latest
+ * un-aborted op. Each pane owns its slot, so concurrent panes never invalidate
+ * each other (a shared counter would strand `reconcile`'s parallel reloads),
+ * and session changes remount the whole screen via the fence key.
+ */
+function settles(slot: OpSlot, controller: AbortController): boolean {
+  return slot.current === controller && !controller.signal.aborted;
+}
+
 const SLA_STATES: FieldSlaState[] = ["OK", "AT_RISK", "BREACHED"];
 const ACCEPTANCE_KINDS: AcceptanceKind[] = ["CUSTOMER_ACCEPTED", "CUSTOMER_DECLINED"];
 const ACCEPTANCE_CHANNELS: AcceptanceChannel[] = ["IN_PERSON", "PHONE", "EMAIL", "MESSENGER"];
@@ -177,12 +191,10 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
   const [actionError, setActionError] = useState<string>();
 
   const fieldApi = useMemo(() => createFieldApi(api), [api]);
-  const generation = useRef(0);
   const listOp = useRef<AbortController>(undefined);
   const detailOp = useRef<AbortController>(undefined);
   const ticketOp = useRef<AbortController>(undefined);
   const mutateOp = useRef<AbortController>(undefined);
-  const isCurrent = useCallback((token: number) => generation.current === token, []);
 
   const categoryId = useId();
   const priorityId = useId();
@@ -207,7 +219,6 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
     listOp.current?.abort();
     const controller = new AbortController();
     listOp.current = controller;
-    const token = ++generation.current;
     setLoading(true);
     setListError(undefined);
     try {
@@ -220,18 +231,17 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
         },
         controller.signal,
       );
-      if (isCurrent(token)) setRows(page.items);
+      if (settles(listOp, controller)) setRows(page.items);
     } catch (cause) {
-      if (isCurrent(token) && !controller.signal.aborted) {
+      if (settles(listOp, controller)) {
         setListError(message(cause, text.loadError));
       }
     } finally {
-      if (isCurrent(token)) setLoading(false);
+      if (settles(listOp, controller)) setLoading(false);
     }
-  }, [capabilities.canRead, customerFilter, fieldApi, isCurrent, query, slaFilter]);
+  }, [capabilities.canRead, customerFilter, fieldApi, query, slaFilter]);
 
   useEffect(() => {
-    generation.current += 1;
     listOp.current?.abort();
     // 200ms defer doubles as the search-typing debounce.
     const start = window.setTimeout(() => {
@@ -252,16 +262,15 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
     detailOp.current?.abort();
     const controller = new AbortController();
     detailOp.current = controller;
-    const token = ++generation.current;
     setDetailState("loading");
     try {
       const next = await fieldApi.getSite(selectedSiteId, controller.signal);
-      if (isCurrent(token)) {
+      if (settles(detailOp, controller)) {
         setDetail(next);
         setDetailState("idle");
       }
     } catch (cause) {
-      if (!isCurrent(token) || controller.signal.aborted) return;
+      if (!settles(detailOp, controller)) return;
       // Out-of-scope reads deny by omission (404); render absence, not failure.
       if (cause instanceof FieldApiError && (cause.status === 404 || cause.status === 403)) {
         setDetail(undefined);
@@ -270,7 +279,7 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
         setDetailState("error");
       }
     }
-  }, [capabilities.canRead, fieldApi, isCurrent, selectedSiteId]);
+  }, [capabilities.canRead, fieldApi, selectedSiteId]);
 
   useEffect(() => {
     const start = window.setTimeout(() => {
@@ -293,18 +302,17 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
     ticketOp.current?.abort();
     const controller = new AbortController();
     ticketOp.current = controller;
-    const token = ++generation.current;
     setTicketState("loading");
     try {
       const next = await fieldApi.getTicket(selectedTicketId, controller.signal);
-      if (isCurrent(token)) {
+      if (settles(ticketOp, controller)) {
         setTicket(next);
         setTicketState("idle");
       }
     } catch {
-      if (isCurrent(token) && !controller.signal.aborted) setTicketState("error");
+      if (settles(ticketOp, controller)) setTicketState("error");
     }
-  }, [fieldApi, isCurrent, selectedTicketId]);
+  }, [fieldApi, selectedTicketId]);
 
   useEffect(() => {
     const start = window.setTimeout(() => {
@@ -323,22 +331,21 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
       mutateOp.current?.abort();
       const controller = new AbortController();
       mutateOp.current = controller;
-      const token = ++generation.current;
       setBusy(true);
       setActionError(undefined);
       try {
         await work(controller.signal);
-        return isCurrent(token);
+        return settles(mutateOp, controller);
       } catch (cause) {
-        if (isCurrent(token) && !controller.signal.aborted) {
+        if (settles(mutateOp, controller)) {
           setActionError(message(cause, fallback));
         }
         return false;
       } finally {
-        if (isCurrent(token)) setBusy(false);
+        if (settles(mutateOp, controller)) setBusy(false);
       }
     },
-    [isCurrent],
+    [],
   );
 
   const reconcile = useCallback(async () => {
@@ -408,10 +415,17 @@ function FieldScreenInner({ api, branchId, actorId, capabilities, sessionKey }: 
         },
         signal,
       );
-      if (capabilities.canTriage && selectedSiteId) {
-        await fieldApi.linkTicket(created.id, { site_id: selectedSiteId }, signal);
-      }
       setSelectedTicketId(created.id);
+      if (capabilities.canTriage && selectedSiteId) {
+        // The ticket exists once created — a failed link must not fail the
+        // intake (resubmitting would duplicate it). The ticket pane keeps the
+        // manual link action for retry.
+        try {
+          await fieldApi.linkTicket(created.id, { site_id: selectedSiteId }, signal);
+        } catch (cause) {
+          setActionError(message(cause, text.ticket.linkFailed));
+        }
+      }
     }, text.intakeForm.failed);
     if (applied) {
       setDraft(EMPTY_DRAFT);
@@ -970,7 +984,7 @@ function SitePane({
                   <a
                     className="field__linkchip"
                     aria-label={text.workOrder.open(code)}
-                    href={`/dispatch?source=field&wo=${ref.id}`}
+                    href={`/dispatch?around_work_order_id=${encodeURIComponent(ref.id)}`}
                   >
                     {code}
                   </a>
