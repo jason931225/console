@@ -12,7 +12,7 @@
 DRAFT --open--> OPEN --start-calibration--> CALIBRATION --finalize--> FINALIZED --archive--> ARCHIVED
 ```
 
-There are no reverse transitions. Every cycle mutation has an expected version. Calibration uses the selected **subject aggregate** version; review edit/submit uses the selected **review** version; cycle transitions use the cycle version. The following timestamps are set once at their transition: `opened_at`, `calibration_started_at`, `finalized_at`, `archived_at`; finalization additionally records `finalized_by`.
+There are no reverse transitions. Every cycle mutation has an expected version. Calibration uses the selected **subject aggregate** version; review edit/submit uses the selected **review** version; cycle transitions use the cycle version. Every command response names `version_scope` (`CYCLE`, `SUBJECT`, or `REVIEW`) and returns the corresponding freshly persisted version; retry replays that exact stored response. The following timestamps are set once at their transition: `opened_at`, `calibration_started_at`, `finalized_at`, `archived_at`; finalization additionally records `finalized_by`.
 
 * Opening requires one or more subjects, every subject has one or more goals, and each subject's goal weights total **exactly 100**. Opening freezes subject identity, manager, home branch, org unit, position, team, rubric, and goals.
 * Calibration starts only when every subject has both SELF and MANAGER reviews in `SUBMITTED` state.

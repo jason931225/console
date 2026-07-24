@@ -168,12 +168,53 @@ pub trait EvaluationRepository {
     ) -> Result<T, KernelError>;
 }
 
+/// Which aggregate owns the optimistic-concurrency token in this response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ActionVersionScope {
+    Cycle,
+    Subject,
+    Review,
+}
+
+/// Exact persisted/replayed command response. `version` belongs to `version_scope`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CycleActionResult {
     pub cycle_id: EvaluationCycleId,
     pub state: EvaluationCycleState,
+    pub version_scope: ActionVersionScope,
     pub version: u64,
     pub changed_subject_ids: Vec<EvaluationSubjectId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MutationOutcome {
+    changed_subject_ids: Vec<EvaluationSubjectId>,
+    version_scope: ActionVersionScope,
+    version: u64,
+}
+impl MutationOutcome {
+    fn cycle(changed_subject_ids: Vec<EvaluationSubjectId>, version: u64) -> Self {
+        Self {
+            changed_subject_ids,
+            version_scope: ActionVersionScope::Cycle,
+            version,
+        }
+    }
+    fn subject(changed_subject_ids: Vec<EvaluationSubjectId>, version: u64) -> Self {
+        Self {
+            changed_subject_ids,
+            version_scope: ActionVersionScope::Subject,
+            version,
+        }
+    }
+    fn review(changed_subject_ids: Vec<EvaluationSubjectId>, version: u64) -> Self {
+        Self {
+            changed_subject_ids,
+            version_scope: ActionVersionScope::Review,
+            version,
+        }
+    }
 }
 
 pub fn open_cycle<R: EvaluationRepository>(
@@ -192,7 +233,7 @@ pub fn open_cycle<R: EvaluationRepository>(
         at,
         |cycle, subjects| {
             cycle.open(command.metadata.expected_version, subjects, at)?;
-            Ok(Vec::new())
+            Ok(MutationOutcome::cycle(Vec::new(), cycle.version()))
         },
     )
 }
@@ -212,7 +253,7 @@ pub fn start_calibration<R: EvaluationRepository>(
         at,
         |cycle, subjects| {
             cycle.start_calibration(command.metadata.expected_version, subjects, at)?;
-            Ok(Vec::new())
+            Ok(MutationOutcome::cycle(Vec::new(), cycle.version()))
         },
     )
 }
@@ -231,7 +272,7 @@ pub fn edit_review_draft<R: EvaluationRepository>(
         &command.metadata,
         at,
         |cycle, subjects| {
-            if cycle.state != EvaluationCycleState::Open {
+            if cycle.state() != EvaluationCycleState::Open {
                 return Err(KernelError::conflict(
                     "review drafts are only mutable while cycle is open",
                 ));
@@ -245,7 +286,10 @@ pub fn edit_review_draft<R: EvaluationRepository>(
                 command.rationale.clone(),
                 command.evidence_links.clone(),
             )?;
-            Ok(vec![subject.id()])
+            Ok(MutationOutcome::review(
+                vec![subject.id()],
+                subject.review_version(command.kind),
+            ))
         },
     )
 }
@@ -264,7 +308,7 @@ pub fn submit_review<R: EvaluationRepository>(
         &command.metadata,
         at,
         |cycle, subjects| {
-            if cycle.state != EvaluationCycleState::Open {
+            if cycle.state() != EvaluationCycleState::Open {
                 return Err(KernelError::conflict(
                     "review drafts are only mutable while cycle is open",
                 ));
@@ -272,7 +316,10 @@ pub fn submit_review<R: EvaluationRepository>(
             let subject = selected_subject(subjects, command.subject_id)?;
             require_selected_evaluator(context.user_id, subject, command.kind)?;
             subject.submit_review(command.kind, command.metadata.expected_version, at)?;
-            Ok(vec![subject.id()])
+            Ok(MutationOutcome::review(
+                vec![subject.id()],
+                subject.review_version(command.kind),
+            ))
         },
     )
 }
@@ -296,7 +343,7 @@ pub fn calibrate_subject<R: EvaluationRepository>(
         &command.metadata,
         at,
         |cycle, subjects| {
-            if cycle.state != EvaluationCycleState::Calibration {
+            if cycle.state() != EvaluationCycleState::Calibration {
                 return Err(KernelError::conflict(
                     "calibration is only available during calibration",
                 ));
@@ -310,7 +357,10 @@ pub fn calibrate_subject<R: EvaluationRepository>(
                 command.rationale.clone(),
                 at,
             )?;
-            Ok(vec![subject.id()])
+            Ok(MutationOutcome::subject(
+                vec![subject.id()],
+                subject.version(),
+            ))
         },
     )
 }
@@ -345,6 +395,7 @@ pub fn finalize_cycle<R: EvaluationRepository>(
             subject.finalize(code, at)?;
         }
         let changed_subject_ids = subjects.iter().map(EvaluationSubject::id).collect();
+        let outcome = MutationOutcome::cycle(changed_subject_ids, cycle.version());
         commit_result(
             transaction,
             context,
@@ -353,7 +404,7 @@ pub fn finalize_cycle<R: EvaluationRepository>(
             at,
             cycle,
             subjects,
-            changed_subject_ids,
+            outcome,
             context.user_id,
         )
     })
@@ -369,7 +420,7 @@ fn execute_cycle_action<R: EvaluationRepository>(
     mutate: impl FnOnce(
         &mut EvaluationCycle,
         &mut [EvaluationSubject],
-    ) -> Result<Vec<EvaluationSubjectId>, KernelError>,
+    ) -> Result<MutationOutcome, KernelError>,
 ) -> Result<CycleActionResult, KernelError> {
     repository.transaction(|transaction| {
         if let IdempotencyDecision::Replay(value) =
@@ -378,7 +429,7 @@ fn execute_cycle_action<R: EvaluationRepository>(
             return decode_result(value);
         }
         let (mut cycle, mut subjects) = transaction.load_cycle_for_update(cycle_id)?;
-        let changed = mutate(&mut cycle, &mut subjects)?;
+        let outcome = mutate(&mut cycle, &mut subjects)?;
         commit_result(
             transaction,
             context,
@@ -387,7 +438,7 @@ fn execute_cycle_action<R: EvaluationRepository>(
             at,
             cycle,
             subjects,
-            changed,
+            outcome,
             context.user_id,
         )
     })
@@ -409,14 +460,15 @@ fn commit_result<T: EvaluationUnitOfWork>(
     at: Timestamp,
     cycle: EvaluationCycle,
     subjects: Vec<EvaluationSubject>,
-    changed_subject_ids: Vec<EvaluationSubjectId>,
+    outcome: MutationOutcome,
     actor: UserId,
 ) -> Result<CycleActionResult, KernelError> {
     let result = CycleActionResult {
-        cycle_id: cycle.id,
-        state: cycle.state,
-        version: cycle.version,
-        changed_subject_ids,
+        cycle_id: cycle.id(),
+        state: cycle.state(),
+        version_scope: outcome.version_scope,
+        version: outcome.version,
+        changed_subject_ids: outcome.changed_subject_ids,
     };
     let response = serde_json::to_value(&result).map_err(|error| {
         KernelError::internal(format!("cannot serialize cycle result: {error}"))
@@ -426,7 +478,7 @@ fn commit_result<T: EvaluationUnitOfWork>(
             action,
             actor,
             trace: metadata.trace.clone(),
-            target_id: cycle.id.to_string(),
+            target_id: cycle.id().to_string(),
         },
         receipt: ActionReceipt {
             tenant: context.org_id,
@@ -567,7 +619,7 @@ mod tests {
             &mut self,
             id: EvaluationCycleId,
         ) -> Result<(EvaluationCycle, Vec<EvaluationSubject>), KernelError> {
-            if id == self.state.cycle.id {
+            if id == self.state.cycle.id() {
                 Ok((self.state.cycle.clone(), self.state.subjects.clone()))
             } else {
                 Err(KernelError::not_found("cycle"))
@@ -618,6 +670,20 @@ mod tests {
             trace: TraceContext::generate(),
             expected_version,
             idempotency_key: "evaluation-command-0001".to_owned(),
+            fingerprint: fingerprint.to_owned(),
+        }
+    }
+    fn metadata_with_key(
+        actor: UserId,
+        expected_version: u64,
+        fingerprint: &str,
+        idempotency_key: &str,
+    ) -> CommandMetadata {
+        CommandMetadata {
+            actor,
+            trace: TraceContext::generate(),
+            expected_version,
+            idempotency_key: idempotency_key.to_owned(),
             fingerprint: fingerprint.to_owned(),
         }
     }
@@ -678,15 +744,17 @@ mod tests {
         let mut repository =
             repository(EvaluationCycleState::Draft, Failure::None, context.user_id);
         let command = OpenCycleCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             metadata: metadata(context.user_id, 0, "same"),
         };
         let first = open_cycle(&mut repository, &context, command.clone(), now).unwrap();
         let replay = open_cycle(&mut repository, &context, command, now).unwrap();
         assert_eq!(first, replay);
+        assert_eq!(first.version_scope, ActionVersionScope::Cycle);
+        assert_eq!(first.version, 1);
         assert_eq!(repository.state.audits, 1);
         let changed = OpenCycleCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             metadata: metadata(context.user_id, 0, "changed"),
         };
         assert!(open_cycle(&mut repository, &context, changed, now).is_err());
@@ -697,7 +765,7 @@ mod tests {
         let now = Timestamp::now_utc();
         for failure in [Failure::Audit, Failure::Receipt] {
             let mut repository = repository(EvaluationCycleState::Draft, failure, context.user_id);
-            let id = repository.state.cycle.id;
+            let id = repository.state.cycle.id();
             let result = open_cycle(
                 &mut repository,
                 &context,
@@ -708,7 +776,7 @@ mod tests {
                 now,
             );
             assert!(result.is_err());
-            assert_eq!(repository.state.cycle.state, EvaluationCycleState::Draft);
+            assert_eq!(repository.state.cycle.state(), EvaluationCycleState::Draft);
             assert_eq!(repository.state.audits, 0);
             assert!(repository.state.receipts.is_empty());
         }
@@ -740,7 +808,7 @@ mod tests {
             .start_calibration(1, &repository.state.subjects, now)
             .unwrap();
         let command = CalibrateSubjectCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             subject_id,
             grade: RubricLevel::A,
             rationale: "calibration".to_owned(),
@@ -749,7 +817,7 @@ mod tests {
         assert!(calibrate_subject(&mut repository, &context, command, now).is_err());
         let current = repository.state.subjects[0].version();
         let command = CalibrateSubjectCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             subject_id,
             grade: RubricLevel::A,
             rationale: "calibration".to_owned(),
@@ -760,7 +828,7 @@ mod tests {
         // A second writer using the same pre-commit subject version loses OCC,
         // even though it uses a distinct idempotency key.
         let concurrent_loser = CalibrateSubjectCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             subject_id,
             grade: RubricLevel::A,
             rationale: "late calibration".to_owned(),
@@ -770,19 +838,19 @@ mod tests {
         assert_ne!(manager, context.user_id);
     }
     #[test]
-    fn review_commands_require_the_selected_evaluator_and_submission_permission() {
+    fn review_commands_require_the_selected_evaluator_and_return_fresh_review_tokens() {
         let context = context();
         let now = Timestamp::now_utc();
         let mut repository = repository(EvaluationCycleState::Open, Failure::None, UserId::new());
         let subject_id = repository.state.subjects[0].id();
         let denied = EditReviewDraftCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             subject_id,
             kind: ReviewKind::SelfReview,
             grade: RubricLevel::A,
             rationale: "evidence".to_owned(),
             evidence_links: vec![],
-            metadata: metadata(context.user_id, 0, "edit-review-00001"),
+            metadata: metadata(context.user_id, 0, "denied"),
         };
         assert!(edit_review_draft(&mut repository, &context, denied, now).is_err());
         let self_user = repository.state.subjects[0].review_evaluator(ReviewKind::SelfReview);
@@ -790,31 +858,41 @@ mod tests {
             user_id: self_user,
             ..context
         };
-        let edit = EditReviewDraftCommand {
-            cycle_id: repository.state.cycle.id,
-            subject_id,
-            kind: ReviewKind::SelfReview,
-            grade: RubricLevel::A,
-            rationale: "evidence".to_owned(),
-            evidence_links: vec![],
-            metadata: metadata(self_user, 0, "edit-review-00002"),
-        };
-        edit_review_draft(&mut repository, &allowed_context, edit, now).unwrap();
+        for (expected, key) in [
+            (0, "edit-review-key-001"),
+            (1, "edit-review-key-002"),
+            (2, "edit-review-key-003"),
+        ] {
+            let edit = EditReviewDraftCommand {
+                cycle_id: repository.state.cycle.id(),
+                subject_id,
+                kind: ReviewKind::SelfReview,
+                grade: RubricLevel::A,
+                rationale: format!("evidence revision {expected}"),
+                evidence_links: vec![],
+                metadata: metadata_with_key(self_user, expected, "same-logical-edit", key),
+            };
+            let result = edit_review_draft(&mut repository, &allowed_context, edit, now).unwrap();
+            assert_eq!(result.version_scope, ActionVersionScope::Review);
+            assert_eq!(result.version, expected + 1);
+        }
         let submit = SubmitReviewCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             subject_id,
             kind: ReviewKind::SelfReview,
-            metadata: metadata(self_user, 1, "submit-review-001"),
+            metadata: metadata_with_key(self_user, 3, "submit", "submit-review-key-001"),
         };
-        submit_review(&mut repository, &allowed_context, submit, now).unwrap();
+        let result = submit_review(&mut repository, &allowed_context, submit, now).unwrap();
+        assert_eq!(result.version_scope, ActionVersionScope::Review);
+        assert_eq!(result.version, 4);
         let retry_edit = EditReviewDraftCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             subject_id,
             kind: ReviewKind::SelfReview,
             grade: RubricLevel::S,
             rationale: "rewrite".to_owned(),
             evidence_links: vec![],
-            metadata: metadata(self_user, 2, "edit-review-00003"),
+            metadata: metadata_with_key(self_user, 4, "rewrite", "edit-review-key-004"),
         };
         assert!(edit_review_draft(&mut repository, &allowed_context, retry_edit, now).is_err());
         let no_submit = EvaluationActorContext {
@@ -822,10 +900,10 @@ mod tests {
             ..allowed_context
         };
         let command = SubmitReviewCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             subject_id,
             kind: ReviewKind::SelfReview,
-            metadata: metadata(self_user, 2, "submit-review-002"),
+            metadata: metadata_with_key(self_user, 4, "submit-again", "submit-review-key-002"),
         };
         assert!(submit_review(&mut repository, &no_submit, command, now).is_err());
     }
@@ -863,15 +941,15 @@ mod tests {
                 now,
             )
             .unwrap();
-        let cycle_version = repository.state.cycle.version;
+        let cycle_version = repository.state.cycle.version();
         let before_rv = repository.state.next_rv;
         let command = FinalizeCycleCommand {
-            cycle_id: repository.state.cycle.id,
+            cycle_id: repository.state.cycle.id(),
             metadata: metadata(context.user_id, cycle_version, "finalize-rv-0001"),
         };
         assert!(finalize_cycle(&mut repository, &context, command, now).is_err());
         assert_eq!(
-            repository.state.cycle.state,
+            repository.state.cycle.state(),
             EvaluationCycleState::Calibration
         );
         assert_eq!(repository.state.next_rv, before_rv);

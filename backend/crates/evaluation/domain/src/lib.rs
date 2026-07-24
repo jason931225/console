@@ -561,19 +561,68 @@ impl EvaluationSubject {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvaluationCycle {
     id: EvaluationCycleId,
-    pub name: String,
+    name: String,
     state: EvaluationCycleState,
-    pub effective_from: time::Date,
-    pub effective_until: time::Date,
-    pub rubric_id: EvaluationRubricId,
+    effective_from: time::Date,
+    effective_until: time::Date,
+    rubric_id: EvaluationRubricId,
     version: u64,
-    pub opened_at: Option<Timestamp>,
-    pub calibration_started_at: Option<Timestamp>,
+    opened_at: Option<Timestamp>,
+    calibration_started_at: Option<Timestamp>,
     finalized_at: Option<Timestamp>,
-    pub finalized_by: Option<UserId>,
-    pub archived_at: Option<Timestamp>,
+    finalized_by: Option<UserId>,
+    archived_at: Option<Timestamp>,
 }
 impl EvaluationCycle {
+    #[must_use]
+    pub const fn id(&self) -> EvaluationCycleId {
+        self.id
+    }
+    #[must_use]
+    pub const fn state(&self) -> EvaluationCycleState {
+        self.state
+    }
+    #[must_use]
+    pub const fn version(&self) -> u64 {
+        self.version
+    }
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    #[must_use]
+    pub const fn effective_from(&self) -> time::Date {
+        self.effective_from
+    }
+    #[must_use]
+    pub const fn effective_until(&self) -> time::Date {
+        self.effective_until
+    }
+    #[must_use]
+    pub const fn rubric_id(&self) -> EvaluationRubricId {
+        self.rubric_id
+    }
+    #[must_use]
+    pub const fn opened_at(&self) -> Option<Timestamp> {
+        self.opened_at
+    }
+    #[must_use]
+    pub const fn calibration_started_at(&self) -> Option<Timestamp> {
+        self.calibration_started_at
+    }
+    #[must_use]
+    pub const fn finalized_at(&self) -> Option<Timestamp> {
+        self.finalized_at
+    }
+    #[must_use]
+    pub const fn finalized_by(&self) -> Option<UserId> {
+        self.finalized_by
+    }
+    #[must_use]
+    pub const fn archived_at(&self) -> Option<Timestamp> {
+        self.archived_at
+    }
+
     pub fn draft(
         name: impl Into<String>,
         effective_from: time::Date,
@@ -839,7 +888,7 @@ mod tests {
             .unwrap();
         subject.finalize("RV-2500", now).unwrap();
         cycle.archive(3, now).unwrap();
-        assert_eq!(cycle.state, EvaluationCycleState::Archived);
+        assert_eq!(cycle.state(), EvaluationCycleState::Archived);
         assert_eq!(subject.rv_code(), Some("RV-2500"));
     }
 
