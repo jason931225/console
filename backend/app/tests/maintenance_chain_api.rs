@@ -418,6 +418,19 @@ async fn pbac_denies_and_cross_tenant_reads_are_isolated_without_leakage(owner_p
     .await;
     assert_eq!(created.status, StatusCode::CREATED);
 
+    // One live settlement per order: a second draft under a DIFFERENT key hits
+    // the partial unique index and surfaces as 409, not a 500.
+    let duplicate_live = send(
+        &service,
+        "POST",
+        &format!("/api/v1/work-orders/{work_order_id}/settlement"),
+        &admin,
+        Some(settlement_body()),
+        Some("isolation-settlement-02"),
+    )
+    .await;
+    assert_eq!(duplicate_live.status, StatusCode::CONFLICT);
+
     // Deny-by-default: a MEMBER principal gets 403 with the canonical error
     // envelope and no object data.
     for (method, path) in [
