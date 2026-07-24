@@ -112,7 +112,8 @@ pub fn router(state: FacilitiesRestState) -> Router {
             .route(FACILITIES_START_PATH, post(start))
             .route(FACILITIES_SUBMIT_PATH, post(submit))
             .route(FACILITIES_ACCEPT_PATH, post(acceptance))
-            .route(FACILITIES_OBSERVATIONS_PATH, post(observe)),
+            .route(FACILITIES_OBSERVATIONS_PATH, post(observe))
+            .with_state(state),
         verifier,
         pool,
     )
@@ -130,7 +131,7 @@ struct CaseView {
     energy_delta_kwh: Option<String>,
     total_cost_krw: i64,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DueCaseBody {
     obligation_id: Uuid,
@@ -291,7 +292,8 @@ async fn create_due_case(
         None,
         Some(serde_json::json!({"status":"DUE"})),
     )?;
-    with_audit::<_,(),RestError>(&s.pool,e,|tx|Box::pin(async move {sqlx::query("INSERT INTO facilities_cases(id,org_id,branch_id,site_id,obligation_id,status,response_due_at,completion_due_at,acceptance_due_at,occurrence_due_at,request_hash,idempotency_key) VALUES($1,$2,$3,$4,$5,'DUE',$6,$7,$8,$9,$10,$11)").bind(case).bind(*p.org_id.as_uuid()).bind(branch).bind(site).bind(b.obligation_id).bind(due+time::Duration::seconds(i64::from(rd))).bind(due+time::Duration::seconds(i64::from(cd))).bind(due+time::Duration::seconds(i64::from(ad))).bind(due).bind(req_hash).bind(b.idempotency_key).execute(tx.as_mut()).await.map_err(RestError::db)?; history(tx,&p,case,None,"DUE").await?; Ok(())})).await?;
+    let tx_principal = p.clone();
+    with_audit::<_,(),RestError>(&s.pool,e,|tx|Box::pin(async move {let p = tx_principal;sqlx::query("INSERT INTO facilities_cases(id,org_id,branch_id,site_id,obligation_id,status,response_due_at,completion_due_at,acceptance_due_at,occurrence_due_at,request_hash,idempotency_key) VALUES($1,$2,$3,$4,$5,'DUE',$6,$7,$8,$9,$10,$11)").bind(case).bind(*p.org_id.as_uuid()).bind(branch).bind(site).bind(b.obligation_id).bind(due+time::Duration::seconds(i64::from(rd))).bind(due+time::Duration::seconds(i64::from(cd))).bind(due+time::Duration::seconds(i64::from(ad))).bind(due).bind(req_hash).bind(b.idempotency_key).execute(tx.as_mut()).await.map_err(RestError::db)?; history(tx,&p,case,None,"DUE").await?; Ok(())})).await?;
     let _ = now;
     get_case_view(&s.pool, &p, case).await.map(Json)
 }
@@ -357,6 +359,7 @@ async fn transition(
     let p = principal(s, h).await?;
     let org = p.org_id;
     let actor = p.clone();
+    let to = to.to_owned();
     with_audits::<_, _, RestError>(&s.pool, org, move |tx| {
         Box::pin(async move {
             let r = sqlx::query("SELECT status,branch_id,assignee_id FROM facilities_cases WHERE id=$1 AND org_id=$2 FOR UPDATE")
@@ -369,15 +372,15 @@ async fn transition(
             if require_assignee && current != Some(*actor.user_id.as_uuid()) {
                 return Err(RestError::new(StatusCode::FORBIDDEN, "not_assignee", "only the assigned technician may perform this transition"));
             }
-            if !legal(&from, to) {
+            if !legal(&from, &to) {
                 return Err(RestError::new(StatusCode::CONFLICT, "illegal_transition", "facilities case transition is not legal"));
             }
             let changed = sqlx::query("UPDATE facilities_cases SET status=$1, assignee_id=COALESCE($2,assignee_id), scheduled_for=COALESCE($3,scheduled_for), safety_acknowledged_at=CASE WHEN $1='IN_PROGRESS' THEN now() ELSE safety_acknowledged_at END, updated_at=now() WHERE id=$4 AND org_id=$5 AND status=$6")
-                .bind(to).bind(assignee).bind(scheduled).bind(id).bind(*org.as_uuid()).bind(&from).execute(tx.as_mut()).await.map_err(RestError::db)?;
+                .bind(to.as_str()).bind(assignee).bind(scheduled).bind(id).bind(*org.as_uuid()).bind(&from).execute(tx.as_mut()).await.map_err(RestError::db)?;
             if changed.rows_affected() != 1 {
                 return Err(RestError::new(StatusCode::CONFLICT, "concurrent_transition", "facilities case changed concurrently"));
             }
-            history(tx, &actor, id, Some(&from), to).await?;
+            history(tx, &actor, id, Some(&from), &to).await?;
             let audit = event(&actor, "facilities.case.transition", id, branch, Some(serde_json::json!({"status":from})), Some(serde_json::json!({"status":to})))?;
             Ok(((), vec![audit]))
         })
