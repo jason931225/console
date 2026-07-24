@@ -105,14 +105,18 @@ describe("complianceModuleScreen", () => {
     });
   });
 
-  it("does not request catalog kinds that the local policy has denied", async () => {
+  it("uses one compliance-domain-read gate for all canonical catalog reads", async () => {
     const { api, GET } = apiWithCatalog();
-    renderCompliance(api, { can: (action) => action === complianceModuleScreen.policy.read });
+    renderCompliance(api, {
+      can: (action) => action === complianceModuleScreen.policy.read,
+    });
 
     await screen.findByRole("button", { name: "CP-0001 상세 열기" });
+    expect(screen.getByRole("button", { name: "RG-0001 상세 열기" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "FW-0001 상세 열기" })).toBeVisible();
     expect(GET).toHaveBeenCalledWith("/api/v1/compliance/obligations", expect.anything());
-    expect(GET).not.toHaveBeenCalledWith("/api/v1/compliance/regulations", expect.anything());
-    expect(GET).not.toHaveBeenCalledWith("/api/v1/compliance/frameworks", expect.anything());
+    expect(GET).toHaveBeenCalledWith("/api/v1/compliance/regulations", expect.anything());
+    expect(GET).toHaveBeenCalledWith("/api/v1/compliance/frameworks", expect.anything());
   });
 });
 
