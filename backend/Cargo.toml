@@ -22,6 +22,7 @@ members = [
   "crates/inventory/*",
   "crates/logistics/*",
   "crates/equipment/*",
+  "crates/evaluation/*",
   "crates/ontology/*",
   "crates/registry/*",
   "crates/reporting/*",
@@ -225,6 +226,8 @@ mnt-equipment-domain = { path = "crates/equipment/domain" }
 mnt-equipment-application = { path = "crates/equipment/application" }
 mnt-equipment-adapter-postgres = { path = "crates/equipment/adapter-postgres" }
 mnt-equipment-rest = { path = "crates/equipment/rest" }
+mnt-evaluation-domain = { path = "crates/evaluation/domain" }
+mnt-evaluation-application = { path = "crates/evaluation/application" }
 mnt-support-domain = { path = "crates/support/domain" }
 mnt-support-application = { path = "crates/support/application" }
 mnt-support-adapter-postgres = { path = "crates/support/adapter-postgres" }

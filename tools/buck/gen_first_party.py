@@ -239,6 +239,12 @@ TEST_RESOURCE_REQUIREMENTS = {
     'mnt-equipment-domain': {
         'unit': 'none',
     },
+    'mnt-evaluation-application': {
+        'unit': 'none',
+    },
+    'mnt-evaluation-domain': {
+        'unit': 'none',
+    },
     'mnt-gate-audit-coverage': {
         'integration': {
             'tests/gate_detects_violation.rs': 'postgres',
