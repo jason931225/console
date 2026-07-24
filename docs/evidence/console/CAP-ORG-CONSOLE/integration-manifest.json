@@ -1,0 +1,44 @@
+{
+  "lane": "CAP-ORG-CONSOLE",
+  "stage": "scout",
+  "date": "2026-07-24",
+  "shared_root_requests": [
+    {
+      "root": "backend/openapi/openapi.yaml",
+      "action": "add",
+      "detail": "tag 'orgchange'; paths /api/v1/org-changes (+/{id}, /preflight, /submit, /approval-steps/{stepId}/decision, /effectuate, /settlement-items/{itemId}/complete, /archive, /cancel) and /api/v1/org-entities; schemas CreateOrgChangeRequest, UpdateOrgChangeDraftRequest, OrgProposalOp, OrgChangeSummary, OrgChangeDetail, OrgChangePreflightReport, OrgChangePage, OrgChangeDecisionRequest, OrgEntitySummary. Every operation carries tags: [orgchange] (client-gen requirement). Regenerate clients/{ts,kotlin,swift}."
+    },
+    {
+      "root": "backend/crates/platform/authz",
+      "action": "add",
+      "detail": "Feature variants OrgChangeRead [D,D,D,A,A,A], OrgChangeDraft [D,D,D,A,A,A], OrgChangeApprove [D,D,D,D,A,A], OrgChangeApply [D,D,D,D,A,A]; as_str keys org_change_read/org_change_draft/org_change_approve/org_change_apply; from_str arms; ALL list."
+    },
+    {
+      "root": "backend platform-rest build_router",
+      "action": "add",
+      "detail": "mount mnt_orgchange_rest::router(state) and append ORG_CHANGE_ROUTE_PATHS to the route census (build_router touch, mirrors governance/rest mounting)."
+    },
+    {
+      "root": "backend/crates/platform/db/migrations",
+      "action": "reserve",
+      "detail": "0189_create_org_change.sql (provisional; repo head 0180 at scout time — renumber to next free immediately before push). DDL in design-contract.md section 6; inserts feature_catalog keys org_change_*."
+    },
+    {
+      "root": "web/src/console/shell/nav.ts",
+      "action": "edit",
+      "detail": "add \"orgchart\" to MOUNTED_SCREEN_KEYS (nav item + gate g(DIRECTORY_ROLES,[FEATURES.EMPLOYEE_DIRECTORY_READ]) already declared at the HR group). Exposure remains governed by EXPOSED_SCREEN_KEYS."
+    },
+    {
+      "root": "web/src/console/screens/registry.ts",
+      "action": "add",
+      "detail": "SCREEN_REGISTRY entry: orgchart: OrgChartScreenBody (import from web/src/console/orgchange or the frontend lane's module dir)."
+    },
+    {
+      "root": "web/src/i18n/ko.ts",
+      "action": "none",
+      "detail": "console.shell.nav.orgchart: \"조직도\" already present (~line 971). Module strings live in new module-owned web/src/i18n/orgchange.ts (production.ts pattern) — no shared-file edit expected."
+    }
+  ],
+  "hot_crate_edits": [],
+  "hot_crate_notes": "identity and registry need NO edits for slice 1: orgchange depends on their published application commands (CreateRegion/Branch, Update*, Deactivate*, CreateSite/UpdateSite) and adapter pub methods only. If a command signature proves insufficient during build, the request routes through this manifest, not a direct edit."
+}
