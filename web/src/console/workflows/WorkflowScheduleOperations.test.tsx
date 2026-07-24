@@ -8,6 +8,11 @@ import { PolicyGateProvider } from "../policy";
 import { WorkflowScheduleOperations } from "./WorkflowScheduleOperations";
 import type { WorkflowScheduleRun } from "./scheduleApi";
 
+const mockAssertPasskeyStepUp = vi.hoisted(() => vi.fn());
+vi.mock("../../auth/webauthn", () => ({
+  assertPasskeyStepUp: mockAssertPasskeyStepUp,
+}));
+
 const schedule = {
   id: "11111111-1111-4111-8111-111111111111",
   label: "평일 KPI 스냅샷",
@@ -191,7 +196,8 @@ describe("WorkflowScheduleOperations", () => {
   it("omits schedule creation controls for a view-only policy", async () => {
     renderPanel(api(), (action) =>
       action !== "console.automate.schedule.create" &&
-      action !== "console.automate.schedule.toggle",
+      action !== "console.automate.schedule.toggle" &&
+      action !== "console.automate.schedule.edit",
     );
     await screen.findByRole("button", { name: "평일 KPI 스냅샷 선택" });
     expect(screen.queryByRole("form", { name: "예약 작업 추가" })).toBeNull();
@@ -200,11 +206,30 @@ describe("WorkflowScheduleOperations", () => {
   });
 
   it("allows update-only users to edit, save, and cancel without a create affordance", async () => {
-    renderPanel(api(), (action) => action !== "console.automate.schedule.create");
+    renderPanel(
+      api(),
+      (action) =>
+        action !== "console.automate.schedule.create" &&
+        action !== "console.automate.schedule.toggle",
+    );
     await userEvent.click(await screen.findByRole("button", { name: "예약 편집" }));
     expect(screen.getByRole("form", { name: "예약 작업 편집" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "예약 작업 추가" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "취소" }));
+    expect(screen.queryByRole("form", { name: "예약 작업 추가" })).toBeNull();
+  });
+
+  it("allows toggle-only users to change lifecycle without edit or create controls", async () => {
+    renderPanel(
+      api(),
+      (action) =>
+        action !== "console.automate.schedule.create" &&
+        action !== "console.automate.schedule.edit",
+    );
+    expect(
+      await screen.findByRole("button", { name: "예약 활성화" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "예약 편집" })).toBeNull();
     expect(screen.queryByRole("form", { name: "예약 작업 추가" })).toBeNull();
   });
 
@@ -255,6 +280,60 @@ function deferred<T>() {
 }
 
 describe("WorkflowScheduleOperations scope fences", () => {
+  it("does not post a revision after an A passkey step-up resolves in B", async () => {
+    const stepUp = deferred<{
+      ceremony_id: string;
+      credential: { id: string; type: string };
+    }>();
+    mockAssertPasskeyStepUp.mockReturnValueOnce(stepUp.promise);
+    const GET = vi.fn(async (path: string) => {
+      if (path === "/api/v1/workflow-studio/schedules")
+        return { data: { items: [schedule] }, response: new Response() };
+      if (path === "/api/v1/workflow-studio/definitions")
+        return {
+          data: {
+            items: [
+              {
+                id: schedule.definition_id,
+                display_name: "KPI 정의",
+                pending_version: 4,
+                pending_staged_by: "another-user",
+              },
+            ],
+          },
+          response: new Response(),
+        };
+      if (path === "/api/v1/workflow-studio/schedules/{id}/runs")
+        return { data: { items: [] }, response: new Response() };
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const POST = vi.fn(async () => ({
+      data: { cron_expr: schedule.cron_expr, timezone: schedule.timezone, fire_times: [] },
+      response: new Response(),
+    }));
+    const client = { GET, POST, PATCH: vi.fn() } as unknown as ConsoleApiClient;
+    const sessionA = { access_token: "token-a", org_id: "org-a", user_id: "a", roles: ["SUPER_ADMIN"], feature_grants: [] };
+    const sessionB = { ...sessionA, access_token: "token-b", org_id: "org-b", user_id: "b" };
+    const view = render(
+      <AuthTestProvider session={sessionA} overrides={{ api: client }}>
+        <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
+      </AuthTestProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "개정 승인" }));
+    view.rerender(
+      <AuthTestProvider session={sessionB} overrides={{ api: client }}>
+        <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
+      </AuthTestProvider>,
+    );
+    stepUp.resolve({ ceremony_id: "ceremony", credential: { id: "credential", type: "public-key" } });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      POST.mock.calls.some(([path]) => String(path).includes("/revisions/")),
+    ).toBe(false);
+  });
+
   it("does not reload or mutate B after an A toggle resolves late", async () => {
     const write = deferred<{ data: typeof schedule; response: Response }>();
     let scheduleLists = 0;

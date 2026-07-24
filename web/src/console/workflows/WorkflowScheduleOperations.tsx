@@ -28,7 +28,8 @@ const ACTIONS = {
   viewSchedules: "console.automate.tab.schedules.view",
   create: "console.automate.schedule.create",
   select: "console.automate.schedule.select",
-  update: "console.automate.schedule.toggle",
+  edit: "console.automate.schedule.edit",
+  toggle: "console.automate.schedule.toggle",
   run: "console.automate.schedule.run",
   approveRevision: "console.automate.schedule.revision.approve",
   withdrawRevision: "console.automate.schedule.revision.withdraw",
@@ -258,7 +259,7 @@ export function WorkflowScheduleOperations() {
     if (
       !selected ||
       pendingId ||
-      !gate.can(ACTIONS.update, { kind: "workflow_schedule", id: selected.id })
+      !gate.can(ACTIONS.toggle, { kind: "workflow_schedule", id: selected.id })
     )
       return;
     const expectedScope = scopeKey;
@@ -287,7 +288,7 @@ export function WorkflowScheduleOperations() {
   const save = useCallback(async () => {
     if (
       pendingId ||
-      !gate.can(editing ? ACTIONS.update : ACTIONS.create, {
+      !gate.can(editing ? ACTIONS.edit : ACTIONS.create, {
         kind: "workflow_schedule",
         id: selected?.id ?? "new",
       })
@@ -323,7 +324,7 @@ export function WorkflowScheduleOperations() {
   const startEdit = useCallback(() => {
     if (
       !selected ||
-      !gate.can(ACTIONS.update, { kind: "workflow_schedule", id: selected.id })
+      !gate.can(ACTIONS.edit, { kind: "workflow_schedule", id: selected.id })
     )
       return;
     setForm({
@@ -377,6 +378,7 @@ export function WorkflowScheduleOperations() {
       setError(undefined);
       try {
         const stepUp = action === "approve" ? await assertPasskeyStepUp(api) : undefined;
+        if (scopeRef.current !== expectedScope) return;
         const params = {
           path: { id: selectedDefinition.id, rev: selectedDefinition.pending_version },
         };
@@ -412,7 +414,7 @@ export function WorkflowScheduleOperations() {
     id: "new",
   });
   const canUpdateSelected = selected
-    ? gate.can(ACTIONS.update, { kind: "workflow_schedule", id: selected.id })
+    ? gate.can(ACTIONS.edit, { kind: "workflow_schedule", id: selected.id })
     : false;
   const showScheduleForm = editing ? canUpdateSelected : canCreateSchedules;
 
@@ -563,7 +565,7 @@ export function WorkflowScheduleOperations() {
                     <dd>{statusTone(selected.last_status)}</dd>
                   </dl>
                   <PolicyGated
-                    action={ACTIONS.update}
+                    action={ACTIONS.toggle}
                     resource={{ kind: "workflow_schedule", id: selected.id }}
                   >
                     <button
@@ -580,7 +582,7 @@ export function WorkflowScheduleOperations() {
                     </button>
                   </PolicyGated>
                   <PolicyGated
-                    action={ACTIONS.update}
+                    action={ACTIONS.edit}
                     resource={{ kind: "workflow_schedule", id: selected.id }}
                   >
                     <button type="button" style={button} onClick={startEdit}>
