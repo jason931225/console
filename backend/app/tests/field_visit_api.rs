@@ -38,7 +38,17 @@ async fn authenticated_runtime_role_completes_field_visit_story(pool: PgPool) {
     let customer = seed_customer(&pool, org, branch, "화성정밀").await;
     let site = seed_site(&pool, org, branch, customer, "화성정밀 1공장").await;
     let equipment = seed_equipment(&pool, org, branch, customer, site).await;
-    let work_order = seed_work_order(&pool, org, branch, customer, site, equipment, admin).await;
+    let work_order = seed_work_order(
+        &pool,
+        org,
+        branch,
+        customer,
+        site,
+        equipment,
+        admin,
+        "20260724-001",
+    )
+    .await;
     seed_attendance(&pool, org, branch, mechanic, work_order, site).await;
 
     // Intake: an internal ticket lands OPEN with an SLA due date but no site.
@@ -469,12 +479,62 @@ async fn field_console_denies_without_leakage(pool: PgPool) {
         "out-of-scope site link is 404: {denied}"
     );
 
-    // PBAC: a Login-only MEMBER can read but never triage or accept (403),
-    // and the error envelope stays generic.
+    // Linking an out-of-scope work order is equally a 404 — its existence in
+    // another branch must not surface as a wrong-site 409.
+    let equipment_b = seed_equipment(&pool, org, branch_b, customer_b, site_b).await;
+    let wo_b = seed_work_order(
+        &pool,
+        org,
+        branch_b,
+        customer_b,
+        site_b,
+        equipment_b,
+        admin_a,
+        "20260724-002",
+    )
+    .await;
+    let (status, denied) = send(
+        &rt,
+        &keys,
+        "POST",
+        &format!("{TICKETS}/{ticket_id}/link"),
+        &token_a,
+        Some(json!({"work_order_id": wo_b})),
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "out-of-scope work-order link is 404, not a 409 existence leak: {denied}"
+    );
+
+    // PBAC: the open-signup MEMBER tier is denied the field read gate
+    // (work_order_read_all, mirroring the shell nav gate) and every mutation.
     let customer_a = seed_customer(&pool, org, branch_a, "본지점 거래처").await;
     let site_a = seed_site(&pool, org, branch_a, customer_a, "본지점 현장").await;
-    let (status, _) = send(&rt, &keys, "GET", FIELD_SITES, &member_token, None, None).await;
-    assert_eq!(status, StatusCode::OK, "MEMBER holds Login-tier read");
+    let (status, denied) = send(&rt, &keys, "GET", FIELD_SITES, &member_token, None, None).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "field overview is work_order_read_all-gated: {denied}"
+    );
+    assert_eq!(denied["error"]["code"], "forbidden");
+    let (status, denied) = send(
+        &rt,
+        &keys,
+        "GET",
+        &format!("{FIELD_SITES}/{site_a}"),
+        &member_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "in-scope detail is 403 for MEMBER (out-of-scope stays 404): {denied}"
+    );
     let (status, denied) = send(
         &rt,
         &keys,
@@ -774,6 +834,7 @@ async fn seed_equipment(
         .bind(*branch.as_uuid()).bind(customer).bind(site).bind(format!("FLT{}-{:04}", "AB", 1)).bind(*org.as_uuid()).fetch_one(pool).await.unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn seed_work_order(
     pool: &PgPool,
     org: OrgId,
@@ -782,9 +843,10 @@ async fn seed_work_order(
     site: Uuid,
     equipment: Uuid,
     requested_by: UserId,
+    request_no: &str,
 ) -> Uuid {
-    sqlx::query_scalar("INSERT INTO work_orders (request_no, branch_id, equipment_id, customer_id, site_id, requested_by, status, symptom, org_id) VALUES ('20260724-001', $1, $2, $3, $4, $5, 'IN_PROGRESS', '리프트 체인 소음', $6) RETURNING id")
-        .bind(*branch.as_uuid()).bind(equipment).bind(customer).bind(site).bind(*requested_by.as_uuid()).bind(*org.as_uuid()).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("INSERT INTO work_orders (request_no, branch_id, equipment_id, customer_id, site_id, requested_by, status, symptom, org_id) VALUES ($7, $1, $2, $3, $4, $5, 'IN_PROGRESS', '리프트 체인 소음', $6) RETURNING id")
+        .bind(*branch.as_uuid()).bind(equipment).bind(customer).bind(site).bind(*requested_by.as_uuid()).bind(*org.as_uuid()).bind(request_no).fetch_one(pool).await.unwrap()
 }
 
 async fn seed_attendance(

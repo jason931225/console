@@ -43,7 +43,10 @@ conflict/invalid-transition→409, internal→500; DB details never leaked).
 
 #### A. `GET /api/v1/field/sites` — field overview (list layer)
 
-- Authz: principal via request-context; `authorize(Login, representative_branch)`;
+- Authz: principal via request-context;
+  `authorize(WorkOrderReadAll, representative_branch)` — the field read gate
+  mirrors the shell nav gate (`OPERATIONAL_ROLES x work_order_read_all`), so the
+  open-signup MEMBER tier is denied server-side (403), not just nav-hidden;
   rows confined to `BranchScope` (+ Postgres RLS as `mnt_rt`). Deny-by-omission:
   out-of-scope sites never appear in rows, counts, or totals.
 - Query: `q?` (site/customer substring), `customer_id?`, `sla?` (`OK|AT_RISK|BREACHED`),
@@ -72,8 +75,9 @@ FieldSiteRow {
 
 #### B. `GET /api/v1/field/sites/{id}` — site detail (object layer)
 
-- Authz: site branch resolved, `authorize(Login, site.branch_id)`; 404 (not 403)
-  when the site is outside scope — no existence leak.
+- Authz: site branch resolved, `authorize(WorkOrderReadAll, site.branch_id)`;
+  404 (not 403) when the site is outside scope — no existence leak; 403 only for
+  an in-scope site the principal's role may not read.
 - Response:
 
 ```
@@ -262,7 +266,7 @@ Mirror the production exemplar exactly (freshest convention):
 |---|---|
 | `FieldScreen.tsx` | `FieldScreen` session-fence remount wrapper (sessionKey·branchId·actorId·api-fence·capabilityKey) + `FieldScreenBody`: generation/AbortController fencing, `load()` on mount/session change, loading `role="status"`, error alert+retry, denied state when `!canRead`, list pane (stat bar derived from rows + search + rows) + detail pane (kv/links/acceptance action). className = plain string literals (purity gate — no cn/clsx). |
 | `fieldApi.ts` | `createFieldApi(api: ConsoleApiClient)` over generated `components["schemas"]` types: `listSites`, `getSite`, `listTickets`, `createTicket`, `assign`, `transition`, `comment`, `link`, `recordAcceptance`. `FieldApiError` with status. |
-| `fieldCapabilities.ts` | `deriveFieldCapabilities(gate, branchId)` from features: `work_order_read_all`→canRead(list), `daily/… n/a`; mapping: canRead = login-tier read (list/detail), canIntake = login, canTriage = assignee_manage (+cross-branch untriaged from projection), canComment = work_order_start, canAccept = assignee_manage. Pure projection; server re-authorizes everything. |
+| `fieldCapabilities.ts` | `deriveFieldCapabilities(gate, branchId)` from features: `work_order_read_all`→canRead(list), `daily/… n/a`; mapping: canRead = work_order_read_all (list/detail — matches the server gate), canIntake = login, canTriage = assignee_manage (+cross-branch untriaged from projection), canComment = work_order_start, canAccept = assignee_manage. Pure projection; server re-authorizes everything. |
 | `useFieldConsoleAuthz.ts` | copy of production pattern: `jwtFloorProjection` fail-closed floor → `fetchAuthzProjection` authoritative → `makePolicyGate`. |
 | `routeContract.ts` | `FieldRouteContract { branchId }` + structural fixture. |
 | `FieldConsoleRoute.tsx` | route adapter binding `useAuth` api/session → capabilities → screen. |

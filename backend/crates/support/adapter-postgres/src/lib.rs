@@ -1125,13 +1125,22 @@ impl PgSupportStore {
                 };
 
                 // A linked work order must be dispatched to the ticket's site
-                // (referential guardrail; the 0194 CHECK is the backstop).
+                // (referential guardrail; the 0194 CHECK is the backstop). The
+                // lookup is scope-confined like the site lookup: an
+                // out-of-scope work order is a 404, never a 409 existence leak.
                 let new_work_order = match command.work_order_id {
                     None => ticket.work_order_id,
                     Some(None) => None,
                     Some(Some(work_order_id)) => {
-                        let row = sqlx::query("SELECT site_id FROM work_orders WHERE id = $1")
-                            .bind(*work_order_id.as_uuid())
+                        let mut builder = QueryBuilder::<Postgres>::new(
+                            "SELECT site_id FROM work_orders WHERE id = ",
+                        );
+                        builder.push_bind(*work_order_id.as_uuid());
+                        builder.push(" AND (");
+                        push_site_scope(&mut builder, &command.branch_scope);
+                        builder.push(")");
+                        let row = builder
+                            .build()
                             .fetch_optional(tx.as_mut())
                             .await?
                             .ok_or_else(|| KernelError::not_found("work order was not found"))?;
@@ -1258,7 +1267,10 @@ impl PgSupportStore {
             .into());
         }
         let key = command.idempotency_key.trim().to_owned();
-        if key.len() < 16 || key.len() > 200 {
+        // Character count, not bytes — the 0194 CHECK is char_length, so a
+        // multibyte key must fail here as validation, not later as a 500.
+        let key_chars = key.chars().count();
+        if key_chars < 16 || key_chars > 200 {
             return Err(
                 KernelError::validation("Idempotency-Key must be 16..=200 characters").into(),
             );
@@ -1794,10 +1806,10 @@ fn push_branch_scope(
     }
 }
 
-/// Branch-scope predicate for `registry_sites` reads. Sites always carry a
-/// branch (NOT NULL), so unlike [`push_branch_scope`] there is no untriaged
-/// escape hatch: `All` sees every site, a branch list sees exactly its
-/// branches, and an empty list sees nothing (fail-closed).
+/// Branch-scope predicate for `registry_sites` / `work_orders` reads. Those
+/// rows always carry a branch (NOT NULL), so unlike [`push_branch_scope`] there
+/// is no untriaged escape hatch: `All` sees every row, a branch list sees
+/// exactly its branches, and an empty list sees nothing (fail-closed).
 fn push_site_scope(builder: &mut QueryBuilder<Postgres>, branch_scope: &BranchScope) {
     match branch_scope {
         BranchScope::All => {

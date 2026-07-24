@@ -77,7 +77,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
         '403':
-          description: Principal lacks Login on any branch.
+          description: Principal lacks work_order_read_all (the field read gate) on any branch.
           content:
             application/json:
               schema:
@@ -111,6 +111,12 @@ paths:
                 $ref: '#/components/schemas/FieldSiteDetail'
         '401':
           description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Principal lacks work_order_read_all on the site's branch (in-scope sites only).
           content:
             application/json:
               schema:

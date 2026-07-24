@@ -472,9 +472,12 @@ async fn list_field_sites(
     Query(query): Query<ListFieldSitesRequest>,
 ) -> Result<impl IntoResponse, RestError> {
     let principal = principal_from_headers(&state, &headers).await?;
+    // Field read gate mirrors the shell nav gate (work_order_read_all): the
+    // overview carries customer PII (contact, geo), so the open-signup MEMBER
+    // tier is denied server-side, not just nav-hidden.
     authorize(
         &principal,
-        Action::new(Feature::Login),
+        Action::new(Feature::WorkOrderReadAll),
         representative_branch(&principal.branch_scope)?,
     )
     .map_err(RestError::from_kernel)?;
@@ -507,7 +510,8 @@ async fn get_field_site(
         .site_branch_in_scope(site_id, &principal.branch_scope)
         .await
         .map_err(RestError::from_store)?;
-    authorize(&principal, Action::new(Feature::Login), branch).map_err(RestError::from_kernel)?;
+    authorize(&principal, Action::new(Feature::WorkOrderReadAll), branch)
+        .map_err(RestError::from_kernel)?;
     let detail = state
         .store
         .field_site_detail(site_id, &principal.branch_scope)
