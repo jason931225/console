@@ -238,12 +238,11 @@ async fn notification_routing_is_isolated_over_http_as_runtime_role(pool: PgPool
         ("notification.policy_set", 1),
         ("notification.policy_clear", 1),
     ] {
-        let rows: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM audit_events WHERE action = $1")
-                .bind(action)
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_events WHERE action = $1")
+            .bind(action)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(rows, expected, "audit readback for {action}");
     }
 }
