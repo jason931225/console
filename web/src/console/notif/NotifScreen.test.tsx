@@ -43,11 +43,12 @@ const darkRow = row("33333333-3333-4333-8333-333333333333", {
   link: { type: "screen", screen: "mywork" },
 });
 
+// English producer key on purpose: the chip must localize AND tone it as 결재.
 const approvalGroup: NotificationObjectGroup = {
   link: approvalRow.link,
   total: 3,
   unread: 2,
-  categories: [{ category: "결재", unread: 2 }],
+  categories: [{ category: "approval", unread: 2 }],
   latest: approvalRow,
   muted: false,
 };
@@ -64,7 +65,7 @@ function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 }
 
-type Handler = (request: Request, url: URL) => Response;
+type Handler = (request: Request, url: URL) => Response | Promise<Response>;
 
 function stubFetch(handlers: Partial<Record<string, Handler>>) {
   const calls: { method: string; url: URL; body: string }[] = [];
@@ -268,7 +269,9 @@ describe("NotifScreen", () => {
     await screen.findByRole("button", { name: approvalRow.text });
     await userEvent.click(screen.getByRole("button", { name: text.viewByObject }));
     expect(await screen.findByText("2/3")).toBeVisible();
-    expect(screen.getByText("결재 2")).toBeVisible();
+    const categoryChip = screen.getByText("결재 2");
+    expect(categoryChip).toBeVisible();
+    expect(categoryChip).toHaveAttribute("style", expect.stringContaining("var(--accent-bg)"));
     await userEvent.click(screen.getByRole("button", { name: text.mute }));
     const unmute = await screen.findByRole("button", { name: text.unmute });
     expect(unmute).toHaveAttribute("aria-pressed", "true");
@@ -276,6 +279,27 @@ describe("NotifScreen", () => {
     expect(await screen.findByRole("button", { name: text.mute })).toBeVisible();
     expect(calls.some((call) => call.method === "PUT" && call.body.includes("\"scope\":\"object\""))).toBe(true);
     expect(calls.some((call) => call.method === "DELETE" && call.url.pathname.endsWith(mutePolicy.id))).toBe(true);
+  });
+
+  it("keeps paging available when a row action interrupts an in-flight page load", async () => {
+    let listCalls = 0;
+    stubFetch({
+      ...happyHandlers(),
+      "GET /api/v1/me/notifications": () => {
+        listCalls += 1;
+        if (listCalls === 1) return json({ items: [approvalRow], next_cursor: "c1" });
+        return new Promise<Response>(() => undefined); // interrupted page load never settles
+      },
+      [`POST /api/v1/me/notifications/${approvalRow.id}/read`]: () =>
+        json({ ...approvalRow, unread: false, read_at: "2026-07-24T09:05:00Z" }),
+    });
+    renderScreen();
+    const item = (await screen.findByRole("button", { name: approvalRow.text })).closest("li");
+    if (!item) throw new Error("row list item missing");
+    await userEvent.click(screen.getByRole("button", { name: text.loadMore }));
+    await userEvent.click(within(item).getByRole("button", { name: text.markRead }));
+    expect(await within(item).findByRole("button", { name: text.markUnread })).toBeVisible();
+    expect(screen.getByRole("button", { name: text.loadMore })).toBeVisible();
   });
 
   it("drills a group to its object-filtered timeline and clears the filter", async () => {

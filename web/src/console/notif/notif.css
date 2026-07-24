@@ -148,7 +148,7 @@
   margin-top: 6px;
   border-radius: 50%;
   background: var(--signal);
-  opacity: 0.15;
+  opacity: 0.12;
 }
 
 .notif__row--unread .notif__dot { opacity: 1; }

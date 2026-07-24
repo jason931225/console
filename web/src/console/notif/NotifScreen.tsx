@@ -143,6 +143,8 @@ function NotifScreenInstance({ api, capabilities }: Props) {
       }));
       if (isCurrent(token)) setHeads((current) => ({ ...current, ...Object.fromEntries(entries) }));
     } catch (cause) {
+      // An aborted batch stored nothing — release the claims so a later load retries.
+      for (const link of distinct) knownHeads.current.delete(linkKey(link));
       if (!isAbort(cause)) throw cause;
     }
   }, [isCurrent, notifApi]);
@@ -221,6 +223,9 @@ function NotifScreenInstance({ api, capabilities }: Props) {
     const controller = new AbortController();
     operation.current = controller;
     const token = ++generation.current;
+    // The abort above may have cancelled an in-flight load whose finally can no
+    // longer clear its flag (stale token) — clear it here or loading sticks true.
+    setLoading(false);
     setBusy(true);
     setFailure(undefined);
     try {

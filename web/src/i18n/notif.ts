@@ -1,6 +1,7 @@
 // 알림 module copy — module-owned i18n resource (same mechanism as
 // production.ts / salesCrm.ts; the shared ko.ts stays integrator-owned).
 import { ko } from "./ko";
+import { categoryLabel } from "./notificationCategories";
 
 export const notifStrings = {
   title: "알림",
@@ -55,7 +56,9 @@ const CATEGORY_TONE: Record<
 export function notifCategoryTone(
   category: string,
 ): "accent" | "purple" | "info" | "ok" | "warn" | "neutral" {
-  return CATEGORY_TONE[category.trim()] ?? "neutral";
+  // Normalize open producer keys (approval/leave/…) through categoryLabel so a
+  // category always gets the same tone as its localized chip label.
+  return CATEGORY_TONE[categoryLabel(category).trim()] ?? "neutral";
 }
 
 /** Korean nav label for a screen-link group; the raw key when unregistered. */
