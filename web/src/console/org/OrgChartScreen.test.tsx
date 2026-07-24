@@ -258,6 +258,44 @@ describe("OrgChartScreen", () => {
     expect(screen.getByRole("button", { name: `${text.ocWaiting} (2/4)` })).toBeDisabled();
   });
 
+  it("gates 폐지 보관 behind the settlement checklist through the real completion route", async () => {
+    const settling: OrgChangeDetail = {
+      ...changeDetail,
+      kind: "DISSOLVE",
+      status: "SETTLING",
+      approval_steps: changeDetail.approval_steps.map((step) => ({ ...step, decision: "APPROVED" as const, decided_by: "hr-1" })),
+      settlement_items: [
+        { id: "st1", item_key: "ASSETS", label: "자산 이관·반납", done: true },
+        { id: "st2", item_key: "PAYROLL_SOCIAL_FINAL", label: "급여·4대보험·퇴직 정산", done: false },
+      ],
+    };
+    const complete = vi.fn();
+    const api = apiWith({ ...happyRoutes, "/api/v1/org-changes/{id}": () => ok(settling) });
+    vi.mocked(api.POST).mockImplementation(((path: string, init: { params?: { path?: Record<string, string> } }) => {
+      if (path === "/api/v1/org-changes/{id}/settlement-items/{itemId}/complete") {
+        complete(init.params?.path);
+        return Promise.resolve(ok({
+          ...settling,
+          settlement_items: settling.settlement_items.map((item) => ({ ...item, done: true })),
+        }));
+      }
+      return Promise.resolve(fail(404));
+    }) as never);
+    renderScreen(full, api);
+
+    await userEvent.click(await screen.findByRole("button", { name: /OC-2026-0001/ }));
+    await screen.findByRole("dialog");
+    const archive = await screen.findByRole("button", { name: text.ocArchive });
+    expect(archive).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: text.ocSettleAction }));
+    await waitFor(() => {
+      expect(complete).toHaveBeenCalledWith({ id: "oc-1", itemId: "st2" });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: text.ocArchive })).toBeEnabled();
+    });
+  });
+
   it("hides every approval and draft affordance from a read-only capability set", async () => {
     renderScreen(reader);
     await userEvent.click(await screen.findByRole("button", { name: /OC-2026-0001/ }));

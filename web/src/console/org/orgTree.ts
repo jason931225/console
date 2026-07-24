@@ -171,7 +171,18 @@ export function applyPendingOps(
             const source = units.find((unit) => unit.name === op.from_org_unit);
             if (source && target && source !== target) {
               target.total += source.total;
-              target.positions = [...target.positions, ...source.positions];
+              // Merge by title so the projected card keeps one row per 직급.
+              const merged = target.positions.map((position) => ({ ...position }));
+              for (const position of source.positions) {
+                const existing = merged.find((candidate) => candidate.title === position.title);
+                if (existing) {
+                  existing.total += position.total;
+                  existing.employees = [...existing.employees, ...position.employees];
+                } else {
+                  merged.push({ ...position });
+                }
+              }
+              target.positions = merged;
               units = units.filter((unit) => unit !== source);
             } else if (source) {
               source.name = op.to_org_unit;

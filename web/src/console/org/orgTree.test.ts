@@ -96,6 +96,10 @@ describe("applyPendingOps", () => {
     ], "코스");
     expect(merged[0].units).toHaveLength(1);
     expect(merged[0].units[0].total).toBe(10);
+    expect(merged[0].units[0].positions).toEqual([
+      { title: "팀장", total: 1, employees: [{ id: "e1", name: "김하나", status: "재직" }] },
+      { title: "사원", total: 9, employees: [{ id: "e2", name: "이두리", status: "재직" }] },
+    ]);
   });
 
   it("does not touch other companies and returns the same reference for empty ops", () => {

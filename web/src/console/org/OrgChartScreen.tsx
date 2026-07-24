@@ -272,6 +272,7 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
   const closeEdit = useCallback(() => {
     setEdit(false);
     setAddSiteOpen(false);
+    setGuard(undefined);
     if (pendingOps.length > 0) openDraftModal();
   }, [openDraftModal, pendingOps.length]);
 
@@ -418,16 +419,17 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
                 </div>
               </div>
               <div className="org-root-spine" aria-hidden="true" />
-              <div className="org-columns" role="tree" aria-label={text.tree}>
+              <div className="org-columns" role="group" aria-label={text.tree}>
                 {columns.map((column) => {
                   const open = openColumns.includes(column.company);
                   const editableSites = edit && column.company === siteOwner;
                   return (
-                    <div key={column.company} className="org-column" role="treeitem" aria-expanded={open}>
+                    <div key={column.company} className="org-column">
                       <div className="org-entity-card-row">
                         <button
                           type="button"
                           className={open ? "org-entity-card org-entity-card--open" : "org-entity-card"}
+                          aria-expanded={open}
                           title={open ? text.collapseAll : text.expandAll}
                           onClick={() => {
                             setOpenColumns((current) =>

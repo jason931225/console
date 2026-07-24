@@ -287,7 +287,7 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
               <span className={index === stage ? "org-step-chip org-step-chip--current" : index < stage ? "org-step-chip org-step-chip--done" : "org-step-chip"}>
                 {text.ocSteps[key]}
               </span>
-              {index < stepKeys.length - 1 && <span className="org-step-sep" aria-hidden="true">{">"}</span>}
+              {index < stepKeys.length - 1 && <span className="org-step-sep" aria-hidden="true">{"›"}</span>}
             </span>
           ))}
           {(status === "REJECTED" || status === "CANCELLED") && (
