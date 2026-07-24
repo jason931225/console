@@ -13,6 +13,7 @@ members = [
   "crates/consulting/*",
   "crates/compliance/*",
   "crates/docs/*",
+  "crates/evaluation/*",
   "crates/financial/*",
   "crates/finance-gl/*",
   "crates/governance/*",
@@ -191,6 +192,10 @@ mnt-docs-domain = { path = "crates/docs/domain" }
 mnt-docs-application = { path = "crates/docs/application" }
 mnt-docs-adapter-postgres = { path = "crates/docs/adapter-postgres" }
 mnt-docs-rest = { path = "crates/docs/rest" }
+mnt-evaluation-domain = { path = "crates/evaluation/domain" }
+mnt-evaluation-application = { path = "crates/evaluation/application" }
+mnt-evaluation-adapter-postgres = { path = "crates/evaluation/adapter-postgres" }
+mnt-evaluation-rest = { path = "crates/evaluation/rest" }
 mnt-financial-domain = { path = "crates/financial/domain" }
 mnt-financial-application = { path = "crates/financial/application" }
 mnt-financial-adapter-postgres = { path = "crates/financial/adapter-postgres" }

@@ -2797,6 +2797,8 @@ dependencies = [
  "mnt-docs-adapter-postgres",
  "mnt-docs-rest",
  "mnt-erp-domain",
+ "mnt-evaluation-adapter-postgres",
+ "mnt-evaluation-rest",
  "mnt-facilities-rest",
  "mnt-finance-gl-adapter-postgres",
  "mnt-finance-gl-rest",
@@ -3332,6 +3334,58 @@ version = "0.1.0"
 dependencies = [
  "mnt-kernel-core",
  "time",
+]
+
+[[package]]
+name = "mnt-evaluation-adapter-postgres"
+version = "0.1.0"
+dependencies = [
+ "mnt-evaluation-application",
+ "mnt-evaluation-domain",
+ "mnt-kernel-core",
+ "mnt-platform-db",
+ "mnt-platform-request-context",
+ "serde_json",
+ "sqlx 0.9.0",
+ "thiserror 2.0.18",
+ "time",
+ "uuid",
+]
+
+[[package]]
+name = "mnt-evaluation-application"
+version = "0.1.0"
+dependencies = [
+ "mnt-evaluation-domain",
+ "serde",
+ "serde_json",
+ "time",
+ "uuid",
+]
+
+[[package]]
+name = "mnt-evaluation-domain"
+version = "0.1.0"
+dependencies = [
+ "mnt-kernel-core",
+ "serde",
+]
+
+[[package]]
+name = "mnt-evaluation-rest"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "mnt-evaluation-adapter-postgres",
+ "mnt-evaluation-application",
+ "mnt-evaluation-domain",
+ "mnt-kernel-core",
+ "mnt-platform-auth",
+ "mnt-platform-authz",
+ "mnt-platform-request-context",
+ "serde",
+ "time",
+ "uuid",
 ]
 
 [[package]]
@@ -3917,6 +3971,7 @@ dependencies = [
 name = "mnt-logistics-adapter-postgres"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "mnt-kernel-core",
  "mnt-logistics-domain",
  "mnt-platform-db",
