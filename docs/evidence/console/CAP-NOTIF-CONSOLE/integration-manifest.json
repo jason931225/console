@@ -1,0 +1,41 @@
+{
+  "lane": "CAP-NOTIF-CONSOLE",
+  "stage": "1-scout",
+  "collisionRootRequests": {
+    "web/src/console/shell/nav.ts": {
+      "MOUNTED_SCREEN_KEYS": { "add": ["notif"] },
+      "EXPOSED_SCREEN_KEYS": { "unchanged": true, "note": "lands DARK per ADR-0025; nav item { screen: 'notif', labelKey: 'console.shell.nav.notif', icon: 'bell' } already present, ungated" }
+    },
+    "web/src/console/screens/registry.ts": {
+      "SCREEN_REGISTRY": { "add": { "notif": { "component": "NotifScreenBody", "import": "../notif" } } }
+    },
+    "backend/openapi/openapi.yaml": {
+      "tag": "me",
+      "addOperations": [
+        { "method": "get", "path": "/api/v1/me/notifications/by-object", "operationId": "listMyNotificationObjectGroups", "query": ["unread?", "before?", "limit?"], "response200": "NotificationObjectGroupPage" },
+        { "method": "post", "path": "/api/v1/me/notifications/{id}/unread", "operationId": "markMyNotificationUnread", "response200": "NotificationSummary", "errors": [401, 404, 503] },
+        { "method": "get", "path": "/api/v1/me/notification-policies", "operationId": "listMyNotificationPolicies", "response200": "NotificationPolicyList" },
+        { "method": "put", "path": "/api/v1/me/notification-policies", "operationId": "upsertMyNotificationPolicy", "requestBody": "UpsertNotificationPolicyRequest", "response200": "NotificationPolicySummary", "errors": [401, 422, 503] },
+        { "method": "delete", "path": "/api/v1/me/notification-policies/{id}", "operationId": "deleteMyNotificationPolicy", "response204": true, "errors": [401, 404, 503] }
+      ],
+      "amendSchemas": {
+        "NotificationSummary": { "addProperty": { "muted": "boolean (computed vs caller's policies; default false)" } },
+        "NotificationCountsSummary": { "addProperty": { "muted_unread": "int64 (unread suppressed by mute policies; total_unread/by_category exclude muted)" } }
+      },
+      "addSchemas": ["NotificationObjectGroup", "NotificationObjectGroupPage", "NotificationPolicySummary", "NotificationPolicyList", "UpsertNotificationPolicyRequest"]
+    },
+    "clients/{ts,kotlin,swift}": { "action": "regenerate-and-commit after openapi delta (3 CI drift gates)" },
+    "backend/crates/platform/db/migrations": {
+      "provisionalNumber": "0196",
+      "file": "0196_notification_policies_and_object_agg.sql",
+      "note": "local head is 0180; integrator takes next free number immediately before push (cross-lane collision rule)",
+      "ddlSource": "design-contract.md §2"
+    }
+  },
+  "ownershipRootOutputs": [
+    "docs/evidence/console/CAP-NOTIF-CONSOLE/design-spec.md",
+    "docs/evidence/console/CAP-NOTIF-CONSOLE/gap-analysis.md",
+    "docs/evidence/console/CAP-NOTIF-CONSOLE/design-contract.md",
+    "docs/evidence/console/CAP-NOTIF-CONSOLE/integration-manifest.json"
+  ]
+}
