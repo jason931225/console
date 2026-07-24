@@ -17,10 +17,10 @@ import type {
 const NS = "console.modules.compliance";
 
 export const COMPLIANCE_ACTIONS = {
-  read: "compliance_obligation_read",
-  manage: "compliance_obligation_manage",
-  regulationRead: "compliance_regulation_read",
-  frameworkRead: "compliance_framework_read",
+  read: "compliance_domain_read",
+  manage: "compliance_domain_manage",
+  regulationRead: "compliance_domain_read",
+  frameworkRead: "compliance_domain_read",
   frameworkManage: "compliance_framework_manage",
   evidenceLink: "compliance_evidence_link",
   domainManage: "compliance_domain_manage",

@@ -374,6 +374,16 @@ fn require_compliance_evidence_link(principal: &Principal) -> Result<(), RestErr
     require_org_catalog_feature(principal, Feature::ComplianceEvidenceLink)
 }
 
+fn require_evidence_link_with_read(principal: &Principal) -> Result<(), RestError> {
+    require_compliance_read(principal)?;
+    require_compliance_evidence_link(principal)
+}
+
+fn require_evidence_accept_with_read(principal: &Principal) -> Result<(), RestError> {
+    require_compliance_read(principal)?;
+    require_compliance_manage(principal)
+}
+
 fn require_org_catalog_feature(principal: &Principal, feature: Feature) -> Result<(), RestError> {
     match &principal.branch_scope {
         BranchScope::All => authorize_org_wide(principal, Action::new(feature)),
@@ -747,7 +757,7 @@ async fn accept_evidence_binding(
     Path(id): Path<String>,
 ) -> Result<Json<mnt_compliance_domain::EvidenceBinding>, RestError> {
     let principal = principal_from_headers(&state, &headers).await?;
-    require_compliance_manage(&principal)?;
+    require_evidence_accept_with_read(&principal)?;
     let id = id.parse().map_err(|_| {
         RestError::from_kernel(KernelError::validation(
             "evidence binding id must be a UUID",
@@ -772,7 +782,7 @@ async fn create_evidence_binding(
     Json(body): Json<CreateEvidenceBindingRequest>,
 ) -> Result<Json<mnt_compliance_domain::EvidenceBinding>, RestError> {
     let principal = principal_from_headers(&state, &headers).await?;
-    require_compliance_evidence_link(&principal)?;
+    require_evidence_link_with_read(&principal)?;
     let result = state
         .store
         .create_evidence_binding(CreateEvidenceBindingCommand {
@@ -1389,9 +1399,44 @@ impl IntoResponse for RestError {
 
 #[cfg(test)]
 mod tests {
-    use super::{LocationPingRequest, RestError};
+    use super::{
+        LocationPingRequest, RestError, require_evidence_accept_with_read,
+        require_evidence_link_with_read,
+    };
     use axum::{http::StatusCode, response::IntoResponse};
-    use mnt_kernel_core::KernelError;
+    use mnt_kernel_core::{BranchScope, KernelError, OrgId, UserId};
+    use mnt_platform_authz::{EffectiveFeatureGrant, Feature, PermissionLevel, Principal};
+    use std::collections::BTreeSet;
+
+    fn principal_with(feature: Feature) -> Principal {
+        Principal::new(
+            UserId::new(),
+            OrgId::knl(),
+            BTreeSet::new(),
+            BranchScope::All,
+        )
+        .with_effective_feature_grants(vec![EffectiveFeatureGrant::new(
+            feature,
+            PermissionLevel::Allow,
+            BranchScope::All,
+        )])
+    }
+
+    #[test]
+    fn evidence_link_without_compliance_read_is_forbidden() {
+        let error =
+            require_evidence_link_with_read(&principal_with(Feature::ComplianceEvidenceLink))
+                .expect_err("an action grant cannot imply compliance catalog read");
+        assert_eq!(error.into_response().status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn evidence_accept_without_compliance_read_is_forbidden() {
+        let error =
+            require_evidence_accept_with_read(&principal_with(Feature::ComplianceDomainManage))
+                .expect_err("an action grant cannot imply compliance catalog read");
+        assert_eq!(error.into_response().status(), StatusCode::FORBIDDEN);
+    }
 
     #[test]
     fn evidence_acceptance_error_mapping_preserves_forbidden_conflict_and_unavailable_truth() {

@@ -19,13 +19,6 @@ import { complianceModuleScreen } from "./complianceModuleScreen";
 import { EvidenceBindingWorkbench } from "./EvidenceBindingWorkbench";
 
 const COMPLIANCE_READ_ROLES = new Set(["EXECUTIVE", "SUPER_ADMIN"]);
-const INTEGRITY_FINDINGS_READ = "integrity_findings_read";
-const READ_ACTIONS = new Set<string>([
-  COMPLIANCE_ACTIONS.read,
-  COMPLIANCE_ACTIONS.regulationRead,
-  COMPLIANCE_ACTIONS.frameworkRead,
-  COMPLIANCE_ACTIONS.audit,
-]);
 
 export function ComplianceModuleScreenBody() {
   const { api, session } = useAuth();
@@ -39,23 +32,23 @@ export function ComplianceModuleScreenBody() {
       ? `${session.org_id}:${session.user_id}:${session.client_session_incarnation}`
       : undefined;
 
+  const canRead =
+    (roles?.some((role) => COMPLIANCE_READ_ROLES.has(role)) ?? false) ||
+    (featureGrants?.includes(COMPLIANCE_ACTIONS.read) ?? false);
   const gate = useMemo<PolicyGate>(
     () => ({
       can: (action) => {
-        if (featureGrants?.includes(action)) return true;
-        if (READ_ACTIONS.has(action)) {
-          return (
-            (roles?.some((role) => COMPLIANCE_READ_ROLES.has(role)) ?? false) ||
-            (featureGrants?.includes(INTEGRITY_FINDINGS_READ) ?? false)
-          );
-        }
-        return false;
+        if (
+          action === COMPLIANCE_ACTIONS.read ||
+          action === COMPLIANCE_ACTIONS.regulationRead ||
+          action === COMPLIANCE_ACTIONS.frameworkRead
+        )
+          return canRead;
+        return featureGrants?.includes(action) ?? false;
       },
     }),
-    [featureGrants, roles],
+    [canRead, featureGrants],
   );
-
-  const canRead = gate.can(COMPLIANCE_ACTIONS.read);
   // The backend permits this org-wide action to SUPER_ADMIN or an org-wide
   // custom grant. This is a conservative UI hint; the REST boundary remains
   // authoritative for every submission.
