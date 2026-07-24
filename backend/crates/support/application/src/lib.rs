@@ -3,10 +3,13 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use mnt_kernel_core::{
-    AuditAction, AuditEvent, BranchId, BranchScope, KernelError, SupportTicketCommentId,
-    SupportTicketId, Timestamp, TraceContext, UserId,
+    AuditAction, AuditEvent, BranchId, BranchScope, CustomerId, KernelError, SiteId,
+    SupportTicketCommentId, SupportTicketId, Timestamp, TraceContext, UserId, WorkOrderId,
 };
-use mnt_support_domain::{TicketCategory, TicketOrigin, TicketPriority, TicketStatus};
+use mnt_support_domain::{
+    AcceptanceChannel, AcceptanceKind, FieldSlaState, TicketCategory, TicketOrigin, TicketPriority,
+    TicketStatus,
+};
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -78,6 +81,44 @@ pub struct AddCommentCommand {
     pub occurred_at: Timestamp,
 }
 
+/// Bind a ticket to the field object chain: a customer site and/or the work
+/// order dispatched for the visit. `Some(None)` clears a link (explicit JSON
+/// `null`); `None` leaves it untouched. Linking a site to an untriaged CUSTOMER
+/// ticket also sets `branch_id` from the site — that IS triage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkTicketCommand {
+    pub actor: UserId,
+    pub ticket_id: SupportTicketId,
+    /// Principal's branch scope: the site lookup is confined to it so a
+    /// branch-scoped manager can only link sites they can see (deny-by-omission).
+    pub branch_scope: BranchScope,
+    pub site_id: Option<Option<SiteId>>,
+    pub work_order_id: Option<Option<WorkOrderId>>,
+    pub trace: TraceContext,
+    pub occurred_at: Timestamp,
+}
+
+/// Record the customer's acceptance verdict for a RESOLVED ticket — the audited
+/// closure evidence of the field story. Drives the existing FSM edges
+/// (accept ⇒ CLOSED, decline ⇒ reopen IN_PROGRESS + customer-visible comment).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecordAcceptanceCommand {
+    pub actor: UserId,
+    pub ticket_id: SupportTicketId,
+    pub kind: AcceptanceKind,
+    pub channel: AcceptanceChannel,
+    /// Customer-side acknowledger name — a business fact like `requester_name`;
+    /// stored, never logged to traces or audit snapshots.
+    pub accepted_by: String,
+    pub note: Option<String>,
+    /// `Idempotency-Key` header value (16..=200 chars, sibling-pilot semantics):
+    /// a replay with the same key + fingerprint returns the stored acceptance;
+    /// reuse with a different request is a conflict.
+    pub idempotency_key: String,
+    pub trace: TraceContext,
+    pub occurred_at: Timestamp,
+}
+
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
@@ -104,6 +145,24 @@ pub struct ListTicketsQuery {
     /// `(created_at DESC, id)` ordering. `None` starts from the first page.
     /// Mirrors the messenger keyset-pagination pattern.
     pub cursor: Option<SupportTicketId>,
+    /// Restrict to tickets linked to one customer site (field-console queue).
+    pub site_id: Option<SiteId>,
+}
+
+/// Branch-scoped field-site overview query (list layer of `/console/field`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListFieldSitesQuery {
+    pub branch_scope: BranchScope,
+    /// Substring match on site name or customer name.
+    pub q: Option<String>,
+    pub customer_id: Option<CustomerId>,
+    /// Filter on the derived per-site SLA state.
+    pub sla: Option<FieldSlaState>,
+    /// Page size; the adapter clamps to `1..=100`.
+    pub limit: Option<i64>,
+    /// Keyset cursor: the id of the last site from the previous page, on the
+    /// `(site_name, site_id)` ascending ordering.
+    pub cursor: Option<SiteId>,
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +195,13 @@ pub struct TicketSummary {
     pub resolved_at: Option<Timestamp>,
     #[serde(with = "time::serde::rfc3339::option")]
     pub closed_at: Option<Timestamp>,
+    /// Field object chain (0194, all additive): the linked customer site, its
+    /// customer (denormalized on link), and the dispatched work order.
+    pub site_id: Option<SiteId>,
+    pub site_name: Option<String>,
+    pub customer_id: Option<CustomerId>,
+    pub customer_name: Option<String>,
+    pub work_order_id: Option<WorkOrderId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -168,6 +234,140 @@ pub struct TicketPage {
     pub items: Vec<TicketSummary>,
     pub next_cursor: Option<SupportTicketId>,
     pub total: i64,
+}
+
+// ---------------------------------------------------------------------------
+// Field read models (customer-site overview / detail — `/console/field`)
+// ---------------------------------------------------------------------------
+
+/// One row of the field-site overview: the site, its customer, and the
+/// aggregated issue/visit/SLA state — every count derives from the same query
+/// as the rows (stat bar honesty, §4-11).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FieldSiteRow {
+    pub site_id: SiteId,
+    pub site_name: String,
+    pub branch_id: BranchId,
+    pub customer_id: CustomerId,
+    pub customer_name: String,
+    pub address: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    /// Tickets in OPEN/IN_PROGRESS/ON_HOLD linked to the site.
+    pub open_ticket_count: i64,
+    /// Open tickets whose SLA `due_at` has already passed.
+    pub breached_ticket_count: i64,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub next_due_at: Option<Timestamp>,
+    /// Work orders for the site in a non-terminal status.
+    pub active_work_order_count: i64,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub last_arrival_at: Option<Timestamp>,
+    pub sla: FieldSlaState,
+}
+
+/// One keyset page of field sites plus the unpaged `total` for the same
+/// filters. `next_cursor` is the id to pass as `cursor` for the next page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FieldSitePage {
+    pub items: Vec<FieldSiteRow>,
+    pub next_cursor: Option<SiteId>,
+    pub total: i64,
+}
+
+/// Site master facts on the field detail panel (registry-owned data, read-only
+/// projection here; edits go through the registry API).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FieldSiteSummary {
+    pub id: SiteId,
+    pub name: String,
+    pub branch_id: BranchId,
+    pub customer_id: CustomerId,
+    pub customer_name: String,
+    pub address: Option<String>,
+    pub province: Option<String>,
+    pub city: Option<String>,
+    pub postal_code: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub geofence_radius_m: Option<f64>,
+    pub contact_name: Option<String>,
+    pub contact_phone: Option<String>,
+}
+
+/// Per-site SLA rollup: current open/breached state plus the 90-day resolution
+/// record (resolved before vs after `due_at`; tickets without a due date are
+/// excluded rather than guessed).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldSlaSummary {
+    pub state: FieldSlaState,
+    pub open: i64,
+    pub breached: i64,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub next_due_at: Option<Timestamp>,
+    pub resolved_within_sla_90d: i64,
+    pub resolved_breached_90d: i64,
+}
+
+/// Read-only reference to a work order dispatched to the site. Status/priority/
+/// result are the workorder crate's 16-state vocabulary rendered as chips; all
+/// mutations go through the workorder API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldWorkOrderRef {
+    pub id: WorkOrderId,
+    pub request_no: String,
+    pub status: String,
+    pub priority: String,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub target_due_at: Option<Timestamp>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub report_submitted_at: Option<Timestamp>,
+    pub result_type: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: Timestamp,
+}
+
+/// A durable check-in/out business fact (`site_attendance_events`, compliance-
+/// owned; carries no coordinates and survives consent withdrawal).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldAttendanceEvent {
+    pub user_id: UserId,
+    /// Same-org display-name lookup; `None` for a deleted user.
+    pub user_name: Option<String>,
+    pub work_order_id: WorkOrderId,
+    /// `ARRIVAL` or `DEPARTURE` (compliance vocabulary, read-only here).
+    pub kind: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub occurred_at: Timestamp,
+}
+
+/// Recorded customer acceptance (append-only closure evidence).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TicketAcceptanceView {
+    pub id: uuid::Uuid,
+    pub ticket_id: SupportTicketId,
+    pub kind: AcceptanceKind,
+    pub channel: AcceptanceChannel,
+    pub accepted_by: String,
+    pub note: Option<String>,
+    pub recorded_by_user_id: UserId,
+    /// Same-org display-name lookup; `None` for a deleted recorder.
+    pub recorded_by_name: Option<String>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub occurred_at: Timestamp,
+}
+
+/// Object + history layers of the field detail panel: the site, its SLA rollup,
+/// and the traversable downstream chain (tickets, work orders, attendance,
+/// acceptances — each capped at 50, most relevant first).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FieldSiteDetail {
+    pub site: FieldSiteSummary,
+    pub sla: FieldSlaSummary,
+    pub tickets: Vec<TicketSummary>,
+    pub work_orders: Vec<FieldWorkOrderRef>,
+    pub attendance: Vec<FieldAttendanceEvent>,
+    pub acceptances: Vec<TicketAcceptanceView>,
 }
 
 /// Audience filter for [`TicketDetail`] reads. The customer-visible path drops

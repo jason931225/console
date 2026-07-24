@@ -214,6 +214,117 @@ impl TicketPriority {
     }
 }
 
+/// Customer acceptance verdict for a resolved field ticket. Acceptance drives
+/// the EXISTING ticket FSM edges (`RESOLVED → CLOSED` on accept,
+/// `RESOLVED → IN_PROGRESS` reopen on decline) — it adds no new states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AcceptanceKind {
+    CustomerAccepted,
+    CustomerDeclined,
+}
+
+impl AcceptanceKind {
+    #[must_use]
+    pub const fn as_db_str(self) -> &'static str {
+        match self {
+            Self::CustomerAccepted => "CUSTOMER_ACCEPTED",
+            Self::CustomerDeclined => "CUSTOMER_DECLINED",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Result<Self, KernelError> {
+        match value {
+            "CUSTOMER_ACCEPTED" => Ok(Self::CustomerAccepted),
+            "CUSTOMER_DECLINED" => Ok(Self::CustomerDeclined),
+            other => Err(KernelError::validation(format!(
+                "unknown support acceptance kind {other:?}"
+            ))),
+        }
+    }
+
+    /// The ticket status this acceptance verdict drives the FSM to, from
+    /// RESOLVED: accepted closes the ticket, declined reopens it.
+    #[must_use]
+    pub const fn transition_target(self) -> TicketStatus {
+        match self {
+            Self::CustomerAccepted => TicketStatus::Closed,
+            Self::CustomerDeclined => TicketStatus::InProgress,
+        }
+    }
+}
+
+/// How the customer acknowledgement was received (curated enum, §4-19; the
+/// unauthenticated customer ack link is a future charter — acceptance is
+/// staff-recorded today).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AcceptanceChannel {
+    InPerson,
+    Phone,
+    Email,
+    Messenger,
+}
+
+impl AcceptanceChannel {
+    #[must_use]
+    pub const fn as_db_str(self) -> &'static str {
+        match self {
+            Self::InPerson => "IN_PERSON",
+            Self::Phone => "PHONE",
+            Self::Email => "EMAIL",
+            Self::Messenger => "MESSENGER",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Result<Self, KernelError> {
+        match value {
+            "IN_PERSON" => Ok(Self::InPerson),
+            "PHONE" => Ok(Self::Phone),
+            "EMAIL" => Ok(Self::Email),
+            "MESSENGER" => Ok(Self::Messenger),
+            other => Err(KernelError::validation(format!(
+                "unknown support acceptance channel {other:?}"
+            ))),
+        }
+    }
+}
+
+/// Deterministic per-site SLA state over the site's OPEN/IN_PROGRESS/ON_HOLD
+/// tickets (§4-28 no-AI; §4-26 SLA — contractual, site-scoped — never SLO):
+/// BREACHED if any `due_at < now`; else AT_RISK if any `due_at < now + 24h`;
+/// else OK. The SQL derivation in the adapter is the single evaluation site;
+/// this enum is its typed value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum FieldSlaState {
+    Ok,
+    AtRisk,
+    Breached,
+}
+
+impl FieldSlaState {
+    #[must_use]
+    pub const fn as_db_str(self) -> &'static str {
+        match self {
+            Self::Ok => "OK",
+            Self::AtRisk => "AT_RISK",
+            Self::Breached => "BREACHED",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Result<Self, KernelError> {
+        match value {
+            "OK" => Ok(Self::Ok),
+            "AT_RISK" => Ok(Self::AtRisk),
+            "BREACHED" => Ok(Self::Breached),
+            other => Err(KernelError::validation(format!(
+                "unknown field SLA state {other:?}"
+            ))),
+        }
+    }
+}
+
 /// Maps a priority to its SLA window. Defaults match [`TicketPriority::default_sla`];
 /// kept as a struct so deployment-specific targets can override the constants
 /// without touching call sites.
@@ -369,6 +480,63 @@ mod tests {
             policy.due_at(TicketPriority::Low, created).unwrap(),
             created + Duration::days(7)
         );
+    }
+
+    #[test]
+    fn acceptance_kind_drives_only_existing_fsm_edges_from_resolved() {
+        // ACCEPTED closes; DECLINED reopens — both must be legal RESOLVED edges.
+        for kind in [
+            AcceptanceKind::CustomerAccepted,
+            AcceptanceKind::CustomerDeclined,
+        ] {
+            let target = kind.transition_target();
+            let transition = TicketStatus::Resolved
+                .transition_to(target)
+                .unwrap_or_else(|_| panic!("RESOLVED -> {target} must be a legal FSM edge"));
+            assert_eq!(transition.from, TicketStatus::Resolved);
+        }
+        assert_eq!(
+            AcceptanceKind::CustomerAccepted.transition_target(),
+            TicketStatus::Closed
+        );
+        assert_eq!(
+            AcceptanceKind::CustomerDeclined.transition_target(),
+            TicketStatus::InProgress
+        );
+    }
+
+    #[test]
+    fn field_enums_roundtrip_db_strings() {
+        for kind in [
+            AcceptanceKind::CustomerAccepted,
+            AcceptanceKind::CustomerDeclined,
+        ] {
+            assert_eq!(AcceptanceKind::from_db_str(kind.as_db_str()).unwrap(), kind);
+        }
+        for channel in [
+            AcceptanceChannel::InPerson,
+            AcceptanceChannel::Phone,
+            AcceptanceChannel::Email,
+            AcceptanceChannel::Messenger,
+        ] {
+            assert_eq!(
+                AcceptanceChannel::from_db_str(channel.as_db_str()).unwrap(),
+                channel
+            );
+        }
+        for state in [
+            FieldSlaState::Ok,
+            FieldSlaState::AtRisk,
+            FieldSlaState::Breached,
+        ] {
+            assert_eq!(
+                FieldSlaState::from_db_str(state.as_db_str()).unwrap(),
+                state
+            );
+        }
+        assert!(AcceptanceKind::from_db_str("BOGUS").is_err());
+        assert!(AcceptanceChannel::from_db_str("FAX").is_err());
+        assert!(FieldSlaState::from_db_str("SLO").is_err());
     }
 
     #[test]
