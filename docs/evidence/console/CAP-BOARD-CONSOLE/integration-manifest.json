@@ -1,0 +1,35 @@
+{
+  "lane": "CAP-BOARD-CONSOLE",
+  "story": "STORY-BOARD-001",
+  "route": "/console/board",
+  "sharedRootEntries": [
+    {
+      "file": "web/src/console/shell/nav.ts",
+      "change": "append \"board\" to MOUNTED_SCREEN_KEYS (nav item {screen:\"board\", labelKey:\"console.shell.nav.board\", icon:\"megaphone\"} already exists ungated in the comms group; EXPOSED_SCREEN_KEYS untouched per ADR-0025)"
+    },
+    {
+      "file": "web/src/console/screens/registry.ts",
+      "change": "add `board: BoardScreenBody` importing from \"../board\" (no-props ComponentType)"
+    },
+    {
+      "file": "web/src/i18n/ko.ts",
+      "change": "none — console.shell.nav.board already present; module strings live in the new module-owned web/src/i18n/board.ts"
+    },
+    {
+      "file": "backend/openapi/openapi.yaml",
+      "change": "tag `notices` (exists): add PATCH /api/v1/notices/{id} (UpdateNoticeDraftRequest -> NoticeSummary; 401/403/404/409/422) and GET /api/v1/notices/{id}/receipts (NoticeReceiptPage; 401/403/404; query acknowledged/limit/offset); extend NoticeSummary with category, audience_scope, audience_branches, my_receipt, progress; extend CreateNoticeDraftRequest with category?, audience?; add NoticeAudienceInput, NoticeReceipt, NoticeReceiptPage schemas; publish gains 422 (empty audience). Field shapes: docs/evidence/console/CAP-BOARD-CONSOLE/design-contract.md §4"
+    },
+    {
+      "file": "clients/{ts,kotlin,swift}",
+      "change": "regenerate + commit after the openapi change (openapi_drift + check:api-drift:portable/swift gates)"
+    },
+    {
+      "file": "backend/crates/platform/db/migrations",
+      "change": "adopt provisional 0197_notice_audience_and_category.sql (DDL in design-contract.md §2) under the next free migration number at consolidation"
+    },
+    {
+      "file": "web/src/console/module/config.ts",
+      "change": "ONLY IF the board build needs a generic-contract extension (per-row detail prog / detail action visibility predicate); prefer expressing board within the existing ModuleConfig shape first"
+    }
+  ]
+}
