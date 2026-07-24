@@ -36,6 +36,7 @@ members = [
   "crates/comms/*",
   "crates/payroll/*",
   "crates/production/*",
+  "crates/recruiting/*",
   "crates/policy/*",
   "crates/erp/*",
   "crates/platform/*",
@@ -214,6 +215,10 @@ mnt-logistics-domain = { path = "crates/logistics/domain" }
 mnt-logistics-application = { path = "crates/logistics/application" }
 mnt-logistics-adapter-postgres = { path = "crates/logistics/adapter-postgres" }
 mnt-logistics-rest = { path = "crates/logistics/rest" }
+mnt-recruiting-domain = { path = "crates/recruiting/domain" }
+mnt-recruiting-application = { path = "crates/recruiting/application" }
+mnt-recruiting-adapter-postgres = { path = "crates/recruiting/adapter-postgres" }
+mnt-recruiting-rest = { path = "crates/recruiting/rest" }
 mnt-support-domain = { path = "crates/support/domain" }
 mnt-support-application = { path = "crates/support/application" }
 mnt-support-adapter-postgres = { path = "crates/support/adapter-postgres" }
