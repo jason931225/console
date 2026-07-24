@@ -575,6 +575,19 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
     .await
     .unwrap();
     assert_eq!(submissions, 3);
+    // Remaining mutation classes: rejected requests (409/422) write nothing.
+    for (action, expected) in [
+        ("evaluation.subject.added", 2_i64),
+        ("evaluation.goals.replaced", 2),
+        ("evaluation.review.saved", 5),
+    ] {
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_events WHERE action = $1")
+            .bind(action)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, expected, "{action}");
+    }
 }
 
 #[sqlx::test(migrations = "../crates/platform/db/migrations")]
