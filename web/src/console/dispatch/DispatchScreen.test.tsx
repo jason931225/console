@@ -12,13 +12,13 @@ import type { DispatchCapabilities } from "./dispatchCapabilities";
 import { DispatchScreen } from "./DispatchScreen";
 
 const manager: DispatchCapabilities = {
-  canRead: true, canRequest: true, canRespond: false, canAssign: true, canReadHistory: true,
+  canRead: true, canRequest: true, canAssign: true, canReadHistory: true,
 };
 const readOnly: DispatchCapabilities = {
-  canRead: true, canRequest: false, canRespond: false, canAssign: false, canReadHistory: false,
+  canRead: true, canRequest: false, canAssign: false, canReadHistory: false,
 };
 const denied: DispatchCapabilities = {
-  canRead: false, canRequest: false, canRespond: false, canAssign: false, canReadHistory: false,
+  canRead: false, canRequest: false, canAssign: false, canReadHistory: false,
 };
 
 const soon = () => new Date(Date.now() + 38 * 60000).toISOString();
@@ -266,6 +266,55 @@ describe("DispatchScreen", () => {
     );
     expect(await screen.findByText(text.actions.assigned("WO-2643", "박정비"))).toBeVisible();
     expect(await screen.findByText(text.broadcast.assignedDone("박정비"))).toBeVisible();
+  });
+
+  it("clears the busy fence after a successful action so the console stays live", async () => {
+    let started = false;
+    const api = client({
+      [queuePath]: () => ok({ items: [started ? broadcasting() : item()] }),
+      [usersPath]: rosterPage,
+      [candidatesPath]: () => ok({ items: [] }),
+      [responsesPath]: () => ok({ items: [] }),
+      [auditPath]: () => ok({ items: [] }),
+    });
+    vi.mocked(api.POST).mockImplementation((() => {
+      started = true;
+      return Promise.resolve(ok({ id: "d-1" }));
+    }) as never);
+    renderScreen(manager, api);
+    await userEvent.click(await screen.findByRole("button", { name: /WO-2643/ }));
+    await userEvent.click(screen.getByRole("button", { name: text.actions.requestDispatch }));
+    expect(await screen.findByText(text.actions.requested("WO-2643"))).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "false");
+    });
+  });
+
+  it("withholds 배차 확정 while broadcasting — force-assign is only legal from MANAGER_FORCE_PENDING", async () => {
+    const api = client({
+      [queuePath]: () =>
+        ok({ items: [item({ dispatch: { ...forcePending(), status: "BROADCASTING" } })] }),
+      [usersPath]: rosterPage,
+      [candidatesPath]: () =>
+        ok({
+          items: [
+            {
+              mechanic_id: "mech-2",
+              score_milli: 1200,
+              gps_ranked: false,
+              workload: { p1: 0, p2: 0, p3: 0, other: 0 },
+              score_reason: "schedule",
+            },
+          ],
+        }),
+      [responsesPath]: () => ok({ items: [] }),
+      [auditPath]: () => ok({ items: [] }),
+    });
+    renderScreen(manager, api);
+    await userEvent.click(await screen.findByRole("button", { name: /WO-2643/ }));
+    expect(await screen.findByText(text.broadcast.title)).toBeVisible();
+    expect(screen.queryByRole("button", { name: text.actions.confirmAssign })).toBeNull();
+    expect(screen.queryByText(text.candidates.title)).toBeNull();
   });
 
   it("omits candidates, history, and the primary action for a read-only operator", async () => {

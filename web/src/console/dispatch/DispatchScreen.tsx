@@ -393,7 +393,12 @@ function DispatchScreenBody({ api, branchId, capabilities, sessionKey }: Props) 
         const result = await work(controller.signal);
         if (isCurrent(token)) {
           if (result) setNotice(result);
+          // load() supersedes this operation's generation token, so the guarded
+          // finally below can no longer clear the fence — clear it here, after
+          // the reload, while this mutation still owns `busy` (mutations are
+          // unreachable while busy, so no newer owner can exist).
           await load();
+          setBusy(false);
         }
       } catch (cause) {
         if (isCurrent(token) && !controller.signal.aborted) {
@@ -469,8 +474,10 @@ function DispatchScreenBody({ api, branchId, capabilities, sessionKey }: Props) 
     filter.unassignedOnly || filter.imminentOnly || Boolean(filter.priority) || query.length > 0;
   const canRequestSelected =
     capabilities.canRequest && Boolean(selected) && !selected?.dispatch && !selected?.assigned_mechanic_id;
+  // Domain FSM: force_assign is legal ONLY from MANAGER_FORCE_PENDING — during
+  // BROADCASTING the server rejects it, so the pick panel must not offer it.
   const assignOpen =
-    capabilities.canAssign && Boolean(selected?.dispatch) && selected?.dispatch?.status !== "AUTO_ASSIGNED";
+    capabilities.canAssign && selected?.dispatch?.status === "MANAGER_FORCE_PENDING";
 
   if (!capabilities.canRead) {
     return (
