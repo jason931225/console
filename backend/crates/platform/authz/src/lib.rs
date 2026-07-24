@@ -302,10 +302,25 @@ pub enum Feature {
     /// are all denied; a registered service principal receives this only via an
     /// explicit tenant-scoped effective grant.
     ProductionSourceIngest,
+    /// Read evaluation cycles, subjects, preflight reports, and the finalized
+    /// person ledger. HR-sensitive — mirrors the `EmployeeDirectoryRead` tier
+    /// (ADMIN + EXECUTIVE + SUPER_ADMIN); the person-ledger read is itself
+    /// audited (`evaluation.history.viewed`).
+    EvaluationRead,
+    /// Drive the evaluation cycle lifecycle (create/open/start-calibration/
+    /// finalize/archive), enroll subjects, replace goals, and calibrate.
+    /// Mirrors the `EmployeeDirectoryManage` tier (ADMIN + SUPER_ADMIN); the
+    /// calibration handler additionally enforces four-eyes SoD in code.
+    EvaluationManage,
+    /// Record and submit self/manager review drafts and read one's own
+    /// evaluation task list. The per-subject check (caller is the subject's
+    /// assigned manager, or holds `EvaluationManage`) is enforced in code with
+    /// deny-by-omission 404s.
+    EvaluationSubmit,
 }
 
 impl Feature {
-    pub const ALL: [Self; 80] = [
+    pub const ALL: [Self; 83] = [
         Self::Login,
         Self::WorkOrderCreate,
         Self::WorkOrderEditIntake,
@@ -386,6 +401,9 @@ impl Feature {
         Self::FacilitiesAccept,
         Self::FacilitiesObserve,
         Self::ProductionSourceIngest,
+        Self::EvaluationRead,
+        Self::EvaluationManage,
+        Self::EvaluationSubmit,
     ];
 
     #[must_use]
@@ -471,6 +489,9 @@ impl Feature {
             Self::FacilitiesAccept => "facilities_accept",
             Self::FacilitiesObserve => "facilities_observe",
             Self::ProductionSourceIngest => "production_source_ingest",
+            Self::EvaluationRead => "evaluation_read",
+            Self::EvaluationManage => "evaluation_manage",
+            Self::EvaluationSubmit => "evaluation_submit",
         }
     }
 
@@ -601,6 +622,13 @@ impl Feature {
             Self::FacilitiesAccept => [D, D, D, A, D, A],
             Self::FacilitiesObserve => [D, A, A, A, A, A],
             Self::ProductionSourceIngest => [D, D, D, D, D, D],
+            // Evaluation is HR-sensitive: read/submit mirror the
+            // EmployeeDirectoryRead tier, manage mirrors EmployeeDirectoryManage.
+            // The per-subject submit check and calibration four-eyes SoD are
+            // additionally enforced in the evaluation REST/adapter code.
+            Self::EvaluationRead => [D, D, D, A, A, A],
+            Self::EvaluationManage => [D, D, D, A, D, A],
+            Self::EvaluationSubmit => [D, D, D, A, A, A],
         }
     }
 }
@@ -690,6 +718,9 @@ impl FromStr for Feature {
             "facilities_accept" => Ok(Self::FacilitiesAccept),
             "facilities_observe" => Ok(Self::FacilitiesObserve),
             "production_source_ingest" => Ok(Self::ProductionSourceIngest),
+            "evaluation_read" => Ok(Self::EvaluationRead),
+            "evaluation_manage" => Ok(Self::EvaluationManage),
+            "evaluation_submit" => Ok(Self::EvaluationSubmit),
             _ => Err(KernelError::validation(format!(
                 "unknown feature key: {raw}"
             ))),

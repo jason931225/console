@@ -23,14 +23,15 @@ const ROLES: [Role; 6] = [
     Role::SuperAdmin,
 ];
 
-fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 80] {
+fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 83] {
     use Feature::{
         AiAssist, ApprovalFinalize, AssigneeManage, AuditLogRead, AuditStreamAccessLogRead,
         AuditStreamRead, BenefitCatalogManage, BenefitCatalogRead, BranchManage, CompletionReview,
         ComplianceDomainManage, ComplianceDomainRead, ComplianceEvidenceLink, ConsultingManage,
         ConsultingRead, DailyPlanRequest, DailyPlanReview, ElevatedRoleGrant,
         EmployeeDirectoryManage, EmployeeDirectoryRead, EquipmentCostLedgerRead,
-        EquipmentCostLedgerWrite, EquipmentManage, EvidenceAttach, ExcelDownload,
+        EquipmentCostLedgerWrite, EquipmentManage, EvaluationManage, EvaluationRead,
+        EvaluationSubmit, EvidenceAttach, ExcelDownload,
         ExitCaseHqConfirm, ExitCaseHrConfirm, ExitCaseReport, ExitSettlementManage,
         FacilitiesAccept, FacilitiesDispatch, FacilitiesExecute, FacilitiesManage,
         FacilitiesObserve, InspectionRoundComplete, InspectionScheduleManage,
@@ -164,6 +165,12 @@ fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 80] {
         (FacilitiesAccept, [D, D, D, A, D, A]),
         (FacilitiesObserve, [D, A, A, A, A, A]),
         (ProductionSourceIngest, [D, D, D, D, D, D]),
+        // Evaluation mirrors the HR EmployeeDirectory tiers: read/submit are
+        // ADMIN + EXECUTIVE + SUPER_ADMIN, manage is ADMIN + SUPER_ADMIN. The
+        // per-subject submit check and calibration four-eyes SoD live in code.
+        (EvaluationRead, [D, D, D, A, A, A]),
+        (EvaluationManage, [D, D, D, A, D, A]),
+        (EvaluationSubmit, [D, D, D, A, A, A]),
     ]
 }
 
@@ -825,7 +832,7 @@ fn cedar_compiled_bundle_cache_key_requires_versioned_identity() {
 #[test]
 fn permission_matrix_is_exhaustive_and_matches_inherited_table() {
     let matrix = expected_matrix();
-    assert_eq!(Feature::ALL.len(), 80);
+    assert_eq!(Feature::ALL.len(), 83);
     assert_eq!(matrix.len(), Feature::ALL.len());
 
     for feature in Feature::ALL {
