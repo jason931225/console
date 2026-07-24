@@ -29,8 +29,8 @@ use mnt_compliance_domain::{
     LocationConsentState, LocationPing, ObligationRegulationLink, ObligationRegulationRelationship,
     ObligationStatus, ObligationType, PersistedLocationConsent, RegulationImpact,
     RegulationImpactStatus, ReviewCadence, evaluate_geofence, validate_control_key,
-    validate_date_range, validate_evidence_requirements, validate_hash_sha256,
-    validate_metadata_object, validate_optional_text, validate_required_text,
+    validate_date_range, validate_evidence_requirements, validate_evidence_status_transition,
+    validate_hash_sha256, validate_metadata_object, validate_optional_text, validate_required_text,
 };
 use mnt_kernel_core::{
     AuditAction, AuditEvent, BranchId, BranchScope, ConsentId, DEFAULT_GEOFENCE_RADIUS_M,
