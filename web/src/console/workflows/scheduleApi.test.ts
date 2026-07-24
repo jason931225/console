@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ConsoleApiClient } from "../../api/client";
 import {
+  createWorkflowSchedule,
   listScheduleRuns,
   listWorkflowSchedules,
   previewWorkflowSchedule,
@@ -110,5 +111,40 @@ describe("workflow schedule API", () => {
         enabled: false,
       }),
     ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("creates a durable schedule through the generated schedule resource", async () => {
+    const POST = vi.fn().mockResolvedValue({
+      data: {
+        id: SCHEDULE_ID,
+        label: "평일 점검",
+        cron_expr: "0 9 * * 1-5",
+        timezone: "Asia/Seoul",
+        definition_id: "22222222-2222-4222-8222-222222222222",
+        enabled: true,
+        created_at: "2026-07-24T00:00:00Z",
+        updated_at: "2026-07-24T00:00:00Z",
+      },
+      response: new Response(),
+    });
+
+    await expect(
+      createWorkflowSchedule(apiClient({ POST }), {
+        label: "평일 점검",
+        cron_expr: "0 9 * * 1-5",
+        timezone: "Asia/Seoul",
+        definition_id: "22222222-2222-4222-8222-222222222222",
+        enabled: true,
+      }),
+    ).resolves.toMatchObject({ id: SCHEDULE_ID });
+    expect(POST).toHaveBeenCalledWith("/api/v1/workflow-studio/schedules", {
+      body: {
+        label: "평일 점검",
+        cron_expr: "0 9 * * 1-5",
+        timezone: "Asia/Seoul",
+        definition_id: "22222222-2222-4222-8222-222222222222",
+        enabled: true,
+      },
+    });
   });
 });

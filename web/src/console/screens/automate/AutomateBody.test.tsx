@@ -4,6 +4,7 @@
 // correctly under its own BulkPolicyGateProvider (empty/error/loaded states).
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import axe from "axe-core";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -50,6 +51,19 @@ const scheduledDefinition = {
       last_run_at: "07-09 09:00",
     },
   },
+};
+const durableSchedule = {
+  id: "55555555-5555-4555-8555-555555555555",
+  label: "일일 KPI 스냅샷",
+  cron_expr: "0 9 * * *",
+  timezone: "Asia/Seoul",
+  definition_id: scheduledDefinition.id,
+  enabled: true,
+  next_run_at: null,
+  last_run_at: null,
+  last_status: null,
+  created_at: "2026-07-08T09:00:00Z",
+  updated_at: "2026-07-08T09:00:00Z",
 };
 
 const server = setupServer(allowAllBulkAuthorize());
@@ -131,7 +145,7 @@ function expectLocation(expected: string) {
   expect(screen.getByTestId("location").textContent).toBe(expected);
 }
 
-function installHandlers(items: unknown[] = []) {
+function installHandlers(items: unknown[] = [], scheduleItems: unknown[] = []) {
   server.use(
     http.get("*/api/v1/ontology/object-types", () => HttpResponse.json([])),
     http.get("*/api/v1/workflow-studio/definitions", () => HttpResponse.json({ items })),
@@ -139,7 +153,7 @@ function installHandlers(items: unknown[] = []) {
       HttpResponse.json({ items: [] }),
     ),
     http.get("*/api/v1/workflow-studio/schedules", () =>
-      HttpResponse.json({ items: [] }),
+      HttpResponse.json({ items: scheduleItems }),
     ),
   );
 }
@@ -158,27 +172,50 @@ describe("AutomateBody (console screen composition)", () => {
   it.each([
     ["/console/workflow", "rules"],
     ["/console/scheduled", "schedules"],
-  ] as const)("direct load and reload of %s retain the route-authoritative %s tab", async (path, tab) => {
+  ] as const)("direct load and reload of %s retain the route-authoritative %s surface", async (path, tab) => {
     installHandlers([]);
-    const selectedLabel = tab === "rules" ? S.tabs.rules : S.tabs.schedules;
 
     const firstLoad = renderBody(["SUPER_ADMIN"], [path]);
-    expect(await screen.findByRole("tab", { name: selectedLabel, selected: true })).toBeVisible();
+    if (tab === "rules")
+      expect(await screen.findByRole("tab", { name: S.tabs.rules, selected: true })).toBeVisible();
+    else expect(await screen.findByRole("heading", { name: "예약 작업" })).toBeVisible();
     firstLoad.unmount();
 
     renderBody(["SUPER_ADMIN"], [path]);
-    expect(await screen.findByRole("tab", { name: selectedLabel, selected: true })).toBeVisible();
+    if (tab === "rules")
+      expect(await screen.findByRole("tab", { name: S.tabs.rules, selected: true })).toBeVisible();
+    else expect(await screen.findByRole("heading", { name: "예약 작업" })).toBeVisible();
     expectLocation(path);
   });
 
-  it("keeps the authoritative definition-backed schedule workflow reachable at /console/scheduled", async () => {
-    installHandlers([scheduledDefinition]);
+  it("keeps one durable schedule workspace with definition-backed create, edit, and run actions at /console/scheduled", async () => {
+    installHandlers([scheduledDefinition], [durableSchedule]);
     renderBody(["SUPER_ADMIN"], ["/console/scheduled"]);
 
-    const detail = await screen.findByRole("region", { name: "일일 KPI 스냅샷" });
-    expect(screen.getByRole("form", { name: S.sections.addSchedule })).toBeVisible();
-    expect(within(detail).getByRole("button", { name: S.actions.runNow })).toBeVisible();
-    expect(within(detail).getByRole("button", { name: S.actions.edit })).toBeVisible();
+    const detail = await screen.findByRole("region", { name: "예약 상세" });
+    expect(screen.getByRole("form", { name: "예약 작업 추가" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "일일 KPI 스냅샷" })).toBeVisible();
+    expect(within(detail).getByRole("button", { name: "지금 실행" })).toBeVisible();
+    expect(within(detail).getByRole("button", { name: "예약 편집" })).toBeVisible();
+  });
+
+  it("keeps the scheduled route to one main landmark", async () => {
+    installHandlers([]);
+    const view = render(
+      <main aria-label="콘솔 콘텐츠">
+        <MemoryRouter initialEntries={["/console/scheduled"]}>
+          <AuthContext.Provider value={authValue(["SUPER_ADMIN"])}>
+            <AutomateBody />
+          </AuthContext.Provider>
+        </MemoryRouter>
+      </main>,
+    );
+
+    await screen.findByRole("heading", { name: "예약 작업" });
+    const results = await axe.run(view.container, {
+      runOnly: { type: "rule", values: ["landmark-one-main", "landmark-unique"] },
+    });
+    expect(results.violations).toEqual([]);
   });
 
   it("writes tab changes to history and follows browser back and forward", async () => {
@@ -188,10 +225,7 @@ describe("AutomateBody (console screen composition)", () => {
     expect(await screen.findByRole("tab", { name: S.tabs.rules, selected: true })).toBeVisible();
     await userEvent.click(screen.getByRole("tab", { name: S.tabs.schedules }));
     expectLocation("/console/scheduled");
-    expect(screen.getByRole("tab", { name: S.tabs.schedules })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(await screen.findByRole("heading", { name: "예약 작업" })).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: "history back" }));
     await waitFor(() => {
@@ -205,10 +239,7 @@ describe("AutomateBody (console screen composition)", () => {
     await userEvent.click(screen.getByRole("button", { name: "history forward" }));
     await waitFor(() => {
       expectLocation("/console/scheduled");
-      expect(screen.getByRole("tab", { name: S.tabs.schedules })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
+      expect(screen.getByRole("heading", { name: "예약 작업" })).toBeVisible();
     });
   });
 
@@ -247,7 +278,9 @@ describe("AutomateBody (console screen composition)", () => {
     installHandlers([]);
     renderBody(["SUPER_ADMIN"], ["/sentinel", input]);
 
-    expect(await screen.findByRole("tab", { name: selectedTab, selected: true })).toBeVisible();
+    if (selectedTab === S.tabs.schedules)
+      expect(await screen.findByRole("heading", { name: "예약 작업" })).toBeVisible();
+    else expect(await screen.findByRole("tab", { name: selectedTab, selected: true })).toBeVisible();
     await waitFor(() => {
       expectLocation(expected);
     });
@@ -300,7 +333,6 @@ describe("AutomateBody (console screen composition)", () => {
   it.each([
     ["/console/workflow", S.tabs.rules],
     ["/console/workflow?keep=1&tab=monitors#anchor", S.tabs.monitors],
-    ["/console/scheduled?keep=1#anchor", S.tabs.schedules],
   ] as const)("does not add a history entry when the current tab at %s is selected", async (path, tabLabel) => {
     installHandlers([]);
     renderBody(["SUPER_ADMIN"], ["/sentinel", path]);

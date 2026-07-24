@@ -14,6 +14,8 @@ export type WorkflowSchedule =
   components["schemas"]["WorkflowScheduleResponse"];
 export type WorkflowScheduleUpdate =
   components["schemas"]["UpdateWorkflowScheduleRequest"];
+export type WorkflowScheduleCreate =
+  components["schemas"]["CreateWorkflowScheduleRequest"];
 export type WorkflowScheduleRun = components["schemas"]["ScheduleRunItem"];
 export type WorkflowSchedulePreview =
   components["schemas"]["PreviewScheduleResponse"];
@@ -28,6 +30,18 @@ export async function listWorkflowSchedules(
   );
   if (!data) throw new ApiCallError(response.status, error);
   return data.items;
+}
+
+export async function createWorkflowSchedule(
+  api: ConsoleApiClient,
+  input: WorkflowScheduleCreate,
+): Promise<WorkflowSchedule> {
+  const { data, error, response } = await api.POST(
+    "/api/v1/workflow-studio/schedules",
+    { body: input },
+  );
+  if (!data) throw new ApiCallError(response.status, error);
+  return data;
 }
 
 export async function previewWorkflowSchedule(

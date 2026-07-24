@@ -26,6 +26,11 @@ function api(): ConsoleApiClient {
   const GET = vi.fn(async (path: string) => {
     if (path === "/api/v1/workflow-studio/schedules")
       return { data: { items: [schedule] }, response: new Response() };
+    if (path === "/api/v1/workflow-studio/definitions")
+      return {
+        data: { items: [{ id: schedule.definition_id, display_name: "KPI 정의" }] },
+        response: new Response(),
+      };
     if (path === "/api/v1/workflow-studio/schedules/{id}/runs")
       return {
         data: {
@@ -103,7 +108,7 @@ describe("WorkflowScheduleOperations", () => {
         body: { enabled: true },
       },
     );
-    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(5));
     expect(screen.getByRole("button", { name: "예약 활성화" })).toBeVisible();
   });
 
@@ -123,6 +128,65 @@ describe("WorkflowScheduleOperations", () => {
     );
     expect(screen.getByRole("button", { name: "예약 활성화" })).toBeVisible();
   });
+
+  it("keeps a 409 write conflict visible and reloads the authoritative schedule", async () => {
+    const client = api();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      data: undefined,
+      error: { error: { message: "conflict", code: "conflict" } },
+      response: new Response(undefined, { status: 409 }),
+    } as never);
+    renderPanel(client);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "예약 활성화" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "예약 상태가 변경되었습니다",
+    );
+    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(5));
+    expect(screen.getByRole("button", { name: "예약 활성화" })).toBeVisible();
+  });
+
+  it("creates a durable schedule from a selected workflow definition", async () => {
+    const client = api();
+    vi.mocked(client.POST).mockImplementation(async (path) => {
+      if (path === "/api/v1/workflow-studio/schedules")
+        return {
+          data: { ...schedule, label: "월말 KPI", enabled: true },
+          response: new Response(),
+        } as never;
+      return {
+        data: {
+          cron_expr: schedule.cron_expr,
+          timezone: schedule.timezone,
+          fire_times: [],
+        },
+        response: new Response(),
+      } as never;
+    });
+    const user = userEvent.setup();
+    renderPanel(client);
+
+    await user.type(await screen.findByLabelText("이름"), "월말 KPI");
+    await user.selectOptions(
+      screen.getByLabelText("연결된 워크플로 정의"),
+      schedule.definition_id,
+    );
+    await user.click(screen.getByRole("button", { name: "예약 작업 추가" }));
+
+    await waitFor(() =>
+      expect(client.POST).toHaveBeenCalledWith("/api/v1/workflow-studio/schedules", {
+        body: {
+          label: "월말 KPI",
+          cron_expr: "0 9 * * 1-5",
+          timezone: "Asia/Seoul",
+          definition_id: schedule.definition_id,
+          enabled: true,
+        },
+      }),
+    );
+  });
 });
 
 function deferred<T>() {
@@ -137,9 +201,13 @@ describe("WorkflowScheduleOperations scope fences", () => {
   it("rejects a deferred prior-session schedule list after an A→B switch", async () => {
     const first = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
     const second = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
+    let scheduleRequests = 0;
     const GET = vi.fn().mockImplementation((path: string) => {
+      if (path === "/api/v1/workflow-studio/definitions")
+        return Promise.resolve({ data: { items: [] }, response: new Response() });
       if (path !== "/api/v1/workflow-studio/schedules") throw new Error(`unexpected GET ${path}`);
-      return GET.mock.calls.length === 1 ? first.promise : second.promise;
+      scheduleRequests += 1;
+      return scheduleRequests === 1 ? first.promise : second.promise;
     });
     const client = { GET, POST: vi.fn(), PATCH: vi.fn() } as unknown as ConsoleApiClient;
     const sessionA = { access_token: "token-a", org_id: "org-a", user_id: "a", roles: ["SUPER_ADMIN"], feature_grants: [] };
@@ -149,14 +217,18 @@ describe("WorkflowScheduleOperations scope fences", () => {
         <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
       </AuthTestProvider>,
     );
-    await waitFor(() => expect(GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(GET).toHaveBeenCalledTimes(2));
+    const firstListSignal = GET.mock.calls.find(
+      ([path]) => path === "/api/v1/workflow-studio/schedules",
+    )?.[1]?.signal as AbortSignal;
 
     view.rerender(
       <AuthTestProvider session={sessionB} overrides={{ api: client }}>
         <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
       </AuthTestProvider>,
     );
-    await waitFor(() => expect(GET).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(GET).toHaveBeenCalledTimes(4));
+    expect(firstListSignal.aborted).toBe(true);
     first.resolve({ data: { items: [{ ...schedule, label: "A 전용 예약" }] }, response: new Response() });
     await Promise.resolve();
     expect(screen.queryByText("A 전용 예약")).toBeNull();
@@ -169,6 +241,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
   it("clears preview and history together when the selected schedule detail request fails", async () => {
     const GET = vi.fn(async (path: string) => {
       if (path === "/api/v1/workflow-studio/schedules") return { data: { items: [schedule] }, response: new Response() };
+      if (path === "/api/v1/workflow-studio/definitions") return { data: { items: [] }, response: new Response() };
       if (path === "/api/v1/workflow-studio/schedules/{id}/runs") return { data: undefined, error: { error: { message: "conflict", code: "conflict" } }, response: new Response(undefined, { status: 409 }) };
       throw new Error(`unexpected GET ${path}`);
     });
@@ -195,6 +268,7 @@ describe("WorkflowScheduleOperations scope fences", () => {
     const secondRuns = deferred<{ data: { items: WorkflowScheduleRun[] }; response: Response }>();
     const GET = vi.fn((path: string, options?: { params?: { path?: { id?: string } } }) => {
       if (path === "/api/v1/workflow-studio/schedules") return Promise.resolve({ data: { items: [schedule, scheduleB] }, response: new Response() });
+      if (path === "/api/v1/workflow-studio/definitions") return Promise.resolve({ data: { items: [] }, response: new Response() });
       if (path === "/api/v1/workflow-studio/schedules/{id}/runs")
         return options?.params?.path?.id === schedule.id ? firstRuns.promise : secondRuns.promise;
       throw new Error(`unexpected GET ${path}`);
@@ -207,8 +281,16 @@ describe("WorkflowScheduleOperations scope fences", () => {
 
     await screen.findByRole("button", { name: "월말 정산 선택" });
     await waitFor(() => expect(POST).toHaveBeenCalledTimes(1));
+    const firstPreviewSignal = POST.mock.calls[0]?.[1]?.signal as AbortSignal;
+    const firstHistorySignal = GET.mock.calls.find(
+      ([path, options]) =>
+        path === "/api/v1/workflow-studio/schedules/{id}/runs" &&
+        options?.params?.path?.id === schedule.id,
+    )?.[1]?.signal as AbortSignal;
     await userEvent.click(screen.getByRole("button", { name: "월말 정산 선택" }));
     await waitFor(() => expect(POST).toHaveBeenCalledTimes(2));
+    expect(firstPreviewSignal.aborted).toBe(true);
+    expect(firstHistorySignal.aborted).toBe(true);
 
     secondPreview.resolve({ data: { cron_expr: scheduleB.cron_expr, timezone: scheduleB.timezone, fire_times: ["2026-07-31T09:00:00Z"] }, response: new Response() });
     secondRuns.resolve({ data: { items: [] }, response: new Response() });
