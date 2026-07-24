@@ -17,7 +17,6 @@ import {
   PayrollApiError,
   type ClosePreflight,
   type PayrollException,
-  type PayrollLineSummary,
   type PayrollRunDetail,
   type PayrollRunStatus,
   type PayrollRunSummary,
@@ -113,11 +112,16 @@ const SEVERITY_TONE: Record<PayrollException["severity"], Tone> = {
   danger: "danger",
 };
 
-const NTS_TONE: Record<PayrollLineSummary["nts_tax_row_status"], Tone> = {
+const NTS_TONE: Record<string, Tone> = {
   REQUIRED_NOT_SUPPLIED: "danger",
   SUPPLIED_UNVERIFIED: "warn",
   VERIFIED_SOURCE_ROW: "ok",
 };
+
+function ntsLabel(status: string): string {
+  if (status in text.ntsStatus) return text.ntsStatus[status as keyof typeof text.ntsStatus];
+  return text.ntsStatus.unknown;
+}
 
 const LINE_CALC_TONE: Record<string, Tone> = {
   BLOCKED_LEGAL_GATE: "danger",
@@ -163,8 +167,19 @@ function deltaWon(value: number): string {
   return value > 0 ? `+${won(value)}` : won(value);
 }
 
+const TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/** Local-time rendering; the raw value passes through when it is not a date. */
 function timeText(iso: string): string {
-  return iso.slice(0, 16).replace("T", " ");
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? iso : TIME_FORMAT.format(at);
 }
 
 function count(value: number | null | undefined): string {
@@ -307,6 +322,7 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scheduleInputRef = useRef<HTMLInputElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const preflightReturnFocus = useRef<HTMLElement | null>(null);
   const dragState = useRef<{ key: ColKey; startX: number; startW: number }>(undefined);
 
   const isCurrent = useCallback((token: number) => generation.current === token, []);
@@ -439,9 +455,21 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
     return result;
   }, [act, loadDetail, selectedId]);
 
+  const closePreflightDialog = useCallback(() => {
+    setPreflight(PREFLIGHT_CLOSED);
+    preflightReturnFocus.current?.focus();
+    preflightReturnFocus.current = null;
+  }, []);
+
+  // The attestation covers the checks currently shown, so every (re)fetch clears it.
   const openPreflight = useCallback(async () => {
     if (!selectedId) return;
-    setPreflight((current) => ({ ...current, open: true, loading: true, error: undefined }));
+    setPreflight((current) => {
+      if (!current.open && document.activeElement instanceof HTMLElement) {
+        preflightReturnFocus.current = document.activeElement;
+      }
+      return { ...current, open: true, loading: true, error: undefined, attested: false };
+    });
     try {
       const data = await payrollApi.closePreflight(selectedId);
       setPreflight((current) => (current.open ? { ...current, loading: false, data } : current));
@@ -457,8 +485,31 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
   const confirmClose = async () => {
     if (!selectedId) return;
     const result = await runAction((signal) => payrollApi.closeAttendance(selectedId, signal));
-    if (result.ok) setPreflight(PREFLIGHT_CLOSED);
+    if (result.ok) closePreflightDialog();
     else if (result.error?.code === "preflight_blocked") await openPreflight();
+  };
+
+  const trapDialogFocus = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      closePreflightDialog();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusables = dialog.querySelectorAll<HTMLElement>(
+      "button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex='-1'])",
+    );
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   const resolveException = async (exception: PayrollException, action: "CONFIRM" | "HOLD", reason?: string) => {
@@ -917,7 +968,7 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
                     </div>
                   ) : (
                     <>
-                      <div className="payroll__grid" role="list" aria-label={text.rosterTitle} onKeyDown={rosterKeys}>
+                      <div className="payroll__grid" onKeyDown={rosterKeys}>
                         <div className="payroll__gridhead" style={{ gridTemplateColumns: gridCols }}>
                           <span>{text.colName}</span>
                           <span>
@@ -943,7 +994,9 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
                         </div>
                         {shownLines.length === 0 ? (
                           <p className="payroll__zonestatus" role="status">{text.rosterEmpty}</p>
-                        ) : shownLines.map((line, index) => {
+                        ) : (
+                        <div role="list" aria-label={text.rosterTitle}>
+                        {shownLines.map((line, index) => {
                           const flag = line.employee_id != null ? openExceptionByEmployee.get(line.employee_id) : undefined;
                           const held = line.employee_id != null && heldEmployeeIds.has(line.employee_id);
                           const open = openLineId === line.id;
@@ -973,7 +1026,7 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
                                 <span className="payroll__num payroll__mono">{count(line.overtime_hours)}</span>
                                 <span className="payroll__chips">
                                   <span className={line.gross_pay_source_present ? CHIP.ok : CHIP.danger}>{text.srcGross} {line.gross_pay_source_present ? text.srcPresent : text.srcMissing}</span>
-                                  <span className={CHIP[NTS_TONE[line.nts_tax_row_status]]}>{text.ntsStatus[line.nts_tax_row_status]}</span>
+                                  <span className={CHIP[NTS_TONE[line.nts_tax_row_status] ?? "neutral"]}>{ntsLabel(line.nts_tax_row_status)}</span>
                                 </span>
                                 <span className="payroll__chips">
                                   <span className={CHIP[LINE_CALC_TONE[line.calculation_status] ?? "neutral"]}>{lineCalcLabel(line.calculation_status)}</span>
@@ -1010,6 +1063,8 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
                             </div>
                           );
                         })}
+                        </div>
+                        )}
                       </div>
                       <footer className="payroll__cardfoot">{text.rosterAudit}</footer>
                     </>
@@ -1198,7 +1253,7 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
       )}
 
       {preflight.open ? (
-        <div className="payroll__scrim" onClick={() => { setPreflight(PREFLIGHT_CLOSED); }}>
+        <div className="payroll__scrim" onClick={closePreflightDialog}>
           <div
             ref={dialogRef}
             className="payroll__dialog"
@@ -1207,9 +1262,7 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
             aria-labelledby="payroll-preflight-title"
             tabIndex={-1}
             onClick={(event) => { event.stopPropagation(); }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") setPreflight(PREFLIGHT_CLOSED);
-            }}
+            onKeyDown={trapDialogFocus}
           >
             <h2 id="payroll-preflight-title">{text.preflightTitle}</h2>
             {preflight.error ? (
@@ -1250,7 +1303,7 @@ function PayrollScreenInner({ api, actorId, capabilities, sessionKey }: Props) {
               {text.preflightAttest}
             </label>
             <div className="payroll__msacts">
-              <button className="payroll__btn payroll__btn--ghost" type="button" onClick={() => { setPreflight(PREFLIGHT_CLOSED); }}>{text.preflightCancel}</button>
+              <button className="payroll__btn payroll__btn--ghost" type="button" onClick={closePreflightDialog}>{text.preflightCancel}</button>
               <button
                 className="payroll__btn payroll__btn--primary"
                 type="button"

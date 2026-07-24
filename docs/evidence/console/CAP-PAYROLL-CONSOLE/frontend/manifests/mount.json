@@ -46,6 +46,7 @@
       "POST /runs/{id}/issue-payslips",
       "GET /runs/{id}/payslip-delivery"
     ],
-    "note": "contract routes are typed locally in payrollApi.ts per design-contract.md §2–§3; once the integrator lands backend/openapi + regenerated clients/ts, the local types must converge on the generated ones (divergence = defect in this module)"
+    "note": "contract routes are typed locally in payrollApi.ts (derived from the design mirror pay module + HANDOFF; no separate design-contract.md file exists in this lane); once the integrator lands backend/openapi + regenerated clients/ts, the local types must converge on the generated ones (divergence = defect in this module)",
+    "paging": "collection reads (runs, run lines, exceptions) send limit=500&offset and walk pages to the server-reported total; backend clamps limit to MAX_LIMIT=500 (payroll adapter-postgres) — the exceptions contract route must accept the same limit/offset query params"
   }
 }

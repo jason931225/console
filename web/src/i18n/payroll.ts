@@ -96,6 +96,7 @@ export const payrollStrings = {
     REQUIRED_NOT_SUPPLIED: "세액 원천 미제출",
     SUPPLIED_UNVERIFIED: "세액 검증 대기",
     VERIFIED_SOURCE_ROW: "세액 원천 검증됨",
+    unknown: "세액 상태 확인 필요",
   },
   lineCalcStatus: {
     BLOCKED_LEGAL_GATE: "법정 게이트 차단",

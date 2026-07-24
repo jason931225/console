@@ -4,11 +4,13 @@ import type { ConsoleApiClient } from "../../api/client";
 
 // ---------------------------------------------------------------------------
 // DTOs. Generated schemas cover the three long-standing read routes; the run
-// lifecycle surface is contract-first per
-// docs/evidence/console/CAP-PAYROLL-CONSOLE/design-contract.md §2–§3 until the
-// integrator lands the openapi paths and regenerates clients/ts. The local
-// types below extend the generated ones exactly per that contract — any
-// divergence from the regenerated client is a defect to fix here.
+// lifecycle surface is contract-first, recorded in
+// docs/evidence/console/CAP-PAYROLL-CONSOLE/frontend/manifests/mount.json and
+// derived from the design mirror (docs/design/oyatie-console — pay module +
+// HANDOFF) until the integrator lands the openapi paths and regenerates
+// clients/ts. The local types below extend the generated ones exactly per that
+// contract — any divergence from the regenerated client is a defect to fix
+// here.
 // ---------------------------------------------------------------------------
 
 type GeneratedRunSummary = components["schemas"]["PayrollRunSummary"];
@@ -190,7 +192,7 @@ function requireData<T>(response: { data?: T; error?: unknown; response: Respons
 // the same runtime client keeps bearer/refresh/caching middleware while the
 // contract routes remain client-generation pending (see header note).
 interface ContractInit {
-  params?: { path: Record<string, string> };
+  params?: { path?: Record<string, string>; query?: Record<string, number> };
   body?: unknown;
   signal?: AbortSignal;
 }
@@ -206,20 +208,40 @@ interface ContractClient {
   POST: (url: string, init?: ContractInit) => Promise<ContractResult>;
 }
 
+/**
+ * Whole-collection page size. The workspace sorts, flags, and searches the
+ * roster and exception list client-side, so a single truncated server page
+ * would silently hide employees; collection reads walk pages to the server
+ * total instead.
+ */
+const PAGE_LIMIT = 500;
+
 /** Payroll run-lifecycle transport bound to the authenticated ConsoleApiClient. */
 export function createPayrollApi(api: ConsoleApiClient) {
   const raw = api as unknown as ContractClient;
   return {
     listRuns: async (signal?: AbortSignal) => {
-      const response = await api.GET("/api/v1/payroll/runs", { signal });
+      const response = await api.GET("/api/v1/payroll/runs", {
+        params: { query: { limit: PAGE_LIMIT, offset: 0 } },
+        signal,
+      });
       return requireData(response) as unknown as PayrollRunPage;
     },
     getRun: async (id: string, signal?: AbortSignal) => {
-      const response = await api.GET("/api/v1/payroll/runs/{id}", {
-        params: { path: { id } },
+      const first = requireData(await api.GET("/api/v1/payroll/runs/{id}", {
+        params: { path: { id }, query: { limit: PAGE_LIMIT, offset: 0 } },
         signal,
-      });
-      return requireData(response) as unknown as PayrollRunDetail;
+      })) as unknown as PayrollRunDetail;
+      const lines = [...first.lines];
+      while (lines.length < first.lines_total) {
+        const next = requireData(await api.GET("/api/v1/payroll/runs/{id}", {
+          params: { path: { id }, query: { limit: PAGE_LIMIT, offset: lines.length } },
+          signal,
+        })) as unknown as PayrollRunDetail;
+        if (next.lines.length === 0) break;
+        lines.push(...next.lines);
+      }
+      return { ...first, lines };
     },
     myPayslips: async (signal?: AbortSignal) => {
       const response = await api.GET("/api/v1/payroll/payslips/me", { signal });
@@ -242,11 +264,22 @@ export function createPayrollApi(api: ConsoleApiClient) {
         body: {},
         signal,
       })) as PayrollRunDetail,
-    listExceptions: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.GET("/api/v1/payroll/runs/{id}/exceptions", {
-        params: { path: { id } },
+    listExceptions: async (id: string, signal?: AbortSignal) => {
+      const first = requireData(await raw.GET("/api/v1/payroll/runs/{id}/exceptions", {
+        params: { path: { id }, query: { limit: PAGE_LIMIT, offset: 0 } },
         signal,
-      })) as ExceptionPage,
+      })) as ExceptionPage;
+      const items = [...first.items];
+      while (items.length < first.total) {
+        const next = requireData(await raw.GET("/api/v1/payroll/runs/{id}/exceptions", {
+          params: { path: { id }, query: { limit: PAGE_LIMIT, offset: items.length } },
+          signal,
+        })) as ExceptionPage;
+        if (next.items.length === 0) break;
+        items.push(...next.items);
+      }
+      return { ...first, items };
+    },
     resolveException: async (
       id: string,
       exId: string,

@@ -31,6 +31,42 @@ describe("createPayrollApi", () => {
     }));
   });
 
+  it("walks run-line pages to the server total instead of truncating the roster", async () => {
+    const lineOf = (id: string) => ({
+      id,
+      employee_display_name: id,
+      employee_company: "knl",
+      gross_pay_source_present: true,
+      net_pay_source_present: true,
+      nts_tax_row_status: "VERIFIED_SOURCE_ROW",
+      calculation_status: "READY_FOR_REVIEW",
+      blockers: [],
+    });
+    const all = [lineOf("l-1"), lineOf("l-2"), lineOf("l-3")];
+    const detailAt = (offset: number, lines: unknown[]) => ({
+      run: { id: "run-1" },
+      legal_basis: {},
+      source_summary: {},
+      lines,
+      lines_total: all.length,
+      lines_limit: 2,
+      lines_offset: offset,
+    });
+    const api = {
+      GET: vi.fn((_url: string, init?: { params?: { query?: { offset?: number } } }) => {
+        const offset = init?.params?.query?.offset ?? 0;
+        return Promise.resolve({
+          data: detailAt(offset, offset === 0 ? all.slice(0, 2) : all.slice(offset)),
+          response: new Response(null, { status: 200 }),
+        });
+      }),
+      POST: vi.fn(),
+    } as unknown as ConsoleApiClient;
+    const detail = await createPayrollApi(api).getRun("run-1");
+    expect(detail.lines.map((line) => line.id)).toEqual(["l-1", "l-2", "l-3"]);
+    expect(api.GET).toHaveBeenCalledTimes(2);
+  });
+
   it("surfaces the canonical error envelope code instead of synthesizing success", async () => {
     const api = {
       GET: vi.fn(),
