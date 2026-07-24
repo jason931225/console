@@ -302,10 +302,20 @@ pub enum Feature {
     /// are all denied; a registered service principal receives this only via an
     /// explicit tenant-scoped effective grant.
     ProductionSourceIngest,
+    /// Read the recruiting pipeline (postings, applicants, offers, talent
+    /// pool). HR-owned data: ADMIN + EXECUTIVE + SUPER_ADMIN, mirroring
+    /// `EmployeeDirectoryRead`. Gated org-wide (`authorize_org_wide`) — the
+    /// recruiting tables carry no branch column to narrow by.
+    RecruitingRead,
+    /// Manage the recruiting pipeline: postings (draft/publish/close),
+    /// applicant transitions, offers, and the hire handshake. ADMIN +
+    /// SUPER_ADMIN, mirroring `EmployeeDirectoryManage`; hire additionally
+    /// requires `EmployeeDirectoryManage` (the owning HR domain's gate).
+    RecruitingManage,
 }
 
 impl Feature {
-    pub const ALL: [Self; 80] = [
+    pub const ALL: [Self; 82] = [
         Self::Login,
         Self::WorkOrderCreate,
         Self::WorkOrderEditIntake,
@@ -386,6 +396,8 @@ impl Feature {
         Self::FacilitiesAccept,
         Self::FacilitiesObserve,
         Self::ProductionSourceIngest,
+        Self::RecruitingRead,
+        Self::RecruitingManage,
     ];
 
     #[must_use]
@@ -471,6 +483,8 @@ impl Feature {
             Self::FacilitiesAccept => "facilities_accept",
             Self::FacilitiesObserve => "facilities_observe",
             Self::ProductionSourceIngest => "production_source_ingest",
+            Self::RecruitingRead => "recruiting_read",
+            Self::RecruitingManage => "recruiting_manage",
         }
     }
 
@@ -601,6 +615,10 @@ impl Feature {
             Self::FacilitiesAccept => [D, D, D, A, D, A],
             Self::FacilitiesObserve => [D, A, A, A, A, A],
             Self::ProductionSourceIngest => [D, D, D, D, D, D],
+            // Recruiting mirrors the HR directory pair: recruiting rows are
+            // HR-owned data with EXECUTIVE read-only visibility.
+            Self::RecruitingRead => [D, D, D, A, A, A],
+            Self::RecruitingManage => [D, D, D, A, D, A],
         }
     }
 }
@@ -690,6 +708,8 @@ impl FromStr for Feature {
             "facilities_accept" => Ok(Self::FacilitiesAccept),
             "facilities_observe" => Ok(Self::FacilitiesObserve),
             "production_source_ingest" => Ok(Self::ProductionSourceIngest),
+            "recruiting_read" => Ok(Self::RecruitingRead),
+            "recruiting_manage" => Ok(Self::RecruitingManage),
             _ => Err(KernelError::validation(format!(
                 "unknown feature key: {raw}"
             ))),
