@@ -20,14 +20,11 @@ import {
 } from "./scheduleApi";
 
 const ACTIONS = {
-  viewRules: "console.automate.tab.rules.view",
   viewSchedules: "console.automate.tab.schedules.view",
-  viewMonitors: "console.automate.tab.monitors.view",
   select: "console.automate.schedule.select",
   update: "console.automate.schedule.toggle",
 } as const;
 
-type AutomationTab = "rules" | "schedules" | "monitors";
 
 const shell: CSSProperties = {
   display: "grid",
@@ -47,7 +44,9 @@ const card: CSSProperties = {
   gap: "var(--sp-4)",
   padding: "var(--sp-5)",
   background: "var(--surface)",
-  border: "1px solid var(--border)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "var(--border)",
   borderRadius: "var(--radius-card)",
   boxShadow: "var(--shadow)",
 };
@@ -55,7 +54,9 @@ const button: CSSProperties = {
   minHeight: 36,
   padding: "0 var(--sp-4)",
   borderRadius: "var(--radius-md)",
-  border: "1px solid var(--border)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "var(--border)",
   background: "var(--surface)",
   color: "var(--ink)",
   fontWeight: "var(--fw-strong)",
@@ -98,11 +99,7 @@ function errorMessage(error: unknown): string {
 }
 
 /** Durable schedule lifecycle surface: backend-owned schedules, preview, and run history. */
-export function WorkflowScheduleOperations({
-  onTabChange,
-}: {
-  onTabChange?: (tab: AutomationTab) => void;
-}) {
+export function WorkflowScheduleOperations() {
   const { api, session } = useAuth();
   const gate = usePolicyGate();
   const [schedules, setSchedules] = useState<WorkflowSchedule[]>([]);
@@ -112,17 +109,26 @@ export function WorkflowScheduleOperations({
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string>();
   const [error, setError] = useState<string>();
+  const [acceptedScope, setAcceptedScope] = useState<string>();
   const scheduleRequest = useRef(0);
   const detailRequest = useRef(0);
+  const scopeKey = session ? `${session.access_token}:${session.org_id}` : "anonymous";
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
 
   const loadSchedules = useCallback(
-    async (signal?: AbortSignal) => {
+    async (expectedScope: string, signal?: AbortSignal) => {
       const request = ++scheduleRequest.current;
       setLoading(true);
       try {
         const next = await listWorkflowSchedules(api, signal);
-        if (request !== scheduleRequest.current || signal?.aborted) return;
+        if (
+          request !== scheduleRequest.current ||
+          signal?.aborted ||
+          scopeRef.current !== expectedScope
+        ) return;
         setSchedules(next);
+        setAcceptedScope(expectedScope);
         setSelectedId((current) =>
           current && next.some((item) => item.id === current)
             ? current
@@ -130,7 +136,11 @@ export function WorkflowScheduleOperations({
         );
         setError(undefined);
       } catch (caught) {
-        if (signal?.aborted || request !== scheduleRequest.current) return;
+        if (
+          signal?.aborted ||
+          request !== scheduleRequest.current ||
+          scopeRef.current !== expectedScope
+        ) return;
         setError(errorMessage(caught));
       } finally {
         if (request === scheduleRequest.current && !signal?.aborted)
@@ -141,19 +151,31 @@ export function WorkflowScheduleOperations({
   );
 
   useEffect(() => {
+    // A tenant/session switch invalidates all in-memory schedule data before
+    // the new request settles; the scope token also rejects late A responses.
+    setAcceptedScope(undefined);
+    setSchedules([]);
+    setSelectedId(undefined);
+    setRuns([]);
+    setPreview([]);
+    setError(undefined);
     const controller = new AbortController();
-    void loadSchedules(controller.signal);
+    void loadSchedules(scopeKey, controller.signal);
     return () => controller.abort();
-  }, [loadSchedules, session?.access_token, session?.org_id]);
+  }, [loadSchedules, scopeKey]);
 
-  const selected = schedules.find((item) => item.id === selectedId);
+  const scopedSchedules = acceptedScope === scopeKey ? schedules : [];
+  const selected = scopedSchedules.find((item) => item.id === selectedId);
 
   useEffect(() => {
-    if (!selected) {
+    if (!selected || acceptedScope !== scopeKey) {
       setRuns([]);
       setPreview([]);
       return;
     }
+    // A selected schedule never inherits preview/history from a prior id or scope.
+    setRuns([]);
+    setPreview([]);
     const controller = new AbortController();
     const request = ++detailRequest.current;
     void Promise.all([
@@ -166,14 +188,22 @@ export function WorkflowScheduleOperations({
       listScheduleRuns(api, selected.id, controller.signal),
     ])
       .then(([nextPreview, nextRuns]) => {
-        if (controller.signal.aborted || request !== detailRequest.current)
-          return;
+        if (
+          controller.signal.aborted ||
+          request !== detailRequest.current ||
+          scopeRef.current !== scopeKey
+        ) return;
         setPreview(nextPreview.fire_times);
         setRuns(nextRuns);
       })
       .catch((caught: unknown) => {
-        if (controller.signal.aborted || request !== detailRequest.current)
-          return;
+        if (
+          controller.signal.aborted ||
+          request !== detailRequest.current ||
+          scopeRef.current !== scopeKey
+        ) return;
+        setRuns([]);
+        setPreview([]);
         setError(errorMessage(caught));
       });
     return () => controller.abort();
@@ -182,8 +212,8 @@ export function WorkflowScheduleOperations({
     selected?.id,
     selected?.cron_expr,
     selected?.timezone,
-    session?.access_token,
-    session?.org_id,
+    acceptedScope,
+    scopeKey,
   ]);
 
   const toggle = useCallback(async () => {
@@ -203,14 +233,14 @@ export function WorkflowScheduleOperations({
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
       // Read again after the mutation; the backend remains the lifecycle authority.
-      await loadSchedules();
+      await loadSchedules(scopeKey);
     } catch (caught) {
-      await loadSchedules();
+      await loadSchedules(scopeKey);
       setError(errorMessage(caught));
     } finally {
       setPendingId(undefined);
     }
-  }, [api, gate, loadSchedules, pendingId, selected]);
+  }, [api, gate, loadSchedules, pendingId, scopeKey, selected]);
 
   const canViewSchedules = gate.can(ACTIONS.viewSchedules, {
     kind: "automate_tab",
@@ -221,46 +251,6 @@ export function WorkflowScheduleOperations({
     <main aria-labelledby="workflow-schedule-title" style={shell}>
       <header>
         <h1 id="workflow-schedule-title">예약 작업</h1>
-        <div role="tablist" aria-label="자동화 허브 탭" style={row}>
-          {gate.can(ACTIONS.viewRules, {
-            kind: "automate_tab",
-            id: "rules",
-          }) ? (
-            <button
-              type="button"
-              role="tab"
-              aria-selected="false"
-              style={button}
-              onClick={() => onTabChange?.("rules")}
-            >
-              워크플로
-            </button>
-          ) : null}
-          {canViewSchedules ? (
-            <button
-              type="button"
-              role="tab"
-              aria-selected="true"
-              style={selectedButton}
-            >
-              예약
-            </button>
-          ) : null}
-          {gate.can(ACTIONS.viewMonitors, {
-            kind: "automate_tab",
-            id: "monitors",
-          }) ? (
-            <button
-              type="button"
-              role="tab"
-              aria-selected="false"
-              style={button}
-              onClick={() => onTabChange?.("monitors")}
-            >
-              분석·감시
-            </button>
-          ) : null}
-        </div>
         <p>
           테넌트 권한으로 조회된 워크플로 예약의 실행 주기와 이력을 확인하고
           활성 상태를 변경합니다.
@@ -275,13 +265,13 @@ export function WorkflowScheduleOperations({
             <section aria-label="예약 목록" style={card}>
               <div style={row}>
                 <h2>예약 목록</h2>
-                <span>{schedules.length}개</span>
+                <span>{scopedSchedules.length}개</span>
               </div>
               {loading ? <p>예약을 불러오는 중…</p> : null}
-              {!loading && schedules.length === 0 ? (
+              {!loading && scopedSchedules.length === 0 ? (
                 <p>현재 권한 범위에 예약 작업이 없습니다.</p>
               ) : null}
-              {schedules.map((item) => (
+              {scopedSchedules.map((item) => (
                 <PolicyGated
                   key={item.id}
                   action={ACTIONS.select}

@@ -102,7 +102,10 @@ export function AutomateBody() {
   return (
     <PolicyGateProvider gate={gate}>
       {routeTab === "schedules" ? (
-        <WorkflowScheduleOperations onTabChange={navigateToTab} />
+        <>
+          <AutomateHub tab={routeTab} onTabChange={navigateToTab} />
+          <WorkflowScheduleOperations />
+        </>
       ) : (
         <AutomateHub tab={routeTab} onTabChange={navigateToTab} />
       )}

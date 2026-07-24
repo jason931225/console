@@ -2,7 +2,7 @@
 // log, version-pending banner) is exhaustively covered by
 // pages/AutomatePage.test.tsx; this file only proves AutomateBody mounts it
 // correctly under its own BulkPolicyGateProvider (empty/error/loaded states).
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -18,6 +18,39 @@ import { allowAllBulkAuthorize } from "../../../test/policyGateMock";
 import { AutomateBody } from "./AutomateBody";
 
 const S = ko.console.automate;
+const scheduledDefinition = {
+  id: "44444444-4444-4444-8444-444444444444",
+  workflow_key: "automate.schedule.kpi",
+  display_name: "일일 KPI 스냅샷",
+  object_type: "work_order",
+  status: "ACTIVE",
+  latest_version: 1,
+  active_version: 1,
+  pending_version: null,
+  pending_staged_by: null,
+  approval_line: [],
+  payment_line: [],
+  notification_rules: [],
+  action_allowlist: [],
+  required_approval_line: false,
+  required_payment_line: false,
+  created_at: "2026-07-08T09:00:00Z",
+  updated_at: "2026-07-08T09:00:00Z",
+  definition: {
+    schema_version: "workflow.definition.v1",
+    trigger: "automate.object_change",
+    steps: [],
+    automate: { scope: "org", doc: null, condition: null },
+    schedule: {
+      name: "일일 KPI 스냅샷",
+      active: true,
+      cron: "0 9 * * *",
+      cron_label: "매일",
+      next_run_at: "07-10 09:00",
+      last_run_at: "07-09 09:00",
+    },
+  },
+};
 
 const server = setupServer(allowAllBulkAuthorize());
 beforeAll(() => {
@@ -105,6 +138,9 @@ function installHandlers(items: unknown[] = []) {
     http.get("*/api/v1/workflow-studio/definitions/:id/run-log", () =>
       HttpResponse.json({ items: [] }),
     ),
+    http.get("*/api/v1/workflow-studio/schedules", () =>
+      HttpResponse.json({ items: [] }),
+    ),
   );
 }
 
@@ -133,6 +169,16 @@ describe("AutomateBody (console screen composition)", () => {
     renderBody(["SUPER_ADMIN"], [path]);
     expect(await screen.findByRole("tab", { name: selectedLabel, selected: true })).toBeVisible();
     expectLocation(path);
+  });
+
+  it("keeps the authoritative definition-backed schedule workflow reachable at /console/scheduled", async () => {
+    installHandlers([scheduledDefinition]);
+    renderBody(["SUPER_ADMIN"], ["/console/scheduled"]);
+
+    const detail = await screen.findByRole("region", { name: "일일 KPI 스냅샷" });
+    expect(screen.getByRole("form", { name: S.sections.addSchedule })).toBeVisible();
+    expect(within(detail).getByRole("button", { name: S.actions.runNow })).toBeVisible();
+    expect(within(detail).getByRole("button", { name: S.actions.edit })).toBeVisible();
   });
 
   it("writes tab changes to history and follows browser back and forward", async () => {
