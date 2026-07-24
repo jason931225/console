@@ -411,42 +411,27 @@ describe("WorkflowScheduleOperations scope fences", () => {
     expect(screen.getByLabelText("연결된 워크플로 정의")).toHaveValue("");
   });
 
-  it("rejects a deferred prior-session schedule list after an A→B switch", async () => {
-    const first = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
-    const second = deferred<{ data: { items: typeof schedule[] }; response: Response }>();
-    let scheduleRequests = 0;
-    let firstListSignal: AbortSignal | undefined;
-    const GET = vi.fn().mockImplementation((path: string, options?: { signal?: AbortSignal }) => {
-      if (path === "/api/v1/workflow-studio/definitions")
-        return Promise.resolve({ data: { items: [] }, response: new Response() });
-      if (path !== "/api/v1/workflow-studio/schedules") throw new Error(`unexpected GET ${path}`);
-      scheduleRequests += 1;
-      if (scheduleRequests === 1) firstListSignal = options?.signal;
-      return scheduleRequests === 1 ? first.promise : second.promise;
-    });
-    const client = { GET, POST: vi.fn(), PATCH: vi.fn() } as unknown as ConsoleApiClient;
+  it("does not start an already-unmounted A bootstrap after an immediate A→B switch", async () => {
+    const clientA = api();
+    const clientB = api();
     const sessionA = { access_token: "token-a", org_id: "org-a", user_id: "a", roles: ["SUPER_ADMIN"], feature_grants: [] };
     const sessionB = { ...sessionA, access_token: "token-b", org_id: "org-b", user_id: "b" };
     const view = render(
-      <AuthTestProvider session={sessionA} overrides={{ api: client }}>
+      <AuthTestProvider session={sessionA} overrides={{ api: clientA }}>
         <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
       </AuthTestProvider>,
     );
-    await waitFor(() => { expect(GET).toHaveBeenCalledTimes(2); });
-    view.rerender(
-      <AuthTestProvider session={sessionB} overrides={{ api: client }}>
-        <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
-      </AuthTestProvider>,
-    );
-    await waitFor(() => { expect(GET).toHaveBeenCalledTimes(4); });
-    expect(firstListSignal?.aborted).toBe(true);
-    first.resolve({ data: { items: [{ ...schedule, label: "A 전용 예약" }] }, response: new Response() });
-    await Promise.resolve();
-    expect(screen.queryByText("A 전용 예약")).toBeNull();
 
-    second.resolve({ data: { items: [{ ...schedule, label: "B 전용 예약" }] }, response: new Response() });
-    expect(await screen.findByText("B 전용 예약")).toBeVisible();
-    expect(screen.queryByText("A 전용 예약")).toBeNull();
+    // Rerender before React drains the startup microtask scheduled for A.
+    view.rerender(
+      <AuthTestProvider session={sessionB} overrides={{ api: clientB }}>
+        <PolicyGateProvider gate={{ can: () => true }}><WorkflowScheduleOperations /></PolicyGateProvider>
+      </AuthTestProvider>,
+    );
+
+    await waitFor(() => { expect(clientB.GET).toHaveBeenCalledTimes(2); });
+    expect(clientA.GET).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: "평일 KPI 스냅샷 선택" })).toBeVisible();
   });
 
   it("clears preview and history together when the selected schedule detail request fails", async () => {

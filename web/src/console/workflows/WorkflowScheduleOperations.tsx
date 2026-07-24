@@ -165,6 +165,10 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
 
   const loadSchedules = useCallback(
     async (signal?: AbortSignal) => {
+      // The startup effect schedules this in a microtask. Cleanup may run first
+      // on an immediate scope transition, so do not even allocate a request or
+      // begin API work for an already-aborted/unmounted scope.
+      if (signal?.aborted || !isActive()) return;
       const request = ++scheduleRequest.current;
       setLoading(true);
       try {
@@ -189,7 +193,7 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
         if (request === scheduleRequest.current && !signal?.aborted) setLoading(false);
       }
     },
-    [api, scopeKey],
+    [api, isActive, scopeKey],
   );
 
   useEffect(() => {
