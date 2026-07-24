@@ -24,7 +24,7 @@ use mnt_notices_application::{
 use mnt_notices_domain::{NewNotice, NoticeAudience, NoticeBody, NoticeCategory, NoticeTitle};
 use mnt_notifications_application::{EmitNotificationCommand, NotificationSink};
 use mnt_notifications_domain::NotificationLink;
-use mnt_platform_db::{DbError, issue_code, with_audit, with_org_conn};
+use mnt_platform_db::{DbError, issue_code, with_audit, with_audits, with_org_conn};
 use mnt_platform_request_context::current_org;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -356,11 +356,15 @@ impl PgNoticeStore {
         .await
     }
 
-    /// Transition a draft to published: fail-closed preflight (the effective
-    /// audience must be non-empty), issue the canonical NT- code, snapshot the
-    /// audience into `notice_receipts` (one audited bulk insert), then —
-    /// best-effort, post-commit — fan out a notification to each snapshotted
-    /// recipient.
+    /// Transition a draft to published in ONE audited transaction: lock the
+    /// row (`FOR UPDATE` — 404 missing / 409 already published), snapshot the
+    /// effective audience (org-wide, or the members of its audience branches
+    /// via `user_branches`) into `notice_receipts`, fail closed if the
+    /// snapshot came out empty, issue the canonical NT- code, and flip the
+    /// status. A failure at ANY step rolls the whole publish back — there is
+    /// no window where a notice is published with zero receipts and its
+    /// republish path dead on the 409 guard. Then — best-effort, post-commit —
+    /// fan out a notification to each snapshotted recipient.
     pub async fn publish(
         &self,
         command: PublishNoticeCommand,
@@ -380,9 +384,17 @@ impl PgNoticeStore {
             command.occurred_at,
         )?
         .with_org(org);
+        let recipients_event = notice_audit_event(
+            "notice.publish_recipients",
+            Some(command.publisher),
+            command.notice_id,
+            command.trace,
+            command.occurred_at,
+        )?
+        .with_org(org);
 
-        let (audience_scope, title) =
-            with_audit::<_, (String, String), PgNoticeError>(&self.pool, publish_event, move |tx| {
+        let (title, recipient_ids) =
+            with_audits::<_, (String, Vec<UserId>), PgNoticeError>(&self.pool, org, move |tx| {
                 Box::pin(async move {
                     let current: Option<(String, String)> = sqlx::query_as(
                         "SELECT status, audience_scope FROM notices WHERE id = $1 FOR UPDATE",
@@ -398,73 +410,6 @@ impl PgNoticeStore {
                         }
                     };
 
-                    // Fail-closed preflight: publishing to nobody is a
-                    // validation error, not a silent empty snapshot.
-                    let has_audience: bool = if audience_scope == "branches" {
-                        sqlx::query_scalar(
-                            r"
-                            SELECT EXISTS(
-                                SELECT 1
-                                FROM users u
-                                JOIN user_branches ub
-                                  ON ub.user_id = u.id AND ub.org_id = u.org_id
-                                JOIN notice_audience_branches nab
-                                  ON nab.notice_id = $2 AND nab.org_id = $1
-                                 AND nab.branch_id = ub.branch_id
-                                WHERE u.org_id = $1 AND u.is_active = true
-                            )
-                            ",
-                        )
-                        .bind(org_uuid)
-                        .bind(notice_uuid)
-                        .fetch_one(tx.as_mut())
-                        .await?
-                    } else {
-                        sqlx::query_scalar(
-                            "SELECT EXISTS(SELECT 1 FROM users WHERE org_id = $1 AND is_active = true)",
-                        )
-                        .bind(org_uuid)
-                        .fetch_one(tx.as_mut())
-                        .await?
-                    };
-                    if !has_audience {
-                        return Err(KernelError::validation(
-                            "the notice's effective audience is empty",
-                        )
-                        .into());
-                    }
-
-                    let code = issue_code(tx, org, "notification").await?;
-                    let title: String = sqlx::query_scalar(
-                        r"
-                        UPDATE notices
-                        SET status = 'published', code = $2, published_at = $3, updated_at = $3
-                        WHERE id = $1
-                        RETURNING title
-                        ",
-                    )
-                    .bind(notice_uuid)
-                    .bind(code)
-                    .bind(occurred_at)
-                    .fetch_one(tx.as_mut())
-                    .await?;
-                    Ok((audience_scope, title))
-                })
-            })
-            .await?;
-
-        let recipients_event = notice_audit_event(
-            "notice.publish_recipients",
-            Some(command.publisher),
-            command.notice_id,
-            command.trace,
-            command.occurred_at,
-        )?
-        .with_org(org);
-
-        let recipient_ids =
-            with_audit::<_, Vec<UserId>, PgNoticeError>(&self.pool, recipients_event, move |tx| {
-                Box::pin(async move {
                     let snapshot_sql = if audience_scope == "branches" {
                         r"
                         INSERT INTO notice_receipts (org_id, notice_id, recipient_user_id)
@@ -492,9 +437,39 @@ impl PgNoticeStore {
                         .bind(notice_uuid)
                         .fetch_all(tx.as_mut())
                         .await?;
-                    rows.iter()
+                    let recipient_ids = rows
+                        .iter()
                         .map(|row| Ok(UserId::from_uuid(row.try_get("recipient_user_id")?)))
-                        .collect::<Result<Vec<_>, PgNoticeError>>()
+                        .collect::<Result<Vec<_>, PgNoticeError>>()?;
+
+                    // Fail closed: publishing to nobody is a validation error,
+                    // never a silent empty snapshot. The rollback un-publishes
+                    // the notice AND discards the receipt rows atomically.
+                    if recipient_ids.is_empty() {
+                        return Err(KernelError::validation(
+                            "the notice's effective audience is empty",
+                        )
+                        .into());
+                    }
+
+                    let code = issue_code(tx, org, "notification").await?;
+                    let title: String = sqlx::query_scalar(
+                        r"
+                        UPDATE notices
+                        SET status = 'published', code = $2, published_at = $3, updated_at = $3
+                        WHERE id = $1
+                        RETURNING title
+                        ",
+                    )
+                    .bind(notice_uuid)
+                    .bind(code)
+                    .bind(occurred_at)
+                    .fetch_one(tx.as_mut())
+                    .await?;
+                    Ok((
+                        (title, recipient_ids),
+                        Vec::from([publish_event, recipients_event]),
+                    ))
                 })
             })
             .await?;
@@ -588,6 +563,16 @@ impl PgNoticeStore {
 
         with_org_conn::<_, _, PgNoticeError>(&self.pool, org, move |tx| {
             Box::pin(async move {
+                // 404 for a notice that does not exist (in this org) — never a
+                // fabricated 0/0 (openapi declares 404 on the progress route).
+                let exists: Option<i32> = sqlx::query_scalar("SELECT 1 FROM notices WHERE id = $1")
+                    .bind(notice_uuid)
+                    .fetch_optional(tx.as_mut())
+                    .await?;
+                if exists.is_none() {
+                    return Err(KernelError::not_found("notice not found").into());
+                }
+
                 let row = sqlx::query(
                     r"
                     SELECT COUNT(*) AS total,

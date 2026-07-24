@@ -509,6 +509,18 @@ async fn branch_scoped_audience_publish_and_receipts_as_runtime_role(owner_pool:
     .await
     .expect("empty-audience notice still readable to manager");
     assert_eq!(still_draft.status, "draft");
+    assert!(
+        still_draft.code.is_none(),
+        "the rejected publish must roll back atomically — no NT- code leaks"
+    );
+    let leaked = still_draft
+        .progress
+        .expect("manager summary carries progress");
+    assert_eq!(
+        (leaked.total, leaked.acknowledged),
+        (0, 0),
+        "the rejected publish must leave zero receipt rows"
+    );
 
     // Publish to branch A only: exactly its 2 members are snapshotted.
     let published = mnt_platform_request_context::scope_org(knl, async {

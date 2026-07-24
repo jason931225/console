@@ -449,14 +449,23 @@ async fn notice_board_rest_scoped_audience_draft_edit_and_receipts(pool: PgPool)
         assert_eq!(outstanding.status, StatusCode::OK);
         assert_eq!(outstanding.json["total"].as_i64(), Some(0));
 
-        // Receipts for a notice that does not exist are 404 even for managers.
+        // Receipts and progress for a notice that does not exist are 404 even
+        // for managers — never a fabricated empty page or 0/0.
+        let ghost = uuid::Uuid::new_v4();
         let missing = get_json(
             service.clone(),
-            &format!("/api/v1/notices/{}/receipts", uuid::Uuid::new_v4()),
+            &format!("/api/v1/notices/{ghost}/receipts"),
             &manager_token,
         )
         .await;
         assert_eq!(missing.status, StatusCode::NOT_FOUND);
+        let missing_progress = get_json(
+            service.clone(),
+            &format!("/api/v1/notices/{ghost}/progress"),
+            &manager_token,
+        )
+        .await;
+        assert_eq!(missing_progress.status, StatusCode::NOT_FOUND);
     })
     .await;
 }
