@@ -138,6 +138,7 @@ export function WorkflowScheduleOperations() {
 
   const loadSchedules = useCallback(
     async (expectedScope: string, signal?: AbortSignal) => {
+      if (scopeRef.current !== expectedScope) return;
       const request = ++scheduleRequest.current;
       setLoading(true);
       try {
@@ -169,7 +170,11 @@ export function WorkflowScheduleOperations() {
         ) return;
         setError(errorMessage(caught));
       } finally {
-        if (request === scheduleRequest.current && !signal?.aborted)
+        if (
+          request === scheduleRequest.current &&
+          !signal?.aborted &&
+          scopeRef.current === expectedScope
+        )
           setLoading(false);
       }
     },
@@ -256,22 +261,26 @@ export function WorkflowScheduleOperations() {
       !gate.can(ACTIONS.update, { kind: "workflow_schedule", id: selected.id })
     )
       return;
+    const expectedScope = scopeKey;
     setPendingId(selected.id);
     setError(undefined);
     try {
       const updated = await updateWorkflowSchedule(api, selected.id, {
         enabled: !selected.enabled,
       });
+      if (scopeRef.current !== expectedScope) return;
       setSchedules((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
       // Read again after the mutation; the backend remains the lifecycle authority.
-      await loadSchedules(scopeKey);
+      await loadSchedules(expectedScope);
     } catch (caught) {
-      await loadSchedules(scopeKey);
+      if (scopeRef.current !== expectedScope) return;
+      await loadSchedules(expectedScope);
+      if (scopeRef.current !== expectedScope) return;
       setError(errorMessage(caught));
     } finally {
-      setPendingId(undefined);
+      if (scopeRef.current === expectedScope) setPendingId(undefined);
     }
   }, [api, gate, loadSchedules, pendingId, scopeKey, selected]);
 
@@ -284,6 +293,7 @@ export function WorkflowScheduleOperations() {
       })
     )
       return;
+    const expectedScope = scopeKey;
     setError(undefined);
     setPendingId(selected?.id ?? "creating");
     try {
@@ -296,19 +306,26 @@ export function WorkflowScheduleOperations() {
       } else {
         await createWorkflowSchedule(api, form);
       }
+      if (scopeRef.current !== expectedScope) return;
       setEditing(false);
       setForm(INITIAL_FORM);
-      await loadSchedules(scopeKey);
+      await loadSchedules(expectedScope);
     } catch (caught) {
-      await loadSchedules(scopeKey);
+      if (scopeRef.current !== expectedScope) return;
+      await loadSchedules(expectedScope);
+      if (scopeRef.current !== expectedScope) return;
       setError(errorMessage(caught));
     } finally {
-      setPendingId(undefined);
+      if (scopeRef.current === expectedScope) setPendingId(undefined);
     }
   }, [api, editing, form, gate, loadSchedules, pendingId, scopeKey, selected]);
 
   const startEdit = useCallback(() => {
-    if (!selected) return;
+    if (
+      !selected ||
+      !gate.can(ACTIONS.update, { kind: "workflow_schedule", id: selected.id })
+    )
+      return;
     setForm({
       label: selected.label,
       cron_expr: selected.cron_expr,
@@ -317,10 +334,11 @@ export function WorkflowScheduleOperations() {
       enabled: selected.enabled,
     });
     setEditing(true);
-  }, [selected]);
+  }, [gate, selected]);
 
   const runNow = useCallback(async () => {
     if (!selected || pendingId) return;
+    const expectedScope = scopeKey;
     setPendingId(selected.id);
     setError(undefined);
     try {
@@ -332,11 +350,13 @@ export function WorkflowScheduleOperations() {
         },
       });
       if (!response.data) throw new ApiCallError(response.response.status, response.error);
-      await loadSchedules(scopeKey);
+      if (scopeRef.current !== expectedScope) return;
+      await loadSchedules(expectedScope);
     } catch (caught) {
+      if (scopeRef.current !== expectedScope) return;
       setError(errorMessage(caught));
     } finally {
-      setPendingId(undefined);
+      if (scopeRef.current === expectedScope) setPendingId(undefined);
     }
   }, [api, loadSchedules, pendingId, scopeKey, selected]);
 
@@ -352,6 +372,7 @@ export function WorkflowScheduleOperations() {
         setError("자신이 올린 개정은 승인할 수 없습니다.");
         return;
       }
+      const expectedScope = scopeKey;
       setPendingId(selected?.id);
       setError(undefined);
       try {
@@ -367,14 +388,16 @@ export function WorkflowScheduleOperations() {
               )
             : await api.POST(
                 "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/withdraw",
-                params,
+              params,
               );
         if (!response.data) throw new ApiCallError(response.response.status, response.error);
-        await loadSchedules(scopeKey);
+        if (scopeRef.current !== expectedScope) return;
+        await loadSchedules(expectedScope);
       } catch (caught) {
+        if (scopeRef.current !== expectedScope) return;
         setError(errorMessage(caught));
       } finally {
-        setPendingId(undefined);
+        if (scopeRef.current === expectedScope) setPendingId(undefined);
       }
     },
     [api, loadSchedules, pendingId, scopeKey, selected?.id, selectedDefinition, session?.user_id],
@@ -388,6 +411,10 @@ export function WorkflowScheduleOperations() {
     kind: "workflow_schedule",
     id: "new",
   });
+  const canUpdateSelected = selected
+    ? gate.can(ACTIONS.update, { kind: "workflow_schedule", id: selected.id })
+    : false;
+  const showScheduleForm = editing ? canUpdateSelected : canCreateSchedules;
 
   return (
     <section aria-labelledby="workflow-schedule-title" style={shell}>
@@ -404,7 +431,7 @@ export function WorkflowScheduleOperations() {
       ) : (
         <>
           {error ? <p role="alert">{error}</p> : null}
-          {canCreateSchedules ? <form
+          {showScheduleForm ? <form
             aria-label={editing ? "예약 작업 편집" : "예약 작업 추가"}
             style={card}
             onSubmit={(event) => {
