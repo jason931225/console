@@ -90,7 +90,7 @@ the lane is later dropped, the number is not recycled.
 | # | Slot | Assigned to | Subject | State | Appended |
 |---|---|---|---|---|---|
 | 1 | 0201 | — | evidence-retention (reserved gap) | **RESERVED — unavailable** | 2026-07-25 |
-| 2 | 0203 | L-A1 | ontology catalog additive-upgrade path | assigned | 2026-07-25 |
+| 2 | 0203 | hf-leaveapi-revoke | REVOKE PUBLIC on leave_api.assert_employee_directory_manager + restore the deny-by-default tripwire | assigned (swapped in 2026-07-25, see §5) | 2026-07-25 |
 | 3 | 0204 | L-X1 | deal aggregate — the CRM trunk | assigned | 2026-07-25 |
 | 4 | 0205 | L-X2 | deal stage transitions + per-stage evidence enum | assigned | 2026-07-25 |
 | 5 | 0206 | L-X3 | activity discipline + Closed-Lost reason enum + auto-Lost settings | assigned | 2026-07-25 |
@@ -98,7 +98,7 @@ the lane is later dropped, the number is not recycled.
 | 7 | 0208 | L-X5 | Won → contract `C-` + large-deal threshold object | assigned | 2026-07-25 |
 | 8 | 0209 | L-X7 | ontology projections (deal / listing / inquiry) | assigned | 2026-07-25 |
 | 9 | 0210 | L-X8 | lead PII: consent, retention, masking, audited sensitive view | assigned | 2026-07-25 |
-| 10 | 0211 | hf-leaveapi-revoke | REVOKE PUBLIC on leave_api.assert_employee_directory_manager (SECURITY DEFINER authz helper) + restore the six→seven deny-by-default tripwire | assigned | 2026-07-25 |
+| 10 | 0211 | L-A1 | ontology catalog additive-upgrade path (swapped from 0203, lane had written nothing) | assigned | 2026-07-25 |
 
 Next free slot after the seeded assignments: **0211**.
 
@@ -134,3 +134,34 @@ self-service path.
 > since the integrator lands it immediately, and a manifest round-trip would add
 > a copy step with drift risk and no safety gain. §1.3 still stands for lanes the
 > integrator is not landing in the same pass.
+
+## 5. Policy correction — assign at LAND time, not at charter time
+
+**The pre-assignment model in §1 was wrong, and `mnt-gate-migration-safety` was
+right.** The gate requires contiguous versions from 0001
+(`NonContiguousMigrationVersion`, `backend/ci/gates/migration-safety/src/lib.rs:132`).
+That is not ceremony: a hole on the main line is a real hazard, because any
+database already migrated past it rejects a migration that later lands *into*
+it — sqlx's out-of-order guard. Pre-assigning 0203-0210 to lanes that have not
+written them manufactures exactly those holes, so the ledger and the gate
+encoded contradictory policies and every reserved gap reproduced the conflict.
+
+Corrected protocol, effective now:
+
+1. A lane develops against a **placeholder** number and never depends on it —
+   proven trivial in practice: renumbering is a `git mv` plus a grep, because
+   nothing in a migration body or its tests references its own version.
+2. The **integrator assigns the real number at merge time**, taking the next
+   number above the highest currently on the branch, so the sequence stays
+   contiguous by construction and lands in the order it is applied.
+3. §4 remains append-only as the record of what was spent. A swap before either
+   lane has written anything is not recycling and is permitted; a swap after a
+   migration exists is not.
+
+The 0203 ↔ 0211 swap above is the first application: `hf-leaveapi-revoke` had a
+written, tested migration and needed to land immediately; `L-A1` had written
+nothing, so it moves up. This keeps the sequence contiguous and avoids opening
+eight holes for a security hotfix that is ready now.
+
+`0201` stays a genuine reserved gap and therefore a standing single violation —
+it predates this wave and is the one hole the gate legitimately still reports.
