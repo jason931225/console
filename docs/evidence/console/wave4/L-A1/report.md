@@ -199,13 +199,16 @@ test targets** from other lanes (mnt-app `board_ack_api`,
 `run_lifecycle_api`; `mnt-recruiting-application` unit;
 `mnt-recruiting-domain` unit; `mnt-workorder-domain` `settlement_fsm`).
 
-**Fixed by the `hf-buck-preflight` lane** (`claude/hf-buck-preflight-20260725`
-@ `b84c2598`), which reports that intervening spine commits supplied most of
-the declarations and that it added the remainder, including one
-(`mnt-platform-db` `tests/lifecycle_maker_checker.rs`) introduced by the
-four-eyes merge. With that table, `gen_first_party.py` and
-`tools/buck/preflight.sh` both exit 0. Not independently re-verified by L-A1 —
-that lane's branch is not merged here.
+**All 14 were fixed by intervening spine commits, not by a dedicated lane.**
+The `hf-buck-preflight` lane (`claude/hf-buck-preflight-20260725` @ `b84c2598`)
+measured this at `74eeb648`, the spine tip before its own first commit: of the
+14 above, 14 were already declared and none were outstanding. That lane
+declared **zero** of the 14. Its own contribution was a genuine 15th —
+`mnt-platform-db` `tests/lifecycle_maker_checker.rs`, introduced by the
+four-eyes merge *after* the CI run this section was written from — plus a
+post-merge regen of `backend/crates/leave/domain/BUCK`. Net effect:
+`gen_first_party.py` exits 0 and `tools/buck/preflight.sh` exits 0 (was 1).
+Not independently re-verified by L-A1 — that lane's branch is not merged here.
 
 **This lane's hand-written target is confirmed byte-identical to generator
 output.** That lane took L-A1's evidence commit into a throwaway worktree,
