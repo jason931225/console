@@ -37,6 +37,7 @@ export interface RegistryObjectType {
 }
 
 let cachedTypes: readonly RegistryObjectType[] | null = null;
+let objectTypeRegistryGeneration = 0;
 const canonicalTypesByAuthority = new Map<string, Map<string, CanonicalObjectType>>();
 const canonicalGenerationsByAuthority = new Map<string, Map<string, number>>();
 
@@ -163,6 +164,41 @@ export async function loadObjectTypeRegistry(
   }
 }
 
+/**
+ * Loads the discovery registry for one exact effective authority. A newer
+ * authority supersedes prior bootstrap requests, so an old response cannot
+ * make its discovered kinds available to the current route.
+ */
+export async function loadObjectTypeRegistryForAuthority(
+  api: ConsoleApiClient,
+  authorityKey: string,
+  signal?: AbortSignal,
+): Promise<readonly RegistryObjectType[]> {
+  if (!authorityKey.trim()) throw new Error("object-type registry requires an authority key");
+  const generation = objectTypeRegistryGeneration + 1;
+  objectTypeRegistryGeneration = generation;
+  const isCurrent = () =>
+    !signal?.aborted && objectTypeRegistryGeneration === generation;
+
+  try {
+    const { data } = await api.GET("/api/v1/object-types", { signal });
+    if (!isCurrent()) throw new Error("object-type registry invalidated");
+    if (!data) throw new Error("object-type registry response missing data");
+    const types: RegistryObjectType[] = data.map((row) => ({
+      kind: row.kind,
+      codePrefix: row.code_prefix ?? null,
+      description: row.description,
+      status: row.status,
+      activeCount: row.active_count,
+    }));
+    ingest(types);
+    return types;
+  } catch (error) {
+    if (!isCurrent()) throw new Error("object-type registry invalidated");
+    throw error;
+  }
+}
+
 /** Seed the cache + grammar from a payload directly. Bootstrap/test seam. */
 export function primeObjectTypeRegistry(types: readonly RegistryObjectType[]): void {
   ingest(types);
@@ -171,6 +207,7 @@ export function primeObjectTypeRegistry(types: readonly RegistryObjectType[]): v
 /** Clear the cache. Test isolation only (pair with codeGrammar.resetCodePrefixes). */
 export function resetObjectTypeRegistry(): void {
   cachedTypes = null;
+  objectTypeRegistryGeneration = 0;
   canonicalTypesByAuthority.clear();
   canonicalGenerationsByAuthority.clear();
 }

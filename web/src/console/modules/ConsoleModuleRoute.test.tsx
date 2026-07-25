@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,7 +6,6 @@ import type { ConsoleApiClient } from "../../api/client";
 import type { AuthSession, ViewAsState } from "../../context/auth";
 import { AuthTestProvider } from "../../test/AuthTestProvider";
 import {
-  primeObjectTypeRegistry,
   resetObjectTypeRegistry,
 } from "../ontology/typeRegistrySource";
 import { ontologyWorkspaceAuthorityKey } from "../ontology/useOntologyRevisionCommitQueue";
@@ -68,16 +67,17 @@ function latestModuleProps(): { config: { id: string; objectKind: string }; auth
 describe("ConsoleModuleRoute dynamic ontology authority wiring", () => {
   beforeEach(() => {
     genericModuleScreen.mockClear();
-    primeObjectTypeRegistry([
-      { kind: "widget", codePrefix: null, description: "dynamic widget", status: "active", activeCount: 0 },
-    ]);
+    resetObjectTypeRegistry();
+    api.GET = vi.fn().mockResolvedValue({
+      data: [{ kind: "widget", code_prefix: null, description: "dynamic widget", status: "active", active_count: 0 }],
+    });
   });
 
   afterEach(() => {
     resetObjectTypeRegistry();
   });
 
-  it("passes the exact fail-closed effective authority key for every dynamic scope change", () => {
+  it("passes the exact fail-closed effective authority key for every dynamic scope change", async () => {
     const contexts = [
       { session: session(), viewAs: undefined },
       { session: session({ org_id: "org-b" }), viewAs: undefined },
@@ -91,12 +91,14 @@ describe("ConsoleModuleRoute dynamic ontology authority wiring", () => {
 
     for (const context of contexts) {
       view.rerender(mounted(context.session, context.viewAs));
-      const props = latestModuleProps();
-      expect(props.config).toMatchObject({ id: "widget", objectKind: "widget" });
-      expect(props.authorityKey).toBe(
-        ontologyWorkspaceAuthorityKey(context.session, context.viewAs),
-      );
-      authorityKeys.push(props.authorityKey);
+      await waitFor(() => {
+        const props = latestModuleProps();
+        expect(props.config).toMatchObject({ id: "widget", objectKind: "widget" });
+        expect(props.authorityKey).toBe(
+          ontologyWorkspaceAuthorityKey(context.session, context.viewAs),
+        );
+      });
+      authorityKeys.push(latestModuleProps().authorityKey);
     }
 
     expect(new Set(authorityKeys).size).toBe(contexts.length);
@@ -106,15 +108,61 @@ describe("ConsoleModuleRoute dynamic ontology authority wiring", () => {
   it("fails closed without an owned effective session incarnation", () => {
     render(mounted(session({ client_session_incarnation: undefined })));
 
-    expect(latestModuleProps()).toMatchObject({
-      config: { id: "widget", objectKind: "widget" },
-      authorityKey: undefined,
-    });
+    expect(genericModuleScreen).not.toHaveBeenCalled();
   });
 
   it("keeps a hand-authored module on its existing configuration", () => {
     render(mounted(session(), undefined, "asset"));
 
     expect(latestModuleProps().config).toMatchObject({ id: "asset", objectKind: "equipment" });
+  });
+
+  it("bootstraps a fresh registered unknown kind under the effective authority before rendering it", async () => {
+    resetObjectTypeRegistry();
+    api.GET = vi.fn().mockResolvedValue({
+      data: [{ kind: "widget", code_prefix: null, description: "dynamic widget", status: "active", active_count: 0 }],
+    });
+    const currentSession = session();
+
+    render(mounted(currentSession));
+
+    await waitFor(() => {
+      expect(api.GET).toHaveBeenCalledWith("/api/v1/object-types", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(latestModuleProps().config).toMatchObject({ id: "widget", objectKind: "widget" });
+    });
+    expect(latestModuleProps().authorityKey).toBe(
+      ontologyWorkspaceAuthorityKey(currentSession, undefined),
+    );
+  });
+
+  it("fails closed instead of falling back to another module when the dynamic registry cannot load", async () => {
+    resetObjectTypeRegistry();
+    api.GET = vi.fn().mockRejectedValue(new Error("registry unavailable"));
+
+    render(mounted(session()));
+
+    await waitFor(() => {
+      expect(api.GET).toHaveBeenCalledWith("/api/v1/object-types", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    });
+    expect(genericModuleScreen).not.toHaveBeenCalled();
+  });
+
+  it("reloads the dynamic registry rather than reusing a prior authority's registry", async () => {
+    resetObjectTypeRegistry();
+    api.GET = vi.fn().mockResolvedValue({
+      data: [{ kind: "widget", code_prefix: null, description: "dynamic widget", status: "active", active_count: 0 }],
+    });
+    const view = render(mounted(session()));
+    await waitFor(() => expect(latestModuleProps().config).toMatchObject({ id: "widget" }));
+
+    view.rerender(mounted(session({ client_session_incarnation: "session-b" })));
+
+    await waitFor(() => {
+      expect(api.GET).toHaveBeenCalledTimes(2);
+      expect(latestModuleProps()).toMatchObject({
+        config: { id: "widget", objectKind: "widget" },
+        authorityKey: ontologyWorkspaceAuthorityKey(session({ client_session_incarnation: "session-b" }), undefined),
+      });
+    });
   });
 });
