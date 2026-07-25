@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ConsoleApiClient } from "../../api/client";
@@ -23,7 +23,8 @@ const config: ModuleScreenConfig = {
   emptyMode: "live",
   policy: { read: "object.view" },
   data: { list: CANONICAL_ONTOLOGY_LIST },
-  statbar: [],
+  statbar: [{ key: "instances", labelKey: "Instances", tone: "neutral", source: "canonical" }],
+  search: { labelKey: "Search", placeholderKey: "Search", fields: [] },
   list: { keyboard: [], sharedTrack: "widgetTrack", columns: [{ key: "code" }] },
   detail: { fields: [], linkChips: [], actions: [] },
   rows: [],
@@ -72,5 +73,28 @@ describe("GenericModuleScreen canonical dynamic type", () => {
     expect(await screen.findByRole("columnheader", { name: "Governed label" })).toBeVisible();
     expect(screen.getAllByText("Real governed value").length).toBeGreaterThan(0);
     expect(screen.queryByText("OT-WIDGET")).not.toBeInTheDocument();
+  });
+
+  it("clears previously governed rows, selection, and stats when a canonical refresh fails", async () => {
+    const api = apiForCanonicalWidget();
+    (api.GET as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: undefined,
+      error: { error: { code: "DENIED", message: "denied" } },
+      response: new Response(null, { status: 403 }),
+    });
+    render(
+      <PolicyGateProvider gate={allowGate}>
+        <GenericModuleScreen api={api} authorityKey="tenant-b:session-1" config={config} />
+      </PolicyGateProvider>,
+    );
+
+    expect((await screen.findAllByText("Real governed value")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Instances 1")).toBeVisible();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search" }), { target: { value: "real" } });
+
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(screen.queryByText("Real governed value")).not.toBeInTheDocument();
+    expect(screen.queryByText("Instances 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("40008000")).not.toBeInTheDocument();
   });
 });

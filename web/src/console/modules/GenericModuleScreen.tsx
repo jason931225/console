@@ -860,7 +860,7 @@ type ModuleRuntimeAction =
       stats: Record<string, ModuleStatValue | undefined> | undefined;
       selectedRowId: string | undefined;
     }
-  | { type: "listFailed" }
+  | { type: "listFailed"; clear: boolean }
   | { type: "detailIdle" }
   | { type: "detailLoading" }
   | {
@@ -907,10 +907,18 @@ function moduleRuntimeReducer(
       };
     }
     case "listFailed":
-      // A refresh failure does not make the last authenticated, scoped result
-      // untrue. Keep it visible and offer recovery; an initial failure still
-      // has no rows and therefore renders only the error state.
-      return { ...state, listState: "error" };
+      if (!action.clear) return { ...state, listState: "error" };
+      // Canonical ontology reads are authority-scoped. A failed refresh means
+      // the prior schema/rows cannot be asserted for this render anymore.
+      return {
+        ...state,
+        selectedRowId: undefined,
+        loadedRows: EMPTY_ROWS,
+        listStats: {},
+        detailStats: {},
+        listState: "error",
+        detailState: "idle",
+      };
     case "detailIdle":
       return { ...state, detailStats: {}, detailState: "idle" };
     case "detailLoading":
@@ -1073,13 +1081,13 @@ function GenericModuleScreenBody({
       })
       .catch(() => {
         if (!active) return;
-        dispatch({ type: "listFailed" });
+        dispatch({ type: "listFailed", clear: canonicalOntology });
       });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [api, gate.can, loadRows, query, refreshToken]);
+  }, [api, canonicalOntology, gate.can, loadRows, query, refreshToken]);
 
   const retryList = useCallback(() => {
     setRefreshToken((token) => token + 1);

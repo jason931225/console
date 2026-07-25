@@ -61,6 +61,21 @@ const INSTANCE = {
   },
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
+const NEWER_DETAIL = {
+  ...DETAIL,
+  object_type: { ...DETAIL.object_type, schema_version: 8, key_write_revision: 8 },
+};
+
 afterEach(() => {
   resetObjectTypeRegistry();
   vi.restoreAllMocks();
@@ -114,5 +129,42 @@ describe("canonical dynamic object-type source", () => {
       "type version mismatch",
     );
     expect(canonicalObjectType("widget", "tenant-a:session-1")).toBeUndefined();
+  });
+
+  it("does not let an older same-authority resolve replace a newer cache entry", async () => {
+    const oldDetail = deferred<{ data: typeof DETAIL; response: Response }>();
+    const oldInstances = deferred<{ data: typeof INSTANCE[]; response: Response }>();
+    const GET = vi.fn()
+      .mockImplementationOnce(() => oldDetail.promise)
+      .mockResolvedValueOnce({ data: NEWER_DETAIL, response: new Response() })
+      .mockResolvedValueOnce({ data: [INSTANCE], response: new Response() })
+      .mockImplementationOnce(() => oldInstances.promise);
+    const api = { GET } as unknown as ConsoleApiClient;
+
+    const older = loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
+    const newer = loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
+    await newer;
+    oldDetail.resolve({ data: DETAIL, response: new Response() });
+    await vi.waitFor(() => expect(GET).toHaveBeenCalledTimes(4));
+    oldInstances.resolve({ data: [INSTANCE], response: new Response() });
+    await older;
+
+    expect(canonicalObjectType("widget", "tenant-a:session-1")?.definition.schemaVersion).toBe(8);
+  });
+
+  it("does not let an older same-authority rejection delete a newer cache entry", async () => {
+    const oldDetail = deferred<{ data: typeof DETAIL; response: Response }>();
+    const GET = vi.fn()
+      .mockImplementationOnce(() => oldDetail.promise)
+      .mockResolvedValueOnce({ data: NEWER_DETAIL, response: new Response() })
+      .mockResolvedValueOnce({ data: [INSTANCE], response: new Response() });
+    const api = { GET } as unknown as ConsoleApiClient;
+
+    const older = loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
+    await loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
+    oldDetail.reject(new Error("older request failed"));
+    await expect(older).rejects.toThrow("older request failed");
+
+    expect(canonicalObjectType("widget", "tenant-a:session-1")?.definition.schemaVersion).toBe(8);
   });
 });

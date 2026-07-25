@@ -38,6 +38,7 @@ export interface RegistryObjectType {
 
 let cachedTypes: readonly RegistryObjectType[] | null = null;
 const canonicalTypesByAuthority = new Map<string, Map<string, CanonicalObjectType>>();
+const canonicalGenerationsByAuthority = new Map<string, Map<string, number>>();
 
 /** A detail/schema snapshot that was read under one effective authority only. */
 export interface CanonicalObjectType {
@@ -53,6 +54,21 @@ function authorityCache(authorityKey: string): Map<string, CanonicalObjectType> 
     canonicalTypesByAuthority.set(authorityKey, cache);
   }
   return cache;
+}
+
+function nextCanonicalGeneration(authorityKey: string, stableKey: string): number {
+  let generations = canonicalGenerationsByAuthority.get(authorityKey);
+  if (!generations) {
+    generations = new Map();
+    canonicalGenerationsByAuthority.set(authorityKey, generations);
+  }
+  const generation = (generations.get(stableKey) ?? 0) + 1;
+  generations.set(stableKey, generation);
+  return generation;
+}
+
+function isCurrentCanonicalGeneration(authorityKey: string, stableKey: string, generation: number): boolean {
+  return canonicalGenerationsByAuthority.get(authorityKey)?.get(stableKey) === generation;
 }
 
 /**
@@ -79,6 +95,7 @@ export async function loadCanonicalObjectType(
 ): Promise<CanonicalObjectType> {
   if (!authorityKey.trim()) throw new Error("canonical ontology reads require an authority key");
   const cache = authorityCache(authorityKey);
+  const generation = nextCanonicalGeneration(authorityKey, stableKey);
   // A failed refresh must never leave previously authorized or stale data
   // eligible for this authority to render.
   cache.delete(stableKey);
@@ -93,10 +110,14 @@ export async function loadCanonicalObjectType(
     }
     const definition = objectTypeDefFromDetail(detail, instances, new Map([[detail.object_type.id, stableKey]]));
     const canonical = { detail, definition, instances } satisfies CanonicalObjectType;
-    cache.set(stableKey, canonical);
+    if (isCurrentCanonicalGeneration(authorityKey, stableKey, generation)) {
+      cache.set(stableKey, canonical);
+    }
     return canonical;
   } catch (error) {
-    cache.delete(stableKey);
+    if (isCurrentCanonicalGeneration(authorityKey, stableKey, generation)) {
+      cache.delete(stableKey);
+    }
     throw error;
   }
 }
@@ -151,4 +172,5 @@ export function primeObjectTypeRegistry(types: readonly RegistryObjectType[]): v
 export function resetObjectTypeRegistry(): void {
   cachedTypes = null;
   canonicalTypesByAuthority.clear();
+  canonicalGenerationsByAuthority.clear();
 }
