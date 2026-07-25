@@ -56,6 +56,7 @@ rust_test(
         "//third-party/rust:sqlx",
         "//third-party/rust:thiserror",
         "//third-party/rust:time",
+        "//third-party/rust:tokio",
         "//third-party/rust:uuid",
         ":mnt-dispatch-adapter-postgres",
     ],
