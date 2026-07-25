@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -176,14 +176,20 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
   };
   try {
     git(['init', '-b', 'main']); git(['config', 'user.name', 'Jason Lee']); git(['config', 'user.email', 'jason19931225@gmail.com']);
-    git(['config', 'gpg.format', 'ssh']); git(['config', 'user.signingkey', '/Users/jasonlee/.ssh/id_ed25519']);
+    const signingKey = path.join(repo, 'review_key');
+    const generated = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', signingKey], { encoding: 'utf8' });
+    assert.equal(generated.status, 0, generated.stderr || generated.error?.message);
+    git(['config', 'gpg.format', 'ssh']); git(['config', 'user.signingkey', signingKey]);
     for (const directory of ['backend/crates/platform/db/migrations', 'backend/openapi', 'tools/buck', 'backend/crates/a', 'backend/crates/b', 'backend/crates/c', 'docs/program', 'docs/evidence/console/fanout-receipts', '.github/trust']) mkdirSync(path.join(repo, directory), { recursive: true });
-    writeFileSync(path.join(repo, '.github/trust/console.allowed_signers'), 'jason19931225@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAgMAp8vHS9V/9UQQVTa5FtmS9Q9fdB8I520DsZMMDTR\n');
+    const publicKey = readFileSync(`${signingKey}.pub`, 'utf8').trim().split(/\s+/).slice(0, 2).join(' ');
+    writeFileSync(path.join(repo, '.github/trust/console.allowed_signers'), `jason19931225@gmail.com ${publicKey}\n`);
     writeFileSync(path.join(repo, 'backend/crates/platform/db/migrations/.keep'), ''); writeFileSync(path.join(repo, 'backend/openapi/openapi.yaml'), 'openapi: 3.1.0\n'); writeFileSync(path.join(repo, 'tools/buck/generated_face_registry.json'), JSON.stringify(faces));
     for (const id of ['a', 'b', 'c']) writeFileSync(path.join(repo, `backend/crates/${id}/file.txt`), 'base\n');
     git(['add', '.']); git(['commit', '-m', 'base']); const base = git(['rev-parse', 'HEAD']);
     const liveWorktree = git(['rev-parse', '--show-toplevel']);
-    const reviewer = { id: 'reviewer', author_name: 'Jason Lee', author_email: 'jason19931225@gmail.com', committer_name: 'Jason Lee', committer_email: 'jason19931225@gmail.com', signing: { format: 'ssh', principal: 'jason19931225@gmail.com', fingerprint: 'SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8' } };
+    const fingerprint = spawnSync('ssh-keygen', ['-lf', `${signingKey}.pub`, '-E', 'sha256'], { encoding: 'utf8' });
+    assert.equal(fingerprint.status, 0, fingerprint.stderr || fingerprint.error?.message);
+    const reviewer = { id: 'reviewer', author_name: 'Jason Lee', author_email: 'jason19931225@gmail.com', committer_name: 'Jason Lee', committer_email: 'jason19931225@gmail.com', signing: { format: 'ssh', principal: 'jason19931225@gmail.com', fingerprint: fingerprint.stdout.trim().split(/\s+/)[1] } };
     const capability = (id) => {
       const source = cap(id.toUpperCase(), [`backend/crates/${id}/**`]);
       return {
@@ -214,7 +220,8 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
     writeFileSync(path.join(repo, 'docs/evidence/console/fanout-admission.json'), JSON.stringify(admission)); git(['add', '.']); git(['commit', '-m', 'admission']); const admissionSha = git(['rev-parse', 'HEAD']);
     const runner = path.join(path.dirname(new URL(import.meta.url).pathname), 'plan-fanout.mjs');
     const isolatedHome = mkdtempSync(path.join(tmpdir(), 'fanout-home-'));
-    const result = spawnSync('node', [runner, '--epoch-base', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8', env: { ...process.env, HOME: isolatedHome } });
+    const { CONSOLE_INTEGRATION_TIP_SHA: _ignoredIntegrationTip, ...hostileOuterEnvironment } = process.env;
+    const result = spawnSync('node', [runner, '--epoch-base', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8', env: { ...hostileOuterEnvironment, HOME: isolatedHome } });
     rmSync(isolatedHome, { recursive: true, force: true });
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout);
