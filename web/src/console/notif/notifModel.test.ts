@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { EXPOSED_SCREEN_KEYS, MOUNTED_SCREEN_KEYS, consoleScreenPath, isExposedScreenKey } from "../shell/nav";
 import { linkKey, rowTarget, sameLink, timeLabel } from "./notifModel";
 
 const objectLink = { type: "object", kind: "approval_run", id: "run-1" } as const;
@@ -16,10 +17,20 @@ describe("notif link model", () => {
     expect(rowTarget(objectLink)).toEqual({ type: "object", kind: "approval_run", id: "run-1" });
   });
 
+  // Asserted against the live exposure manifest rather than a hardcoded screen:
+  // EXPOSED_SCREEN_KEYS is evidence-gated and has legitimately been emptied, so a
+  // fixed exemplar would encode a snapshot instead of the ADR-0025 invariant.
   it("navigates only evidence-exposed screens (ADR-0025)", () => {
-    expect(rowTarget({ type: "screen", screen: "sales" })).toEqual({ type: "screen", path: "/console/sales" });
-    // Mounted-but-dark and unknown screens both stay ack-able non-links.
-    expect(rowTarget({ type: "screen", screen: "mywork" })).toBeUndefined();
+    for (const key of EXPOSED_SCREEN_KEYS) {
+      expect(rowTarget({ type: "screen", screen: key })).toEqual({
+        type: "screen",
+        path: consoleScreenPath(key),
+      });
+    }
+    // Every mounted-but-dark screen stays an ack-able non-link, as does an unknown key.
+    for (const key of MOUNTED_SCREEN_KEYS.filter((k) => !isExposedScreenKey(k))) {
+      expect(rowTarget({ type: "screen", screen: key })).toBeUndefined();
+    }
     expect(rowTarget({ type: "screen", screen: "not-a-screen" })).toBeUndefined();
   });
 

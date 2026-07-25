@@ -3,6 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type * as NavModule from "../shell/nav";
+
+// The exposure manifest is evidence-gated and legitimately empties as screens
+// await their ADR-0025 evidence, so this suite pins one exposed screen rather
+// than depending on whatever the live manifest happens to hold.
+vi.mock("../shell/nav", async () => {
+  const actual = await vi.importActual<typeof NavModule>("../shell/nav");
+  return { ...actual, EXPOSED_SCREEN_KEYS: ["sales"], isExposedScreenKey: (s: string) => s === "sales" };
+});
+
 import { createConsoleApiClient } from "../../api/client";
 import { notifStrings as text } from "../../i18n/notif";
 import { NotifScreen } from "./NotifScreen";
