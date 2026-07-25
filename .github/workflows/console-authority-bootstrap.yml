@@ -4,7 +4,6 @@ on:
   pull_request_target:
     branches:
       - main
-      - 'codex/console-foundation*'
 
 # This workflow is deliberately target-branch-only: no secrets, cache, npm,
 # or checkout of PR executable content precedes the authenticated graph check.
@@ -15,22 +14,26 @@ jobs:
   authenticate-console-authority:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'codex/console-foundation'))
+      github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - name: Checkout protected target code only
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: main
           persist-credentials: false
-          fetch-depth: 1
+          fetch-depth: 0
       - name: Verify C/T authority train before candidate execution
         env:
           HOME: ${{ runner.temp }}/hostile-home
-        run: >-
-          node scripts/console/verify-console-pr-authority-bootstrap.mjs
-          --pr-number '${{ github.event.pull_request.number }}'
-          --head '${{ github.event.pull_request.head.sha }}'
-          --merge '${{ github.event.pull_request.merge_commit_sha }}'
-          --base '${{ github.event.pull_request.base.ref }}'
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          node scripts/console/verify-console-pr-authority-bootstrap.mjs \
+          --pr-number "$PR_NUMBER" \
+          --head "$PR_HEAD_SHA" \
+          --merge "$PR_MERGE_SHA" \
+          --base "$PR_BASE_REF"

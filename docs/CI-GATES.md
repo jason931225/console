@@ -17,11 +17,14 @@ story evidence, and CI jobs for the touched surfaces are green.
 
 ## Console authority bootstrap
 
-`Console authority bootstrap` is a protected-default-branch `pull_request_target`
-gate for console authority trains.  It intentionally checks out only default-branch
-code, fetches PR Git objects without checking them out, verifies signed candidate
+`Console authority bootstrap` is a protected-`main` `pull_request_target`
+gate for console authority trains targeting `main`. It intentionally checks out only
+protected `main` code with the complete Git graph, fetches PR Git objects without
+checking them out, verifies signed candidate
 `C` and direct authority tip `T` against the pinned SSH signer, and treats the
-GitHub synthetic merge `M` only as an unsigned structural object.  Only after that
+GitHub synthetic merge `M` only as an unsigned structural object. Git commands and
+candidate subprocesses run with a sanitized Git environment that ignores inherited
+Git config and `HOME`/XDG configuration. Only after that
 does it create a detached `C` worktree to run the candidate validator, planner, and
 their unit tests.  It has no secrets, cache restore, npm install, or PR executable
 step before authentication.  This bootstrap must be merged to `main` before PR 488

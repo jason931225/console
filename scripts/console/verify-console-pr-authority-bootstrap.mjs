@@ -20,8 +20,24 @@ export const AUTHORITY_PATHS = Object.freeze([
   'docs/program/console-program-ledger.md',
 ]);
 const SHA = /^[0-9a-f]{40}$/;
+const SAFE_ENVIRONMENT_KEYS = Object.freeze(['PATH', 'SystemRoot', 'SYSTEMROOT', 'ComSpec', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL', 'TZ']);
 const fail = (message) => { throw new Error(`console authority bootstrap: ${message}`); };
 const exactSha = (value, label) => { if (!SHA.test(value ?? '')) fail(`${label} must be a lowercase 40-character SHA`); return value; };
+
+function sanitizedGitEnvironment(source = process.env) {
+  const environment = {};
+  for (const key of SAFE_ENVIRONMENT_KEYS) if (source[key] !== undefined) environment[key] = source[key];
+  return {
+    ...environment,
+    HOME: '/dev/null',
+    XDG_CONFIG_HOME: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: '/bin/false',
+  };
+}
 
 export function validatePinnedPolicy(raw) {
   if (raw !== `${TRUSTED_ALLOWED_SIGNER}\n`) fail('C signing policy must contain exactly the pinned signer');
@@ -64,7 +80,10 @@ export function verifyBootstrapGraph(ops, { headSha, mergeSha }) {
   return Object.freeze({ candidateSha: C, integrationTipSha: T, mergeSha: M });
 }
 
-function git(repo, args, options = {}) { return execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options }); }
+function git(repo, args, options = {}) {
+  const { env, ...rest } = options;
+  return execFileSync('git', ['-C', repo, '-c', 'core.hooksPath=/dev/null', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: sanitizedGitEnvironment(env), ...rest });
+}
 function gitOk(repo, args) { try { git(repo, args); return true; } catch { return false; } }
 function treeEntry(repo, sha, file) { const entry = git(repo, ['ls-tree', sha, '--', file]).trim().match(/^(\d{6}) (\w+) [0-9a-f]{40}\t/); return entry ? { mode: entry[1], type: entry[2] } : null; }
 function rawDiff(repo, from, to) {
@@ -77,33 +96,33 @@ function rawDiff(repo, from, to) {
   }
   return changes;
 }
-function verifySshCommit(repo, sha, policy) {
+export function verifyPinnedSshCommit(repo, sha, policy, environment = process.env) {
   const directory = mkdtempSync(path.join(tmpdir(), 'console-signers-')); const policyFile = path.join(directory, 'allowed_signers');
   try {
     writeFileSync(policyFile, policy, { mode: 0o600 }); chmodSync(policyFile, 0o600);
-    const result = spawnSync('git', ['-C', repo, '-c', 'gpg.format=ssh', '-c', 'gpg.ssh.program=ssh-keygen', '-c', `gpg.ssh.allowedSignersFile=${policyFile}`, 'verify-commit', '--raw', sha], { encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' } });
+    const result = spawnSync('git', ['-C', repo, '-c', 'core.hooksPath=/dev/null', '-c', 'gpg.format=ssh', '-c', 'gpg.ssh.program=ssh-keygen', '-c', `gpg.ssh.allowedSignersFile=${policyFile}`, 'verify-commit', '--raw', sha], { encoding: 'utf8', env: sanitizedGitEnvironment(environment) });
     const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
     return { ok: result.status === 0, principal: output.match(/Good "git" signature for (.+?) with /)?.[1] ?? null, fingerprint: output.match(/key (SHA256:[A-Za-z0-9+/]+={0,2})/)?.[1] ?? null, command: ['gpg.format=ssh', 'gpg.ssh.program=ssh-keygen', 'gpg.ssh.allowedSignersFile=<0600-temp>'] };
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 function gitOps(repo) {
-  return { hasCommit: (sha) => gitOk(repo, ['cat-file', '-e', `${sha}^{commit}`]), readFile: (sha, file) => git(repo, ['show', `${sha}:${file}`]), treeEntry: (sha, file) => treeEntry(repo, sha, file), parents: (sha) => git(repo, ['show', '-s', '--format=%P', sha]).trim().split(/\s+/).filter(Boolean), diff: (from, to) => rawDiff(repo, from, to), tree: (sha) => git(repo, ['show', '-s', '--format=%T', sha]).trim(), sameTreeDiff: (left, right) => git(repo, ['diff', '--quiet', '--no-ext-diff', left, right]) === '', verifyCommit: (sha, authority) => verifySshCommit(repo, sha, authority.policy) };
+  return { hasCommit: (sha) => gitOk(repo, ['cat-file', '-e', `${sha}^{commit}`]), readFile: (sha, file) => git(repo, ['show', `${sha}:${file}`]), treeEntry: (sha, file) => treeEntry(repo, sha, file), parents: (sha) => git(repo, ['show', '-s', '--format=%P', sha]).trim().split(/\s+/).filter(Boolean), diff: (from, to) => rawDiff(repo, from, to), tree: (sha) => git(repo, ['show', '-s', '--format=%T', sha]).trim(), sameTreeDiff: (left, right) => git(repo, ['diff', '--quiet', '--no-ext-diff', left, right]) === '', verifyCommit: (sha, authority) => verifyPinnedSshCommit(repo, sha, authority.policy) };
 }
-function safeBaseBranch(base) { return base === 'main' || /^codex\/console-foundation(?:[-/].*)?$/.test(base); }
+function safeBaseBranch(base) { return base === 'main'; }
 function parseArgs(argv) {
   const result = {}; for (let index = 0; index < argv.length; index += 2) { const key = argv[index]; const value = argv[index + 1]; if (!['--pr-number', '--head', '--merge', '--base'].includes(key) || value === undefined) fail('usage: --pr-number N --head SHA --merge SHA --base branch'); result[key.slice(2)] = value; }
   if (!/^\d+$/.test(result['pr-number'] ?? '')) fail('PR number is invalid'); exactSha(result.head, 'PR head'); exactSha(result.merge, 'PR merge'); if (!safeBaseBranch(result.base)) fail('PR base is outside the console foundation trust scope'); return result;
 }
 function fetchExactPullObjects(repo, number, expectedHead, expectedMerge) {
   const namespace = `refs/console-bootstrap/${number}`;
-  git(repo, ['-c', 'core.hooksPath=/dev/null', 'fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/pull/${number}/head:${namespace}/head`, `+refs/pull/${number}/merge:${namespace}/merge`]);
+  git(repo, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/pull/${number}/head:${namespace}/head`, `+refs/pull/${number}/merge:${namespace}/merge`]);
   if (git(repo, ['rev-parse', `${namespace}/head`]).trim() !== expectedHead || git(repo, ['rev-parse', `${namespace}/merge`]).trim() !== expectedMerge) fail('GitHub pull refs do not match event SHAs');
 }
 function runAuthenticatedCandidateChecks(repo, C, T) {
   const candidate = mkdtempSync(path.join(tmpdir(), 'console-candidate-'));
   try {
     git(repo, ['worktree', 'add', '--detach', '--no-checkout', candidate]); git(repo, ['-C', candidate, 'checkout', '--detach', C]);
-    const environment = { ...process.env, CONSOLE_INTEGRATION_TIP_SHA: T, GIT_CONFIG_NOSYSTEM: '1' };
+    const environment = { ...sanitizedGitEnvironment(), CONSOLE_INTEGRATION_TIP_SHA: T };
     for (const [binary, args] of [['node', ['scripts/console/validate-console-truth-ledger.mjs']], ['node', ['scripts/console/plan-fanout.mjs', '--epoch-base', C, '--integration-tip', T]], ['node', ['--test', 'scripts/console/validate-console-truth-ledger.test.mjs', 'scripts/console/plan-fanout.test.mjs']]]) {
       if (spawnSync(binary, args, { cwd: candidate, env: environment, stdio: 'inherit' }).status !== 0) fail(`authenticated C check failed: ${binary} ${args.join(' ')}`);
     }

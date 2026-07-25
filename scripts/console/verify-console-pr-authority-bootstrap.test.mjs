@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AUTHORITY_PATHS, POLICY_PATH, TRUSTED_ALLOWED_SIGNER, TRUSTED_FINGERPRINT, TRUSTED_PRINCIPAL, validatePinnedPolicy, verifyBootstrapGraph } from './verify-console-pr-authority-bootstrap.mjs';
+import { AUTHORITY_PATHS, POLICY_PATH, TRUSTED_ALLOWED_SIGNER, TRUSTED_FINGERPRINT, TRUSTED_PRINCIPAL, validatePinnedPolicy, verifyBootstrapGraph, verifyPinnedSshCommit } from './verify-console-pr-authority-bootstrap.mjs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const C = 'c'.repeat(40), T = 't'.repeat(40).replace(/t/g, 'a'), M = 'b'.repeat(40), BASE = 'd'.repeat(40);
 const policy = `${TRUSTED_ALLOWED_SIGNER}\n`;
@@ -55,8 +59,28 @@ test('rejects indirect T and malformed M', () => {
   rejects({ tree: (sha) => sha === M ? 'tree-m' : 'tree-t' }, /tree\/diff/);
   rejects({ sameTreeDiff: () => false }, /tree\/diff/);
 });
-test('hostile HOME/program cannot replace the explicit verifier configuration seam', () => {
-  const { data, calls } = fixture({ verifyCommit: (sha, authority) => { calls.push({ sha, authority, command: ['gpg.format=ssh', 'gpg.ssh.program=ssh-keygen', 'gpg.ssh.allowedSignersFile=<0600-temp>'] }); return { ok: true, principal: TRUSTED_PRINCIPAL, fingerprint: TRUSTED_FINGERPRINT }; } });
-  verifyBootstrapGraph(data, { headSha: T, mergeSha: M });
-  assert.ok(calls.every(({ command }) => command.includes('gpg.format=ssh') && command.includes('gpg.ssh.program=ssh-keygen') && command.includes('gpg.ssh.allowedSignersFile=<0600-temp>')));
+test('hostile global Git config cannot replace the pinned verifier or execute its marker', () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'console-hostile-git-config-'));
+  const marker = path.join(directory, 'marker');
+  const attacker = path.join(directory, 'attacker-ssh-program');
+  const globalConfig = path.join(directory, 'gitconfig');
+  const sha = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+  try {
+    writeFileSync(attacker, `#!/bin/sh\nprintf attacked > '${marker}'\nexit 1\n`, { mode: 0o700 });
+    writeFileSync(globalConfig, `[gpg "ssh"]\n\tprogram = ${attacker}\n`);
+    const result = verifyPinnedSshCommit(process.cwd(), sha, policy, {
+      GIT_CONFIG_GLOBAL: globalConfig,
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: 'gpg.ssh.program',
+      GIT_CONFIG_VALUE_0: attacker,
+      HOME: directory,
+      XDG_CONFIG_HOME: directory,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.principal, TRUSTED_PRINCIPAL);
+    assert.equal(result.fingerprint, TRUSTED_FINGERPRINT);
+    assert.equal(existsSync(marker), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
