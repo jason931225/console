@@ -7006,7 +7006,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Edit a DRAFT notice (NoticeManage only); every field optional, audience replaced whole, 409 once published */
+        patch: operations["updateNoticeDraft"];
         trace?: never;
     };
     "/api/v1/notices/{id}/publish": {
@@ -8529,6 +8530,981 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/support/tickets/{id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bind a support ticket to the field object chain (customer site and/or dispatched work order)
+         * @description Requires assignee_manage on the ticket branch (untriaged tickets require cross-branch authority). Linking a site to an untriaged CUSTOMER ticket also sets its branch, and customer_id is denormalized from the site. A linked work order must be dispatched to the ticket's linked site. Each body field distinguishes an absent field (leave the link untouched) from an explicit null (clear the link).
+         */
+        post: operations["linkSupportTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support/tickets/{id}/acceptance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record the customer's acceptance verdict for a RESOLVED ticket (audited closure evidence)
+         * @description Requires assignee_manage on the ticket branch and an Idempotency-Key header. CUSTOMER_ACCEPTED drives RESOLVED to CLOSED; CUSTOMER_DECLINED requires a note, drives RESOLVED to IN_PROGRESS, and the note becomes a customer-visible comment. A replay with the same key and the same request returns the stored acceptance; the same key with a different request is a conflict. accepted_by is a business fact and is never logged.
+         */
+        post: operations["recordSupportTicketAcceptance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/field/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List branch-scoped customer sites with their issue, visit, and SLA rollups
+         * @description The field read gate is work_order_read_all, checked server-side because the overview carries customer contact and geo data. Every count derives from the same aggregation as the rows.
+         */
+        get: operations["listFieldSites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/field/sites/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a field site with its SLA rollup and traversable ticket, work-order, attendance, and acceptance history
+         * @description Scope resolution runs before the feature check, so an out-of-scope site is a 404 and never a 403. Each history list is capped at 50, most relevant first.
+         */
+        get: operations["getFieldSite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-orders/{workOrderId}/settlement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the live (non-VOID) cost settlement of a work order */
+        get: operations["getWorkOrderSettlement"];
+        put?: never;
+        /** Open a DRAFT cost settlement on a report-submitted, admin-review, or final-completed order */
+        post: operations["createWorkOrderSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settlements/{settlementId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a DRAFT settlement for review (creator or completion reviewer) */
+        post: operations["submitSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settlements/{settlementId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Four-eyes review of a SUBMITTED settlement; the reviewer must differ from the submitter */
+        post: operations["reviewSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settlements/{settlementId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a DRAFT or SUBMITTED settlement (completion reviewer holding an admin-tier role; reason required) */
+        post: operations["voidSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{id}/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 수령확인 receipts drill for one notice (NoticeManage only); acknowledged=false is the outstanding chase list */
+        get: operations["listNoticeReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/close-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Attendance-close preflight for a payroll run (audited read; EXECUTIVE/SUPER_ADMIN org-wide) */
+        get: operations["getPayrollRunClosePreflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/close-attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attested attendance close (STAGED/BLOCKED_LEGAL_GATE/READY_FOR_REVIEW to ATTENDANCE_CLOSED); a blocked preflight is a 409 carrying the failing checks in error.details */
+        post: operations["closePayrollRunAttendance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/calculate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Per-line draft calculation (ATTENDANCE_CLOSED only); a line without a verified gross + NTS source row stays blocked with truthful blockers, income tax is never estimated */
+        post: operations["calculatePayrollRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exception review queue for a run (audited read; OPEN rows first, then danger/warn/info, then age) */
+        get: operations["listPayrollRunExceptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/exceptions/{exceptionId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve one exception with CONFIRM or HOLD (HOLD requires a reason and carries the row to the next run of the series); the run must be CALCULATED */
+        post: operations["resolvePayrollRunException"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a CALCULATED run for approval; fail-closed while any exception is still OPEN (409 carries the open count in error.details.open) */
+        post: operations["submitPayrollRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** APPROVE or REJECT a SUBMITTED run under maker-checker separation of duties (the decider must not be the submitter) */
+        post: operations["decidePayrollRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw a REJECTED run back to CALCULATED, clearing the submit/decide columns so a fresh maker-checker pair is admissible */
+        post: operations["withdrawPayrollRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/schedule-disbursement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Schedule the transfer for an APPROVED run (one disbursement per run) */
+        post: operations["schedulePayrollDisbursement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/disbursement/attest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Operator attestation FSM SCHEDULED to SUBMITTED_TO_BANK to PAID or FAILED (reason required) and FAILED back to SCHEDULED; no bank API exists, these are operator records */
+        post: operations["attestPayrollDisbursement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/issue-payslips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue payslips for a PAID run into each recipient's inbox vault; hard-gated by the registered 노무사/세무사 release-gate record (409 legal_gate otherwise) */
+        post: operations["issuePayrollPayslips"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{id}/payslip-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Payslip delivery and acknowledgement readback for a run (audited read) */
+        get: operations["getPayrollPayslipDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notifications/by-object": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aggregate the authenticated user's notifications by source object, newest activity first */
+        get: operations["listMyNotificationObjectGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notifications/{id}/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark one of the authenticated user's notifications unread again (read toggle) */
+        post: operations["markMyNotificationUnread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notification-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the authenticated user's notification routing policies, newest first */
+        get: operations["listMyNotificationPolicies"];
+        /** Upsert a mute policy for the authenticated user (idempotent per target) */
+        put: operations["upsertMyNotificationPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notification-policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete (= unmute) one of the authenticated user's notification policies */
+        delete: operations["deleteMyNotificationPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List org changes
+         * @description RLS-filtered page of the tenant's org-change requests, newest first.
+         */
+        get: operations["listOrgChanges"];
+        put?: never;
+        /**
+         * Draft an org change (조직 개편 기안)
+         * @description Creates a DRAFT org-change request. Requires an Idempotency-Key; a replay of the same body under the same key returns the existing request with 200, a different body under the same key conflicts. A revision may supersede an existing request only when that request is REJECTED.
+         */
+        post: operations["createOrgChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one org change
+         * @description Out-of-scope rows are concealed as 404 (deny by omission).
+         */
+        get: operations["getOrgChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit an org-change draft
+         * @description DRAFT or PRECHECKED only; every edit returns the request to DRAFT, so a stored preflight receipt must be re-run before submit. Omitted fields are left unchanged.
+         */
+        patch: operations["updateOrgChangeDraft"];
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the impact preflight
+         * @description DRAFT or PRECHECKED only. Computes the blocker/warning receipt in-transaction; a clean run promotes the request to PRECHECKED, blockers hold it at DRAFT.
+         */
+        post: operations["preflightOrgChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit for SoD approval
+         * @description Requires PRECHECKED; recomputes the receipt inside the submit transaction (a stale or blocked receipt conflicts) and seeds the ordered hr → finance → legal → executive approval chain.
+         */
+        post: operations["submitOrgChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}/approval-steps/{stepId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide one approval step
+         * @description IN_APPROVAL only. Steps decide strictly in step order, the drafter can never decide (a second SoD net is enforced by the gov_approvals CHECK), and a rejection ends the request as REJECTED.
+         */
+        post: operations["decideOrgChangeApprovalStep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}/effectuate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply the approved change
+         * @description APPROVED only, and never before the effective date (발효일). NEW and REORG replay the proposal atomically to APPLIED; DISSOLVE seeds the six settlement items and opens SETTLING.
+         */
+        post: operations["effectuateOrgChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}/settlement-items/{itemId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete one settlement item
+         * @description SETTLING only; an already-completed item conflicts.
+         */
+        post: operations["completeOrgChangeSettlementItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a settled dissolve
+         * @description SETTLING only, and refused while any settlement item is open. The deferred dissolve ops replay inside the archive transaction, so uncleared dependents roll the whole action back (참조 무결성).
+         */
+        post: operations["archiveOrgChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-changes/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a draft
+         * @description DRAFT or PRECHECKED only; anything past submit resolves through the approval chain, never a cancel.
+         */
+        post: operations["cancelOrgChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List group member entities (법인)
+         * @description Active member orgs of every group the caller holds a live grant for; fails closed to an empty list when the caller holds no grant.
+         */
+        get: operations["listOrgEntities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/postings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List job postings with per-stage applicant counts (recruiting_read or recruiting_manage) */
+        get: operations["listRecruitPostings"];
+        put?: never;
+        /** Create a draft job posting (JP- code); recruiting_manage only */
+        post: operations["createRecruitPosting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/postings/{postingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Posting detail with its non-PII applicant pipeline rows */
+        get: operations["getRecruitPosting"];
+        /** Edit a DRAFT posting in place (409 for any other status); CAS on expected_updated_at */
+        put: operations["updateRecruitPosting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/postings/{postingId}/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read-only publish checklist evaluation for a DRAFT posting (recruiting_manage) */
+        post: operations["preflightRecruitPosting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/postings/{postingId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a draft (atomic preflight re-evaluation plus exposure attest; fail-closed) */
+        post: operations["publishRecruitPosting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/postings/{postingId}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a PUBLISHED posting (archive-not-delete); CAS on expected_updated_at */
+        post: operations["closeRecruitPosting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/postings/{postingId}/applicants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recruiter intake — register an applicant (APL- code) on a PUBLISHED posting */
+        post: operations["createRecruitApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Applicant detail (audited PII read) with offer versions and the stage timeline */
+        get: operations["getRecruitApplicant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Advance one stage (INTERVIEW→OFFER is offer-only and OFFER→HIRED hire-only — both 422) */
+        post: operations["advanceRecruitApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/assess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record the interview assessment at the INTERVIEW stage (offer prerequisite) */
+        post: operations["assessRecruitApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set or clear the hold flag */
+        post: operations["holdRecruitApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/request-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Flag supplementary documents as requested (no request body) */
+        post: operations["requestRecruitApplicantDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject with an enum reason — archives the applicant into the talent pool */
+        post: operations["rejectRecruitApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reinstate a rejected applicant to their prior stage (no request body) */
+        post: operations["reinstateRecruitApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Extend an offer (assessment-gated; one live offer per applicant) */
+        post: operations["extendRecruitOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/applicants/{applicantId}/hire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hire — one transaction through the HR-owned employee core
+         * @description Requires recruiting_manage AND employee_directory_manage. Creates the employee through the same idempotent core as People & Workforce (idempotency key recruit-hire-{applicantId}), links the applicant (HIRED), and increments the posting fill count. The latest offer must be ACCEPTED. POOL_DAILY postings return 422 POOL_REGISTRATION_UNAVAILABLE.
+         */
+        post: operations["hireRecruitApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/offers/{offerId}/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adjust a live offer — writes an immutable v+1 row and SUPERSEDEs the prior one */
+        post: operations["adjustRecruitOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/offers/{offerId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw a live offer; the applicant returns to INTERVIEW */
+        post: operations["withdrawRecruitOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/offers/{offerId}/record-reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record the candidate's reply on a live offer (ACCEPTED or DECLINED) */
+        post: operations["recordRecruitOfferReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiting/talent-pool": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rejected-applicant archive (talent pool) */
+        get: operations["listRecruitTalentPool"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9802,10 +10778,14 @@ export interface components {
             symptom: string;
             customer_request?: string;
             target_due_at?: components["schemas"]["Timestamp"];
+            maintenance_type?: components["schemas"]["MaintenanceType"];
+            maintenance_cause?: components["schemas"]["MaintenanceCause"];
         };
         UpdateWorkOrderIntakeRequest: {
             symptom?: string;
             customer_request?: string;
+            maintenance_type?: components["schemas"]["MaintenanceType"];
+            maintenance_cause?: components["schemas"]["MaintenanceCause"];
         };
         AssignWorkOrderRequest: {
             assignments: {
@@ -10006,6 +10986,23 @@ export interface components {
             resolved_at: string | null;
             /** Format: date-time */
             closed_at: string | null;
+            /**
+             * Format: uuid
+             * @description Linked customer site (the field object chain); null until the ticket is linked.
+             */
+            site_id: string | null;
+            site_name: string | null;
+            /**
+             * Format: uuid
+             * @description Denormalized from the linked site on link; null until the ticket is linked.
+             */
+            customer_id: string | null;
+            customer_name: string | null;
+            /**
+             * Format: uuid
+             * @description Work order dispatched for the visit; null until the ticket is linked.
+             */
+            work_order_id: string | null;
         };
         SupportTicketComment: {
             id: components["schemas"]["Uuid"];
@@ -11149,6 +12146,8 @@ export interface components {
             status: components["schemas"]["WorkOrderStatus"];
             priority: components["schemas"]["PriorityLevel"];
             result_type: components["schemas"]["WorkResultType"];
+            maintenance_type: null | components["schemas"]["MaintenanceType"];
+            maintenance_cause: null | components["schemas"]["MaintenanceCause"];
             /** Format: date-time */
             target_due_at: string | null;
             created_at: components["schemas"]["Timestamp"];
@@ -11187,10 +12186,22 @@ export interface components {
             overdue_open_count: number;
             /** Format: int64 */
             unassigned_count: number;
+            /**
+             * Format: double
+             * @description Share (0..1) of closed preventive orders that reached FINAL_COMPLETED no later than their target due date; null when the filtered set has no basis.
+             */
+            preventive_on_time_rate: number | null;
+            /**
+             * Format: double
+             * @description Mean minutes from the first IN_PROGRESS transition to the first REPORT_SUBMITTED transition (OT-13 MTTR); null when no order has completed that span.
+             */
+            mttr_minutes: number | null;
         };
         WorkOrderLensFacets: {
             status: components["schemas"]["WorkOrderFacetBucket"][];
             priority: components["schemas"]["WorkOrderFacetBucket"][];
+            maintenance_type: components["schemas"]["WorkOrderFacetBucket"][];
+            maintenance_cause: components["schemas"]["WorkOrderFacetBucket"][];
         };
         WorkOrderFacetBucket: {
             value: string;
@@ -11321,6 +12332,8 @@ export interface components {
             approval_line: components["schemas"]["ApprovalStepSummary"][];
             status_history: components["schemas"]["StatusHistorySummary"][];
             evidence: components["schemas"]["EvidenceSummary"][];
+            /** @description The live (non-VOID) cost settlement of this order, if one exists. */
+            settlement: null | components["schemas"]["SettlementSummary"];
         };
         SyncBatchRequest: {
             sync_id: string;
@@ -11784,6 +12797,8 @@ export interface components {
             status: components["schemas"]["WorkOrderStatus"];
             priority: components["schemas"]["PriorityLevel"];
             result_type: components["schemas"]["WorkResultType"];
+            maintenance_type: null | components["schemas"]["MaintenanceType"];
+            maintenance_cause: null | components["schemas"]["MaintenanceCause"];
             evidence_verified: boolean;
         };
         TargetChangeRequestSummary: {
@@ -12012,6 +13027,8 @@ export interface components {
              * @description When a producer's resolve-by-link sweep closed this notification; null while open.
              */
             resolved_at: string | null;
+            /** @description Whether the caller's mute policies suppress this row's attention (badge counts, realtime). Computed per caller at read time, never stored, and never filters the list. */
+            muted: boolean;
         };
         NotificationCategoryCount: {
             category: string;
@@ -12019,9 +13036,18 @@ export interface components {
             unread: number;
         };
         NotificationCountsSummary: {
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Unread rows that want attention; rows suppressed by the caller's mute policies are excluded.
+             */
             total_unread: number;
+            /** @description Per-category unread breakdown, mute-suppressed rows excluded; a category whose unread is entirely muted is omitted rather than shown as zero. */
             by_category: components["schemas"]["NotificationCategoryCount"][];
+            /**
+             * Format: int64
+             * @description Unread rows suppressed by the caller's mute policies, across all categories.
+             */
+            muted_unread: number;
         };
         NotificationPage: {
             items: components["schemas"]["NotificationSummary"][];
@@ -14897,19 +15923,30 @@ export interface components {
         NoticeSummary: {
             id: components["schemas"]["Uuid"];
             /** @description NT- code, set only once published. */
-            code?: string | null;
+            code: string | null;
             author_user_id: components["schemas"]["Uuid"];
             title: string;
             body: string;
             /** @enum {string} */
             status: "draft" | "published";
             /** Format: date-time */
-            published_at?: string | null;
+            published_at: string | null;
             created_at: components["schemas"]["Timestamp"];
+            category: components["schemas"]["NoticeCategory"];
+            /** @enum {string} */
+            audience_scope: "org" | "branches";
+            /** @description Audience branches with display names; empty for org-wide notices. */
+            audience_branches: components["schemas"]["NamedEntity"][];
+            /** @description The caller's own 수령확인 state; null when the caller is not a snapshotted recipient. */
+            my_receipt: components["schemas"]["NoticeMyReceipt"] | null;
+            /** @description Hydrated only for NoticeManage callers; null otherwise. */
+            progress: components["schemas"]["NoticeProgress"] | null;
         };
         CreateNoticeDraftRequest: {
             title: string;
             body: string;
+            category?: components["schemas"]["NoticeCategory"];
+            audience?: components["schemas"]["NoticeAudienceInput"];
         };
         NoticeProgress: {
             /** Format: int64 */
@@ -14995,7 +16032,7 @@ export interface components {
             period_end: string;
             source_label: string;
             /** @enum {string} */
-            status: "STAGED" | "BLOCKED_LEGAL_GATE" | "READY_FOR_REVIEW" | "APPROVED" | "ISSUED" | "VOID";
+            status: "STAGED" | "BLOCKED_LEGAL_GATE" | "READY_FOR_REVIEW" | "ATTENDANCE_CLOSED" | "CALCULATING" | "CALCULATED" | "SUBMITTED" | "REJECTED" | "APPROVED" | "DISBURSEMENT_SCHEDULED" | "PAID" | "ISSUED" | "VOID";
             calculation_enabled: boolean;
             /** Format: uuid */
             created_by?: string | null;
@@ -15003,6 +16040,25 @@ export interface components {
             approved_by?: string | null;
             /** Format: date-time */
             approved_at?: string | null;
+            /** @description Attestation receipt written by the attendance close — the preflight checks, the attesting user, and the attestation time. */
+            close_receipt?: Record<string, never> | null;
+            /** Format: uuid */
+            submitted_by?: string | null;
+            /** Format: date-time */
+            submitted_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Maker-checker counterparty; a DB CHECK forbids it from equalling submitted_by.
+             */
+            decided_by?: string | null;
+            /** Format: date-time */
+            decided_at?: string | null;
+            decision_reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Reserved for the future AP- workflow-engine object; never written today.
+             */
+            approval_ref?: string | null;
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
         };
@@ -15047,6 +16103,15 @@ export interface components {
             lines_limit: number;
             /** Format: int64 */
             lines_offset: number;
+            /** Format: int64 */
+            exceptions_open: number;
+            /** Format: int64 */
+            exceptions_total: number;
+            /** @description Latest stored calculation version; null until the run has been calculated. */
+            calculation?: components["schemas"]["PayrollRunCalcSummary"] | null;
+            disbursement?: components["schemas"]["PayrollDisbursement"] | null;
+            /** @description Unpaginated delivery summary; null until at least one payslip has been issued. */
+            payslip_delivery?: components["schemas"]["PayrollPayslipDeliverySummary"] | null;
         };
         MyPayrollLine: {
             run_id: components["schemas"]["Uuid"];
@@ -15055,7 +16120,7 @@ export interface components {
             /** Format: date */
             period_end: string;
             /** @enum {string} */
-            run_status: "STAGED" | "BLOCKED_LEGAL_GATE" | "READY_FOR_REVIEW" | "APPROVED" | "ISSUED" | "VOID";
+            run_status: "STAGED" | "BLOCKED_LEGAL_GATE" | "READY_FOR_REVIEW" | "ATTENDANCE_CLOSED" | "CALCULATING" | "CALCULATED" | "SUBMITTED" | "REJECTED" | "APPROVED" | "DISBURSEMENT_SCHEDULED" | "PAID" | "ISSUED" | "VOID";
             /** @enum {string} */
             calculation_status: "BLOCKED_LEGAL_GATE" | "READY_FOR_REVIEW" | "APPROVED" | "ISSUED" | "VOID";
             work_days?: number | null;
@@ -15992,6 +17057,934 @@ export interface components {
             memo?: string | null;
             idempotencyKey?: string | null;
         };
+        /**
+         * @description Deterministic per-site SLA state over OPEN/IN_PROGRESS/ON_HOLD tickets — BREACHED when any due_at is past, else AT_RISK when any due_at falls within 24 hours, else OK.
+         * @enum {string}
+         */
+        FieldSlaState: "OK" | "AT_RISK" | "BREACHED";
+        FieldSiteRow: {
+            site_id: components["schemas"]["Uuid"];
+            site_name: string;
+            branch_id: components["schemas"]["Uuid"];
+            customer_id: components["schemas"]["Uuid"];
+            customer_name: string;
+            address: string | null;
+            /** Format: double */
+            latitude: number | null;
+            /** Format: double */
+            longitude: number | null;
+            /**
+             * Format: int64
+             * @description Tickets in OPEN/IN_PROGRESS/ON_HOLD linked to the site.
+             */
+            open_ticket_count: number;
+            /**
+             * Format: int64
+             * @description Open tickets whose SLA due_at has already passed.
+             */
+            breached_ticket_count: number;
+            /** Format: date-time */
+            next_due_at: string | null;
+            /**
+             * Format: int64
+             * @description Work orders for the site in a non-terminal status.
+             */
+            active_work_order_count: number;
+            /** Format: date-time */
+            last_arrival_at: string | null;
+            sla: components["schemas"]["FieldSlaState"];
+        };
+        FieldSitePage: {
+            items: components["schemas"]["FieldSiteRow"][];
+            /**
+             * Format: uuid
+             * @description Id to pass as `cursor` for the next page, or null on the last page.
+             */
+            next_cursor: string | null;
+            /** Format: int64 */
+            total: number;
+        };
+        FieldSiteSummary: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            branch_id: components["schemas"]["Uuid"];
+            customer_id: components["schemas"]["Uuid"];
+            customer_name: string;
+            address: string | null;
+            province: string | null;
+            city: string | null;
+            postal_code: string | null;
+            /** Format: double */
+            latitude: number | null;
+            /** Format: double */
+            longitude: number | null;
+            /** Format: double */
+            geofence_radius_m: number | null;
+            contact_name: string | null;
+            contact_phone: string | null;
+        };
+        FieldSlaSummary: {
+            state: components["schemas"]["FieldSlaState"];
+            /** Format: int64 */
+            open: number;
+            /** Format: int64 */
+            breached: number;
+            /** Format: date-time */
+            next_due_at: string | null;
+            /** Format: int64 */
+            resolved_within_sla_90d: number;
+            /** Format: int64 */
+            resolved_breached_90d: number;
+        };
+        FieldWorkOrderRef: {
+            id: components["schemas"]["Uuid"];
+            request_no: string;
+            /** @description Workorder-crate status vocabulary, read-only here. */
+            status: string;
+            priority: string;
+            /** Format: date-time */
+            target_due_at: string | null;
+            /** Format: date-time */
+            report_submitted_at: string | null;
+            result_type: string;
+            created_at: components["schemas"]["Timestamp"];
+        };
+        FieldAttendanceEvent: {
+            user_id: components["schemas"]["Uuid"];
+            /** @description Same-org display-name lookup; null when the account no longer exists. */
+            user_name: string | null;
+            work_order_id: components["schemas"]["Uuid"];
+            /** @description Compliance attendance vocabulary, read-only here — ARRIVAL or DEPARTURE. */
+            kind: string;
+            occurred_at: components["schemas"]["Timestamp"];
+        };
+        FieldSiteDetail: {
+            site: components["schemas"]["FieldSiteSummary"];
+            sla: components["schemas"]["FieldSlaSummary"];
+            tickets: components["schemas"]["SupportTicketSummary"][];
+            work_orders: components["schemas"]["FieldWorkOrderRef"][];
+            attendance: components["schemas"]["FieldAttendanceEvent"][];
+            acceptances: components["schemas"]["SupportTicketAcceptance"][];
+        };
+        /** @description At least one of site_id / work_order_id must be present. An absent field leaves that link untouched; an explicit null clears it. */
+        LinkSupportTicketRequest: {
+            /** Format: uuid */
+            site_id?: string | null;
+            /** Format: uuid */
+            work_order_id?: string | null;
+        };
+        /** @enum {string} */
+        SupportTicketAcceptanceKind: "CUSTOMER_ACCEPTED" | "CUSTOMER_DECLINED";
+        /** @enum {string} */
+        SupportTicketAcceptanceChannel: "IN_PERSON" | "PHONE" | "EMAIL" | "MESSENGER";
+        RecordSupportTicketAcceptanceRequest: {
+            kind: components["schemas"]["SupportTicketAcceptanceKind"];
+            channel: components["schemas"]["SupportTicketAcceptanceChannel"];
+            /** @description Customer-side acknowledger name (business fact, never logged). */
+            accepted_by: string;
+            /** @description Required when kind is CUSTOMER_DECLINED; it becomes the customer-visible comment on the reopen. */
+            note?: string | null;
+        };
+        SupportTicketAcceptance: {
+            id: components["schemas"]["Uuid"];
+            ticket_id: components["schemas"]["Uuid"];
+            kind: components["schemas"]["SupportTicketAcceptanceKind"];
+            channel: components["schemas"]["SupportTicketAcceptanceChannel"];
+            accepted_by: string;
+            note: string | null;
+            recorded_by_user_id: components["schemas"]["Uuid"];
+            /** @description Recorder display name via a same-org lookup; null when the account no longer exists. */
+            recorded_by_name: string | null;
+            occurred_at: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description Typed maintenance classification (유형).
+         * @enum {string}
+         */
+        MaintenanceType: "EMERGENCY" | "CORRECTIVE" | "PREVENTIVE" | "INSPECTION";
+        /**
+         * @description Typed maintenance cause (원인).
+         * @enum {string}
+         */
+        MaintenanceCause: "BREAKDOWN" | "RETURN_PREP" | "SCHEDULED" | "INSPECTION_FINDING" | "OTHER";
+        /**
+         * @description Cost-settlement lifecycle (정산 → 전표). VOID is terminal and frees the one-live-settlement slot.
+         * @enum {string}
+         */
+        SettlementStatus: "DRAFT" | "SUBMITTED" | "APPROVED" | "VOID";
+        /** @enum {string} */
+        SettlementLineKind: "LABOR" | "PART" | "OUTSOURCE" | "OTHER";
+        SettlementLineRequest: {
+            kind: components["schemas"]["SettlementLineKind"];
+            label: string;
+            /** Format: int64 */
+            amount_krw: number;
+            /** @description PO/IV/outsource code when known. */
+            source_ref?: string;
+            /**
+             * Format: int32
+             * @description Defaults to the line's position in the array.
+             */
+            sort_order?: number;
+        };
+        CreateSettlementRequest: {
+            lines: components["schemas"]["SettlementLineRequest"][];
+            note?: string;
+        };
+        ReviewSettlementRequest: {
+            /** @enum {string} */
+            decision: "APPROVED" | "RETURNED";
+            /** @description Required (non-empty after trim) when decision is RETURNED. */
+            comment?: string;
+        };
+        VoidSettlementRequest: {
+            reason: string;
+        };
+        SettlementLineSummary: {
+            id: components["schemas"]["Uuid"];
+            kind: components["schemas"]["SettlementLineKind"];
+            label: string;
+            /** Format: int64 */
+            amount_krw: number;
+            source_ref: string | null;
+            /** Format: int32 */
+            sort_order: number;
+        };
+        SettlementSummary: {
+            id: components["schemas"]["Uuid"];
+            work_order_id: components["schemas"]["Uuid"];
+            branch_id: components["schemas"]["Uuid"];
+            status: components["schemas"]["SettlementStatus"];
+            /** Format: int64 */
+            total_amount_krw: number;
+            /** @description Finance journal/voucher code once posted (finance-gl lane). */
+            voucher_ref: string | null;
+            note: string | null;
+            lines: components["schemas"]["SettlementLineSummary"][];
+            created_by: components["schemas"]["Uuid"];
+            /** Format: uuid */
+            submitted_by: string | null;
+            /** Format: date-time */
+            submitted_at: string | null;
+            /** Format: uuid */
+            approved_by: string | null;
+            /** Format: date-time */
+            approved_at: string | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        /** @enum {string} */
+        NoticeCategory: "general" | "legal" | "hr_order" | "training";
+        NoticeAudienceInput: {
+            /** @enum {string} */
+            scope: "org" | "branches";
+            /** @description Non-empty iff scope is branches; must be empty or omitted for org (422 otherwise). */
+            branch_ids?: components["schemas"]["Uuid"][];
+        };
+        NoticeMyReceipt: {
+            /**
+             * Format: date-time
+             * @description 수령확인 timestamp; null until the caller acknowledges.
+             */
+            acknowledged_at: string | null;
+        };
+        UpdateNoticeDraftRequest: {
+            title?: string;
+            body?: string;
+            category?: components["schemas"]["NoticeCategory"];
+            audience?: components["schemas"]["NoticeAudienceInput"];
+        };
+        NoticeReceipt: {
+            recipient_user_id: components["schemas"]["Uuid"];
+            display_name: string;
+            /**
+             * Format: date-time
+             * @description 수령확인 timestamp; null while the recipient is outstanding.
+             */
+            acknowledged_at: string | null;
+        };
+        NoticeReceiptPage: {
+            items: components["schemas"]["NoticeReceipt"][];
+            /**
+             * Format: int64
+             * @description Total matching rows before limit/offset.
+             */
+            total: number;
+        };
+        PayrollPreflightCheck: {
+            /** @enum {string} */
+            key: "attendance_material" | "period_lock" | "pending_leave";
+            label_ko: string;
+            ok: boolean;
+            /** @description Soft signal only; can_close is the AND of the hard checks (attendance_material, period_lock). */
+            warn: boolean;
+            note: string | null;
+            /** @description Up to 50 fix-link ids (draft lines missing attendance material, or pending leave requests); the note carries the full count. */
+            blocking_refs: components["schemas"]["Uuid"][];
+        };
+        PayrollClosePreflight: {
+            checks: components["schemas"]["PayrollPreflightCheck"][];
+            can_close: boolean;
+        };
+        PayrollRunCalcSummary: {
+            /** Format: int32 */
+            version: number;
+            calculated_at: components["schemas"]["Timestamp"];
+            /** Format: int64 */
+            calculated_lines: number;
+            /** Format: int64 */
+            blocked_lines: number;
+            /** @description Always false until the 노무사/세무사 release gate flips the stored rows. */
+            payable: boolean;
+            kernel_rate_table: string;
+            /**
+             * Format: int64
+             * @description Whole KRW won. null unless EVERY line of the run calculated — never a partial sum presented as a total.
+             */
+            total_net_won: number | null;
+        };
+        PayrollException: {
+            id: components["schemas"]["Uuid"];
+            run_id: components["schemas"]["Uuid"];
+            /** Format: uuid */
+            line_id: string | null;
+            /** Format: uuid */
+            employee_id: string | null;
+            employee_display_name: string;
+            /** @enum {string} */
+            kind: "OVERTIME_ALLOWANCE" | "RETRO_ADJUSTMENT" | "ABSENCE_DEDUCTION" | "PRORATION" | "ACCOUNT_VERIFICATION";
+            /** @enum {string} */
+            severity: "info" | "warn" | "danger";
+            /**
+             * Format: int64
+             * @description Whole KRW won. null when the delta is not derivable from a verified source.
+             */
+            amount_delta_won: number | null;
+            summary_ko: string;
+            detail: Record<string, never>;
+            linked_refs: Record<string, never>[];
+            /** @enum {string} */
+            status: "OPEN" | "CONFIRMED" | "HELD";
+            /** Format: uuid */
+            resolved_by: string | null;
+            /** Format: date-time */
+            resolved_at: string | null;
+            resolved_reason: string | null;
+            /**
+             * Format: uuid
+             * @description The run this HELD exception was carried forward from.
+             */
+            carried_from_run_id: string | null;
+            created_at: components["schemas"]["Timestamp"];
+        };
+        PayrollExceptionPage: {
+            items: components["schemas"]["PayrollException"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            open: number;
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            offset: number;
+        };
+        PayrollDisbursement: {
+            id: components["schemas"]["Uuid"];
+            run_id: components["schemas"]["Uuid"];
+            scheduled_at: components["schemas"]["Timestamp"];
+            /**
+             * @description Operator attestation, never a bank result — no bank API exists.
+             * @enum {string}
+             */
+            status: "SCHEDULED" | "SUBMITTED_TO_BANK" | "PAID" | "FAILED";
+            /** Format: uuid */
+            attested_by: string | null;
+            /** Format: date-time */
+            attested_at: string | null;
+            /** @description Retained only while the status is FAILED; cleared on any other attestation. */
+            reason: string | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        PayrollPayslipDeliveryItem: {
+            line_id: components["schemas"]["Uuid"];
+            employee_id: components["schemas"]["Uuid"];
+            inbox_doc_id: components["schemas"]["Uuid"];
+            issued_at: components["schemas"]["Timestamp"];
+            /**
+             * Format: date-time
+             * @description Read back from the inbox doc's confirmed_at; the vault does not yet confirm payslip receipts, so this stays null today.
+             */
+            acknowledged_at: string | null;
+        };
+        PayrollPayslipDeliverySummary: {
+            run_id: components["schemas"]["Uuid"];
+            /** Format: int64 */
+            issued: number;
+            /** Format: int64 */
+            acknowledged: number;
+            items: components["schemas"]["PayrollPayslipDeliveryItem"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            offset: number;
+        };
+        ClosePayrollAttendanceRequest: {
+            /** @description Must be true; the close is an attestation, and false is rejected with 422. */
+            attest: boolean;
+        };
+        ResolvePayrollExceptionRequest: {
+            /** @enum {string} */
+            action: "CONFIRM" | "HOLD";
+            /** @description Required for HOLD (a blank reason is rejected with 422). */
+            reason?: string;
+        };
+        DecidePayrollRunRequest: {
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            /** @description Required for REJECT (a blank reason is rejected with 422). */
+            reason?: string;
+        };
+        SchedulePayrollDisbursementRequest: {
+            /**
+             * Format: date-time
+             * @description RFC 3339; must be in the future.
+             */
+            scheduled_at: string;
+        };
+        AttestPayrollDisbursementRequest: {
+            /** @enum {string} */
+            status: "SCHEDULED" | "SUBMITTED_TO_BANK" | "PAID" | "FAILED";
+            /** @description Required for FAILED (a blank reason is rejected with 422). */
+            reason?: string;
+        };
+        NotificationObjectGroup: {
+            link: components["schemas"]["NotificationLink"];
+            /** Format: int64 */
+            total: number;
+            /**
+             * Format: int64
+             * @description Unread rows in the group; annotated, never mute-filtered.
+             */
+            unread: number;
+            /** @description Per-category unread breakdown within the group; zero-unread categories are omitted. */
+            categories: components["schemas"]["NotificationCategoryCount"][];
+            latest: components["schemas"]["NotificationSummary"];
+            /** @description True when an all-scope or matching object-scope mute policy covers this object for the caller; category-scope policies never flip the group bell. */
+            muted: boolean;
+        };
+        NotificationObjectGroupPage: {
+            items: components["schemas"]["NotificationObjectGroup"][];
+            /** @description Opaque keyset cursor for the next page; null at the end. */
+            next_cursor: string | null;
+        };
+        NotificationPolicySummary: {
+            id: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            scope: "all" | "category" | "object";
+            /** @description Present only when scope is category. */
+            category?: string;
+            link?: components["schemas"]["NotificationLink"];
+            /** @description Extensible routing action ("mute" today; e.g. "watch" later). */
+            action: string;
+            created_at: components["schemas"]["Timestamp"];
+        };
+        NotificationPolicyList: {
+            items: components["schemas"]["NotificationPolicySummary"][];
+        };
+        UpsertNotificationPolicyRequest: {
+            /** @enum {string} */
+            scope: "all" | "category" | "object";
+            /** @description Required when scope is category; must be absent otherwise. */
+            category?: string;
+            link?: components["schemas"]["NotificationLink"];
+        };
+        /** @enum {string} */
+        OrgChangeKind: "NEW" | "REORG" | "DISSOLVE";
+        /** @enum {string} */
+        OrgChangeStatus: "DRAFT" | "PRECHECKED" | "IN_APPROVAL" | "APPROVED" | "APPLIED" | "SETTLING" | "ARCHIVED" | "REJECTED" | "CANCELLED";
+        /** @enum {string} */
+        OrgChangeTargetKind: "ENTITY" | "REGION" | "BRANCH" | "SITE" | "ORG_UNIT";
+        /** @enum {string} */
+        OrgChangeApprovalRoleKey: "hr" | "finance" | "legal" | "executive";
+        /** @enum {string} */
+        OrgChangeStepDecision: "PENDING" | "APPROVED" | "REJECTED";
+        /** @enum {string} */
+        OrgChangeSettlementKey: "TRANSFER_EMPLOYEES" | "POSITIONS" | "COST_CENTERS" | "CLOSE_OPEN_DOCS" | "ASSETS" | "PAYROLL_SOCIAL_FINAL";
+        OrgChangeTarget: {
+            kind: components["schemas"]["OrgChangeTargetKind"];
+            /** @description Must parse as a UUID for REGION, BRANCH, and SITE targets; a free-form key for ENTITY and ORG_UNIT. */
+            ref: string;
+            label: string;
+        };
+        OrgProposalReassignScope: {
+            company: string;
+        };
+        /** @description One typed sandbox-diff operation, replayed in order at apply time. Internally tagged by `op`; unknown properties are rejected. */
+        OrgProposalOp: components["schemas"]["OrgProposalOpCreateRegion"] | components["schemas"]["OrgProposalOpRenameRegion"] | components["schemas"]["OrgProposalOpDeactivateRegion"] | components["schemas"]["OrgProposalOpCreateBranch"] | components["schemas"]["OrgProposalOpRenameBranch"] | components["schemas"]["OrgProposalOpDeactivateBranch"] | components["schemas"]["OrgProposalOpCreateSite"] | components["schemas"]["OrgProposalOpUpdateSite"] | components["schemas"]["OrgProposalOpReassignOrgUnit"];
+        OrgProposalOpCreateRegion: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "CREATE_REGION";
+            name: string;
+        };
+        OrgProposalOpRenameRegion: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "RENAME_REGION";
+            regionId: components["schemas"]["Uuid"];
+            name: string;
+        };
+        OrgProposalOpDeactivateRegion: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "DEACTIVATE_REGION";
+            regionId: components["schemas"]["Uuid"];
+        };
+        OrgProposalOpCreateBranch: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "CREATE_BRANCH";
+            regionId: components["schemas"]["Uuid"];
+            name: string;
+        };
+        /** @description Rename and/or move a branch across regions; at least one of `name` and `regionId` must be present. */
+        OrgProposalOpRenameBranch: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "RENAME_BRANCH";
+            branchId: components["schemas"]["Uuid"];
+            name?: string;
+            regionId?: components["schemas"]["Uuid"];
+        };
+        OrgProposalOpDeactivateBranch: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "DEACTIVATE_BRANCH";
+            branchId: components["schemas"]["Uuid"];
+        };
+        OrgProposalOpCreateSite: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "CREATE_SITE";
+            customerId: components["schemas"]["Uuid"];
+            name: string;
+        };
+        OrgProposalOpUpdateSite: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "UPDATE_SITE";
+            siteId: components["schemas"]["Uuid"];
+            name: string;
+        };
+        /** @description Bounded `employees.org_unit` rewrite; the source and target org units must differ. */
+        OrgProposalOpReassignOrgUnit: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "REASSIGN_ORG_UNIT";
+            fromOrgUnit: string;
+            toOrgUnit: string;
+            scope: components["schemas"]["OrgProposalReassignScope"];
+        };
+        CreateOrgChangeRequest: {
+            kind: components["schemas"]["OrgChangeKind"];
+            target: components["schemas"]["OrgChangeTarget"];
+            effectiveDate: components["schemas"]["Date"];
+            reason: string;
+            proposal: components["schemas"]["OrgProposalOp"][];
+            supersedesId?: components["schemas"]["Uuid"];
+        };
+        /** @description Every field is optional; an omitted field is left unchanged. */
+        UpdateOrgChangeDraftRequest: {
+            kind?: components["schemas"]["OrgChangeKind"];
+            effectiveDate?: components["schemas"]["Date"];
+            reason?: string;
+            proposal?: components["schemas"]["OrgProposalOp"][];
+        };
+        OrgChangeDecisionRequest: {
+            /** @enum {string} */
+            decision: "APPROVED" | "REJECTED";
+            memo?: string;
+        };
+        CompleteOrgChangeSettlementItemRequest: {
+            memo?: string;
+        };
+        CancelOrgChangeRequest: {
+            reason: string;
+        };
+        OrgChangePreflightBlocker: {
+            code: string;
+            label: string;
+            dependentKind: string;
+            /** Format: int64 */
+            count: number;
+        };
+        OrgChangePreflightWarning: {
+            code: string;
+            label: string;
+            dependentKind?: string;
+            /** Format: int64 */
+            count?: number;
+        };
+        OrgChangePreflightReport: {
+            computedAt: components["schemas"]["Timestamp"];
+            /** @description True when the draft changed after this receipt was computed; submit recomputes and never trusts a stale receipt. */
+            stale: boolean;
+            blockers: components["schemas"]["OrgChangePreflightBlocker"][];
+            warnings: components["schemas"]["OrgChangePreflightWarning"][];
+            /** Format: int64 */
+            headcount: number;
+            /** Format: int64 */
+            dependentsTotal: number;
+        };
+        OrgChangeApprovalStep: {
+            id: components["schemas"]["Uuid"];
+            /** Format: int32 */
+            stepOrder: number;
+            roleKey: components["schemas"]["OrgChangeApprovalRoleKey"];
+            decision: components["schemas"]["OrgChangeStepDecision"];
+            decidedBy?: components["schemas"]["Uuid"];
+            decidedAt?: components["schemas"]["Timestamp"];
+            memo?: string;
+        };
+        OrgChangeSettlementItem: {
+            id: components["schemas"]["Uuid"];
+            itemKey: components["schemas"]["OrgChangeSettlementKey"];
+            /** @description Server-issued display label. */
+            label: string;
+            done: boolean;
+            doneBy?: components["schemas"]["Uuid"];
+            doneAt?: components["schemas"]["Timestamp"];
+            memo?: string;
+        };
+        OrgChangeEvent: {
+            at: components["schemas"]["Timestamp"];
+            actor: components["schemas"]["Uuid"];
+            action: string;
+            /** @description An OrgChangeStatus wire value. */
+            fromStatus?: string;
+            /** @description An OrgChangeStatus wire value. */
+            toStatus?: string;
+            reason?: string;
+        };
+        OrgChangeSummary: {
+            id: components["schemas"]["Uuid"];
+            /** @description Server-issued display code `OC-YYYY-NNNN`. */
+            code: string;
+            kind: components["schemas"]["OrgChangeKind"];
+            status: components["schemas"]["OrgChangeStatus"];
+            target: components["schemas"]["OrgChangeTarget"];
+            effectiveDate: components["schemas"]["Date"];
+            reason: string;
+            /** Format: int64 */
+            headcount: number;
+            /** Format: int64 */
+            siteCount: number;
+            /** Format: int64 */
+            teamCount: number;
+            draftedBy: components["schemas"]["Uuid"];
+            createdAt: components["schemas"]["Timestamp"];
+            updatedAt: components["schemas"]["Timestamp"];
+            supersedesId?: components["schemas"]["Uuid"];
+        };
+        OrgChangeDetail: components["schemas"]["OrgChangeSummary"] & {
+            proposal: components["schemas"]["OrgProposalOp"][];
+            preflight?: components["schemas"]["OrgChangePreflightReport"];
+            approvalSteps: components["schemas"]["OrgChangeApprovalStep"][];
+            settlementItems: components["schemas"]["OrgChangeSettlementItem"][];
+            events: components["schemas"]["OrgChangeEvent"][];
+        };
+        OrgChangePage: {
+            items: components["schemas"]["OrgChangeSummary"][];
+            /** Format: int64 */
+            total: number;
+        };
+        OrgEntitySummary: {
+            orgId: components["schemas"]["Uuid"];
+            slug: string;
+            name: string;
+            /** @description Tenant status; ACTIVE, SUSPENDED, or ARCHIVED. */
+            status: string;
+        };
+        /** @enum {string} */
+        RecruitPostingStatus: "DRAFT" | "PUBLISHED" | "CLOSED";
+        /** @enum {string} */
+        RecruitPostingScope: "INTERNAL" | "EXTERNAL";
+        /** @enum {string} */
+        RecruitEmploymentType: "REGULAR" | "RESIDENT_SHIFT" | "PART_TIME" | "POOL_DAILY";
+        /** @enum {string} */
+        RecruitApplicantStage: "APPLIED" | "SCREENING" | "INTERVIEW" | "OFFER" | "HIRED";
+        /** @enum {string} */
+        RecruitRejectReason: "CAREER_SHORTFALL" | "ROLE_MISMATCH" | "COMP_MISMATCH" | "ACCEPTED_ELSEWHERE" | "OTHER";
+        /** @enum {string} */
+        RecruitAssessmentScore: "SUITABLE" | "NEUTRAL" | "UNSUITABLE";
+        /** @enum {string} */
+        RecruitOfferStatus: "EXTENDED" | "SUPERSEDED" | "WITHDRAWN" | "ACCEPTED" | "DECLINED";
+        /** @enum {string} */
+        RecruitAmountPeriod: "MONTHLY" | "DAILY";
+        /** @enum {string} */
+        RecruitStageEventAction: "APPLY" | "ADVANCE" | "ASSESS" | "HOLD" | "UNHOLD" | "REQUEST_DOCUMENTS" | "OFFER_EXTEND" | "OFFER_ADJUST" | "OFFER_WITHDRAW" | "OFFER_REPLY" | "REJECT" | "REINSTATE" | "HIRE";
+        RecruitPreflightCheck: {
+            /** @enum {string} */
+            key: "role_defined" | "quota_defined" | "no_duplicate_open" | "exposure_attested";
+            ok: boolean;
+            note: string;
+        };
+        RecruitPostingPreflightResponse: {
+            checks: components["schemas"]["RecruitPreflightCheck"][];
+            /** @description Verdict over the automatic checks only; the exposure attest is collected at publish. */
+            publishable: boolean;
+        };
+        /** @description Non-rejected applicant counts per pipeline stage; HIRED is not counted. */
+        RecruitStageCounts: {
+            /** Format: int64 */
+            applied: number;
+            /** Format: int64 */
+            screening: number;
+            /** Format: int64 */
+            interview: number;
+            /** Format: int64 */
+            offer: number;
+        };
+        RecruitPosting: {
+            id: components["schemas"]["Uuid"];
+            /** @description Per-organization display code, JP-0001. */
+            posting_no: string;
+            role_title: string;
+            company: string;
+            worksite: string;
+            employment_type: components["schemas"]["RecruitEmploymentType"];
+            scope: components["schemas"]["RecruitPostingScope"];
+            /** Format: int32 */
+            headcount: number;
+            /** Format: int32 */
+            hired_count: number;
+            /**
+             * Format: date
+             * @description Null = open-ended (상시).
+             */
+            deadline: string | null;
+            requirements: string[];
+            /** @description Optional ontology position instance reference. */
+            position_ref: string | null;
+            status: components["schemas"]["RecruitPostingStatus"];
+            /** Format: date-time */
+            published_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        RecruitPostingSummary: components["schemas"]["RecruitPosting"] & {
+            stage_counts: components["schemas"]["RecruitStageCounts"];
+        };
+        RecruitPostingListResponse: {
+            items: components["schemas"]["RecruitPostingSummary"][];
+        };
+        RecruitPostingDetailResponse: {
+            posting: components["schemas"]["RecruitPosting"];
+            applicants: components["schemas"]["RecruitApplicantSummary"][];
+        };
+        /** @description Non-PII pipeline projection for posting detail. Profile lines, source document, reject note, and the assessment signature are served only by the audited applicant detail read. */
+        RecruitApplicantSummary: {
+            id: components["schemas"]["Uuid"];
+            posting_id: components["schemas"]["Uuid"];
+            /** @description Per-organization display code, APL-0001. */
+            applicant_no: string;
+            name: string;
+            stage: components["schemas"]["RecruitApplicantStage"];
+            hold: boolean;
+            doc_requested: boolean;
+            /** Format: date-time */
+            rejected_at: string | null;
+            reject_reason: components["schemas"]["RecruitRejectReason"] | null;
+            /** @description Existence flag only; the score stays behind the audited applicant detail read. */
+            assessed: boolean;
+            hired_employee_id: components["schemas"]["Uuid"] | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        RecruitAssessment: {
+            score: components["schemas"]["RecruitAssessmentScore"];
+            by: components["schemas"]["Uuid"] | null;
+            /** Format: date-time */
+            at: string | null;
+        };
+        RecruitApplicant: {
+            id: components["schemas"]["Uuid"];
+            posting_id: components["schemas"]["Uuid"];
+            applicant_no: string;
+            name: string;
+            profile_lines: string[];
+            /** @description Provenance filename only. */
+            source_document: string | null;
+            stage: components["schemas"]["RecruitApplicantStage"];
+            hold: boolean;
+            doc_requested: boolean;
+            /** Format: date-time */
+            rejected_at: string | null;
+            reject_reason: components["schemas"]["RecruitRejectReason"] | null;
+            reject_note: string | null;
+            assessment: components["schemas"]["RecruitAssessment"] | null;
+            hired_employee_id: components["schemas"]["Uuid"] | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        RecruitOffer: {
+            id: components["schemas"]["Uuid"];
+            applicant_id: components["schemas"]["Uuid"];
+            /** Format: int32 */
+            version: number;
+            /** @description Canonical NUMERIC(14,2) decimal string. */
+            amount: string;
+            amount_period: components["schemas"]["RecruitAmountPeriod"];
+            /** @enum {string} */
+            currency: "KRW";
+            reply_deadline: components["schemas"]["Date"];
+            status: components["schemas"]["RecruitOfferStatus"];
+            withdraw_reason: string | null;
+            extended_by: components["schemas"]["Uuid"];
+            extended_at: components["schemas"]["Timestamp"];
+            /** Format: date-time */
+            resolved_at: string | null;
+        };
+        RecruitStageEvent: {
+            id: components["schemas"]["Uuid"];
+            action: components["schemas"]["RecruitStageEventAction"];
+            from_stage: components["schemas"]["RecruitApplicantStage"] | null;
+            to_stage: components["schemas"]["RecruitApplicantStage"] | null;
+            /** @description Free-text or enum payload for the action — reject reason, assessment score, offer decision, or withdraw reason. */
+            reason: string | null;
+            actor: components["schemas"]["Uuid"];
+            occurred_at: components["schemas"]["Timestamp"];
+        };
+        RecruitApplicantDetailResponse: {
+            applicant: components["schemas"]["RecruitApplicant"];
+            offers: components["schemas"]["RecruitOffer"][];
+            events: components["schemas"]["RecruitStageEvent"][];
+        };
+        RecruitTalentPoolEntry: {
+            applicant_id: components["schemas"]["Uuid"];
+            applicant_no: string;
+            name: string;
+            /** @description Role title of the posting the applicant was rejected from. */
+            role_title: string;
+            reason: components["schemas"]["RecruitRejectReason"] | null;
+            rejected_at: components["schemas"]["Timestamp"];
+        };
+        RecruitTalentPoolListResponse: {
+            items: components["schemas"]["RecruitTalentPoolEntry"][];
+        };
+        RecruitPublishFailedResponse: components["schemas"]["ErrorBody"] & {
+            checks?: components["schemas"]["RecruitPreflightCheck"][];
+            publishable?: boolean;
+        };
+        RecruitHireConflictResponse: components["schemas"]["ErrorBody"] & {
+            employee_id?: components["schemas"]["Uuid"];
+        };
+        CreateRecruitPostingRequest: {
+            role_title: string;
+            company: string;
+            worksite: string;
+            employment_type: components["schemas"]["RecruitEmploymentType"];
+            scope: components["schemas"]["RecruitPostingScope"];
+            /** Format: int32 */
+            headcount: number;
+            /**
+             * Format: date
+             * @description Omit or null for an open-ended posting (상시).
+             */
+            deadline?: string | null;
+            requirements?: string[];
+            position_ref?: string | null;
+        };
+        UpdateRecruitPostingRequest: components["schemas"]["CreateRecruitPostingRequest"] & {
+            expected_updated_at: components["schemas"]["Timestamp"];
+        };
+        PublishRecruitPostingRequest: {
+            /** @description The publisher's exposure-scope attestation; false fails the preflight gate. */
+            attest_exposure_scope: boolean;
+            expected_updated_at: components["schemas"]["Timestamp"];
+        };
+        CloseRecruitPostingRequest: {
+            expected_updated_at: components["schemas"]["Timestamp"];
+        };
+        CreateRecruitApplicantRequest: {
+            name: string;
+            profile_lines?: string[];
+            source_document?: string | null;
+        };
+        AdvanceRecruitApplicantRequest: {
+            expected_updated_at: components["schemas"]["Timestamp"];
+        };
+        AssessRecruitApplicantRequest: {
+            score: components["schemas"]["RecruitAssessmentScore"];
+        };
+        HoldRecruitApplicantRequest: {
+            hold: boolean;
+        };
+        RejectRecruitApplicantRequest: {
+            reason: components["schemas"]["RecruitRejectReason"];
+            note?: string | null;
+        };
+        ExtendRecruitOfferRequest: {
+            /** @description Canonical NUMERIC(14,2) decimal string; at most 12 whole digits and 2 fraction digits, no exponent or leading zeros. */
+            amount: string;
+            amount_period: components["schemas"]["RecruitAmountPeriod"];
+            reply_deadline: components["schemas"]["Date"];
+        };
+        /** @description The amount_period is inherited from the offer being adjusted and cannot be changed. */
+        AdjustRecruitOfferRequest: {
+            /** @description Canonical NUMERIC(14,2) decimal string. */
+            amount: string;
+            /**
+             * Format: date
+             * @description Omit or null to keep the prior offer's reply deadline.
+             */
+            reply_deadline?: string | null;
+        };
+        WithdrawRecruitOfferRequest: {
+            reason: string;
+        };
+        RecordRecruitOfferReplyRequest: {
+            /** @enum {string} */
+            decision: "ACCEPTED" | "DECLINED";
+        };
+        HireRecruitApplicantRequest: {
+            employee_number: string;
+            phone: string;
+            org_unit: string;
+            position: string;
+            site: string;
+            home_branch_id: components["schemas"]["Uuid"];
+            /** @description Defaults to the accepted offer amount for MONTHLY offers; required explicitly for DAILY offers. */
+            base_pay?: string | null;
+        };
+        HireRecruitApplicantResponse: {
+            employee_id: components["schemas"]["Uuid"];
+            applicant: components["schemas"]["RecruitApplicant"];
+            posting: components["schemas"]["RecruitPosting"];
+        };
     };
     responses: {
         /** @description Missing or invalid bearer token. */
@@ -16917,10 +18910,14 @@ export interface operations {
             query?: {
                 status?: components["schemas"]["WorkOrderStatus"][];
                 priority?: components["schemas"]["PriorityLevel"][];
+                maintenance_type?: components["schemas"]["MaintenanceType"][];
+                maintenance_cause?: components["schemas"]["MaintenanceCause"][];
                 /** @description Use `me` for the authenticated user or a user UUID. */
                 assigned_to?: string;
                 customer_id?: components["schemas"]["Uuid"];
                 site_id?: components["schemas"]["Uuid"];
+                /** @description Restricts to one asset's orders (asset → work-order history). */
+                equipment_id?: components["schemas"]["Uuid"];
                 /** @description Narrows results to one branch already visible to the caller; it never expands branch/RLS visibility. */
                 branch_id?: components["schemas"]["Uuid"];
                 /** @description Search around this seed work order; returns branch/RLS-visible orders sharing the seed's customer, site, or equipment, including the seed. */
@@ -17170,6 +19167,8 @@ export interface operations {
                 category?: components["schemas"]["SupportTicketCategory"];
                 origin?: components["schemas"]["SupportTicketOrigin"];
                 assignee_user_id?: components["schemas"]["Uuid"];
+                /** @description Restrict to tickets linked to one customer site (the field-console queue). */
+                site_id?: components["schemas"]["Uuid"];
                 include_untriaged?: boolean;
                 limit?: number;
                 cursor?: components["schemas"]["Uuid"];
@@ -21952,7 +23951,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The number of the caller's unread notifications. */
+            /** @description The number of the caller's unread notifications that want attention; rows suppressed by the caller's mute policies are excluded. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -22045,7 +24044,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Unread counts grouped by category, for the caller only. */
+            /** @description Unread counts grouped by category, for the caller only. Mute-suppressed rows are excluded from total_unread and by_category and tallied separately as muted_unread. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -28151,6 +30150,37 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    updateNoticeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNoticeDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
     publishNotice: {
         parameters: {
             query?: never;
@@ -28175,6 +30205,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
         };
     };
     acknowledgeNotice: {
@@ -31308,6 +33339,1829 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    linkSupportTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkSupportTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated ticket summary carrying the new links. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportTicketSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    recordSupportTicketAcceptance: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordSupportTicketAcceptanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The recorded acceptance, or the stored acceptance on an idempotent replay. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportTicketAcceptance"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listFieldSites: {
+        parameters: {
+            query?: {
+                /** @description Substring match on site name or customer name. */
+                q?: string;
+                customer_id?: components["schemas"]["Uuid"];
+                sla?: components["schemas"]["FieldSlaState"];
+                /** @description Page size; clamped server-side to 1..=100. */
+                limit?: number;
+                /** @description Keyset cursor — the site id of the previous page's last row. */
+                cursor?: components["schemas"]["Uuid"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A keyset page of field sites visible in the principal's branch scope, plus the unpaged total for the same filters. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldSitePage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    getFieldSite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Field site detail with its object chain. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldSiteDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    getWorkOrderSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workOrderId: components["parameters"]["WorkOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The live cost settlement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createWorkOrderSettlement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Replaying the same key with an identical body returns the existing settlement without a second audit event; the same key with a different body is a 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                workOrderId: components["parameters"]["WorkOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSettlementRequest"];
+            };
+        };
+        responses: {
+            /** @description The draft settlement, also returned on an idempotent replay. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    submitSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlementId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The submitted settlement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    reviewSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlementId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewSettlementRequest"];
+            };
+        };
+        responses: {
+            /** @description The reviewed settlement, APPROVED or RETURNED back to DRAFT. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    voidSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlementId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidSettlementRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided settlement; VOID frees the one-live-settlement slot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listNoticeReceipts: {
+        parameters: {
+            query?: {
+                acknowledged?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recipient receipts, newest acknowledgment first, then display name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeReceiptPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPayrollRunClosePreflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The attendance-material / period-lock / pending-leave checks and whether the run may be closed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollClosePreflight"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    closePayrollRunAttendance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosePayrollAttendanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The run detail after the close. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    calculatePayrollRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run detail after the calculation, including the latest calculation summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listPayrollRunExceptions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of run exceptions with the open count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollExceptionPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resolvePayrollRunException: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+                exceptionId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolvePayrollExceptionRequest"];
+            };
+        };
+        responses: {
+            /** @description The resolved exception row. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollException"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    submitPayrollRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run detail after submission. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    decidePayrollRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecidePayrollRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The run detail after the decision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    withdrawPayrollRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run detail after the withdrawal. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    schedulePayrollDisbursement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulePayrollDisbursementRequest"];
+            };
+        };
+        responses: {
+            /** @description The created disbursement record; the run moves to DISBURSEMENT_SCHEDULED. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollDisbursement"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    attestPayrollDisbursement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttestPayrollDisbursementRequest"];
+            };
+        };
+        responses: {
+            /** @description The attested disbursement record; PAID also moves the run to PAID. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollDisbursement"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    issuePayrollPayslips: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The delivery summary after issuance; the run moves to ISSUED. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollPayslipDeliverySummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getPayrollPayslipDelivery: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delivery counts and a page of delivered payslip links. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollPayslipDeliverySummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listMyNotificationObjectGroups: {
+        parameters: {
+            query?: {
+                /** @description When true, return only groups that still hold at least one unread notification. */
+                unread?: boolean;
+                /** @description Opaque keyset cursor from a previous page's next_cursor; an undecodable or foreign cursor yields an empty page. */
+                before?: string;
+                /** @description Page size (clamped server-side to 1..=200; default 50). */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the caller's notifications grouped by source object. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationObjectGroupPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    markMyNotificationUnread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The notification, unread again. read_at keeps the first-read timestamp. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listMyNotificationPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's routing policies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPolicyList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    upsertMyNotificationPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertNotificationPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description The stored policy; a repeat upsert of the same target returns the same row. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPolicySummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationError"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    deleteMyNotificationPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy is removed and its rows regain attention. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description JWT verification is not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listOrgChanges: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["OrgChangeStatus"];
+                kind?: components["schemas"]["OrgChangeKind"];
+                /** @description Defaults to 50; the server clamps the value into 1..200 rather than rejecting it. */
+                limit?: number;
+                /** @description Defaults to 0; the server clamps the value into 0..100000 rather than rejecting it. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of org-change summaries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangePage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createOrgChange: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrgChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay of the existing request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            /** @description Draft created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getOrgChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request with proposal, preflight receipt, approval chain, settlement items, and history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateOrgChangeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrgChangeDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Draft updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    preflightOrgChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Receipt stored and returned inside the request detail. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    submitOrgChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Now IN_APPROVAL with the pending approval chain. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    decideOrgChangeApprovalStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+                stepId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgChangeDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Decision recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    effectuateOrgChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applied, or settling for a dissolve. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    completeOrgChangeSettlementItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+                itemId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteOrgChangeSettlementItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Item completed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    archiveOrgChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    cancelOrgChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelOrgChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Cancelled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgChangeDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listOrgEntities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entity list, ordered by org id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgEntitySummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listRecruitPostings: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["RecruitPostingStatus"];
+                scope?: components["schemas"]["RecruitPostingScope"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Postings in the caller's organization, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPostingListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    createRecruitPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecruitPostingRequest"];
+            };
+        };
+        responses: {
+            /** @description The draft posting. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPosting"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getRecruitPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postingId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Posting and applicant summaries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPostingDetailResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateRecruitPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postingId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRecruitPostingRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPosting"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    preflightRecruitPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postingId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Check vector and the automatic-check verdict. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPostingPreflightResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    publishRecruitPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postingId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishRecruitPostingRequest"];
+            };
+        };
+        responses: {
+            /** @description The published posting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPosting"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Request validation failed, or the preflight gate is unmet (code PREFLIGHT_FAILED, which adds the full check vector). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPublishFailedResponse"];
+                };
+            };
+        };
+    };
+    closeRecruitPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postingId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseRecruitPostingRequest"];
+            };
+        };
+        responses: {
+            /** @description The closed posting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitPosting"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    createRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postingId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecruitApplicantRequest"];
+            };
+        };
+        responses: {
+            /** @description The applicant at APPLIED. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicant"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applicant, offer versions (newest first), and stage-event history (oldest first). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicantDetailResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    advanceRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdvanceRecruitApplicantRequest"];
+            };
+        };
+        responses: {
+            /** @description The advanced applicant. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicant"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    assessRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessRecruitApplicantRequest"];
+            };
+        };
+        responses: {
+            /** @description The assessed applicant. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicant"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    holdRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HoldRecruitApplicantRequest"];
+            };
+        };
+        responses: {
+            /** @description The applicant with the new hold state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicant"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    requestRecruitApplicantDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The applicant with doc_requested set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicant"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rejectRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectRecruitApplicantRequest"];
+            };
+        };
+        responses: {
+            /** @description The rejected applicant. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicant"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    reinstateRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reinstated applicant. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitApplicant"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    extendRecruitOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtendRecruitOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description The extended offer; the applicant moves to OFFER. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitOffer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    hireRecruitApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicantId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HireRecruitApplicantRequest"];
+            };
+        };
+        responses: {
+            /** @description Employee created and linked (also returned on an idempotent employee-core replay). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HireRecruitApplicantResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description State conflict; an already-hired replay additionally carries the linked employee_id. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitHireConflictResponse"];
+                };
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    adjustRecruitOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offerId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustRecruitOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description The new offer version. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitOffer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    withdrawRecruitOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offerId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawRecruitOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description The withdrawn offer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitOffer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    recordRecruitOfferReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offerId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordRecruitOfferReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description The resolved offer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitOffer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listRecruitTalentPool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Talent-pool rows, newest rejection first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitTalentPoolListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
 }
