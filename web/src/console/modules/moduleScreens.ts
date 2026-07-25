@@ -45,6 +45,13 @@ function scalarAttribute(value: unknown): string | number | undefined {
   return undefined;
 }
 
+function attributeRecord(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("canonical ontology instance attributes must be an object");
+  }
+  return value as Record<string, unknown>;
+}
+
 /**
  * The generic module's real data adapter. It reads schema detail first, then
  * pins the instance read to that returned version UUID. Missing authority is a
@@ -57,10 +64,12 @@ export function canonicalOntologyDataAdapter(kind: string, authorityKey: string 
       const canonical = await loadCanonicalObjectType(api, kind, authorityKey, signal);
       const properties = canonical.definition.properties.map((property) => property.key);
       const rows = canonical.instances.map((state) => {
-        const attributes = state.revision.attributes;
-        const values = Object.fromEntries(
-          properties.map((key) => [key, scalarAttribute(attributes[key])]).filter(([, value]) => value !== undefined),
-        );
+        const attributes = attributeRecord(state.revision.attributes);
+        const values: ModuleRow["cells"] = {};
+        for (const key of properties) {
+          const value = scalarAttribute(attributes[key]);
+          if (value !== undefined) values[key] = value;
+        }
         return {
           id: state.instance.id,
           code: instanceCode(state.instance.id),
@@ -687,7 +696,7 @@ function genericModuleScreen(kind: string): ModuleScreenConfig {
     titleKey: type?.nameKey ?? kind,
     objectNameKey: type?.nameKey ?? kind,
     objectKind: kind,
-    typeKey: type?.key,
+    typeKey: type?.key ?? kind,
     codePrefix: registered?.codePrefix ?? type?.codePrefix ?? "",
     emptyMode: "live",
     policy: { read: "object.view" },
