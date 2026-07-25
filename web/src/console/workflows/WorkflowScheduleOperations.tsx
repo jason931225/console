@@ -13,6 +13,7 @@ import { assertPasskeyStepUp } from "../../auth/webauthn";
 import { useAuth, type AuthSession } from "../../context/auth";
 import type { ConsoleApiClient } from "../../api/client";
 import { PolicyGated, usePolicyGate, type PolicyGate } from "../policy";
+import { workflowScheduleKo as strings } from "../../i18n/workflowSchedule";
 import "../tokens.css";
 import {
   createWorkflowSchedule,
@@ -96,25 +97,41 @@ const row: CSSProperties = {
 };
 
 function formatTime(value: string | null | undefined): string {
-  return value ?? "다음 실행 없음";
+  return value ?? strings.noNextRun;
 }
 
 function statusLabel(schedule: WorkflowSchedule): string {
-  return schedule.enabled ? "활성" : "비활성";
+  return schedule.enabled ? strings.active : strings.inactive;
 }
 
 function statusTone(status: string | null | undefined): string {
-  return status ?? "실행 기록 없음";
+  return status ?? strings.noRunHistory;
+}
+
+type PasskeyStepUpAssertion = Awaited<ReturnType<typeof assertPasskeyStepUp>>;
+
+function isPasskeyStepUpAssertion(
+  value: unknown,
+): value is PasskeyStepUpAssertion {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "ceremony_id" in value &&
+    typeof value.ceremony_id === "string" &&
+    "credential" in value &&
+    typeof value.credential === "object" &&
+    value.credential !== null
+  );
 }
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiCallError) {
     if (error.status === 403)
-      return "예약 변경이 거부되었습니다. 현재 권한으로는 이 예약을 변경할 수 없습니다.";
+      return strings.updateDenied;
     if (error.status === 409)
-      return "예약 상태가 변경되었습니다. 최신 상태를 다시 불러왔습니다.";
+      return strings.updateConflict;
   }
-  return "예약 정보를 처리하지 못했습니다. 최신 상태를 다시 시도하세요.";
+  return strings.requestFailed;
 }
 
 /** Durable schedule lifecycle surface: backend-owned schedules, preview, and run history. */
@@ -351,28 +368,39 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
         selectedDefinition.pending_staged_by?.toLowerCase() ===
           session.user_id.toLowerCase()
       ) {
-        setError("자신이 올린 개정은 승인할 수 없습니다.");
+        setError(strings.selfApprovalDenied);
         return;
       }
         setPendingId(selected?.id);
       setError(undefined);
       try {
-        const stepUp = action === "approve" ? await assertPasskeyStepUp(api) : undefined;
-        if (!isActive()) return;
         const params = {
-          path: { id: selectedDefinition.id, rev: selectedDefinition.pending_version },
+          params: {
+            path: {
+              id: selectedDefinition.id,
+              rev: selectedDefinition.pending_version,
+            },
+          },
         };
-        const response =
-          action === "approve"
-            ? await api.POST(
-                "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/approve",
-                { ...params, body: { step_up: stepUp } },
-              )
-            : await api.POST(
-                "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/withdraw",
-              params,
-              );
-        if (!response.data) throw new ApiCallError(response.response.status, response.error);
+        if (action === "approve") {
+          const stepUp: unknown = await assertPasskeyStepUp(api);
+          if (!isActive()) return;
+          if (!isPasskeyStepUpAssertion(stepUp))
+            throw new Error("passkey step-up assertion is required");
+          const response = await api.POST(
+            "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/approve",
+            { ...params, body: { step_up: stepUp } },
+          );
+          if (!response.data)
+            throw new ApiCallError(response.response.status, response.error);
+        } else {
+          const response = await api.POST(
+            "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/withdraw",
+            params,
+          );
+          if (!response.data)
+            throw new ApiCallError(response.response.status, response.error);
+        }
         if (!isActive()) return;
         await loadSchedules();
       } catch (caught) {
@@ -401,29 +429,25 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
   return (
     <section aria-labelledby="workflow-schedule-title" style={shell}>
       <header>
-        <h1 id="workflow-schedule-title">예약 작업</h1>
-        <p>
-          예약의 주기, 실행 이력, 수동 실행은 durable schedule resource가
-          담당합니다. 연결된 워크플로 정의의 개정은 이 예약에 연결된 정의에만
-          적용됩니다.
-        </p>
+        <h1 id="workflow-schedule-title">{strings.title}</h1>
+        <p>{strings.description}</p>
       </header>
       {!canViewSchedules ? (
-        <p>접근 가능한 탭 없음</p>
+        <p>{strings.accessDenied}</p>
       ) : (
         <>
           {error ? <p role="alert">{error}</p> : null}
           {showScheduleForm ? <form
-            aria-label={editing ? "예약 작업 편집" : "예약 작업 추가"}
+            aria-label={editing ? strings.editFormAria : strings.createFormAria}
             style={card}
             onSubmit={(event) => {
               event.preventDefault();
               void save();
             }}
           >
-            <h2>{editing ? "예약 작업 편집" : "예약 작업 추가"}</h2>
+            <h2>{editing ? strings.editFormAria : strings.createFormAria}</h2>
             <label>
-              이름
+              {strings.name}
               <input
                 value={form.label}
                 required
@@ -434,7 +458,7 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
               />
             </label>
             <label>
-              크론
+              {strings.cron}
               <input
                 value={form.cron_expr}
                 required
@@ -445,7 +469,7 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
               />
             </label>
             <label>
-              시간대
+              {strings.timezone}
               <input
                 value={form.timezone ?? "Asia/Seoul"}
                 required
@@ -456,7 +480,7 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
               />
             </label>
             <label>
-              연결된 워크플로 정의
+              {strings.workflowDefinition}
               <select
                 value={form.definition_id}
                 disabled={editing}
@@ -466,7 +490,7 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                   setForm((current) => ({ ...current, definition_id: definitionId }));
                 }}
               >
-                <option value="">워크플로 정의 선택</option>
+                <option value="">{strings.selectWorkflowDefinition}</option>
                 {definitions.map((definition) => (
                   <option key={definition.id} value={definition.id}>
                     {definition.display_name}
@@ -475,11 +499,11 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
               </select>
             </label>
             {editing ? (
-              <p>실행 이력을 보존하기 위해 연결된 워크플로 정의는 변경할 수 없습니다.</p>
+              <p>{strings.immutableDefinition}</p>
             ) : null}
             <div style={row}>
               <button type="submit" style={button} disabled={Boolean(pendingId)}>
-                {editing ? "예약 변경 저장" : "예약 작업 추가"}
+                {editing ? strings.saveEdit : strings.create}
               </button>
               {editing ? (
                 <button
@@ -490,20 +514,20 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                     setForm(INITIAL_FORM);
                   }}
                 >
-                  취소
+                  {strings.cancel}
                 </button>
               ) : null}
             </div>
           </form> : null}
           <div style={grid}>
-            <section aria-label="예약 목록" style={card}>
+            <section aria-label={strings.listAria} style={card}>
               <div style={row}>
-                <h2>예약 목록</h2>
-                <span>{scopedSchedules.length}개</span>
+                <h2>{strings.list}</h2>
+                <span>{strings.count(scopedSchedules.length)}</span>
               </div>
-              {loading ? <p>예약을 불러오는 중…</p> : null}
+              {loading ? <p>{strings.loading}</p> : null}
               {!loading && scopedSchedules.length === 0 ? (
-                <p>현재 권한 범위에 예약 작업이 없습니다.</p>
+                <p>{strings.empty}</p>
               ) : null}
               {scopedSchedules.map((item) => (
                 <PolicyGated
@@ -514,7 +538,7 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                   <button
                     type="button"
                     aria-pressed={item.id === selected?.id}
-                    aria-label={`${item.label} 선택`}
+                    aria-label={strings.selectAria(item.label)}
                     style={item.id === selected?.id ? selectedButton : button}
                     onClick={() => { setSelectedId(item.id); }}
                   >
@@ -523,9 +547,9 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                 </PolicyGated>
               ))}
             </section>
-            <section aria-label="예약 상세" style={card}>
+            <section aria-label={strings.detailAria} style={card}>
               {!selected ? (
-                <p>예약을 선택하세요.</p>
+                <p>{strings.selectSchedule}</p>
               ) : (
                 <>
                   <div style={row}>
@@ -533,15 +557,15 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                     <strong>{statusLabel(selected)}</strong>
                   </div>
                   <dl>
-                    <dt>크론</dt>
+                    <dt>{strings.cron}</dt>
                     <dd>{selected.cron_expr}</dd>
-                    <dt>시간대</dt>
+                    <dt>{strings.timezone}</dt>
                     <dd>{selected.timezone}</dd>
-                    <dt>다음 실행</dt>
+                    <dt>{strings.nextRun}</dt>
                     <dd>{formatTime(selected.next_run_at)}</dd>
-                    <dt>마지막 실행</dt>
+                    <dt>{strings.lastRun}</dt>
                     <dd>{formatTime(selected.last_run_at)}</dd>
-                    <dt>마지막 결과</dt>
+                    <dt>{strings.lastResult}</dt>
                     <dd>{statusTone(selected.last_status)}</dd>
                   </dl>
                   <PolicyGated
@@ -555,10 +579,10 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                       onClick={() => void toggle()}
                     >
                       {pendingId === selected.id
-                        ? "예약 변경 중…"
+                        ? strings.saving
                         : selected.enabled
-                          ? "예약 비활성화"
-                          : "예약 활성화"}
+                          ? strings.disable
+                          : strings.enable}
                     </button>
                   </PolicyGated>
                   <PolicyGated
@@ -566,7 +590,7 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                     resource={{ kind: "workflow_schedule", id: selected.id }}
                   >
                     <button type="button" style={button} onClick={startEdit}>
-                      예약 편집
+                      {strings.edit}
                     </button>
                   </PolicyGated>
                   <PolicyGated
@@ -579,18 +603,18 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                       disabled={pendingId === selected.id}
                       onClick={() => void runNow()}
                     >
-                      지금 실행
+                      {strings.runNow}
                     </button>
                   </PolicyGated>
                   {selectedDefinition?.pending_version ? (
                     <div style={row}>
-                      <span>연결된 정의 개정 {selectedDefinition.pending_version}</span>
+                      <span>{strings.pendingRevision(selectedDefinition.pending_version)}</span>
                       <PolicyGated
                         action={ACTIONS.approveRevision}
                         resource={{ kind: "workflow_schedule", id: selected.id }}
                       >
                         <button type="button" style={button} onClick={() => void revise("approve")}>
-                          개정 승인
+                          {strings.approveRevision}
                         </button>
                       </PolicyGated>
                       <PolicyGated
@@ -598,13 +622,13 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                         resource={{ kind: "workflow_schedule", id: selected.id }}
                       >
                         <button type="button" style={button} onClick={() => void revise("withdraw")}>
-                          개정 철회
+                          {strings.withdrawRevision}
                         </button>
                       </PolicyGated>
                     </div>
                   ) : null}
                   <section aria-labelledby="workflow-schedule-preview">
-                    <h3 id="workflow-schedule-preview">다음 실행 미리보기</h3>
+                    <h3 id="workflow-schedule-preview">{strings.previewTitle}</h3>
                     {preview.length ? (
                       <ol>
                         {preview.map((time) => (
@@ -612,22 +636,21 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
                         ))}
                       </ol>
                     ) : (
-                      <p>예정된 실행이 없습니다.</p>
+                      <p>{strings.noFutureRun}</p>
                     )}
                   </section>
                   <section aria-labelledby="workflow-schedule-history">
-                    <h3 id="workflow-schedule-history">실행 이력</h3>
+                    <h3 id="workflow-schedule-history">{strings.historyTitle}</h3>
                     {runs.length ? (
                       <ol>
                         {runs.map((run) => (
                           <li key={run.run_id}>
-                            {run.status} · {run.started_at} · 정의 v
-                            {run.definition_version}
+                            {strings.runSummary(run.status, run.started_at, run.definition_version)}
                           </li>
                         ))}
                       </ol>
                     ) : (
-                      <p>실행 기록 없음</p>
+                      <p>{strings.noRunHistory}</p>
                     )}
                   </section>
                 </>

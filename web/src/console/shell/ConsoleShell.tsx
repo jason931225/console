@@ -339,9 +339,14 @@ export function ConsoleShell({
         theme={theme}
         onSelect={(nextScreen) => {
           if (mobile) closeDrawer();
+          const search = new URLSearchParams(location.search);
+          if (nextScreen === "workflow" || nextScreen === "scheduled") {
+            search.delete("tab");
+          }
+          const query = search.toString();
           void navigate({
             pathname: consoleScreenPath(nextScreen),
-            search: location.search,
+            search: query ? `?${query}` : "",
             hash: location.hash,
           });
         }}

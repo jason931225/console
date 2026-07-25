@@ -195,7 +195,11 @@ function requireEffectiveDotSlashBootstrap(block, job, failures) {
     const run = runScalar(step);
     const command = run === "|" ? multilineRunCommands(step).join("\n") : run ?? "";
     return index !== bootstrapIndex
-      && (/(?:^|[^A-Za-z0-9_])tools\/buck(?:2|\/)/.test(command) || /\bdotslash\b/i.test(command));
+      && (
+        /(?:^|[^A-Za-z0-9_])tools\/buck(?:2|\/)/.test(command)
+        || /\bdotslash\b/i.test(command)
+        || /(?:^|[\s;&|])node\s+scripts\/dev-up\.mjs\s+bootstrap(?:\s|$)/m.test(command)
+      );
   });
   if (firstBuckInvocation >= 0 && bootstrapIndex > firstBuckInvocation) {
     failures.push(`${job} must install pinned DotSlash before its first Buck invocation`);
@@ -301,8 +305,10 @@ export function evaluateCiPreflight(workflow) {
     }
   }
 
-  const backend = jobBlock(workflow, "backend");
-  if (backend) requireEffectiveDotSlashBootstrap(backend, "backend", failures);
+  for (const job of ["backend", "dev-up-smoke"]) {
+    const block = jobBlock(workflow, job);
+    if (block) requireEffectiveDotSlashBootstrap(block, job, failures);
+  }
 
   for (const job of protectedJobs) {
     const block = jobBlock(workflow, job);

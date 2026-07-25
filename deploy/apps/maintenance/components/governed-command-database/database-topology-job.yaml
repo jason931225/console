@@ -276,8 +276,8 @@ spec:
               mnt_leave_cmd|t|f|f|f|f|f|f
               mnt_leave_definer|f|f|f|f|f|f|f
               mnt_ontology_cmd|t|f|f|f|f|f|f
-              mnt_platform_force_cmd|t|f|f|f|f|f|f
               mnt_ontology_writer|f|f|f|f|f|f|f
+              mnt_platform_force_cmd|t|f|f|f|f|f|f
               mnt_rt|t|f|f|f|f|f|f'
               actual_roles="$(psql -v ON_ERROR_STOP=1 -At -F '|' <<'SQL'
               SELECT rolname, rolcanlogin, rolsuper, rolbypassrls, rolinherit,

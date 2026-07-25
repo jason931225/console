@@ -450,8 +450,8 @@ expected_roles='mnt_app|t|f|t|t
 mnt_leave_cmd|t|f|f|f
 mnt_leave_definer|f|f|f|f
 mnt_ontology_cmd|t|f|f|f
-mnt_platform_force_cmd|t|f|f|f
 mnt_ontology_writer|f|f|f|f
+mnt_platform_force_cmd|t|f|f|f
 mnt_rt|t|f|f|f'
 actual_roles="$(docker exec "${fresh_container}" psql -U "${MNT_POSTGRES_ADMIN_USER}" -d "${MNT_POSTGRES_DB}" -At -F '|' -c \
   "SELECT rolname,rolcanlogin,rolsuper,rolbypassrls,rolinherit FROM pg_roles WHERE rolname IN ('mnt_app','mnt_rt','mnt_leave_cmd','mnt_ontology_cmd','mnt_platform_force_cmd','mnt_leave_definer','mnt_ontology_writer') ORDER BY rolname")"

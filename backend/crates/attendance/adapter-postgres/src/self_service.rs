@@ -9,14 +9,17 @@ use mnt_attendance_application::{
     OwnAttendanceExceptionRead, OwnExceptionResolutionRead, OwnWeek52Read, ReadOwnWeek52,
     SelfAttendanceScope,
 };
-use mnt_attendance_domain::{ExceptionKind, ResolutionAction};
+use mnt_attendance_domain::{ExceptionKind, ResolutionAction, StrictDurationEvent};
 use mnt_kernel_core::OrgId;
 use mnt_platform_db::with_org_conn;
 use sqlx::{Postgres, Row, Transaction};
 use time::Duration;
 use uuid::Uuid;
 
-use crate::{AttendanceStoreError, PgAttendanceStore, Week52Event, week52_boundary, week52_hours};
+use crate::{
+    AttendanceStoreError, PgAttendanceStore, strict_duration_event_kind, week52_boundary,
+    week52_hours,
+};
 
 const LIST_OWN_EXCEPTIONS_SQL: &str = "\
     SELECT e.id,e.code,e.kind,e.status,e.work_date,e.occurred_at,e.detail,e.evidence,e.created_at,\
@@ -104,7 +107,7 @@ impl PgAttendanceStore {
                     return Ok(None);
                 };
                 let rows = sqlx::query(
-                    "SELECT employee_id,kind,occurred_at FROM employee_attendance_records \
+                    "SELECT id,employee_id,kind,occurred_at FROM employee_attendance_records \
                      WHERE employee_id=$1 ORDER BY occurred_at,id",
                 )
                 .bind(employee_id)
@@ -113,9 +116,10 @@ impl PgAttendanceStore {
                 let events = rows
                     .iter()
                     .map(|row| {
-                        Ok(Week52Event {
+                        Ok(StrictDurationEvent {
+                            id: row.try_get("id")?,
                             employee_id: row.try_get("employee_id")?,
-                            kind: row.try_get("kind")?,
+                            kind: strict_duration_event_kind(&row.try_get::<String, _>("kind")?),
                             occurred_at: row.try_get("occurred_at")?,
                         })
                     })

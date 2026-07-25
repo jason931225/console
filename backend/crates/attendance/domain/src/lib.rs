@@ -3,10 +3,121 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 use serde::{Deserialize, Serialize};
-use time::{Date, Duration, Month};
+use std::collections::BTreeMap;
+
+use time::{Date, Duration, Month, OffsetDateTime};
 use uuid::Uuid;
 
 pub const MAX_SUBSTITUTION_RANGE_DAYS: i64 = 38; // selected month plus D+7
+
+/// An attendance event relevant to strict clock-pair duration derivation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StrictDurationEvent {
+    pub employee_id: Uuid,
+    pub occurred_at: OffsetDateTime,
+    pub id: Uuid,
+    pub kind: StrictDurationEventKind,
+}
+
+/// Only clock events affect the strict duration state machine. Other attendance
+/// events remain in the timeline but do not open or close a clock pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrictDurationEventKind {
+    ClockIn,
+    ClockOut,
+    Other,
+}
+
+/// A half-open time period used when clipping complete clock pairs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StrictDurationWindow {
+    pub start: OffsetDateTime,
+    pub end: OffsetDateTime,
+}
+
+impl StrictDurationWindow {
+    /// # Errors
+    ///
+    /// Returns [`AttendanceDomainError::InvalidStrictDurationWindow`] when the
+    /// end is not after the start.
+    pub fn new(start: OffsetDateTime, end: OffsetDateTime) -> Result<Self, AttendanceDomainError> {
+        if end <= start {
+            return Err(AttendanceDomainError::InvalidStrictDurationWindow);
+        }
+        Ok(Self { start, end })
+    }
+}
+
+/// Derives per-employee seconds from complete, strict CLOCK_IN/CLOCK_OUT pairs.
+///
+/// Events are ordered by employee ID, occurrence time, then event ID. Every
+/// CLOCK_IN must be closed by exactly one CLOCK_OUT; any malformed employee
+/// timeline fails the entire window. Complete pairs are clipped to `window`.
+///
+/// # Errors
+///
+/// Returns an error for a malformed pair sequence, negative duration, or an
+/// accumulated duration that cannot fit in `i64` seconds.
+pub fn strict_pair_seconds(
+    events: &[StrictDurationEvent],
+    window: StrictDurationWindow,
+) -> Result<BTreeMap<Uuid, i64>, AttendanceDomainError> {
+    let mut open = BTreeMap::<Uuid, OffsetDateTime>::new();
+    let mut seconds = BTreeMap::<Uuid, i64>::new();
+    let mut ordered_events = events.to_vec();
+    ordered_events.sort_by_key(|event| (event.employee_id, event.occurred_at, event.id));
+
+    for event in ordered_events {
+        match event.kind {
+            StrictDurationEventKind::ClockIn => {
+                if open.insert(event.employee_id, event.occurred_at).is_some() {
+                    return Err(AttendanceDomainError::RepeatedClockIn);
+                }
+            }
+            StrictDurationEventKind::ClockOut => {
+                let start = open
+                    .remove(&event.employee_id)
+                    .ok_or(AttendanceDomainError::UnmatchedClockOut)?;
+                let elapsed = (event.occurred_at - start).whole_seconds();
+                if elapsed < 0 {
+                    return Err(AttendanceDomainError::NegativeStrictDuration);
+                }
+                let clipped_start = start.max(window.start);
+                let clipped_end = event.occurred_at.min(window.end);
+                let clipped_seconds = strict_clipped_seconds(clipped_start, clipped_end)?;
+                if clipped_seconds > 0 {
+                    let entry = seconds.entry(event.employee_id).or_default();
+                    *entry = strict_add_seconds(*entry, clipped_seconds)?;
+                }
+            }
+            StrictDurationEventKind::Other => {}
+        }
+    }
+
+    if open.is_empty() {
+        Ok(seconds)
+    } else {
+        Err(AttendanceDomainError::OpenClockIn)
+    }
+}
+
+fn strict_add_seconds(current: i64, additional: i64) -> Result<i64, AttendanceDomainError> {
+    current
+        .checked_add(additional)
+        .ok_or(AttendanceDomainError::StrictDurationOverflow)
+}
+
+fn strict_clipped_seconds(
+    start: OffsetDateTime,
+    end: OffsetDateTime,
+) -> Result<i64, AttendanceDomainError> {
+    let seconds = (end - start).whole_seconds();
+    if seconds < 0 {
+        Err(AttendanceDomainError::NegativeStrictDuration)
+    } else {
+        Ok(seconds)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -187,6 +298,18 @@ impl ResolutionAction {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum AttendanceDomainError {
+    #[error("strict duration window must be positive")]
+    InvalidStrictDurationWindow,
+    #[error("clock-in was repeated before the previous clock-out")]
+    RepeatedClockIn,
+    #[error("clock-out has no matching clock-in")]
+    UnmatchedClockOut,
+    #[error("clock-in has no matching clock-out")]
+    OpenClockIn,
+    #[error("clock pair has a negative duration")]
+    NegativeStrictDuration,
+    #[error("strict duration exceeds supported seconds")]
+    StrictDurationOverflow,
     #[error("month must be YYYY-MM")]
     InvalidMonth,
     #[error("range must be positive and no longer than selected month plus D+7")]
@@ -206,6 +329,170 @@ pub enum AttendanceDomainError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn strict_event(
+        employee_id: Uuid,
+        id: u128,
+        kind: StrictDurationEventKind,
+        hours: i64,
+    ) -> StrictDurationEvent {
+        StrictDurationEvent {
+            employee_id,
+            occurred_at: OffsetDateTime::UNIX_EPOCH + Duration::hours(hours),
+            id: Uuid::from_u128(id),
+            kind,
+        }
+    }
+
+    fn strict_window() -> StrictDurationWindow {
+        StrictDurationWindow::new(
+            OffsetDateTime::UNIX_EPOCH,
+            OffsetDateTime::UNIX_EPOCH + Duration::days(7),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn strict_pairs_sort_reversed_input_and_ignore_intermediate_events() {
+        let employee = Uuid::from_u128(1);
+        let seconds = strict_pair_seconds(
+            &[
+                strict_event(employee, 3, StrictDurationEventKind::ClockOut, 9),
+                strict_event(employee, 2, StrictDurationEventKind::Other, 1),
+                strict_event(employee, 1, StrictDurationEventKind::ClockIn, 0),
+            ],
+            strict_window(),
+        )
+        .unwrap();
+        assert_eq!(seconds.get(&employee), Some(&(9 * 60 * 60)));
+    }
+
+    #[test]
+    fn strict_pairs_order_same_time_events_by_id() {
+        let employee = Uuid::from_u128(1);
+        let seconds = strict_pair_seconds(
+            &[
+                strict_event(employee, 2, StrictDurationEventKind::ClockOut, 0),
+                strict_event(employee, 1, StrictDurationEventKind::ClockIn, 0),
+            ],
+            strict_window(),
+        )
+        .unwrap();
+        assert!(!seconds.contains_key(&employee));
+    }
+
+    #[test]
+    fn strict_pairs_clip_boundary_crossings_and_ignore_zero_length_pairs() {
+        let employee = Uuid::from_u128(1);
+        let window = StrictDurationWindow::new(
+            OffsetDateTime::UNIX_EPOCH + Duration::days(7),
+            OffsetDateTime::UNIX_EPOCH + Duration::days(14),
+        )
+        .unwrap();
+        let seconds = strict_pair_seconds(
+            &[
+                strict_event(employee, 1, StrictDurationEventKind::ClockIn, 7 * 24 - 2),
+                strict_event(employee, 2, StrictDurationEventKind::ClockOut, 7 * 24 + 3),
+                strict_event(employee, 3, StrictDurationEventKind::ClockIn, 10 * 24),
+                strict_event(employee, 4, StrictDurationEventKind::ClockOut, 10 * 24),
+                strict_event(employee, 5, StrictDurationEventKind::ClockIn, 14 * 24 - 3),
+                strict_event(employee, 6, StrictDurationEventKind::ClockOut, 14 * 24 + 2),
+            ],
+            window,
+        )
+        .unwrap();
+        assert_eq!(seconds.get(&employee), Some(&(6 * 60 * 60)));
+    }
+
+    #[test]
+    fn strict_pairs_fail_the_entire_window_for_malformed_sequences() {
+        let employee = Uuid::from_u128(1);
+        assert_eq!(
+            strict_pair_seconds(
+                &[strict_event(
+                    employee,
+                    1,
+                    StrictDurationEventKind::ClockOut,
+                    1
+                )],
+                strict_window(),
+            ),
+            Err(AttendanceDomainError::UnmatchedClockOut)
+        );
+        assert_eq!(
+            strict_pair_seconds(
+                &[
+                    strict_event(employee, 1, StrictDurationEventKind::ClockIn, 0),
+                    strict_event(employee, 2, StrictDurationEventKind::ClockIn, 1),
+                ],
+                strict_window(),
+            ),
+            Err(AttendanceDomainError::RepeatedClockIn)
+        );
+        assert_eq!(
+            strict_pair_seconds(
+                &[strict_event(
+                    employee,
+                    1,
+                    StrictDurationEventKind::ClockIn,
+                    0
+                )],
+                strict_window(),
+            ),
+            Err(AttendanceDomainError::OpenClockIn)
+        );
+    }
+
+    #[test]
+    fn strict_pairs_isolate_employees_but_fail_if_any_timeline_is_invalid() {
+        let first = Uuid::from_u128(1);
+        let second = Uuid::from_u128(2);
+        let seconds = strict_pair_seconds(
+            &[
+                strict_event(second, 4, StrictDurationEventKind::ClockOut, 4),
+                strict_event(first, 2, StrictDurationEventKind::ClockOut, 3),
+                strict_event(second, 3, StrictDurationEventKind::ClockIn, 2),
+                strict_event(first, 1, StrictDurationEventKind::ClockIn, 1),
+            ],
+            strict_window(),
+        )
+        .unwrap();
+        assert_eq!(seconds.get(&first), Some(&(2 * 60 * 60)));
+        assert_eq!(seconds.get(&second), Some(&(2 * 60 * 60)));
+        assert_eq!(
+            strict_pair_seconds(
+                &[
+                    strict_event(first, 1, StrictDurationEventKind::ClockIn, 1),
+                    strict_event(first, 2, StrictDurationEventKind::ClockOut, 2),
+                    strict_event(second, 3, StrictDurationEventKind::ClockOut, 3),
+                ],
+                strict_window(),
+            ),
+            Err(AttendanceDomainError::UnmatchedClockOut)
+        );
+    }
+
+    #[test]
+    fn strict_duration_window_rejects_invalid_bounds() {
+        let at = OffsetDateTime::UNIX_EPOCH;
+        assert_eq!(
+            StrictDurationWindow::new(at, at),
+            Err(AttendanceDomainError::InvalidStrictDurationWindow)
+        );
+    }
+
+    #[test]
+    fn strict_duration_arithmetic_rejects_negative_and_overflow() {
+        let at = OffsetDateTime::UNIX_EPOCH;
+        assert_eq!(
+            strict_clipped_seconds(at, at - Duration::seconds(1)),
+            Err(AttendanceDomainError::NegativeStrictDuration)
+        );
+        assert_eq!(
+            strict_add_seconds(i64::MAX, 1),
+            Err(AttendanceDomainError::StrictDurationOverflow)
+        );
+    }
     #[test]
     fn selected_month_is_explicit_and_bounded() {
         let r = AttendanceDateRange::selected_month_with_buffer("2026-07").unwrap();
