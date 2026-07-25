@@ -200,10 +200,12 @@ test targets** from other lanes (mnt-app `board_ack_api`,
 `mnt-recruiting-domain` unit; `mnt-workorder-domain` `settlement_fsm`).
 
 **Fixed by the `hf-buck-preflight` lane** (`claude/hf-buck-preflight-20260725`
-@ `b84c2598`): intervening spine commits declared 13, that lane declared the
-14th plus a 15th (`mnt-platform-db` `tests/lifecycle_maker_checker.rs`) added
-by the four-eyes merge. `gen_first_party.py` now exits 0 and
-`tools/buck/preflight.sh` exits 0.
+@ `b84c2598`), which reports that intervening spine commits supplied most of
+the declarations and that it added the remainder, including one
+(`mnt-platform-db` `tests/lifecycle_maker_checker.rs`) introduced by the
+four-eyes merge. With that table, `gen_first_party.py` and
+`tools/buck/preflight.sh` both exit 0. Not independently re-verified by L-A1 —
+that lane's branch is not merged here.
 
 **This lane's hand-written target is confirmed byte-identical to generator
 output.** That lane took L-A1's evidence commit into a throwaway worktree,
