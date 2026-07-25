@@ -27,8 +27,12 @@ jobs:
         include:
           - batch: core
             shards: "preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity"
-          - batch: critical
-            shards: "critical-today critical-lifecycle camera-capture"
+          - batch: critical-core
+            shards: "critical-today camera-capture"
+          - batch: critical-report
+            shards: "critical-report"
+          - batch: critical-location
+            shards: "critical-location"
           - batch: messenger-dynamic
             shards: "messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail"
           - batch: audit-standard
@@ -259,6 +263,9 @@ jobs:
           XCTESTRUN="$(find "$DERIVED/Build/Products" -name '*.xctestrun' -print -quit)"
           test -n "$XCTESTRUN"
           chmod 600 "$XCTESTRUN"
+          # Prewarm has no renewable session. Normalize its static UI host
+          # before launch; functional shards add credentials only after minting.
+          (cd "$ROOT" && python3 scripts/patch-ios-xctestrun.py "$XCTESTRUN" --target MaintenanceFieldUITests --ui-target-app-path '__TESTROOT__/Debug-iphonesimulator/MaintenanceFieldApp.app')
           timing_finish passed
           export MNT_UITEST_BASE_URL="$URL" MNT_UITEST_WORK_ORDER_ID_DETAIL=00000000-0000-0000-0000-000000f00004 MNT_UITEST_WORK_ORDER_ID_START=00000000-0000-0000-0000-000000f00003 MNT_UITEST_WORK_ORDER_ID_REPORT=00000000-0000-0000-0000-000000f00004 MNT_UITEST_WORK_ORDER_ID_REPORT_SUCCESS=00000000-0000-0000-0000-000000f00005 MNT_UITEST_WORK_ORDER_ID_ADMIN_APPROVE=00000000-0000-0000-0000-000000f00007 MNT_UITEST_WORK_ORDER_ID_ADMIN_REJECT=00000000-0000-0000-0000-000000f00008 MNT_UITEST_WORK_ORDER_ID_CAMERA=00000000-0000-0000-0000-000000f00004 MNT_UITEST_MESSENGER_THREAD_ID=00000000-0000-0000-0000-000000c10001 MNT_UITEST_MESSENGER_INITIAL_MESSAGE_ID=00000000-0000-0000-0000-000000c20001
           configure_shard() {
@@ -297,12 +304,17 @@ jobs:
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testFullFixtureRowsRemainReachableAboveTabBar
                 )
                 ;;
-              critical-lifecycle)
-                SHARD_TIMEOUT_SECONDS=300
+              critical-report)
+                SHARD_TIMEOUT_SECONDS=240
                 SHARD_SELECTORS=(
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testOpenWorkOrderDetailAndAdvance
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testReportFormValidationSurfacesRealRequiredCopy
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testReportSubmissionPersistsVisibleTerminalOutcome
+                )
+                ;;
+              critical-location)
+                SHARD_TIMEOUT_SECONDS=150
+                SHARD_SELECTORS=(
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testLocationConsentTransitionsPersistThroughTheRealBackend
                 )
                 ;;
@@ -632,15 +644,17 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          EXPECTED_BATCHES=(core critical messenger-dynamic audit-standard audit-adaptive)
-          EXPECTED_SHARDS=(preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity critical-today critical-lifecycle camera-capture messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
+          EXPECTED_BATCHES=(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive)
+          EXPECTED_SHARDS=(preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
           for batch_name in "${EXPECTED_BATCHES[@]}"; do
             batch_dir="$RESULTS_ROOT/ios-ui-test-results-$batch_name"
             test -d "$batch_dir"
             test "$(cat "$batch_dir/batch-name.txt")" = "$batch_name"
             case "$batch_name" in
               core) expected_manifest='preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity' ;;
-              critical) expected_manifest='critical-today critical-lifecycle camera-capture' ;;
+              critical-core) expected_manifest='critical-today camera-capture' ;;
+              critical-report) expected_manifest='critical-report' ;;
+              critical-location) expected_manifest='critical-location' ;;
               messenger-dynamic) expected_manifest='messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail' ;;
               audit-standard) expected_manifest='audit-dynamic-messenger audit-dynamic-login accessibility-standard' ;;
               audit-adaptive) expected_manifest='accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5' ;;
@@ -648,9 +662,9 @@ jobs:
             esac
             test "$(paste -sd' ' "$batch_dir/shard-manifest.txt")" = "$expected_manifest"
           done
-          test "$(find "$RESULTS_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'ios-ui-test-results-*' | wc -l | tr -d ' ')" = 5
-          test "$(find "$RESULTS_ROOT" -type f -name '*-summary.json' | wc -l | tr -d ' ')" = 19
-          test "$(find "$RESULTS_ROOT" -type f -name '*-tests.json' | wc -l | tr -d ' ')" = 19
+          test "$(find "$RESULTS_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'ios-ui-test-results-*' | wc -l | tr -d ' ')" = 7
+          test "$(find "$RESULTS_ROOT" -type f -name '*-summary.json' | wc -l | tr -d ' ')" = 20
+          test "$(find "$RESULTS_ROOT" -type f -name '*-tests.json' | wc -l | tr -d ' ')" = 20
           VERIFY_ARGS=()
           for shard_name in "${EXPECTED_SHARDS[@]}"; do
             mapfile -t summaries < <(find "$RESULTS_ROOT" -type f -name "$shard_name-summary.json" -print)

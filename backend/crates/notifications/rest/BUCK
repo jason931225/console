@@ -20,6 +20,7 @@ rust_library(
         "//backend/crates/kernel/core:mnt-kernel-core",
         "//backend/crates/notifications/adapter-postgres:mnt-notifications-adapter-postgres",
         "//backend/crates/notifications/application:mnt-notifications-application",
+        "//backend/crates/notifications/domain:mnt-notifications-domain",
         "//backend/crates/platform/auth:mnt-platform-auth",
         "//backend/crates/platform/authz:mnt-platform-authz",
         "//backend/crates/platform/request-context:mnt-platform-request-context",

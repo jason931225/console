@@ -270,9 +270,18 @@ final class FieldViewModel: ObservableObject {
         do {
             let draft = ReportDraft(resultType: resultType, diagnosis: diagnosis, actionTaken: actionTaken)
             let syncState = try await workOrderRepository.submitReport(id: selectedWorkOrder.id, draft: draft)
-            self.selectedWorkOrder = try await workOrderRepository.detail(id: selectedWorkOrder.id)
+            self.selectedWorkOrder = selectedWorkOrder.applyingSubmittedReport(draft, syncState: syncState)
             today = await workOrderRepository.cachedToday()
             messageKey = syncState == .pending ? "offline_queued" : "report_submitted"
+            isLoading = false
+
+            // A confirmed report is the terminal user action. Refreshing Today
+            // is useful but nonessential, so publish that outcome before the
+            // follow-up read can alter the transient loading/error state.
+            if syncState == .synced {
+                await refreshToday()
+            }
+            return
         } catch {
             messageKey = failureMessageKey(for: error, fallback: "operation_failed")
         }

@@ -80,3 +80,47 @@ sh_test(
     deps = ["//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_schema_contract"],
     labels = ["test.integration", "resource.postgres", "needs-postgres"],
 )
+
+# These non-generated adapters ensure the app PostgreSQL suites receive the
+# disposable harness environment only inside their test processes. Never call
+# the generated app test targets directly from CI: that would bypass the
+# credential-file loader and expose the runner to raw PostgreSQL target labels.
+sh_test(
+    name = "app-inline-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],
+    deps = ["//backend/app:mnt-app-itest-inline-postgres"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "app-dev-auth-persona-guard-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/app:mnt-app-itest-dev_auth_persona_guard_feature)"],
+    deps = ["//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "dispatch-p1-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch)"],
+    deps = ["//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "attendance-cancel-substitution-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution)"],
+    deps = ["//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "attendance-concurrency-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency)"],
+    deps = ["//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)

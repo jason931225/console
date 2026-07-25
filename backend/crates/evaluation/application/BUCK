@@ -18,9 +18,7 @@ rust_library(
     env = {"CARGO_MANIFEST_DIR": "backend/crates/evaluation/application"},
     deps = [
         "//backend/crates/evaluation/domain:mnt-evaluation-domain",
-        "//backend/crates/kernel/core:mnt-kernel-core",
         "//third-party/rust:serde",
-        "//third-party/rust:serde_json",
         "//third-party/rust:time",
         "//third-party/rust:uuid",
     ],
@@ -37,7 +35,6 @@ rust_test(
     labels = ["owner.backend.crates.evaluation.application", "domain.evaluation", "test.unit", "resource.none"],
     deps = [
         "//backend/crates/evaluation/domain:mnt-evaluation-domain",
-        "//backend/crates/kernel/core:mnt-kernel-core",
         "//third-party/rust:serde",
         "//third-party/rust:serde_json",
         "//third-party/rust:time",
