@@ -19,7 +19,12 @@
 //!   (d) a tenant with no catalog at all still receives the upgraded catalog
 //!       whole, and neither tenant can see the other's registry;
 //!   (e) a retained key that contradicts the manifest's projection contract
-//!       fails the whole install closed, with zero residue.
+//!       fails the whole install closed, with zero residue;
+//!   (f) a version that adds NO key — one that only edits an existing type — is
+//!       recorded as applied and changes nothing else. That is the additive
+//!       path's sharpest limitation, so it is pinned by a test rather than left
+//!       to a prose caveat, and it is the only case where the marker append and
+//!       its audit row are the whole transaction.
 
 use mnt_kernel_core::{OrgId, TraceContext, UserId};
 use mnt_ontology_adapter_postgres::seed::{
@@ -40,6 +45,7 @@ use uuid::Uuid;
 const PROBE_KEY: &str = "catalog_upgrade_probe";
 const UPGRADE_VERSION: &str = "test-additive-upgrade.1";
 const CONFLICT_VERSION: &str = "test-additive-conflict.1";
+const EDIT_ONLY_VERSION: &str = "test-additive-edit-only.1";
 const SEEDED_CATALOG_SIZE: i64 = 27;
 
 async fn role_pool(owner_pool: &PgPool, role: &'static str) -> PgPool {
@@ -143,6 +149,16 @@ fn upgraded_manifest(catalog_version: &str, backing_kind: BackingKind) -> serde_
         .as_array_mut()
         .unwrap()
         .push(snapshot);
+    manifest
+}
+
+/// The shipped manifest under a new catalog version, with one existing type's
+/// title edited and NO new key. A real catalog version shaped like this — "add a
+/// property to `customer`" — is the case the additive installer cannot carry.
+fn edit_only_manifest(catalog_version: &str) -> serde_json::Value {
+    let mut manifest = builtin_catalog_manifest().unwrap();
+    manifest["catalog_version"] = serde_json::Value::String(catalog_version.to_owned());
+    manifest["object_types"][0]["title"] = serde_json::Value::String("편집된 제목".to_owned());
     manifest
 }
 
@@ -638,5 +654,119 @@ async fn retained_key_contradicting_the_projection_contract_fails_closed_as_runt
         install_footprint(&owner_pool, org_uuid).await,
         settled_footprint,
         "a rejected upgrade must leave no marker or audit residue"
+    );
+}
+
+/// (f) The additive installer creates keys; it never revises one. A catalog
+/// version whose only change is to an already-installed type therefore lands as
+/// a marker and an audit row and NOTHING else — the tenant is recorded as being
+/// on that version while its registry still holds the previous definitions.
+///
+/// This is a deliberate limit, not a defect, but it is the one that would be
+/// easiest to discover in production instead of here: the install reports
+/// success, so a caller has no signal that its edit was dropped. Pinning it
+/// means a future lane that decides to carry edits has to change this test on
+/// purpose. It is also the only transaction in which the marker append and its
+/// audit row are the entire state change, which is exactly why that append is
+/// audited at all.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn edit_only_catalog_version_is_recorded_and_changes_nothing_else_as_runtime_role(
+    owner_pool: PgPool,
+) {
+    let org_uuid = Uuid::from_u128(0x5e5e_5e5e_5e5e_5e5e_5e5e_5e5e_5e5e_5e5e);
+    let org = OrgId::from_uuid(org_uuid);
+    let actor = seed_org_and_user(&owner_pool, org_uuid, "edit-only").await;
+    let rt_pool = role_pool(&owner_pool, "mnt_rt").await;
+    let cmd_pool = role_pool(&owner_pool, "mnt_ontology_cmd").await;
+    let store = PgOntologyStore::new(rt_pool.clone()).with_command_pool(cmd_pool);
+
+    let base = builtin_catalog_manifest().unwrap();
+    let base_keys = manifest_keys(&base);
+    let edit_only = edit_only_manifest(EDIT_ONLY_VERSION);
+    assert_eq!(
+        manifest_keys(&edit_only),
+        base_keys,
+        "the edit-only version must introduce no key"
+    );
+    assert_ne!(
+        edit_only["object_types"][0]["title"], base["object_types"][0]["title"],
+        "the edit-only version must actually differ from the installed one"
+    );
+    allowlist(&owner_pool, EDIT_ONLY_VERSION, &edit_only).await;
+
+    install(
+        &store,
+        org,
+        actor,
+        BUILTIN_CATALOG_VERSION,
+        &base,
+        datetime!(2026-07-25 12:00 UTC),
+    )
+    .await
+    .unwrap();
+    let seeded_fingerprint = catalog_fingerprint(&rt_pool, org_uuid, &base_keys).await;
+
+    let (installed, count) = install(
+        &store,
+        org,
+        actor,
+        EDIT_ONLY_VERSION,
+        &edit_only,
+        datetime!(2026-07-25 12:05 UTC),
+    )
+    .await
+    .unwrap();
+    assert!(
+        installed,
+        "an unrecorded version must take the upgrade path"
+    );
+    assert_eq!(count, SEEDED_CATALOG_SIZE);
+
+    assert_eq!(
+        catalog_fingerprint(&rt_pool, org_uuid, &base_keys).await,
+        seeded_fingerprint,
+        "an edit-only version must not revise a retained key - the edit is dropped, silently"
+    );
+
+    let outcome = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT jsonb_build_object(
+          'markers', (SELECT jsonb_agg(i.catalog_version ORDER BY i.catalog_version)
+                        FROM ont_builtin_catalog_installs i WHERE i.org_id=$1),
+          'builtin_install', (SELECT COUNT(*) FROM audit_events
+                               WHERE org_id=$1 AND action='ontology.object_type.builtin_install'),
+          'upgrade_after', (SELECT after_snap FROM audit_events
+                             WHERE org_id=$1 AND action='ontology.builtin_catalog.upgrade')
+        )
+        "#,
+    )
+    .bind(org_uuid)
+    .fetch_one(&owner_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        outcome["markers"],
+        serde_json::json!([BUILTIN_CATALOG_VERSION, EDIT_ONLY_VERSION]),
+        "the tenant is recorded as being on a version its registry does not reflect"
+    );
+    assert_eq!(
+        outcome["builtin_install"], SEEDED_CATALOG_SIZE,
+        "no key was created, so no per-type audit row was added"
+    );
+    assert_eq!(
+        outcome["upgrade_after"]["catalog_version"],
+        EDIT_ONLY_VERSION
+    );
+    assert_eq!(
+        outcome["upgrade_after"]["installed_keys"],
+        serde_json::json!([]),
+        "the audit must say plainly that this upgrade installed nothing"
+    );
+    assert_eq!(
+        outcome["upgrade_after"]["retained_keys"]
+            .as_array()
+            .unwrap()
+            .len() as i64,
+        SEEDED_CATALOG_SIZE
     );
 }
