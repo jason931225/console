@@ -30,6 +30,13 @@ their unit tests.  It has no secrets, cache restore, npm install, or PR executab
 step before authentication.  This bootstrap must be merged to `main` before PR 488
 is rerun; a workflow supplied by the PR cannot establish its own trust root.
 
+On a closed, merged same-repository `main` PR, the separate squash-binding job checks
+out protected code from `S^` and verifies that the one-parent squash commit `S` is
+bound to the signed `C`/`T` authority train: its only parent is the trusted pre-merge
+base and its tree is exactly `T`'s tree. It emits the non-release
+`console-squash-binding-v1` receipt with `TREE_BOUND_HOLD_PRESERVED` and release
+disposition `HOLD`; it never checks out or executes `T`, `M`, or `S`.
+
 For user-facing features, PR/review evidence must prove the shipped workflow, not
 just the transport seam. API endpoint tests, handler tests, or generated-client
 round trips are necessary contract evidence, but they are **not sufficient** for

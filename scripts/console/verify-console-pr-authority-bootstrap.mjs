@@ -52,10 +52,9 @@ function assertSigned(status, label) {
 }
 
 /** A pure seam used by hermetic tests; ops only reads Git object facts. */
-export function verifyBootstrapGraph(ops, { headSha, mergeSha }) {
-  const T = exactSha(headSha, 'PR head');
-  const M = exactSha(mergeSha, 'PR merge');
-  if (!ops.hasCommit(T) || !ops.hasCommit(M)) fail('PR head or merge object is unavailable');
+function verifyAuthorityTrain(ops, authorityTipSha) {
+  const T = exactSha(authorityTipSha, 'PR head');
+  if (!ops.hasCommit(T)) fail('PR head object is unavailable');
   const C = candidateLocator(ops.readFile(T, REGISTRY_PATH)); // untrusted locator, never authority
   if (!ops.hasCommit(C)) fail('C object is unavailable');
   const policyEntry = ops.treeEntry(C, POLICY_PATH);
@@ -74,10 +73,34 @@ export function verifyBootstrapGraph(ops, { headSha, mergeSha }) {
     changed.add(change.path);
   }
   if (AUTHORITY_PATHS.some((entry) => !changed.has(entry))) fail('C..T authority document set is incomplete');
+  return { candidateSha: C, authorityTipSha: T };
+}
+
+/** A pure seam used by hermetic tests; ops only reads Git object facts. */
+export function verifyBootstrapGraph(ops, { headSha, mergeSha }) {
+  const train = verifyAuthorityTrain(ops, headSha);
+  const { candidateSha: C, authorityTipSha: T } = train;
+  const M = exactSha(mergeSha, 'PR merge');
+  if (!ops.hasCommit(M)) fail('PR merge object is unavailable');
   const mergeParents = ops.parents(M);
   if (!Array.isArray(mergeParents) || mergeParents.length !== 2 || mergeParents[1] !== T) fail('M must be a two-parent merge whose second parent is T');
   if (ops.tree(M) !== ops.tree(T) || !ops.sameTreeDiff(M, T)) fail('M tree/diff must equal T exactly');
   return Object.freeze({ candidateSha: C, integrationTipSha: T, mergeSha: M });
+}
+
+/** A pure post-merge seam. It never reads candidate, T, or S executable content. */
+export function verifySquashBinding(ops, { authorityTipSha, squashSha, preMergeBaseSha }) {
+  const train = verifyAuthorityTrain(ops, authorityTipSha);
+  const S = exactSha(squashSha, 'squash commit');
+  const B = exactSha(preMergeBaseSha, 'pre-merge base');
+  if (!ops.hasCommit(S) || !ops.hasCommit(B)) fail('squash commit or pre-merge base object is unavailable');
+  const squashParents = ops.parents(S);
+  if (!Array.isArray(squashParents) || squashParents.length !== 1 || squashParents[0] !== B) fail('S must be a one-parent squash commit on the trusted pre-merge base');
+  if (ops.tree(S) !== ops.tree(train.authorityTipSha) || !ops.sameTreeDiff(S, train.authorityTipSha)) fail('S tree/diff must equal T exactly');
+  return Object.freeze({ candidateSha: train.candidateSha, authorityTipSha: train.authorityTipSha, squashSha: S, preMergeBaseSha: B });
+}
+export function squashBindingReceipt(binding) {
+  return Object.freeze({ schema: 'console-squash-binding-v1', verdict: 'TREE_BOUND_HOLD_PRESERVED', release_disposition: 'HOLD', ...binding });
 }
 
 function git(repo, args, options = {}) {
@@ -118,15 +141,38 @@ function fetchExactPullObjects(repo, number, expectedHead, expectedMerge) {
   git(repo, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/pull/${number}/head:${namespace}/head`, `+refs/pull/${number}/merge:${namespace}/merge`]);
   if (git(repo, ['rev-parse', `${namespace}/head`]).trim() !== expectedHead || git(repo, ['rev-parse', `${namespace}/merge`]).trim() !== expectedMerge) fail('GitHub pull refs do not match event SHAs');
 }
-function runAuthenticatedCandidateChecks(repo, C, T) {
+export function candidateCheckPlan(C, T, M) {
+  return Object.freeze({
+    environment: Object.freeze({ CONSOLE_CANDIDATE_SHA: C, CONSOLE_AUTHORITY_TIP_SHA: T, CONSOLE_SYNTHETIC_MERGE_SHA: M }),
+    commands: Object.freeze([
+      ['node', ['scripts/console/validate-console-truth-ledger.mjs']],
+      ['node', ['scripts/console/plan-fanout.mjs', '--candidate-sha', C, '--authority-tip-sha', T, '--synthetic-merge-sha', M]],
+      ['node', ['--test', 'scripts/console/validate-console-truth-ledger.test.mjs', 'scripts/console/plan-fanout.test.mjs', 'scripts/console/verify-console-authority-train.test.mjs']],
+    ]),
+  });
+}
+function runAuthenticatedCandidateChecks(repo, C, T, M) {
   const candidate = mkdtempSync(path.join(tmpdir(), 'console-candidate-'));
   try {
     git(repo, ['worktree', 'add', '--detach', '--no-checkout', candidate]); git(repo, ['-C', candidate, 'checkout', '--detach', C]);
-    const environment = { ...sanitizedGitEnvironment(), CONSOLE_INTEGRATION_TIP_SHA: T };
-    for (const [binary, args] of [['node', ['scripts/console/validate-console-truth-ledger.mjs']], ['node', ['scripts/console/plan-fanout.mjs', '--epoch-base', C, '--integration-tip', T]], ['node', ['--test', 'scripts/console/validate-console-truth-ledger.test.mjs', 'scripts/console/plan-fanout.test.mjs']]]) {
+    const plan = candidateCheckPlan(C, T, M);
+    const environment = { ...sanitizedGitEnvironment(), ...plan.environment };
+    for (const [binary, args] of plan.commands) {
       if (spawnSync(binary, args, { cwd: candidate, env: environment, stdio: 'inherit' }).status !== 0) fail(`authenticated C check failed: ${binary} ${args.join(' ')}`);
     }
   } finally { try { git(repo, ['worktree', 'remove', '--force', candidate]); } catch { rmSync(candidate, { recursive: true, force: true }); } }
 }
-function main() { const args = parseArgs(process.argv.slice(2)); const repo = process.cwd(); fetchExactPullObjects(repo, args['pr-number'], args.head, args.merge); const graph = verifyBootstrapGraph(gitOps(repo), { headSha: args.head, mergeSha: args.merge }); runAuthenticatedCandidateChecks(repo, graph.candidateSha, graph.integrationTipSha); process.stdout.write(`${JSON.stringify({ verdict: 'PASS', ...graph }, null, 2)}\n`); }
-if (import.meta.url === new URL(`file://${process.argv[1]}`).href) main();
+function parseSquashBindingArgs(argv) {
+  const result = {}; for (let index = 0; index < argv.length; index += 2) { const key = argv[index]; const value = argv[index + 1]; if (!['--head', '--squash', '--base'].includes(key) || value === undefined) fail('usage: squash-binding --head SHA --squash SHA --base main'); result[key.slice(2)] = value; }
+  exactSha(result.head, 'PR head'); exactSha(result.squash, 'squash commit'); if (!safeBaseBranch(result.base)) fail('PR base is outside the protected main trust scope'); return result;
+}
+function main() { const args = parseArgs(process.argv.slice(2)); const repo = process.cwd(); fetchExactPullObjects(repo, args['pr-number'], args.head, args.merge); const graph = verifyBootstrapGraph(gitOps(repo), { headSha: args.head, mergeSha: args.merge }); runAuthenticatedCandidateChecks(repo, graph.candidateSha, graph.integrationTipSha, graph.mergeSha); process.stdout.write(`${JSON.stringify({ verdict: 'PASS', ...graph }, null, 2)}\n`); }
+function squashBindingMain() {
+  const args = parseSquashBindingArgs(process.argv.slice(3)); const repo = process.cwd();
+  const preMergeBaseSha = git(repo, ['rev-parse', 'HEAD']).trim();
+  const binding = verifySquashBinding(gitOps(repo), { authorityTipSha: args.head, squashSha: args.squash, preMergeBaseSha });
+  process.stdout.write(`${JSON.stringify(squashBindingReceipt(binding), null, 2)}\n`);
+}
+if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  if (process.argv[2] === 'squash-binding') squashBindingMain(); else main();
+}

@@ -2,6 +2,7 @@ name: Console authority bootstrap
 
 on:
   pull_request_target:
+    types: [opened, synchronize, reopened, closed]
     branches:
       - main
 
@@ -13,6 +14,7 @@ permissions:
 jobs:
   authenticate-console-authority:
     if: >-
+      github.event.action != 'closed' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
@@ -37,3 +39,37 @@ jobs:
           --head "$PR_HEAD_SHA" \
           --merge "$PR_MERGE_SHA" \
           --base "$PR_BASE_REF"
+
+  bind-merged-console-authority-squash:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout protected pre-merge base code only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}^
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Bind merged squash tree to the authenticated authority train
+        env:
+          HOME: ${{ runner.temp }}/hostile-home
+          AUTHORITY_TIP_SHA: ${{ github.event.pull_request.head.sha }}
+          SQUASH_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          RECEIPT_PATH: ${{ runner.temp }}/console-squash-binding.json
+        run: |
+          node scripts/console/verify-console-pr-authority-bootstrap.mjs squash-binding \
+          --head "$AUTHORITY_TIP_SHA" \
+          --squash "$SQUASH_SHA" \
+          --base "$PR_BASE_REF" > "$RECEIPT_PATH"
+      - name: Upload squash binding receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: console-squash-binding-${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/console-squash-binding.json
+          if-no-files-found: error

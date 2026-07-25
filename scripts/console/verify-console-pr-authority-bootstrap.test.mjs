@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AUTHORITY_PATHS, POLICY_PATH, TRUSTED_ALLOWED_SIGNER, TRUSTED_FINGERPRINT, TRUSTED_PRINCIPAL, validatePinnedPolicy, verifyBootstrapGraph, verifyPinnedSshCommit } from './verify-console-pr-authority-bootstrap.mjs';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { AUTHORITY_PATHS, POLICY_PATH, TRUSTED_ALLOWED_SIGNER, TRUSTED_FINGERPRINT, TRUSTED_PRINCIPAL, candidateCheckPlan, squashBindingReceipt, validatePinnedPolicy, verifyBootstrapGraph, verifyPinnedSshCommit, verifySquashBinding } from './verify-console-pr-authority-bootstrap.mjs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const C = 'c'.repeat(40), T = 't'.repeat(40).replace(/t/g, 'a'), M = 'b'.repeat(40), BASE = 'd'.repeat(40);
+const C = 'c'.repeat(40), T = 't'.repeat(40).replace(/t/g, 'a'), M = 'b'.repeat(40), S = 'e'.repeat(40), BASE = 'd'.repeat(40);
 const policy = `${TRUSTED_ALLOWED_SIGNER}\n`;
 const changes = AUTHORITY_PATHS.map((path) => ({ path, status: 'M', oldMode: '100644', newMode: '100644', oldType: 'blob', newType: 'blob' }));
 function fixture(overrides = {}) {
@@ -58,6 +58,58 @@ test('rejects indirect T and malformed M', () => {
   rejects({ parents: (sha) => sha === T ? [C] : [BASE] }, /two-parent merge/);
   rejects({ tree: (sha) => sha === M ? 'tree-m' : 'tree-t' }, /tree\/diff/);
   rejects({ sameTreeDiff: () => false }, /tree\/diff/);
+});
+test('binds a one-parent squash S to signed C/T without reading T or S executable content', () => {
+  const { data, calls } = fixture({
+    readFile: (sha, file) => {
+      if (sha === S || (sha === T && file !== 'docs/program/console-capability-registry.json')) throw new Error('untrusted executable/data was read');
+      return file === POLICY_PATH ? policy : JSON.stringify({ candidate: { sha: C } });
+    },
+    parents: (sha) => sha === T ? [C] : sha === S ? [BASE] : [],
+    tree: (sha) => sha === S || sha === T ? 'tree-t' : 'tree-c',
+  });
+  assert.deepEqual(verifySquashBinding(data, { authorityTipSha: T, squashSha: S, preMergeBaseSha: BASE }), { candidateSha: C, authorityTipSha: T, squashSha: S, preMergeBaseSha: BASE });
+  assert.deepEqual(calls.map(({ sha }) => sha), [C, T]);
+});
+test('rejects merge, rebase, wrong-base, and tree-drift squash bindings', () => {
+  const squash = (overrides) => assert.throws(() => verifySquashBinding(fixture({
+    parents: (sha) => sha === T ? [C] : sha === S ? [BASE] : [],
+    tree: (sha) => sha === S || sha === T ? 'tree-t' : 'tree-c',
+    ...overrides,
+  }).data, { authorityTipSha: T, squashSha: S, preMergeBaseSha: BASE }), /authority bootstrap/);
+  squash({ parents: (sha) => sha === T ? [C] : sha === S ? [BASE, C] : [] });
+  squash({ parents: (sha) => sha === T ? [C, BASE] : sha === S ? [BASE] : [] });
+  squash({ parents: (sha) => sha === T ? [C] : sha === S ? [C] : [] });
+  squash({ tree: (sha) => sha === S ? 'tree-s' : sha === T ? 'tree-t' : 'tree-c' });
+});
+test('emits a non-release squash binding receipt that preserves HOLD', () => {
+  assert.deepEqual(squashBindingReceipt({ candidateSha: C, authorityTipSha: T, squashSha: S, preMergeBaseSha: BASE }), {
+    schema: 'console-squash-binding-v1',
+    verdict: 'TREE_BOUND_HOLD_PRESERVED',
+    release_disposition: 'HOLD',
+    candidateSha: C,
+    authorityTipSha: T,
+    squashSha: S,
+    preMergeBaseSha: BASE,
+  });
+});
+test('candidate compatibility fixture receives only C/T/M environment facts and planner new flags', () => {
+  const plan = candidateCheckPlan(C, T, M);
+  assert.deepEqual(plan.environment, {
+    CONSOLE_CANDIDATE_SHA: C,
+    CONSOLE_AUTHORITY_TIP_SHA: T,
+    CONSOLE_SYNTHETIC_MERGE_SHA: M,
+  });
+  assert.deepEqual(plan.commands[1], ['node', ['scripts/console/plan-fanout.mjs', '--candidate-sha', C, '--authority-tip-sha', T, '--synthetic-merge-sha', M]]);
+  assert.deepEqual(plan.commands[2][1], ['--test', 'scripts/console/validate-console-truth-ledger.test.mjs', 'scripts/console/plan-fanout.test.mjs', 'scripts/console/verify-console-authority-train.test.mjs']);
+});
+test('workflow separates open PR authentication from closed merged squash binding', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/console-authority-bootstrap.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /types: \[opened, synchronize, reopened, closed\]/);
+  assert.match(workflow, /github\.event\.action != 'closed'/);
+  assert.match(workflow, /github\.event\.action == 'closed'/);
+  assert.match(workflow, /pull_request\.merged == true/);
+  assert.match(workflow, /squash-binding/);
 });
 test('hostile global Git config cannot replace the pinned verifier or execute its marker', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'console-hostile-git-config-'));
