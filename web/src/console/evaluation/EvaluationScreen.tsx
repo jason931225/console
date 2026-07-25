@@ -154,10 +154,9 @@ function useKeyedFenced<T>() {
       generations.current.set(key, (generations.current.get(key) ?? 0) + 1);
       operations.current.get(key)?.abort();
       operations.current.delete(key);
-      setData((current) => {
-        const { [key]: _removed, ...remaining } = current;
-        return remaining;
-      });
+      setData((current) =>
+        Object.fromEntries(Object.entries(current).filter(([entryKey]) => entryKey !== key)),
+      );
       return;
     }
     for (const operation of operations.current.values()) operation.abort();
