@@ -69,7 +69,12 @@ describe("createFieldApi", () => {
     expect(vi.mocked(api.POST)).toHaveBeenCalledWith(
       "/api/v1/support/tickets/{id}/acceptance",
       expect.objectContaining({
-        params: { path: { id: "ticket-1" } },
+        params: {
+          path: { id: "ticket-1" },
+          // The handler requires an Idempotency-Key so a retried acceptance
+          // returns the stored one instead of recording a second.
+          header: { "Idempotency-Key": expect.any(String) as unknown as string },
+        },
         body: { kind: "CUSTOMER_ACCEPTED", channel: "PHONE", accepted_by: "김확인" },
       }),
     );

@@ -880,6 +880,9 @@ function SitePane({
   onOpenTicket: (id: string) => void;
 }) {
   const { site, sla } = detail;
+  // The server carries the site contact as a name and a phone; the chip shows
+  // whichever are set and searches on that same string.
+  const contact = [site.contact_name, site.contact_phone].filter(Boolean).join(" · ");
   return (
     <>
       <header className="field__detail-head">
@@ -910,19 +913,19 @@ function SitePane({
             <dd>{site.address}</dd>
           </>
         )}
-        {site.contact && (
+        {contact && (
           <>
             <dt>{text.detail.contact}</dt>
             <dd>
               <button
                 type="button"
                 className="field__linkchip"
-                aria-label={text.detail.searchContact(site.contact)}
+                aria-label={text.detail.searchContact(contact)}
                 onClick={() => {
-                  onSearchContact(site.contact ?? "");
+                  onSearchContact(contact);
                 }}
               >
-                {site.contact}
+                {contact}
               </button>
             </dd>
           </>
@@ -1013,7 +1016,8 @@ function SitePane({
               >
                 <span>{event.user_name ?? ko.common.unknown}</span>
                 <StatusChip tone={event.kind === "ARRIVAL" ? "ok" : "neutral"}>
-                  {text.attendanceKind[event.kind]}
+                  {/* kind is the compliance crate's open vocabulary, not a closed enum */}
+                  {text.attendanceKind[event.kind as keyof typeof text.attendanceKind] ?? event.kind}
                 </StatusChip>
                 <span>{formatDateTime(event.occurred_at)}</span>
               </li>
