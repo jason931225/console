@@ -744,9 +744,9 @@ function renderCell(
 
 /** §4.7-3 bound-type chip: OT- code opens the type's ObjectCard (right pin). */
 function TypeChip({ type }: { type: OntObjectType }) {
-  if (!canOpenTypeCard(type)) return null;
   const windowManager = useOptionalWindowManager();
   const [modalOpen, setModalOpen] = useState(false);
+  if (!canOpenTypeCard(type)) return null;
   const ariaLabel = `${type.code} ${resolveText("console.modules.common.openTypeCard")}`;
   return (
     <>

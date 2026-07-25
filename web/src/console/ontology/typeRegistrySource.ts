@@ -194,7 +194,9 @@ export async function loadObjectTypeRegistryForAuthority(
     ingest(types);
     return types;
   } catch (error) {
-    if (!isCurrent()) throw new Error("object-type registry invalidated");
+    if (!isCurrent()) {
+      throw new Error("object-type registry invalidated", { cause: error });
+    }
     throw error;
   }
 }

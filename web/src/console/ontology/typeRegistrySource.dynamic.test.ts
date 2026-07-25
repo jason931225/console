@@ -69,8 +69,12 @@ const INSTANCE = {
 };
 
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
+  let resolve: (value: T) => void = (_value) => {
+    throw new Error("deferred promise was not initialized");
+  };
+  let reject: (reason?: unknown) => void = (_reason) => {
+    throw new Error("deferred promise was not initialized");
+  };
   const promise = new Promise<T>((nextResolve, nextReject) => {
     resolve = nextResolve;
     reject = nextReject;
@@ -192,6 +196,8 @@ describe("canonical dynamic object-type source", () => {
 
     await loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
     const type = getObjectType("widget", "tenant-a:session-1");
+    expect(type).toBeDefined();
+    if (!type) throw new Error("canonical type must be registered");
     const row: ModuleRow = {
       id: instance.instance.id,
       code: "W-703",
@@ -200,7 +206,7 @@ describe("canonical dynamic object-type source", () => {
       sourceRecord: instance,
     };
 
-    expect(typeCardDescriptor(type!)).toMatchObject({
+    expect(typeCardDescriptor(type)).toMatchObject({
       objectType: { id: detail.object_type.id },
       lifecycleState: "draft",
       schemaVersion: 9,
@@ -220,7 +226,9 @@ describe("canonical dynamic object-type source", () => {
 
     await loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
     const type = getObjectType("widget", "tenant-a:session-1");
-    expect(canOpenTypeCard(type!)).toBe(false);
-    expect(() => typeCardDescriptor(type!)).toThrow("no instance-card representation");
+    expect(type).toBeDefined();
+    if (!type) throw new Error("canonical type must be registered");
+    expect(canOpenTypeCard(type)).toBe(false);
+    expect(() => typeCardDescriptor(type)).toThrow("no instance-card representation");
   });
 });

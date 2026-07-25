@@ -85,13 +85,17 @@ function DynamicModuleScreen({
   useEffect(() => {
     if (!authorityKey) return;
     const controller = new AbortController();
-    setReady(false);
     void loadObjectTypeRegistryForAuthority(api, authorityKey, controller.signal)
       .then(() => {
         if (!controller.signal.aborted) setReady(true);
       })
-      .catch(() => undefined);
-    return () => controller.abort();
+      .catch(() => {
+        // Discovery failure is intentionally represented by the fail-closed
+        // empty route below rather than an alternate module surface.
+      });
+    return () => {
+      controller.abort();
+    };
   }, [api, authorityKey]);
 
   // Until the exact authority's registry proves that this screen is a dynamic
