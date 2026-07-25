@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import { createConsoleCandidateSourceResolver, promotionAuthorityDigests, validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
+import { verifyCommitWithCandidateSshPolicy } from './ssh-signature-policy.mjs';
 
 const registry = JSON.parse(readFileSync(new URL('../../docs/program/console-capability-registry.json', import.meta.url)));
 const jurisdiction = JSON.parse(readFileSync(new URL('../../docs/program/console-jurisdiction-register.json', import.meta.url)));
@@ -143,6 +144,12 @@ test('a real SSH-signed canonical Git receipt is the only non-HOLD admission pat
     const authorityTip = run(['rev-parse', 'HEAD']);
     run(['config', '--unset', 'gpg.ssh.allowedSignersFile']);
     assert.equal(createConsoleCandidateSourceResolver(root, candidateSha, authorityTip, { candidateSigningAuthority }).readText('candidate.txt'), 'candidate\n');
+    const hostileHome = mkdtempSync(path.join(tmpdir(), 'console-hostile-home-'));
+    const hostileVerifier = path.join(hostileHome, 'forged-ssh-keygen'); const hostileMarker = path.join(hostileHome, 'invoked');
+    writeFileSync(hostileVerifier, `#!/bin/sh\ntouch '${hostileMarker}'\nprintf '%s\\n' 'Good "git" signature for ${candidateSigningAuthority.principal} with ED25519 key ${fingerprint}'\n`); chmodSync(hostileVerifier, 0o700);
+    writeFileSync(path.join(hostileHome, '.gitconfig'), `[gpg "ssh"]\n\tprogram = ${hostileVerifier}\n`);
+    const originalHome = process.env.HOME; process.env.HOME = hostileHome;
+    try { assert.throws(() => verifyCommitWithCandidateSshPolicy(root, candidateSha, authorityTip, candidateSigningAuthority), /rejected/); assert.equal(existsSync(hostileMarker), false); } finally { process.env.HOME = originalHome; rmSync(hostileHome, { recursive: true, force: true }); }
     run(['checkout', '-b', 'renamed-authority', authorityTip]);
     run(['mv', 'scripts/console/control.mjs', 'scripts/console/renamed-control.mjs']); run(['commit', '--no-gpg-sign', '-m', 'rename authority control']);
     assert.throws(() => createConsoleCandidateSourceResolver(root, candidateSha, run(['rev-parse', 'HEAD']), { candidateSigningAuthority }), /forbidden rename/);

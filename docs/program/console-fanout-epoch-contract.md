@@ -97,7 +97,7 @@ verification tooling; it never treats author text or a fingerprint substring as
 signature proof. SSH verification materializes the canonical
 `.github/trust/console.allowed_signers` policy from the immutable product
 candidate Git tree into a mode-0600 temporary file and invokes Git with explicit
-`gpg.format=ssh` and `gpg.ssh.allowedSignersFile` overrides. HOME and global Git
+`gpg.format=ssh`, `gpg.ssh.program=ssh-keygen`, and `gpg.ssh.allowedSignersFile` overrides. HOME and global Git
 configuration are not trusted; Git verifies the `git` signature namespace and the
 one policy entry must match the declared principal and full fingerprint. Later authority commits therefore
 cannot change candidate or review trust. If signer infrastructure is unavailable, receipts

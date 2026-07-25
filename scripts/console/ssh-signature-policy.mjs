@@ -33,7 +33,7 @@ export function verifyCommitWithCandidateSshPolicy(repoRoot, candidateSha, sha, 
   const directory = mkdtempSync(path.join(tmpdir(), 'console-allowed-signers-')); const policyPath = path.join(directory, 'allowed_signers');
   try {
     writeFileSync(policyPath, policy, { mode: 0o600 }); chmodSync(policyPath, 0o600);
-    const result = spawnSync('git', ['-C', repoRoot, '-c', 'gpg.format=ssh', '-c', `gpg.ssh.allowedSignersFile=${policyPath}`, 'verify-commit', '--raw', sha], { encoding: 'utf8' });
+    const result = spawnSync('git', ['-C', repoRoot, '-c', 'gpg.format=ssh', '-c', 'gpg.ssh.program=ssh-keygen', '-c', `gpg.ssh.allowedSignersFile=${policyPath}`, 'verify-commit', '--raw', sha], { encoding: 'utf8' });
     if (result.error) fail(`git verify-commit unavailable: ${result.error.message}`);
     const status = `${result.stdout ?? ''}${result.stderr ?? ''}`;
     if (result.status !== 0 || !sshSignatureMatchesAuthority(status, authority)) fail('git verify-commit rejected the exact trusted SSH signature');
