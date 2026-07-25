@@ -76,6 +76,9 @@ grep -Fq 'MNT_BUCK_RUST_TEST_EXACT=one_exact_test' "${exact_log}"
 isolation_log="${scratch}/isolation.log"
 PATH="${fake_bin}:${PATH}" HARNESS_LOG="${isolation_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR=postgres-proof "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
 grep -Fxq 'buck-isolation postgres-proof' "${isolation_log}"
+inherited_isolation_log="${scratch}/inherited-isolation.log"
+PATH="${fake_bin}:${PATH}" HARNESS_LOG="${inherited_isolation_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" BUCK_ISOLATION_DIR=caller-proof "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
+grep -Fxq 'buck-isolation caller-proof' "${inherited_isolation_log}"
 invalid_isolation_log="${scratch}/invalid-isolation.log"
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${invalid_isolation_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR='bad isolation' "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
 ! grep -q '^buck' "${invalid_isolation_log}" 2>/dev/null
