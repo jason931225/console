@@ -85,6 +85,17 @@ function stubApi(over?: Partial<MyWorkApi>): MyWorkApi {
     createTodo: vi.fn().mockResolvedValue(undefined),
     setTodoDone: vi.fn().mockResolvedValue(undefined),
     deleteTodo: vi.fn().mockResolvedValue(undefined),
+    loadWorkbench: vi.fn().mockResolvedValue({
+      as_of: "2026-07-08T09:00:00Z",
+      timezone: "Asia/Seoul",
+      range: { from: "2026-07-07T15:00:00Z", to: "2026-07-14T15:00:00Z" },
+      scope: { kind: "all" },
+      partial: false,
+      action_inbox: { status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false },
+      todos: { status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false },
+      calendar: { status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false },
+    }),
+    createPersonalCalendarEvent: vi.fn().mockResolvedValue(undefined),
     ...over,
   };
 }
@@ -957,5 +968,172 @@ describe("MyWorkBody", () => {
     expect(
       screen.queryByText("테넌트 A 오래된 삭제 새로고침"),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("MyWorkBody calendar workbench", () => {
+  const C = S.calendar;
+  const calendarEvent = {
+    id: "00000000-0000-0000-0000-000000000050",
+    title: "Morning operational review",
+    starts_at: "2026-07-08T04:00:00Z",
+    ends_at: "2026-07-08T05:00:00Z",
+    target: { module: "overview", id: "00000000-0000-0000-0000-000000000050" },
+  };
+  const createdCalendarEvent = {
+    id: "00000000-0000-0000-0000-000000000051",
+    scope_type: "PERSONAL" as const,
+    title: "Prepare weekly close",
+    description: "",
+    starts_at: "2026-07-10T00:00:00.000Z",
+    ends_at: "2026-07-10T01:00:00.000Z",
+    all_day: false,
+    status: "ACTIVE" as const,
+    created_at: "2026-07-08T09:00:00Z",
+    updated_at: "2026-07-08T09:00:00Z",
+    policy: { enforcement: "server" as const, scope_type: "PERSONAL" as const, visibility: "creator_only" as const },
+  };
+
+  function workbench(calendar: unknown, partial = false) {
+    return {
+      as_of: "2026-07-08T09:00:00Z",
+      timezone: "Asia/Seoul",
+      range: { from: "2026-07-07T15:00:00Z", to: "2026-07-14T15:00:00Z" },
+      scope: { kind: "all" },
+      partial,
+      action_inbox: { status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false },
+      todos: { status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false },
+      calendar,
+    };
+  }
+
+  it("renders the bounded calendar source and creates a verifiable personal focus block", async () => {
+    const user = userEvent.setup();
+    const loadWorkbench = vi.fn().mockResolvedValue(
+      workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [calendarEvent], total: 1, truncated: false }),
+    );
+    const createPersonalCalendarEvent = vi.fn().mockResolvedValue(createdCalendarEvent);
+    const api = Object.assign(stubApi(), { loadWorkbench, createPersonalCalendarEvent });
+    renderBody(api);
+
+    expect(await screen.findByRole("region", { name: C.title })).toBeVisible();
+    expect(screen.getByText("Morning operational review")).toBeVisible();
+
+    const title = screen.getByLabelText(C.focusTitle);
+    expect(title).toHaveAttribute("maxLength", "160");
+    await user.type(title, "Prepare weekly close");
+    await user.type(screen.getByLabelText(C.startsAt), "2026-07-10T09:00");
+    await user.type(screen.getByLabelText(C.endsAt), "2026-07-10T10:00");
+    await user.click(screen.getByRole("button", { name: C.schedule }));
+
+    await waitFor(() => {
+      expect(createPersonalCalendarEvent).toHaveBeenCalledWith({
+        title: "Prepare weekly close",
+        startsAt: "2026-07-10T00:00:00.000Z",
+        endsAt: "2026-07-10T01:00:00.000Z",
+      });
+    });
+    expect(loadWorkbench).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(`${C.created}: Prepare weekly close`)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: C.openCreated }));
+    expect(document.querySelector("[data-location]")).toHaveTextContent("/collaboration");
+  });
+
+  it("matches the server's 160-character title limit", async () => {
+    const user = userEvent.setup();
+    renderBody(Object.assign(stubApi(), {
+      loadWorkbench: vi.fn().mockResolvedValue(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false })),
+      createPersonalCalendarEvent: vi.fn(),
+    }));
+    const title = await screen.findByLabelText(C.focusTitle);
+    await user.type(title, "a".repeat(161));
+    expect(title).toHaveValue("a".repeat(160));
+  });
+
+  it("fails closed when calendar authority is denied: no event, count, or server code leaks", async () => {
+    const loadWorkbench = vi.fn().mockResolvedValue(workbench({ status: "denied", code: "calendar_access_denied" }));
+    const api = Object.assign(stubApi(), { loadWorkbench, createPersonalCalendarEvent: vi.fn() });
+    renderBody(api);
+
+    const calendar = await screen.findByRole("region", { name: C.title });
+    expect(within(calendar).getByText(C.unavailable)).toBeVisible();
+    expect(within(calendar).queryByText("Morning operational review")).not.toBeInTheDocument();
+    expect(within(calendar).queryByText("calendar_access_denied")).not.toBeInTheDocument();
+    expect(within(calendar).queryByRole("button", { name: C.schedule })).not.toBeInTheDocument();
+  });
+
+  it("surfaces the actual aggregate range and partial/truncated state", async () => {
+    const api = Object.assign(stubApi(), {
+      loadWorkbench: vi.fn().mockResolvedValue(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 100, truncated: true }, true)),
+      createPersonalCalendarEvent: vi.fn(),
+    });
+    renderBody(api);
+    const calendar = await screen.findByRole("region", { name: C.title });
+    expect(within(calendar).getByText(C.partial)).toBeVisible();
+    expect(within(calendar).getByText(C.truncated)).toBeVisible();
+    expect(within(calendar).getByText(C.range(
+      new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date("2026-07-07T15:00:00Z")),
+      new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date("2026-07-14T15:00:00Z")),
+    ))).toBeVisible();
+  });
+
+  it("surfaces aggregate read failure with an in-place retry", async () => {
+    const loadWorkbench = vi.fn().mockRejectedValueOnce(new Error("unavailable")).mockResolvedValueOnce(
+      workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false }),
+    );
+    const api = Object.assign(stubApi(), { loadWorkbench, createPersonalCalendarEvent: vi.fn() });
+    renderBody(api);
+
+    const calendar = await screen.findByRole("region", { name: C.title });
+    expect(within(calendar).getByText(C.loadFailed)).toBeVisible();
+    await userEvent.click(within(calendar).getByRole("button", { name: S.retry }));
+    await waitFor(() => expect(loadWorkbench).toHaveBeenCalledTimes(2));
+    expect(await within(calendar).findByText(C.empty)).toBeVisible();
+  });
+
+  it("keeps a failed calendar entry intact so the user can retry the real write", async () => {
+    const user = userEvent.setup();
+    const createPersonalCalendarEvent = vi.fn().mockRejectedValueOnce(new Error("unavailable")).mockResolvedValueOnce(createdCalendarEvent);
+    const api = Object.assign(stubApi(), {
+      loadWorkbench: vi.fn().mockResolvedValue(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false })),
+      createPersonalCalendarEvent,
+    });
+    renderBody(api);
+
+    await screen.findByRole("region", { name: C.title });
+    await user.type(screen.getByLabelText(C.focusTitle), "Retry focus block");
+    await user.type(screen.getByLabelText(C.startsAt), "2026-07-10T09:00");
+    await user.type(screen.getByLabelText(C.endsAt), "2026-07-10T10:00");
+    const submit = screen.getByRole("button", { name: C.schedule });
+    await user.click(submit);
+    expect(await screen.findByText(C.scheduleFailed)).toBeVisible();
+    expect(screen.getByLabelText(C.focusTitle)).toHaveValue("Retry focus block");
+
+    await user.click(submit);
+    await waitFor(() => expect(createPersonalCalendarEvent).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(`${C.created}: Prepare weekly close`)).toBeVisible();
+  });
+
+  it("does not retain an earlier authority's calendar while the replacement aggregate is pending", async () => {
+    const apiA = Object.assign(stubApi(), {
+      loadWorkbench: vi.fn().mockResolvedValue(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [calendarEvent], total: 1, truncated: false })),
+      createPersonalCalendarEvent: vi.fn(),
+    });
+    const pending = deferred<ReturnType<typeof workbench>>();
+    const apiB = Object.assign(stubApi(), {
+      loadWorkbench: vi.fn(() => pending.promise),
+      createPersonalCalendarEvent: vi.fn(),
+    });
+    const view = renderBody(apiA);
+    expect(await screen.findByText("Morning operational review")).toBeVisible();
+
+    view.rerender(<MemoryRouter><MyWorkBody api={apiB} now={NOW} /></MemoryRouter>);
+    const calendar = screen.getByRole("region", { name: C.title });
+    expect(within(calendar).queryByText("Morning operational review")).not.toBeInTheDocument();
+
+    await act(async () => {
+      pending.resolve(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false }));
+      await pending.promise;
+    });
   });
 });
