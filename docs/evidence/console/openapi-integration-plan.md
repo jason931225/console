@@ -130,3 +130,37 @@ wins.
 3. Clients (`ts`, `kotlin`, `swift`) are regenerated once at the end and
    committed together; the Kotlin output is checked for per-domain `*Api.kt`
    files and the absence of a monolithic `DefaultApi.kt`.
+
+## Outcome
+
+`openapi.yaml` went from 434 paths / 490 operations / 824 schemas to
+**488 / 551 / 946**. `cargo test -p mnt-app --test openapi_drift` went from
+**11 pass / 2 fail** to **12 pass / 1 fail** — the target gate
+`openapi_yaml_covers_configured_route_inventory` is GREEN, and the one
+remaining failure is the pre-existing spine bug recorded above.
+
+All three clients regenerated; `check:api-drift:portable` and
+`check:api-drift:swift` both exit 0. Kotlin emitted 79 per-domain `*Api.kt`
+files including new `FieldApi` / `MaintenanceApi` / `OrgApi` / `RecruitingApi`,
+with no `DefaultApi.kt`.
+
+### Known gap: swift-openapi-generator drops nullable-$ref properties
+
+The Swift generator emits `Schema "null" is not supported … skipping` for every
+property whose schema is a `oneOf`/`anyOf` union of a `$ref` and `type: 'null'`
+— 42 properties spec-wide, 14 of them added by this integration. Neither the
+union keyword nor member ordering changes it; the generator has no support for
+the construct, so those fields are silently absent from the Swift client.
+Fixing it means changing how the whole spec spells a nullable object reference,
+which is a spec-wide decision, not an integration one.
+
+### Reported, not fixed
+
+- The two `web/src/console/shell/nav.test.ts` failures in the full web suite
+  (2792/2794) predate this work: the `payroll` screen is visible to a grant the
+  test asserts must not see it. Nothing in this branch touches `nav.ts`,
+  `authz.ts`, `registry.ts` or that test — `git diff a5bccdc1 HEAD --
+  web/src/console/{shell,screens}` is empty.
+- `orgchange` is the only REST surface on the platform that serialises
+  camelCase. The console was corrected to match the server, but the server is
+  the outlier.
