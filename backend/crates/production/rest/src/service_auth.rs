@@ -87,7 +87,6 @@ pub(crate) fn verifier_matches(expected: &[u8], actual: &[u8; 32]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine as _;
 
     #[test]
     fn parser_requires_basic_uuid_and_exact_32_byte_secret() {

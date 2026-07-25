@@ -1329,13 +1329,6 @@ fn hash_request<T: Serialize>(request: &T) -> Result<String, RestError> {
         .map(|byte| format!("{byte:02x}"))
         .collect())
 }
-fn hash_credential(credential: &str) -> String {
-    Sha256::digest(credential.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
 fn generated_secret() -> [u8; 32] {
     let first = Uuid::new_v4();
     let second = Uuid::new_v4();
@@ -1344,16 +1337,6 @@ fn generated_secret() -> [u8; 32] {
     secret[16..].copy_from_slice(second.as_bytes());
     secret
 }
-fn valid_source_credential(credential: &str) -> Result<(), RestError> {
-    if credential.len() < 32 || credential.len() > 512 {
-        Err(RestError::validation(
-            "source credential must be 32..512 bytes",
-        ))
-    } else {
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod digest_tests {
     use super::{
