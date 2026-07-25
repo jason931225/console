@@ -1,7 +1,7 @@
 //! Authenticated REST boundary for the Attendance console.  It validates wire
 //! input, derives a tenant/branch scope from the signed principal, and delegates
 //! all business decisions and database work to the private application layers.
-#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use axum::{
     Json, Router,
