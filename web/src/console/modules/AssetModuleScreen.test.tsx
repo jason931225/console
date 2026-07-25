@@ -43,9 +43,27 @@ function apiForTest() {
 }
 
 describe("AssetWorkspace", () => {
+  it("discards a stale list response after a session switch", async () => {
+    let resolveFirst!: (value: unknown) => void;
+    const first = new Promise<unknown>((resolve) => { resolveFirst = resolve; });
+    const api = createConsoleApiClient("asset-test-token");
+    let calls = 0;
+    const get = vi.spyOn(api, "GET").mockImplementation((() => {
+      calls += 1;
+      return calls === 1 ? first : new Promise(() => undefined);
+    }) as never);
+    const props = { api, capabilities: { canRead: true, canManage: () => false, canReadCost: () => false, canImport: () => false } };
+    const view = render(<AssetWorkspace {...props} sessionKey="session-a" />);
+    await waitFor(() => { expect(get).toHaveBeenCalledTimes(1); });
+    view.rerender(<AssetWorkspace {...props} sessionKey="session-b" />);
+    await waitFor(() => { expect(get).toHaveBeenCalledTimes(2); });
+    resolveFirst({ data: { items: [row], total: 1, limit: 50, offset: 0 } });
+    await waitFor(() => { expect(screen.queryByText("EQ-900")).not.toBeInTheDocument(); });
+  });
+
   it("renders source-backed lifecycle, graph, versions and cost, then records rollback through the generated operation", async () => {
     const { api, get, post } = apiForTest();
-    render(<AssetWorkspace api={api} capabilities={{ canRead: true, canManage: true, canReadCost: true }} />);
+    render(<AssetWorkspace api={api} sessionKey="session-a" capabilities={{ canRead: true, canManage: () => true, canReadCost: () => true, canImport: () => true }} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "EQ-900 상세 열기" }));
 
@@ -65,9 +83,9 @@ describe("AssetWorkspace", () => {
     expect(await screen.findByText("버전 3으로 되돌림 이력을 추가했습니다.")).toBeVisible();
   });
 
-  it("does not fetch or show management and cost controls for a read-only caller", async () => {
+  it("denies management requests for an unresolved/denied capability", async () => {
     const { api, get } = apiForTest();
-    render(<AssetWorkspace api={api} capabilities={{ canRead: true, canManage: false, canReadCost: false }} />);
+    render(<AssetWorkspace api={api} sessionKey="session-a" capabilities={{ canRead: true, canManage: () => false, canReadCost: () => false, canImport: () => false }} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "EQ-900 상세 열기" }));
     expect(await screen.findByText("정비 완료")).toBeVisible();
@@ -78,5 +96,27 @@ describe("AssetWorkspace", () => {
     });
     expect(paths).not.toContain("/api/v1/equipment/{id}/substitutes");
     expect(paths).not.toContain("/api/v1/financial/equipment/{equipmentId}/lifecycle-cost");
+  });
+
+  it("omits master-list import when an executive has manage but not import capability", async () => {
+    const { api } = apiForTest();
+    render(<AssetWorkspace api={api} sessionKey="session-a" capabilities={{ canRead: true, canManage: () => true, canReadCost: () => true, canImport: () => false }} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "EQ-900 상세 열기" }));
+    expect(await screen.findByText("대차")).toBeVisible();
+    expect(screen.getByRole("button", { name: "장비 등록" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "엑셀 가져오기" })).not.toBeInTheDocument();
+  });
+
+  it("surfaces an explicit generated-client error envelope with retry", async () => {
+    const api = createConsoleApiClient("asset-test-token");
+    vi.spyOn(api, "GET").mockImplementation(async () => {
+      await Promise.resolve();
+      return { error: { message: "권한이 없습니다." } };
+    });
+    render(<AssetWorkspace api={api} sessionKey="session-a" capabilities={{ canRead: true, canManage: () => false, canReadCost: () => false, canImport: () => false }} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("권한이 없습니다.");
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeVisible();
   });
 });
