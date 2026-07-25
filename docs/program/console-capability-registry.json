@@ -172,13 +172,11 @@
    },
    "dependency_edges": [],
    "route_presentation": {
-    "route_keys": [
-     "overview"
-    ],
-    "source_mounted": true,
+    "route_keys": [],
+    "source_mounted": false,
     "production_exposed": false,
-    "registry_body_present": true,
-    "nav_declared": true,
+    "registry_body_present": false,
+    "nav_declared": false,
     "evidence_receipt_status": "HOLD",
     "source": "exact candidate source inventory"
    },
@@ -2084,13 +2082,11 @@
     }
    ],
    "route_presentation": {
-    "route_keys": [
-     "support"
-    ],
-    "source_mounted": true,
+    "route_keys": [],
+    "source_mounted": false,
     "production_exposed": false,
-    "registry_body_present": true,
-    "nav_declared": true,
+    "registry_body_present": false,
+    "nav_declared": false,
     "evidence_receipt_status": "HOLD",
     "source": "exact candidate source inventory"
    },
@@ -5419,13 +5415,11 @@
     }
    ],
    "route_presentation": {
-    "route_keys": [
-     "support"
-    ],
-    "source_mounted": true,
+    "route_keys": [],
+    "source_mounted": false,
     "production_exposed": false,
-    "registry_body_present": true,
-    "nav_declared": true,
+    "registry_body_present": false,
+    "nav_declared": false,
     "evidence_receipt_status": "HOLD",
     "source": "exact candidate source inventory"
    },
@@ -5991,9 +5985,7 @@
    ],
    "route_presentation": {
     "route_keys": [
-     "inbox",
-     "messenger",
-     "mail"
+     "messenger"
     ],
     "source_mounted": true,
     "production_exposed": false,
@@ -6966,13 +6958,9 @@
  },
  "source_inventory": {
   "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-  "unmodeled_nav_keys": [
+  "unmodeled_keys": [
    {
     "key": "mywork",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "sales",
     "status": "HOLD_UNMAPPED"
    },
    {
@@ -6980,7 +6968,27 @@
     "status": "HOLD_UNMAPPED"
    },
    {
+    "key": "sales",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
     "key": "finance",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "appr",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "dashboard",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "laborcost",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "forecast",
     "status": "HOLD_UNMAPPED"
    },
    {
@@ -7000,27 +7008,11 @@
     "status": "HOLD_UNMAPPED"
    },
    {
-    "key": "appr",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
     "key": "docs",
     "status": "HOLD_UNMAPPED"
    },
    {
     "key": "compliance",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "dashboard",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "laborcost",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "forecast",
     "status": "HOLD_UNMAPPED"
    },
    {
@@ -7033,46 +7025,6 @@
    },
    {
     "key": "directory",
-    "status": "HOLD_UNMAPPED"
-   }
-  ],
-  "unmodeled_mounted_keys": [
-   {
-    "key": "mywork",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "leave",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "sales",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "finance",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "appr",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "dashboard",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "laborcost",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "forecast",
-    "status": "HOLD_UNMAPPED"
-   }
-  ],
-  "unmodeled_exposed_keys": [
-   {
-    "key": "sales",
     "status": "HOLD_UNMAPPED"
    }
   ]

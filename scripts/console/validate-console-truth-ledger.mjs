@@ -123,7 +123,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     if (binding.candidate_sha !== candidate.sha) fail(`${cap.id} jurisdiction binding is not candidate-bound`);
     if (!array(controls.get(binding.control_id).capability_traceability).some((trace) => trace.capability_id === cap.id && trace.candidate_sha === candidate.sha)) fail(`${cap.id} jurisdiction trace is not bidirectional`);
   }
-  if (routeFacts) { const declared = new Set(registry.capabilities.flatMap((cap) => cap.route_presentation.route_keys).concat(...['unmodeled_nav_keys','unmodeled_mounted_keys','unmodeled_exposed_keys'].map((key) => array(registry.source_inventory?.[key]).map((entry) => entry.key)))); const actual=new Set(Object.keys(routeFacts.facts ?? {})); if (declared.size !== actual.size || [...actual].some((key)=>!declared.has(key))) fail('source route inventory is not a complete bijection'); }
+  if (routeFacts) { const owners = registry.capabilities.flatMap((cap) => cap.route_presentation.route_keys.map((key) => `cap:${cap.id}:${key}`)).concat(array(registry.source_inventory?.unmodeled_keys).map((entry) => `unmodeled:${entry.key}`)); const keys=owners.map((entry) => entry.split(':').at(-1)); const actual=new Set(Object.keys(routeFacts.facts ?? {})); if (new Set(keys).size !== keys.length || keys.length !== actual.size || [...actual].some((key)=>!keys.includes(key))) fail('source route inventory is not a complete bijection'); }
   validatedRegistries.set(registry, ledgerDigest(registry));
   return { capability_count: registry.capabilities.length, candidate_sha: candidate.sha, verdict: 'STRUCTURALLY_VALID_HOLD_PRESERVED' };
 }
