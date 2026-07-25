@@ -43,12 +43,12 @@ public actor WorkOrderCacheStore {
 }
 
 public struct WorkOrderRepository: Sendable {
-    private let gateway: any MaintenanceAPIGateway
+    private let gateway: any WorkOrderGateway
     private let cache: WorkOrderCacheStore
     private let offlineQueue: OfflineQueueRepository
 
     public init(
-        gateway: any MaintenanceAPIGateway,
+        gateway: any WorkOrderGateway,
         cache: WorkOrderCacheStore,
         offlineQueue: OfflineQueueRepository
     ) {

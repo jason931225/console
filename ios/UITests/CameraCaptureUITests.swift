@@ -47,6 +47,7 @@ final class CameraCaptureUITests: FieldUITestCase {
         let requesting = app.activityIndicators[AID.cameraPermissionRequesting]
         let denied = app.staticTexts[AID.cameraPermissionDenied]
         let shutter = app.buttons[AID.cameraShutterButton]
+        let cancel = app.buttons[AID.cameraCancelButton]
         let unavailable = app.staticTexts[AID.cameraUnavailable]
 
         var reachedTerminalState = false
@@ -74,7 +75,6 @@ final class CameraCaptureUITests: FieldUITestCase {
             return
         }
 
-        let cancel = app.buttons[AID.cameraCancelButton]
         XCTAssertTrue(cancel.exists, "Every camera terminal state must retain the Cancel escape.")
         cancel.tap()
         XCTAssertTrue(
