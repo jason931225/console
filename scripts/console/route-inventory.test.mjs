@@ -9,9 +9,9 @@ test('route inventory mechanically separates nav, mounted registry bodies, and e
   const registry = readFileSync(new URL('web/src/console/screens/registry.ts', root));
   const result = extractConsoleRouteFactsFromTexts(nav.toString(), registry.toString());
   assert.equal(result.mounted.length, 27);
-  assert.deepEqual(result.exposed, ['sales']);
+  assert.deepEqual(result.exposed, []);
   assert.equal(result.facts.sales.source_mounted, true);
-  assert.equal(result.facts.sales.production_exposed, true);
+  assert.equal(result.facts.sales.production_exposed, false);
   assert.equal(result.facts.payroll.nav_declared, true);
   assert.equal(result.facts.payroll.source_mounted, false);
 });
