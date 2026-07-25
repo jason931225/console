@@ -69,10 +69,10 @@ const INSTANCE = {
 };
 
 function deferred<T>() {
-  let resolve: (value: T) => void = (_value) => {
+  let resolve: (value: T) => void = () => {
     throw new Error("deferred promise was not initialized");
   };
-  let reject: (reason?: unknown) => void = (_reason) => {
+  let reject: (reason?: unknown) => void = () => {
     throw new Error("deferred promise was not initialized");
   };
   const promise = new Promise<T>((nextResolve, nextReject) => {
@@ -156,7 +156,9 @@ describe("canonical dynamic object-type source", () => {
     const newer = loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
     await newer;
     oldDetail.resolve({ data: DETAIL, response: new Response() });
-    await vi.waitFor(() => expect(GET).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => {
+      expect(GET).toHaveBeenCalledTimes(4);
+    });
     oldInstances.resolve({ data: [INSTANCE], response: new Response() });
     await older;
 

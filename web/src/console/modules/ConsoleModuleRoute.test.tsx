@@ -153,7 +153,9 @@ describe("ConsoleModuleRoute dynamic ontology authority wiring", () => {
       data: [{ kind: "widget", code_prefix: null, description: "dynamic widget", status: "active", active_count: 0 }],
     });
     const view = render(mounted(session()));
-    await waitFor(() => expect(latestModuleProps().config).toMatchObject({ id: "widget" }));
+    await waitFor(() => {
+      expect(latestModuleProps().config).toMatchObject({ id: "widget" });
+    });
 
     view.rerender(mounted(session({ client_session_incarnation: "session-b" })));
 
