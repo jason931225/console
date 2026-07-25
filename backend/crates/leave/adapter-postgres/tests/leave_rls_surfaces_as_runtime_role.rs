@@ -2349,7 +2349,7 @@ async fn statutory_push_enforces_the_section_61_windows_as_runtime_role(owner_po
     assert_eq!(r1_payload["unused_days"], serde_json::json!("13.5"));
     assert_eq!(
         r1_payload["legal_basis"],
-        serde_json::json!("근로기준법 제61조제1항 제1호")
+        serde_json::json!("근로기준법 제61조제1항제1호")
     );
 
     // Idempotent inside the same 사용기간.
