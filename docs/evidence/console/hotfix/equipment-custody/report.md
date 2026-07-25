@@ -196,7 +196,8 @@ Manifests: `docs/evidence/console/hotfix/equipment-custody/manifests/`.
 unknown fields (`deny_unknown_fields`). Fragment:
 `manifests/openapi-fragment.yaml` — two edits, existing `equipment-3r` tag, no
 new operation or schema. Then regenerate `clients/{ts,kotlin,swift}` and re-run
-`openapi_drift` + `check:api-drift:portable` + `:swift`.
+`openapi_drift` + `check:api-drift:portable` + `:swift`. **Landing order is
+load-bearing — see §5.5.**
 
 ### 5.2 `web/src/console/equipment/**` — needs an owner, not this lane's root
 
@@ -215,13 +216,52 @@ This lane adds and edits no migration (`git status` shows nothing under
 RESERVED slot (§0), so the gate is red on the spine independently of this work.
 Integrator / slot-ledger decision.
 
-### 5.4 A second red test on the spine: `openapi_drift`
+### 5.4 A second red test on the spine: `openapi_drift` — REPORTED, NOW FIXED
 
-`openapi_documents_evidence_register_snapshot_and_evidentiary_contract` fails
-with *"OpenAPI YAML must define the EV object list endpoint"*. It is a test bug,
-not a missing endpoint — `backend/app/tests/openapi_drift.rs:446` searches for
-`"  /api/v1/evidence/objects:\\n"`, which in Rust source is a literal backslash
-followed by `n` and can never match YAML. The path exists in `openapi.yaml`.
-Both `openapi_drift.rs` and `openapi.yaml` are unmodified by this lane, so the
-failure is byte-identical at HEAD. Owner: openapi-integrator (that file is not
-an equipment root). One-character fix: `\\n` → `\n`.
+`openapi_documents_evidence_register_snapshot_and_evidentiary_contract` failed
+with *"OpenAPI YAML must define the EV object list endpoint"*. It was a test
+bug, not a missing endpoint — `backend/app/tests/openapi_drift.rs:446` searched
+for `"  /api/v1/evidence/objects:\\n"`, which in Rust source is a literal
+backslash followed by `n` and can never match YAML. Both `openapi_drift.rs` and
+`openapi.yaml` are unmodified by this lane, so the failure was byte-identical at
+HEAD.
+
+Handed to openapi-integrator, who fixed it in `5f7181bc` on
+`wave23-consolidation-20260724` — now 13 pass / 0 fail. **Two corrections to
+what this lane reported**, recorded because the original claim was too small:
+
+- it is **seven** `.find()` calls (446, 484, 487, 502, 505, 521, 524), not one;
+  fixing only 446 moves the panic to 484;
+- with the searches repaired the body executed for the first time and a
+  fourteenth assertion failed on its own account — it substring-matches
+  `as_of: { type: integer, format: int64 }` against `EvidenceObjectPage`, whose
+  flow map legitimately also carries a `description`. The integrator loosened
+  the assertion rather than delete a useful spec description to satisfy a
+  substring match. That test asserts YAML *formatting* in several places and
+  will break again on any reformat.
+
+### 5.5 Landing order for §5.1 — resolved with openapi-integrator
+
+The spec edit must **not** be applied to the spine ahead of the crate diff. The
+crate half lives only on this branch; `wave23-consolidation-20260724` still has
+`evidence_reference: String` at `equipment/rest/src/lib.rs:310`. A spec that
+advertised `evidenceObjectId` against that server would make every console
+handover 422, and **no gate would catch it** — `openapi_drift` compares path
+inventories, not request bodies. Migration 0184 sitting on the spine does not
+help: the migration is not the wire contract, the serde struct is.
+
+Agreed resolution: the integrator merges this branch
+(`git merge claude/hf-equipment-custody-20260725`, no push involved) and then
+commits the spec edit plus the `clients/{ts,kotlin,swift}` regen on top, before
+that branch moves. Both halves then reach the spine in one merge. File overlap
+between `5f7181bc` and `963fa0a9` is empty, so the merge is clean.
+
+This lane deliberately did **not** take the openapi + clients edit itself: those
+roots are the integrator's, this lane may not push, and a second independent
+regen of `clients/**` meeting theirs in a merge would be a hand-resolved
+generated-code conflict.
+
+Toolchain note for whoever runs it: there is no JRE on this machine
+(`java -version` fails), but `scripts/generate-kotlin-client.mjs:249-289` falls
+back to the openapitools Docker image when no JDK is on PATH, and Docker is
+healthy (`docker info` → 29.5.2). This worktree has no `node_modules`.
