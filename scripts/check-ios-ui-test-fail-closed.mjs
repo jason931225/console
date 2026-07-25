@@ -648,7 +648,8 @@ function hasStrictAccessibility(files) {
   const dynamicType = extractFunctionBody(fieldCase, /func\s+assertDynamicTypeAccessibilitySupport\s*\(/);
   const nonDynamicType = extractFunctionBody(fieldCase, /func\s+assertNoNonDynamicTypeAccessibilityIssues\s*\(/);
   const issue = extractFunctionBody(fieldCase, /struct\s+DynamicTypeAuditIssue\b/);
-  if (dynamicType === null || nonDynamicType === null || issue === null) return false;
+  const identifierSanitizer = extractFunctionBody(fieldCase, /func\s+sanitizedAccessibilityIdentifier\s*\(/);
+  if (dynamicType === null || nonDynamicType === null || issue === null || identifierSanitizer === null) return false;
 
   const continuationScope = (body) => /let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*continueAfterFailure\b[\s\S]{0,160}continueAfterFailure\s*=\s*true[\s\S]{0,160}defer\s*\{\s*continueAfterFailure\s*=\s*\1\s*\}/.test(body);
   const exactLedger = [
@@ -662,6 +663,23 @@ function hasStrictAccessibility(files) {
     /return\s+false/,
   ].every((pattern) => pattern.test(dynamicType));
   const exactSetEquality = /XCTAssertEqual\(\s*observed\.sorted\(\)\s*,\s*expectedCompatibilityIssues\.sorted\(\)/.test(dynamicType);
+  const failClosedDiagnostics = [
+    /performAccessibilityAudit\(for:\s*\.all\.subtracting\(\.dynamicType\)\)\s*\{\s*issue\s+in/,
+    /let\s+element\s*=\s*issue\.element/,
+    /self\.sanitizedAccessibilityIdentifier\(element\?\.identifier\)/,
+    /String\(describing:\s*\$0\.elementType\)/,
+    /NSCoder\.string\(for:\s*\$0\.frame\)/,
+    /print\s*\(/,
+    /issue\.auditType/,
+    /issue\.compactDescription/,
+    /return\s+false/,
+  ].every((pattern) => pattern.test(nonDynamicType))
+    && !/issue\.detailedDescription|element\?*\.\s*(?:label|value)/.test(nonDynamicType);
+  const sanitizedDiagnostics = /guard\s+let\s+identifier\s*,\s*identifier\.isEmpty\s*==\s*false\s+else\s*\{\s*return\s+"<empty>"\s*\}/.test(identifierSanitizer)
+    && /CharacterSet\.alphanumerics\.union\(CharacterSet\(charactersIn:\s*"\._-"\)\)/.test(identifierSanitizer)
+    && /identifier\.unicodeScalars\.allSatisfy\(allowed\.contains\)/.test(identifierSanitizer)
+    && /return\s+"<redacted>"/.test(identifierSanitizer)
+    && /String\(identifier\.prefix\(160\)\)/.test(identifierSanitizer);
   const auditBody = (name) => extractFunctionBody(
     auditTests,
     new RegExp(`func\\s+${name}\\s*\\(\\s*\\)\\s+async\\s+throws`),
@@ -694,8 +712,7 @@ function hasStrictAccessibility(files) {
   ) && hasExactCompatibilityLedger(auditBody("testMessengerScreenPassesDynamicTypeAudit"), [])
     && hasExactCompatibilityLedger(auditBody("testLoginScreenPassesDynamicTypeAudit"), []);
   return continuationScope(dynamicType) && continuationScope(nonDynamicType)
-    && exactLedger && exactSetEquality && exactAuditLedgers
-    && /try\s+app\.performAccessibilityAudit\(for:\s*\.all\.subtracting\(\.dynamicType\)\)/.test(nonDynamicType)
+    && exactLedger && exactSetEquality && exactAuditLedgers && failClosedDiagnostics && sanitizedDiagnostics
     && !/issueHandler|MNT_ACCESSIBILITY_DIAGNOSTIC|MNT_UITEST_AUDIT_STRICT/.test(fieldCase + auditTests)
     && (fieldCase.match(/performAccessibilityAudit\s*\(/g) ?? []).length === 2
     && !/performAccessibilityAudit\s*\(\s*for:\s*\.all\s*\)/.test(fieldCase)
@@ -805,6 +822,7 @@ function hasContrastStableCapsules(files) {
     && opaqueSemanticSurface.test(fieldChip)
     && /\.font\(\s*\.caption\s*\)[\s\S]{0,100}\.foregroundStyle\(\s*\.primary\s*\)[\s\S]{0,220}\.background\(/.test(messageRow)
     && /scrollContentBackground\(\.hidden\)[\s\S]{0,160}background\(Color\.opaqueFieldDetailBackground\)/.test(detail)
+    && /scrollContentBackground\(\.hidden\)[\s\S]{0,220}\.tint\(\s*\.primary\s*\)/.test(detail)
     && iOSSemanticColors
     && !/\.(?:ultraThin|thin|regular|thick|ultraThick)Material\b/.test(messageRow + fieldChip);
 }
@@ -1444,7 +1462,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasAccessibilityIDParity(files), "iOS UI CI must mirror every FieldAccessibilityID static and dynamic identifier in UITests AID"]);
   checks.push([hasSectionScopedMessengerMessageRows(files), "iOS messenger search results and selected-thread messages must use section-scoped dynamic accessibility IDs"]);
   checks.push([hasSemanticMessengerMessagesHeader(files), "iOS messenger messages must retain a scalable semantic header before selected-thread content"]);
-  checks.push([hasContrastStableCapsules(files), "iOS status, attachment, and read-progress capsules must use explicit primary foregrounds on contrast-stable adaptive backgrounds"]);
+  checks.push([hasContrastStableCapsules(files), "iOS detail actions, status, attachment, and read-progress capsules must use explicit primary foregrounds on contrast-stable adaptive backgrounds"]);
   checks.push([hasModernFullScreenLaunch(files), "iOS app and CI build must preserve a modern full-screen launch contract"]);
   checks.push([hasCiOnlyLocalAts(files), "iOS UI CI must confine local ATS to CI-only job-root loopback configuration while production Info.plist remains unchanged"]);
   checks.push([hasExactFailSlowExecution(job), "each iOS UI matrix worker must execute only its declared named-shard batch fail-slow, preserve every xcresult extraction failure, keep Xcode per-test parallelization disabled, and exit with worker status"]);

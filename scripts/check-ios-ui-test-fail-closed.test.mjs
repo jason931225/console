@@ -563,10 +563,26 @@ Text("fixed").font(.system(size: 17))` }), presentationGate);
 ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content-layout-guide host");
     }
   });
-  it("rejects accessibility audit issue handlers", () => {
+  it("rejects suppressing or unsanitized accessibility audit issue handlers", () => {
+    const fieldCase = validFiles["ios/UITests/Support/FieldUITestCase.swift"];
+    const strictGate = "strict accessibility auditing";
+    expectsFailure(evaluate({
+      "ios/UITests/Support/FieldUITestCase.swift": mutateFile(
+        fieldCase,
+        "return false\n            }\n        } catch",
+        "return true\n            }\n        } catch",
+      ),
+    }), strictGate);
+    expectsFailure(evaluate({
+      "ios/UITests/Support/FieldUITestCase.swift": mutateFile(
+        fieldCase,
+        "identifier=\\(identifier.debugDescription)",
+        "identifier=\\(element?.label.debugDescription ?? \"none\")",
+      ),
+    }), strictGate);
     expectsFailure(evaluate({
       "ios/UITests/AccessibilityAuditUITests.swift": `${validFiles["ios/UITests/AccessibilityAuditUITests.swift"]}\nlet issueHandler = { _ in }`,
-    }), "strict accessibility auditing");
+    }), strictGate);
   });
   it("rejects a messenger messages section without a semantic scalable header", () => {
     const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
@@ -599,6 +615,14 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
                     .padding(.horizontal, 8)`,
         `.font(.caption)
                     .padding(.horizontal, 8)`,
+      ),
+    }), contrastGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `.background(Color.opaqueFieldDetailBackground)
+                .tint(.primary)`,
+        `.background(Color.opaqueFieldDetailBackground)`,
       ),
     }), contrastGate);
   });

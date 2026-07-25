@@ -681,7 +681,8 @@ class FieldUITestCase: XCTestCase {
 
     /// Audit the complement of `.dynamicType` after a clean screen reacquisition.
     /// Together with `assertDynamicTypeAccessibilitySupport`, this is exactly
-    /// `.all`; neither phase installs an issue handler or suppresses a finding.
+    /// `.all`. Its diagnostic handler is sanitized and always returns `false`,
+    /// so it never suppresses a finding.
     func assertNoNonDynamicTypeAccessibilityIssues(
         file: StaticString = #filePath,
         line: UInt = #line
@@ -691,9 +692,30 @@ class FieldUITestCase: XCTestCase {
         defer { continueAfterFailure = priorContinueAfterFailure }
 
         do {
-            try app.performAccessibilityAudit(for: .all.subtracting(.dynamicType))
+            try app.performAccessibilityAudit(for: .all.subtracting(.dynamicType)) { issue in
+                let element = issue.element
+                let identifier = self.sanitizedAccessibilityIdentifier(element?.identifier)
+                let elementType = element.map { String(describing: $0.elementType) } ?? "none"
+                let frame = element.map { NSCoder.string(for: $0.frame) } ?? "none"
+                print(
+                    "MNT_IOS_ACCESSIBILITY_AUDIT_ISSUE "
+                        + "audit=\(String(describing: issue.auditType)) "
+                        + "summary=\(issue.compactDescription.debugDescription) "
+                        + "elementType=\(elementType) "
+                        + "identifier=\(identifier.debugDescription) "
+                        + "frame=\(frame)"
+                )
+                return false
+            }
         } catch {
             XCTFail("Accessibility audit reported issues: \(error)", file: file, line: line)
         }
+    }
+
+    private func sanitizedAccessibilityIdentifier(_ identifier: String?) -> String {
+        guard let identifier, identifier.isEmpty == false else { return "<empty>" }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+        guard identifier.unicodeScalars.allSatisfy(allowed.contains) else { return "<redacted>" }
+        return String(identifier.prefix(160))
     }
 }
