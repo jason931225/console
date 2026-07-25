@@ -181,14 +181,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-CONSOLE-SHELL"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -210,7 +210,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-CONSOLE-SHELL-N1",
@@ -266,42 +266,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -445,14 +445,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-OVERVIEW-WORKSPACE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -474,7 +474,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-OVERVIEW-WORKSPACE-N1",
@@ -530,42 +530,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -725,14 +725,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-BENEFITS-CATALOG"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -754,7 +754,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-BENEFITS-CATALOG-N1",
@@ -810,42 +810,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -1061,14 +1061,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-COMPLIANCE-CATALOG"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -1090,7 +1090,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-COMPLIANCE-CATALOG-N1",
@@ -1146,42 +1146,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -1327,14 +1327,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-SHARED-ONTOLOGY-WORKFLOW"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -1356,7 +1356,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-SHARED-ONTOLOGY-WORKFLOW-N1",
@@ -1412,42 +1412,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -1572,14 +1572,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-PRODUCTION-PILOT"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -1601,7 +1601,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-PRODUCTION-PILOT-N1",
@@ -1657,42 +1657,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -1846,14 +1846,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-LOGISTICS-PILOT"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -1875,7 +1875,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-LOGISTICS-PILOT-N1",
@@ -1931,42 +1931,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -2091,14 +2091,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-IFM-PILOT"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -2120,7 +2120,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-IFM-PILOT-N1",
@@ -2176,42 +2176,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -2370,14 +2370,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-EQUIPMENT-3R-PILOT"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -2399,7 +2399,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-EQUIPMENT-3R-PILOT-N1",
@@ -2455,42 +2455,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -2617,14 +2617,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-CONSULTING-PILOT"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -2646,7 +2646,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-CONSULTING-PILOT-N1",
@@ -2702,42 +2702,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -2861,14 +2861,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-OWNED-PLANTS-PILOT"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -2890,7 +2890,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-OWNED-PLANTS-PILOT-N1",
@@ -2946,42 +2946,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -3149,14 +3149,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-PAYROLL-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -3178,7 +3178,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-PAYROLL-CONSOLE-N1",
@@ -3234,42 +3234,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -3436,14 +3436,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-ATTENDANCE-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -3465,7 +3465,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-ATTENDANCE-CONSOLE-N1",
@@ -3521,42 +3521,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -3724,14 +3724,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-RECRUITING"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -3753,7 +3753,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-RECRUITING-N1",
@@ -3809,42 +3809,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -4008,14 +4008,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-ORG-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -4037,7 +4037,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-ORG-CONSOLE-N1",
@@ -4093,42 +4093,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -4292,14 +4292,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-EVALUATION-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -4321,7 +4321,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-EVALUATION-CONSOLE-N1",
@@ -4377,42 +4377,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -4576,14 +4576,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-INVENTORY-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -4605,7 +4605,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-INVENTORY-CONSOLE-N1",
@@ -4661,42 +4661,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -4858,14 +4858,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-DISPATCH-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -4887,7 +4887,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-DISPATCH-CONSOLE-N1",
@@ -4943,42 +4943,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -5142,14 +5142,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-MAINTENANCE-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -5171,7 +5171,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-MAINTENANCE-CONSOLE-N1",
@@ -5227,42 +5227,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -5424,14 +5424,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-FIELD-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -5453,7 +5453,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-FIELD-CONSOLE-N1",
@@ -5509,42 +5509,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -5710,14 +5710,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -5739,7 +5739,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-DOCS-EVIDENCE-CONSOLE-N1",
@@ -5795,42 +5795,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -5995,14 +5995,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-NOTIF-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -6024,7 +6024,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-NOTIF-CONSOLE-N1",
@@ -6080,42 +6080,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -6277,14 +6277,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-BOARD-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -6306,7 +6306,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-BOARD-CONSOLE-N1",
@@ -6362,42 +6362,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -6539,14 +6539,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-DIRECTORY-CONSOLE"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -6568,7 +6568,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-DIRECTORY-CONSOLE-N1",
@@ -6624,42 +6624,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -6787,14 +6787,14 @@
     "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
-    "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+    "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
     "status": "HOLD",
     "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
     "paths": [
      "docs/evidence/console/CAP-ASSET-MASTER-ACTION"
     ],
     "contract": {
-     "source_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "source_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
      "database": "HOLD: no exact candidate database receipt admitted.",
      "api": "HOLD: no exact candidate API receipt admitted.",
@@ -6816,7 +6816,7 @@
     "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
-    "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
+    "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
      {
       "id": "CAP-ASSET-MASTER-ACTION-N1",
@@ -6872,42 +6872,42 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-WORKFORCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-RECORDS-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
@@ -6925,14 +6925,13 @@
  "provenance": {
   "authority_base_sha": "8e42b9a2ea42c4d79ed498044a9f50f623299f7f",
   "historical_implementation_freeze_sha": "78cb5197927a031ead30c6dc0426c23455d3cb16",
-  "exact_current_candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+  "exact_current_candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
   "candidate_evidence_status": "HOLD: P0 structure is current; no module completion claim is admitted."
  },
- "candidate": {
-  "sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-  "branch": "codex/operational-object-runtime-progress",
-  "evidence_status": "HOLD"
- },
+  "candidate": {
+    "sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
+    "evidence_status": "HOLD"
+  },
  "design_reference": {
   "source_project": "claude.ai/design/p/9c7c313a-2187-4cf1-bb35-7c07ad0a4d9d",
   "local_export": "docs/design/oyatie-console/Oyatie Console.dc.html",
@@ -6954,10 +6953,10 @@
    "audit_lineage": "Reads, decisions, changes, and derived outputs retain queryable audit and lineage evidence.",
    "interoperability": "Modules exchange stable domain contracts through explicit adapters, never shared UI state or undocumented database coupling."
   },
-  "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; cross-module proof wave not yet admitted"
+  "evidence_binding": "candidate:e766d35c4f1cd327bcf50bb51d7efb4d6132fcda; cross-module proof wave not yet admitted"
  },
  "source_inventory": {
-  "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+  "candidate_sha": "e766d35c4f1cd327bcf50bb51d7efb4d6132fcda",
   "unmodeled_keys": [
    {
     "key": "mywork",
