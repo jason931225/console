@@ -905,7 +905,7 @@ struct MessengerTabView: View {
         // persistent navigation surface. Reserve a real scroll-safe viewport;
         // this preserves the complete thread rather than hiding or truncating it.
         .safeAreaInset(edge: .top, spacing: 0) {
-            if dynamicTypeSize.isAccessibilitySize {
+            if dynamicTypeSize == .accessibility5 {
                 Color.clear
                     .frame(height: 56)
                     .accessibilityHidden(true)

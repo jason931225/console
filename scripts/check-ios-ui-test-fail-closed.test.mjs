@@ -621,7 +621,16 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".frame(height: 56)", ".frame(height: 0)"),
     }), ax5Gate);
     expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, "if dynamicTypeSize == .accessibility5 {", "if dynamicTypeSize == .accessibility4 {"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, "if dynamicTypeSize == .accessibility5 {", "if dynamicTypeSize != .accessibility5 {"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
       "ios/UITests/DynamicTypeRuntimeUITests.swift": mutateFile(runtimeTests, "thread.frame.minY", "thread.frame.maxY"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
+      "ios/UITests/DynamicTypeRuntimeUITests.swift": mutateFile(runtimeTests, "navigationBar.waitForExistence", "thread.waitForExistence"),
     }), ax5Gate);
   });
   it("rejects translucent or implicit-foreground status capsules", () => {
