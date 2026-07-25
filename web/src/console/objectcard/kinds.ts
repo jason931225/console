@@ -13,11 +13,12 @@ import { registeredObjectType, registeredObjectTypes } from "../ontology/typeReg
  * not a per-endpoint fork).
  *
  * The static tables below are the OFFLINE FLOOR, not the whole truth (L-F3): a
- * type registered through the Ontology Manager resolves its slug and its label
- * from the object-type registry, so a new object code costs no edit here. The
- * registry is the authority on prefix -> kind; whether that kind is resolvable
- * stays the backend's decision (`RESOLVABLE_KIND_AUTH` + PBAC), exactly as
+ * type registered through the Ontology Manager resolves its slug from the
+ * object-type registry, so a new object code costs no edit here. The registry
+ * is the authority on prefix -> kind; whether that kind is resolvable stays the
+ * backend's decision (`RESOLVABLE_KIND_AUTH` + PBAC), exactly as
  * `ontology/codeGrammar` states for recognition: parsing is not authorization.
+ * The LABEL is only as dynamic as the registry row — see `slugLabel`.
  */
 export interface SlugMeta {
   tone: Tone;
@@ -38,10 +39,20 @@ const SLUG_META: Partial<Record<string, SlugMeta>> = {
 
 /**
  * Korean label for a backend slug. A seeded slug uses its ko string; a slug the
- * card has no ko string for uses the registry's own description (the same
- * backend-authored name `modules/typeRegistry` shows for a dynamic type), and
+ * card has no ko string for falls back to the registry's own `description` (the
+ * same field `modules/typeRegistry.ts:354` uses as a dynamic type's name), and
  * only then the raw slug. Never throws — a link edge may reference a kind the
  * card knows no label for.
+ *
+ * TRUTH BOUND, so the zero-edit story is not overstated:
+ * `object_types.description` is NOT a display label by contract, and every row
+ * seeded in this repo today is ENGLISH PROSE — migrations 0102/0115/0131/0188,
+ * e.g. `series` reads "A user-authored series grouping recurring instances" and
+ * `org_unit` reads "Organizational unit (region/branch/worksite)". So this path
+ * yields a usable Korean label ONLY for a type whose registry row is authored
+ * with one, which is an obligation on the lane that registers the type (L-X7
+ * owes it for `deal`). Both directions are pinned in
+ * `composer/codeGrammarConvergence.test.ts` — prose in, prose out.
  */
 export function slugLabel(slug: string): string {
   const meta = SLUG_META[slug];

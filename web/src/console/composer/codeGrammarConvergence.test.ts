@@ -220,4 +220,45 @@ describe("one edit — a newly registered type costs the frontend zero map edits
     primeObjectTypeRegistry([{ ...DEAL, status: "draft" }]);
     expect(linkTargetFromCode("DL-1042")).toBeUndefined();
   });
+
+  /**
+   * The zero-edit claim's exact upper bound, pinned so it cannot rot into an
+   * overstatement. Parse and card-slug resolution ARE dynamic; the composer
+   * CHIP is not. `kindFromCode` returns the closed `ObjectKind` union, so a
+   * runtime-registered prefix carries no tone and no Korean kind label and
+   * `TokenText.tsx:73-84` renders it as inert raw text. Closing that needs a
+   * dynamic kind in TokenText.tsx, ModuleScreen.tsx and TokenComposer.tsx —
+   * none of them L-F3 roots. L-X10 consequence: a `DL-` code links and
+   * resolves a card, but draws no chip until that lands.
+   */
+  it("parses and resolves but draws no composer chip — the named gap, executable", () => {
+    primeObjectTypeRegistry([DEAL]);
+    expect(spans("신규 DL-1042 검토")).toEqual([{ kind: "codeLink", raw: "DL-1042" }]);
+    expect(linkTargetFromCode("DL-1042")).toEqual({ kind: "deal", id: "DL-1042" });
+    expect(kindFromCode("DL-1042")).toBeUndefined();
+  });
+
+  /**
+   * The label half of the zero-edit story costs something, and the cost is a
+   * backend obligation, not a frontend one. `object_types.description` is
+   * English prose in EVERY row this repo seeds (0102/0115/0131/0188), so
+   * `slugLabel` returns prose verbatim unless the registering lane authors a
+   * Korean display name. `series` is the live case: it is in
+   * `RESOLVABLE_KIND_AUTH` and has an `SR-` prefix, so it reaches this path
+   * today. The Korean-fixture test above proves the WIRING; this proves the
+   * CONTRACT it depends on, so neither is mistaken for the other.
+   */
+  it("returns the registry description verbatim — prose in, prose out", () => {
+    primeObjectTypeRegistry([
+      {
+        kind: "series",
+        codePrefix: "SR-",
+        description: "A user-authored series grouping recurring instances",
+        status: "active",
+        activeCount: 2,
+      },
+    ]);
+    expect(slugLabel("series")).toBe("A user-authored series grouping recurring instances");
+    expect(linkTargetFromCode("SR-77")).toEqual({ kind: "series", id: "SR-77" });
+  });
 });
