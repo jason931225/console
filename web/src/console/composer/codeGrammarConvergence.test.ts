@@ -5,7 +5,11 @@ import {
   objectCodePrefixes,
   resetCodePrefixes,
 } from "../ontology/codeGrammar";
-import { resetObjectTypeRegistry } from "../ontology/typeRegistrySource";
+import {
+  primeObjectTypeRegistry,
+  resetObjectTypeRegistry,
+  type RegistryObjectType,
+} from "../ontology/typeRegistrySource";
 import { linkTargetFromCode, slugLabel, slugTone } from "../objectcard/kinds";
 
 import { parseTokenGrammar, serializeTokenSpans } from "./grammar";
@@ -19,6 +23,11 @@ import { KIND_META, TONE, kindFromCode, type ObjectKind } from "./objectKinds";
  * about to derive it from the single dynamic source (`ontology/codeGrammar` and
  * the object-type registry that primes it) — every assertion below pins the
  * behaviour that must survive that, prefix by prefix.
+ *
+ * The later describes are the deliberate, named deltas: "fixed" (codes the old
+ * digit-only/uppercase-only regex could never match), "narrowed" (an
+ * unregistered prefix is now inert at PARSE, where before it parsed and was
+ * gated inert only at render) and "one edit" (the zero-frontend-edit proof).
  */
 
 const codeOf = (prefix: string) => `${prefix}-1234`;
@@ -148,5 +157,67 @@ describe("preserved — every prefix the old grammar recognized still parses ide
 
   it("never treats a #-prefixed code as an object code (channel wins, as before)", () => {
     expect(spans("#WO-2643")).toEqual([{ kind: "channel", raw: "#WO-2643" }]);
+  });
+});
+
+
+describe("fixed — codes the old digit-only/uppercase-only regex could never match", () => {
+  it("linkifies a mixed-case fallback prefix (Bid-)", () => {
+    expect(spans("입찰 Bid-1204 검토")).toEqual([{ kind: "codeLink", raw: "Bid-1204" }]);
+  });
+
+  it("linkifies an alphanumeric code body (OT-FINANCE, PAY-CHO)", () => {
+    expect(spans("계정 OT-FINANCE 확인")).toEqual([{ kind: "codeLink", raw: "OT-FINANCE" }]);
+    expect(spans("급여 PAY-CHO 확인")).toEqual([{ kind: "codeLink", raw: "PAY-CHO" }]);
+  });
+
+  it("linkifies a three-segment code whole instead of truncating it", () => {
+    expect(spans("계획 WO-2026-Q1-07 참고")).toEqual([{ kind: "codeLink", raw: "WO-2026-Q1-07" }]);
+  });
+});
+
+describe("narrowed — an unregistered prefix is now inert at parse, not just at render", () => {
+  it("does not parse COVID-19 as a code (no registered COVID prefix)", () => {
+    expect(spans("COVID-19 대응")).toEqual([]);
+  });
+
+  it("still round-trips the text verbatim", () => {
+    expect(serializeTokenSpans(parseTokenGrammar("COVID-19 대응"))).toBe("COVID-19 대응");
+  });
+});
+
+describe("one edit — a newly registered type costs the frontend zero map edits", () => {
+  const DEAL: RegistryObjectType = {
+    kind: "deal",
+    codePrefix: "DL-",
+    description: "영업 기회",
+    status: "active",
+    activeCount: 4,
+  };
+
+  it("denies the prefix before the registry is primed", () => {
+    expect(spans("신규 DL-1042 검토")).toEqual([]);
+    expect(linkTargetFromCode("DL-1042")).toBeUndefined();
+    expect(slugLabel("deal")).toBe("deal");
+  });
+
+  it("linkifies, resolves a card slug and labels it once primed — no map edited", () => {
+    primeObjectTypeRegistry([DEAL]);
+
+    expect(spans("신규 DL-1042 검토")).toEqual([{ kind: "codeLink", raw: "DL-1042" }]);
+    expect(linkTargetFromCode("DL-1042")).toEqual({ kind: "deal", id: "DL-1042" });
+    expect(slugLabel("deal")).toBe("영업 기회");
+    expect(slugTone("deal")).toEqual(TONE("neutral"));
+  });
+
+  it("keeps the seeded floor intact after priming (union, never replace)", () => {
+    primeObjectTypeRegistry([DEAL]);
+    expect(spans("결재 AP-3122 확인")).toEqual([{ kind: "codeLink", raw: "AP-3122" }]);
+    expect(linkTargetFromCode("WO-2643")).toEqual({ kind: "work_order", id: "WO-2643" });
+  });
+
+  it("does not resolve a slug for a non-active registered type (deny by default)", () => {
+    primeObjectTypeRegistry([{ ...DEAL, status: "draft" }]);
+    expect(linkTargetFromCode("DL-1042")).toBeUndefined();
   });
 });
