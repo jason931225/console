@@ -2333,8 +2333,8 @@
     "kind": "module_capability",
     "buck2_targets": [
      "//backend/crates/equipment/domain:mnt-equipment-domain-unit",
-     "//backend/crates/equipment/rest:mnt-equipment-rest",
-     "//backend/app:mnt-app-itest-equipment_3r_api"
+     "//tools/buck:equipment-3r-http-postgres",
+     "//tools/buck:app-equipment-3r-api-postgres"
     ],
     "reason": "Exact Buck2 target labels were queried at the current candidate worktree; completion evidence remains HOLD.",
     "rust_status": "REQUIRED"
