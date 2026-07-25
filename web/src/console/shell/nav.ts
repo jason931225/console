@@ -39,6 +39,7 @@ export const FEATURES = {
   INTEGRITY_FINDINGS_READ: "integrity_findings_read",
   ROLE_MANAGE: "role_manage",
   SALES_MANAGE: "sales_manage",
+  PAYROLL_RUN_READ: "payroll_run_read",
 } as const;
 
 const ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN];
@@ -209,7 +210,11 @@ export const NAV_GROUPS: readonly ConsoleNavGroup[] = [
         screen: "payroll",
         labelKey: "console.shell.nav.payroll",
         icon: "calc",
-        gate: g(DIRECTORY_ROLES, [FEATURES.EMPLOYEE_DIRECTORY_READ]),
+        // Grant-only, mirroring the server: payroll_run_read is gated by
+        // `authorize_org_wide`, whose built-in path never grants ADMIN, so a
+        // role-bearing gate would advertise a screen the API denies. Listing
+        // the feature alone means only a real org-wide grant reveals it.
+        gate: g(undefined, [FEATURES.PAYROLL_RUN_READ]),
       },
       // Personal attendance self-service is available to every authenticated
       // principal in the mounted inventory. Manager workspace access remains
