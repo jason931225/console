@@ -112,11 +112,14 @@ jobs:
         run: |
           set -euo pipefail
           CONSOLE_SYNTHETIC_MERGE_SHA="$(git rev-parse "$GITHUB_SHA^{commit}")"
+          test "$(git rev-parse HEAD)" = "$CONSOLE_SYNTHETIC_MERGE_SHA"
           CONSOLE_AUTHORITY_TIP_SHA="$(git rev-parse "$CONSOLE_SYNTHETIC_MERGE_SHA^2")"
           CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"
-          printf 'CONSOLE_CANDIDATE_SHA=%s\n' "$CONSOLE_CANDIDATE_SHA" >> "$GITHUB_ENV"
-          printf 'CONSOLE_AUTHORITY_TIP_SHA=%s\n' "$CONSOLE_AUTHORITY_TIP_SHA" >> "$GITHUB_ENV"
-          printf 'CONSOLE_SYNTHETIC_MERGE_SHA=%s\n' "$CONSOLE_SYNTHETIC_MERGE_SHA" >> "$GITHUB_ENV"
+          {
+            printf 'CONSOLE_CANDIDATE_SHA=%s\n' "$CONSOLE_CANDIDATE_SHA"
+            printf 'CONSOLE_AUTHORITY_TIP_SHA=%s\n' "$CONSOLE_AUTHORITY_TIP_SHA"
+            printf 'CONSOLE_SYNTHETIC_MERGE_SHA=%s\n' "$CONSOLE_SYNTHETIC_MERGE_SHA"
+          } >> "$GITHUB_ENV"
 
       - name: Install pinned DotSlash runtime
         run: tools/buck/install_dotslash.sh
@@ -145,18 +148,23 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: npm run check:console-truth-ledger
 
+      - name: Console fanout planner exact-M admission
+        if: ${{ github.event_name == 'pull_request' }}
+        run: node scripts/console/plan-fanout.mjs --candidate "$CONSOLE_CANDIDATE_SHA" --authority-tip "$CONSOLE_AUTHORITY_TIP_SHA" --synthetic-merge "$CONSOLE_SYNTHETIC_MERGE_SHA"
+
       - name: CI preflight contract tests
         run: node --test scripts/check-ci-preflight.test.mjs
 
       - name: Console route inventory regression
         run: node --test scripts/console/route-inventory.test.mjs
 
+      - name: Console authority-train regression
+        run: node --test scripts/console/verify-console-authority-train.test.mjs
+
       - name: Console truth-ledger validator exact-M regression
-        if: ${{ github.event_name == 'pull_request' }}
         run: node --test scripts/console/validate-console-truth-ledger.test.mjs
 
       - name: Console fanout planner exact-M regression
-        if: ${{ github.event_name == 'pull_request' }}
         run: node --test scripts/console/plan-fanout.test.mjs
 
       - name: Buck PostgreSQL environment wrapper regression

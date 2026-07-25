@@ -387,6 +387,38 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       workflow.replace('        if: ${{ github.event_name == \'pull_request\' }}\n        run: npm run check:console-truth-ledger', '        run: npm run check:console-truth-ledger'),
       "exact C/T/M derivation",
     );
+    expectFailure(
+      workflow.replace('          CONSOLE_SYNTHETIC_MERGE_SHA="$(git rev-parse "$GITHUB_SHA^{commit}")"\n', ''),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('          CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"\n', '          test "$(git rev-parse HEAD)" = "$CONSOLE_SYNTHETIC_MERGE_SHA"\n          CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"\n'),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('        run: node --test scripts/console/validate-console-truth-ledger.test.mjs', '        if: ${{ github.event_name == \'pull_request\' }}\n        run: node --test scripts/console/validate-console-truth-ledger.test.mjs'),
+      "validate-console-truth-ledger.test.mjs",
+    );
+    expectFailure(
+      workflow.replace('        run: node --test scripts/console/plan-fanout.test.mjs', '        if: ${{ github.event_name == \'pull_request\' }}\n        run: node --test scripts/console/plan-fanout.test.mjs'),
+      "plan-fanout.test.mjs",
+    );
+    expectFailure(
+      workflow.replace('      - name: Console authority-train regression\n        run: node --test scripts/console/verify-console-authority-train.test.mjs\n\n', ''),
+      "verify-console-authority-train.test.mjs",
+    );
+    expectFailure(
+      workflow.replace('        if: ${{ github.event_name == \'pull_request\' }}\n        run: node scripts/console/plan-fanout.mjs', '        run: node scripts/console/plan-fanout.mjs'),
+      "plan-fanout.mjs",
+    );
+    expectFailure(
+      workflow.replace('        run: npm run check:console-truth-ledger', '        run: CONSOLE_INTEGRATION_TIP_SHA="$CONSOLE_AUTHORITY_TIP_SHA" npm run check:console-truth-ledger'),
+      "CONSOLE_INTEGRATION_TIP_SHA",
+    );
+    expectFailure(
+      workflow.replace('        run: node scripts/console/plan-fanout.mjs --candidate "$CONSOLE_CANDIDATE_SHA" --authority-tip "$CONSOLE_AUTHORITY_TIP_SHA" --synthetic-merge "$CONSOLE_SYNTHETIC_MERGE_SHA"', '        run: node scripts/console/plan-fanout.mjs'),
+      "plan-fanout.mjs",
+    );
   });
 
   it("rejects omission and comment-only reachability regressions", () => {
