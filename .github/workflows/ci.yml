@@ -232,7 +232,7 @@ jobs:
 
       - name: Serialized disposable PostgreSQL integration targets
         run: |
-          tools/buck/test_needs_postgres.sh \
+          tools/buck/test_needs_postgres.sh --num-threads=1 \
             //backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \
             //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \
             //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency

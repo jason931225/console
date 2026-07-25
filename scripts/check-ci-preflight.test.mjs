@@ -375,11 +375,20 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
   });
 
-  it("passes the exact integration tip to console validator and planner surfaces", () => {
-    expectFailure(
-      workflow.replace("          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}\n", ""),
-      "preflight must pass CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}",
-    );
+  it("passes the exact integration tip to every console validator and planner surface", () => {
+    for (const command of [
+      "npm run check:console-truth-ledger",
+      "node --test scripts/console/validate-console-truth-ledger.test.mjs",
+      "node --test scripts/console/plan-fanout.test.mjs",
+    ]) {
+      expectFailure(
+        workflow.replace(
+          `        env:\n          CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }}\n        run: ${command}`,
+          `        run: ${command}`,
+        ),
+        `preflight must pass CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }} to ${command}`,
+      );
+    }
   });
 
   it("rejects omission and comment-only reachability regressions", () => {
@@ -483,6 +492,17 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     expectFailure(workflow.replace("  browser-e2e:\n", "  browser-e2e:\n    if: ${{ !cancelled() }}\n"), "browser-e2e must not define job-level if");
   });
 
+  it("rejects job-level preflight failure bypasses", () => {
+    expectFailure(
+      workflow.replace("  preflight:\n", "  preflight:\n    if: always()\n"),
+      "preflight must not define job-level if",
+    );
+    expectFailure(
+      workflow.replace("  preflight:\n", "  preflight:\n    continue-on-error: true\n"),
+      "preflight must not define job-level continue-on-error",
+    );
+  });
+
   it("locks post-preflight Buck2 reachability targets and disallows added run surfaces", () => {
     expectFailure(
       workflow.replace(
@@ -490,6 +510,13 @@ ${preflightRustToolchainSetup.trimEnd()}`,
         "cargo test -p mnt-support-domain",
       ),
       "support-domain-unit must run tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit",
+    );
+    expectFailure(
+      workflow.replace(
+        "tools/buck/test_needs_postgres.sh --num-threads=1",
+        "tools/buck/test_needs_postgres.sh",
+      ),
+      "postgres-domain-reachability must run the locked PostgreSQL reachability targets",
     );
     expectFailure(
       workflow.replace(

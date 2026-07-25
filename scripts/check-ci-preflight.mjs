@@ -18,7 +18,7 @@ const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
 const consoleIntegrationTipEnv = "CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}";
 const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
 const postgresDomainReachabilityCommands = [
-  "tools/buck/test_needs_postgres.sh \\",
+  "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
   "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \\",
   "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \\",
   "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
@@ -280,6 +280,12 @@ export function evaluateCiPreflight(workflow) {
   }
 
   const preflightSteps = stepBlocks(preflight);
+  if (/^    if:/m.test(preflight)) {
+    failures.push("preflight must not define job-level if");
+  }
+  if (/^    continue-on-error:/m.test(preflight)) {
+    failures.push("preflight must not define job-level continue-on-error");
+  }
   const checkout = preflightSteps.find((step) => step.startsWith("name: Checkout\n"));
   if (!checkout || !/^        with:\n(?:          [^\n]+\n)*          fetch-depth: 0$/m.test(checkout)) {
     failures.push("preflight checkout must fetch full history with fetch-depth: 0");
