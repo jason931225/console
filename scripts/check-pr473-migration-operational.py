@@ -130,29 +130,56 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise GateError("manifest guarded_tests must equal the 11 exact expected tuples in canonical order")
 
 
-def load_buck_rule(repo_root: Path, target: str) -> str:
-    """Read the exact top-level Buck rule body for an absolute target label."""
-    match = re.fullmatch(r"//(?P<package>[^:]+):(?P<name>[^:]+)", target)
+def target_name(target: str) -> str:
+    match = re.fullmatch(r"//[^:]+:(?P<name>[^:]+)", target)
     if match is None:
         raise GateError(f"invalid Buck target label {target!r}")
-    path = repo_root / match.group("package") / "BUCK"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise GateError(f"cannot read Buck declaration {path}: {error}") from error
-    name = re.escape(match.group("name"))
-    rule = re.search(
-        rf'^\s*(?:rust_test|sh_test)\(\n    name = "{name}",(?P<body>.*?)^\)\n',
-        text,
-        re.MULTILINE | re.DOTALL,
+    return match.group("name")
+
+
+def resolved_target_metadata(repo_root: Path, targets: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+    """Read selected resolved Buck attributes from Buck's machine-readable output."""
+    buck = repo_root / "tools/buck2"
+    command = [
+        str(buck),
+        "targets",
+        "--json",
+        "--output-attribute",
+        "^(name|args|deps|mapped_srcs|crate_root)$",
+        *targets,
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=repo_root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
     )
-    if rule is None:
-        raise GateError(f"Buck target declaration is missing for {target}")
-    return rule.group(0)
+    if completed.returncode != 0:
+        raise GateError(f"Buck2 target metadata query failed: {completed.stderr.strip()}")
+    try:
+        rows = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise GateError(f"Buck2 target metadata is not valid JSON: {error}") from error
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        raise GateError("Buck2 target metadata must be a JSON array of objects")
+    expected_names = {target_name(target) for target in targets}
+    names = [row.get("name") for row in rows]
+    if len(rows) != len(targets) or set(names) != expected_names or len(set(names)) != len(names):
+        raise GateError("Buck2 target metadata must contain each requested target exactly once")
+    return {row["name"]: row for row in rows}
 
 
 def guarded_test_specs(repo_root: Path, manifest: dict[str, Any]) -> tuple[tuple[str, str], ...]:
     """Bind every manifest tuple to its wrapper and generated Rust test declaration."""
+    bindings = {
+        (TARGET_BY_SOURCE_AND_BINARY[(test["source"], test["target"])], RUST_TARGET_BY_SOURCE_AND_BINARY[(test["source"], test["target"])])
+        for test in manifest["guarded_tests"]
+    }
+    metadata = resolved_target_metadata(
+        repo_root, tuple(target for binding in bindings for target in binding)
+    )
     specs: list[tuple[str, str]] = []
     for test in manifest["guarded_tests"]:
         key = (test["source"], test["target"])
@@ -160,16 +187,18 @@ def guarded_test_specs(repo_root: Path, manifest: dict[str, Any]) -> tuple[tuple
         rust_target = RUST_TARGET_BY_SOURCE_AND_BINARY.get(key)
         if wrapper_target is None or rust_target is None:
             raise GateError("guarded test does not map to an approved Buck2 PostgreSQL target")
-        rust_rule = load_buck_rule(repo_root, rust_target)
+        rust_rule = metadata[target_name(rust_target)]
         source = test["source"]
-        source_dir, source_file = source.rsplit("/tests/", 1)
-        expected_mapped_src = f'mapped_srcs = repo_mapped_srcs("{source_dir}", ["tests/{source_file}"]'
-        if expected_mapped_src not in rust_rule or f'crate_root = "{source}"' not in rust_rule:
+        mapped_srcs = rust_rule.get("mapped_srcs")
+        if (
+            rust_rule.get("crate_root") != source
+            or not isinstance(mapped_srcs, dict)
+            or mapped_srcs.get(f"root//{source}") != source
+        ):
             raise GateError(f"generated Rust target {rust_target} no longer binds {source}")
-        wrapper_rule = load_buck_rule(repo_root, wrapper_target)
-        expected_location = f'args = ["$(location {rust_target})"]'
-        expected_deps = f'deps = ["{rust_target}"]'
-        if expected_location not in wrapper_rule or expected_deps not in wrapper_rule:
+        wrapper_rule = metadata[target_name(wrapper_target)]
+        expected_rust_target = f"root{rust_target}"
+        if wrapper_rule.get("args") != [f"$(location {expected_rust_target})"] or wrapper_rule.get("deps") != [expected_rust_target]:
             raise GateError(f"PostgreSQL wrapper {wrapper_target} no longer executes {rust_target}")
         specs.append((wrapper_target, test["name"]))
     return tuple(specs)

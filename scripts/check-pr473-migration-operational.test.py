@@ -86,7 +86,7 @@ class ExecutionTests(unittest.TestCase):
 
     @staticmethod
     def completed_runs() -> list[subprocess.CompletedProcess[str]]:
-        specs = gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
+        specs = ExecutionTests.specs()
         return [
             subprocess.CompletedProcess(["buck"], 0, "", "")
             for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
@@ -95,10 +95,39 @@ class ExecutionTests(unittest.TestCase):
             for _, name in specs
         ]
 
+    @staticmethod
+    def specs() -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (
+                gate.TARGET_BY_SOURCE_AND_BINARY[(test["source"], test["target"])],
+                test["name"],
+            )
+            for test in valid_manifest()["guarded_tests"]
+        )
+
+    @staticmethod
+    def metadata() -> dict[str, dict]:
+        rows: dict[str, dict] = {}
+        for test in valid_manifest()["guarded_tests"]:
+            key = (test["source"], test["target"])
+            wrapper = gate.TARGET_BY_SOURCE_AND_BINARY[key]
+            rust = gate.RUST_TARGET_BY_SOURCE_AND_BINARY[key]
+            rows[gate.target_name(rust)] = {
+                "name": gate.target_name(rust),
+                "crate_root": test["source"],
+                "mapped_srcs": {f"root//{test['source']}": test["source"]},
+            }
+            rows[gate.target_name(wrapper)] = {
+                "name": gate.target_name(wrapper),
+                "args": [f"$(location root{rust})"],
+                "deps": [f"root{rust}"],
+            }
+        return rows
+
     def test_requires_the_buck_owned_disposable_postgres_harness(self) -> None:
         completed = self.completed_runs()
 
-        with patch.object(gate, "run", side_effect=completed) as run_mock:
+        with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=completed) as run_mock:
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
 
@@ -115,7 +144,7 @@ class ExecutionTests(unittest.TestCase):
             )
             self.assertNotIn("cargo", command)
             self.assertNotIn("DATABASE_URL", call.kwargs["env"])
-        specs = gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
+        specs = self.specs()
         for (target, name), call in zip(specs, run_mock.call_args_list[2:]):
             self.assertEqual(
                 call.args[0],
@@ -132,7 +161,7 @@ class ExecutionTests(unittest.TestCase):
             "MNT_APALIS_ADMIN_DATABASE_URL": "postgres://admin@ci/reusable",
         }
         with patch.dict(os.environ, inherited, clear=False):
-            with patch.object(gate, "run", side_effect=completed) as run_mock:
+            with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=completed) as run_mock:
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
         environment = run_mock.call_args.kwargs["env"]
@@ -164,15 +193,9 @@ class ExecutionTests(unittest.TestCase):
         target = gate.RUST_TARGET_BY_SOURCE_AND_BINARY[
             ("backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs", "key_revision_migration_upgrade")
         ]
-        actual = gate.load_buck_rule(SCRIPT.parents[1], target)
-        original = gate.load_buck_rule
-        with patch.object(
-            gate,
-            "load_buck_rule",
-            side_effect=lambda repo, label: actual.replace("crate_root", "wrong_root")
-            if label == target
-            else original(repo, label),
-        ):
+        metadata = self.metadata()
+        metadata[gate.target_name(target)]["crate_root"] = "wrong.rs"
+        with patch.object(gate, "resolved_target_metadata", return_value=metadata):
             with self.assertRaisesRegex(gate.GateError, "no longer binds"):
                 gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
 
@@ -180,17 +203,34 @@ class ExecutionTests(unittest.TestCase):
         target = gate.TARGET_BY_SOURCE_AND_BINARY[
             ("backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs", "key_revision_migration_upgrade")
         ]
-        actual = gate.load_buck_rule(SCRIPT.parents[1], target)
-        original = gate.load_buck_rule
-        with patch.object(
-            gate,
-            "load_buck_rule",
-            side_effect=lambda repo, label: actual.replace("deps =", "other =")
-            if label == target
-            else original(repo, label),
-        ):
+        metadata = self.metadata()
+        metadata[gate.target_name(target)]["deps"] = ["root//wrong:target"]
+        with patch.object(gate, "resolved_target_metadata", return_value=metadata):
             with self.assertRaisesRegex(gate.GateError, "no longer executes"):
                 gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
+
+    def test_rejects_comment_only_source_spoof_in_resolved_metadata(self) -> None:
+        target = gate.RUST_TARGET_BY_SOURCE_AND_BINARY[
+            ("backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs", "key_revision_migration_upgrade")
+        ]
+        metadata = self.metadata()
+        metadata[gate.target_name(target)]["mapped_srcs"] = {"comment": "backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs"}
+        with patch.object(gate, "resolved_target_metadata", return_value=metadata):
+            with self.assertRaisesRegex(gate.GateError, "no longer binds"):
+                gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
+
+    def test_accepts_reordered_resolved_metadata(self) -> None:
+        metadata = dict(reversed(list(self.metadata().items())))
+        with patch.object(gate, "resolved_target_metadata", return_value=metadata):
+            self.assertEqual(gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest()), self.specs())
+
+    def test_rejects_wrong_or_duplicate_metadata_names(self) -> None:
+        target = "//tools/buck:pr473-ontology-key-revision-postgres"
+        rows = [{"name": "wrong"}, {"name": "wrong"}]
+        completed = subprocess.CompletedProcess(["buck"], 0, json.dumps(rows), "")
+        with patch.object(subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(gate.GateError, "exactly once"):
+                gate.resolved_target_metadata(SCRIPT.parents[1], (target, target.replace("ontology", "leave")))
 
 
 if __name__ == "__main__":
