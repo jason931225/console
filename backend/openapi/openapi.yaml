@@ -15558,6 +15558,425 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/payroll/runs/{id}/close-preflight:
+    get:
+      tags:
+      - payroll
+      operationId: getPayrollRunClosePreflight
+      summary: Attendance-close preflight for a payroll run (audited read; EXECUTIVE/SUPER_ADMIN org-wide)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The attendance-material / period-lock / pending-leave checks and whether the run may be closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollClosePreflight'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/payroll/runs/{id}/close-attendance:
+    post:
+      tags:
+      - payroll
+      operationId: closePayrollRunAttendance
+      summary: Attested attendance close (STAGED/BLOCKED_LEGAL_GATE/READY_FOR_REVIEW to ATTENDANCE_CLOSED); a blocked preflight is a 409 carrying the failing checks in error.details
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClosePayrollAttendanceRequest'
+      responses:
+        '200':
+          description: The run detail after the close.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/payroll/runs/{id}/calculate:
+    post:
+      tags:
+      - payroll
+      operationId: calculatePayrollRun
+      summary: Per-line draft calculation (ATTENDANCE_CLOSED only); a line without a verified gross + NTS source row stays blocked with truthful blockers, income tax is never estimated
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The run detail after the calculation, including the latest calculation summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/payroll/runs/{id}/exceptions:
+    get:
+      tags:
+      - payroll
+      operationId: listPayrollRunExceptions
+      summary: Exception review queue for a run (audited read; OPEN rows first, then danger/warn/info, then age)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 500
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Page of run exceptions with the open count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollExceptionPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/payroll/runs/{id}/exceptions/{exceptionId}/resolve:
+    post:
+      tags:
+      - payroll
+      operationId: resolvePayrollRunException
+      summary: Resolve one exception with CONFIRM or HOLD (HOLD requires a reason and carries the row to the next run of the series); the run must be CALCULATED
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: exceptionId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolvePayrollExceptionRequest'
+      responses:
+        '200':
+          description: The resolved exception row.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollException'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/payroll/runs/{id}/submit:
+    post:
+      tags:
+      - payroll
+      operationId: submitPayrollRun
+      summary: Submit a CALCULATED run for approval; fail-closed while any exception is still OPEN (409 carries the open count in error.details.open)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The run detail after submission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/payroll/runs/{id}/decision:
+    post:
+      tags:
+      - payroll
+      operationId: decidePayrollRun
+      summary: APPROVE or REJECT a SUBMITTED run under maker-checker separation of duties (the decider must not be the submitter)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecidePayrollRunRequest'
+      responses:
+        '200':
+          description: The run detail after the decision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/payroll/runs/{id}/withdraw:
+    post:
+      tags:
+      - payroll
+      operationId: withdrawPayrollRun
+      summary: Withdraw a REJECTED run back to CALCULATED, clearing the submit/decide columns so a fresh maker-checker pair is admissible
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The run detail after the withdrawal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/payroll/runs/{id}/schedule-disbursement:
+    post:
+      tags:
+      - payroll
+      operationId: schedulePayrollDisbursement
+      summary: Schedule the transfer for an APPROVED run (one disbursement per run)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulePayrollDisbursementRequest'
+      responses:
+        '201':
+          description: The created disbursement record; the run moves to DISBURSEMENT_SCHEDULED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollDisbursement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/payroll/runs/{id}/disbursement/attest:
+    post:
+      tags:
+      - payroll
+      operationId: attestPayrollDisbursement
+      summary: Operator attestation FSM SCHEDULED to SUBMITTED_TO_BANK to PAID or FAILED (reason required) and FAILED back to SCHEDULED; no bank API exists, these are operator records
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttestPayrollDisbursementRequest'
+      responses:
+        '200':
+          description: The attested disbursement record; PAID also moves the run to PAID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollDisbursement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/payroll/runs/{id}/issue-payslips:
+    post:
+      tags:
+      - payroll
+      operationId: issuePayrollPayslips
+      summary: Issue payslips for a PAID run into each recipient's inbox vault; hard-gated by the registered 노무사/세무사 release-gate record (409 legal_gate otherwise)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The delivery summary after issuance; the run moves to ISSUED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollPayslipDeliverySummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/payroll/runs/{id}/payslip-delivery:
+    get:
+      tags:
+      - payroll
+      operationId: getPayrollPayslipDelivery
+      summary: Payslip delivery and acknowledgement readback for a run (audited read)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 500
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Delivery counts and a page of delivered payslip links.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollPayslipDeliverySummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     basicAuth:
@@ -30275,7 +30694,7 @@ components:
           type: string
         status:
           type: string
-          enum: [STAGED, BLOCKED_LEGAL_GATE, READY_FOR_REVIEW, APPROVED, ISSUED, VOID]
+          enum: [STAGED, BLOCKED_LEGAL_GATE, READY_FOR_REVIEW, ATTENDANCE_CLOSED, CALCULATING, CALCULATED, SUBMITTED, REJECTED, APPROVED, DISBURSEMENT_SCHEDULED, PAID, ISSUED, VOID]
         calculation_enabled:
           type: boolean
         created_by:
@@ -30293,6 +30712,42 @@ components:
           - string
           - 'null'
           format: date-time
+        close_receipt:
+          type:
+          - object
+          - 'null'
+          description: Attestation receipt written by the attendance close — the preflight checks, the attesting user, and the attestation time.
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker counterparty; a DB CHECK forbids it from equalling submitted_by.
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decision_reason:
+          type:
+          - string
+          - 'null'
+        approval_ref:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Reserved for the future AP- workflow-engine object; never written today.
         created_at:
           $ref: '#/components/schemas/Timestamp'
         updated_at:
@@ -30392,6 +30847,8 @@ components:
       - lines_total
       - lines_limit
       - lines_offset
+      - exceptions_open
+      - exceptions_total
       properties:
         run:
           $ref: '#/components/schemas/PayrollRunSummary'
@@ -30412,6 +30869,26 @@ components:
         lines_offset:
           type: integer
           format: int64
+        exceptions_open:
+          type: integer
+          format: int64
+        exceptions_total:
+          type: integer
+          format: int64
+        calculation:
+          anyOf:
+          - $ref: '#/components/schemas/PayrollRunCalcSummary'
+          - type: 'null'
+          description: Latest stored calculation version; null until the run has been calculated.
+        disbursement:
+          anyOf:
+          - $ref: '#/components/schemas/PayrollDisbursement'
+          - type: 'null'
+        payslip_delivery:
+          anyOf:
+          - $ref: '#/components/schemas/PayrollPayslipDeliverySummary'
+          - type: 'null'
+          description: Unpaginated delivery summary; null until at least one payslip has been issued.
     MyPayrollLine:
       type: object
       required:
@@ -30433,7 +30910,7 @@ components:
           format: date
         run_status:
           type: string
-          enum: [STAGED, BLOCKED_LEGAL_GATE, READY_FOR_REVIEW, APPROVED, ISSUED, VOID]
+          enum: [STAGED, BLOCKED_LEGAL_GATE, READY_FOR_REVIEW, ATTENDANCE_CLOSED, CALCULATING, CALCULATED, SUBMITTED, REJECTED, APPROVED, DISBURSEMENT_SCHEDULED, PAID, ISSUED, VOID]
         calculation_status:
           type: string
           enum: [BLOCKED_LEGAL_GATE, READY_FOR_REVIEW, APPROVED, ISSUED, VOID]
@@ -31751,3 +32228,331 @@ components:
           type: integer
           format: int64
           description: Total matching rows before limit/offset.
+    PayrollPreflightCheck:
+      type: object
+      required:
+      - key
+      - label_ko
+      - ok
+      - warn
+      - note
+      - blocking_refs
+      properties:
+        key:
+          type: string
+          enum: [attendance_material, period_lock, pending_leave]
+        label_ko:
+          type: string
+        ok:
+          type: boolean
+        warn:
+          type: boolean
+          description: Soft signal only; can_close is the AND of the hard checks (attendance_material, period_lock).
+        note:
+          type:
+          - string
+          - 'null'
+        blocking_refs:
+          type: array
+          description: Up to 50 fix-link ids (draft lines missing attendance material, or pending leave requests); the note carries the full count.
+          items:
+            $ref: '#/components/schemas/Uuid'
+    PayrollClosePreflight:
+      type: object
+      required:
+      - checks
+      - can_close
+      properties:
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayrollPreflightCheck'
+        can_close:
+          type: boolean
+    PayrollRunCalcSummary:
+      type: object
+      required:
+      - version
+      - calculated_at
+      - calculated_lines
+      - blocked_lines
+      - payable
+      - kernel_rate_table
+      - total_net_won
+      properties:
+        version:
+          type: integer
+          format: int32
+        calculated_at:
+          $ref: '#/components/schemas/Timestamp'
+        calculated_lines:
+          type: integer
+          format: int64
+        blocked_lines:
+          type: integer
+          format: int64
+        payable:
+          type: boolean
+          description: Always false until the 노무사/세무사 release gate flips the stored rows.
+        kernel_rate_table:
+          type: string
+        total_net_won:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Whole KRW won. null unless EVERY line of the run calculated — never a partial sum presented as a total.
+    PayrollException:
+      type: object
+      required:
+      - id
+      - run_id
+      - line_id
+      - employee_id
+      - employee_display_name
+      - kind
+      - severity
+      - amount_delta_won
+      - summary_ko
+      - detail
+      - linked_refs
+      - status
+      - resolved_by
+      - resolved_at
+      - resolved_reason
+      - carried_from_run_id
+      - created_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        run_id:
+          $ref: '#/components/schemas/Uuid'
+        line_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        employee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        employee_display_name:
+          type: string
+        kind:
+          type: string
+          enum: [OVERTIME_ALLOWANCE, RETRO_ADJUSTMENT, ABSENCE_DEDUCTION, PRORATION, ACCOUNT_VERIFICATION]
+        severity:
+          type: string
+          enum: [info, warn, danger]
+        amount_delta_won:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Whole KRW won. null when the delta is not derivable from a verified source.
+        summary_ko:
+          type: string
+        detail:
+          type: object
+        linked_refs:
+          type: array
+          items:
+            type: object
+        status:
+          type: string
+          enum: [OPEN, CONFIRMED, HELD]
+        resolved_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        resolved_reason:
+          type:
+          - string
+          - 'null'
+        carried_from_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The run this HELD exception was carried forward from.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    PayrollExceptionPage:
+      type: object
+      required:
+      - items
+      - total
+      - open
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayrollException'
+        total:
+          type: integer
+          format: int64
+        open:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+    PayrollDisbursement:
+      type: object
+      required:
+      - id
+      - run_id
+      - scheduled_at
+      - status
+      - attested_by
+      - attested_at
+      - reason
+      - created_at
+      - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        run_id:
+          $ref: '#/components/schemas/Uuid'
+        scheduled_at:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          type: string
+          enum: [SCHEDULED, SUBMITTED_TO_BANK, PAID, FAILED]
+          description: Operator attestation, never a bank result — no bank API exists.
+        attested_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        attested_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reason:
+          type:
+          - string
+          - 'null'
+          description: Retained only while the status is FAILED; cleared on any other attestation.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    PayrollPayslipDeliveryItem:
+      type: object
+      required:
+      - line_id
+      - employee_id
+      - inbox_doc_id
+      - issued_at
+      - acknowledged_at
+      properties:
+        line_id:
+          $ref: '#/components/schemas/Uuid'
+        employee_id:
+          $ref: '#/components/schemas/Uuid'
+        inbox_doc_id:
+          $ref: '#/components/schemas/Uuid'
+        issued_at:
+          $ref: '#/components/schemas/Timestamp'
+        acknowledged_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Read back from the inbox doc's confirmed_at; the vault does not yet confirm payslip receipts, so this stays null today.
+    PayrollPayslipDeliverySummary:
+      type: object
+      required:
+      - run_id
+      - issued
+      - acknowledged
+      - items
+      - total
+      - limit
+      - offset
+      properties:
+        run_id:
+          $ref: '#/components/schemas/Uuid'
+        issued:
+          type: integer
+          format: int64
+        acknowledged:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayrollPayslipDeliveryItem'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+    ClosePayrollAttendanceRequest:
+      type: object
+      required:
+      - attest
+      properties:
+        attest:
+          type: boolean
+          description: Must be true; the close is an attestation, and false is rejected with 422.
+    ResolvePayrollExceptionRequest:
+      type: object
+      required:
+      - action
+      properties:
+        action:
+          type: string
+          enum: [CONFIRM, HOLD]
+        reason:
+          type: string
+          description: Required for HOLD (a blank reason is rejected with 422).
+    DecidePayrollRunRequest:
+      type: object
+      required:
+      - decision
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REJECT]
+        reason:
+          type: string
+          description: Required for REJECT (a blank reason is rejected with 422).
+    SchedulePayrollDisbursementRequest:
+      type: object
+      required:
+      - scheduled_at
+      properties:
+        scheduled_at:
+          type: string
+          format: date-time
+          description: RFC 3339; must be in the future.
+    AttestPayrollDisbursementRequest:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum: [SCHEDULED, SUBMITTED_TO_BANK, PAID, FAILED]
+        reason:
+          type: string
+          description: Required for FAILED (a blank reason is rejected with 422).
