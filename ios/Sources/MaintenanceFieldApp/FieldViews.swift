@@ -899,8 +899,7 @@ struct MessengerTabView: View {
         // Messenger contains long, changing operational conversations. Keep the
         // navigation title and actions on an opaque semantic surface rather
         // than allowing scrolling content to alter their contrast.
-        .toolbarBackground(Color.opaqueFieldNavigationBackground, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .messengerNavigationBarBackground()
         // iOS 26 can otherwise settle a selected AX5 List row underneath the
         // persistent navigation surface. Reserve a real scroll-safe viewport;
         // this preserves the complete thread rather than hiding or truncating it.
@@ -1409,6 +1408,17 @@ struct FieldChip: View {
 }
 
 private extension View {
+    @ViewBuilder
+    func messengerNavigationBarBackground() -> some View {
+        #if os(iOS)
+        self
+            .toolbarBackground(Color.opaqueFieldNavigationBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        #else
+        self
+        #endif
+    }
+
     @ViewBuilder
     func inlineNavigationTitle() -> some View {
         #if os(iOS)

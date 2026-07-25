@@ -612,6 +612,16 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".toolbarBackground(.visible, for: .navigationBar)", ".toolbarBackground(.automatic, for: .navigationBar)"),
     }), ax5Gate);
     expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".messengerNavigationBarBackground()", ".inlineNavigationTitle()"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        "#if os(iOS)\n        self\n            .toolbarBackground(Color.opaqueFieldNavigationBackground",
+        "#if os(macOS)\n        self\n            .toolbarBackground(Color.opaqueFieldNavigationBackground",
+      ),
+    }), ax5Gate);
+    expectsFailure(evaluate({
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".font(.headline)\n                FieldChip(key: thread.kind.fieldLabelKey)", ".font(.headline)\n                    .lineLimit(1)\n                FieldChip(key: thread.kind.fieldLabelKey)"),
     }), ax5Gate);
     expectsFailure(evaluate({
