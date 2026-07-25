@@ -671,6 +671,7 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/attendance_console_migration_contract.rs': 'postgres',
             'tests/code_issuance.rs': 'postgres',
             'tests/group_resolvers.rs': 'postgres',
+            'tests/lifecycle_maker_checker.rs': 'postgres',
             'tests/m2_flag_on_runtime_drain.rs': 'postgres',
             'tests/period_locks_and_lifecycle.rs': 'postgres',
             'tests/rls_isolation.rs': 'postgres',
