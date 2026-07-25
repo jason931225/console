@@ -232,7 +232,7 @@ function RailCategory({
 
   const canOpenItem = (item: CommsRailItem): boolean => {
     const target = item.target;
-    if (!target) return false;
+    if (!target || target.source !== item.source) return false;
     if (target.kind === "full-screen") return Boolean(onOpenFullModule);
     if (target.source === "messenger") return Boolean(onOpenMessengerThread);
     if (target.source === "mail") return Boolean(onOpenMailThread);
@@ -241,7 +241,7 @@ function RailCategory({
 
   const openItem = (item: CommsRailItem) => {
     const target = item.target;
-    if (!target) return;
+    if (!target || target.source !== item.source) return;
     if (target.kind === "full-screen") {
       onOpenFullModule?.(item, target);
       return;

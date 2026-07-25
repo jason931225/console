@@ -139,6 +139,24 @@ describe("CommsRailView", () => {
     expect(onOpenMessengerThread).toHaveBeenCalledWith("thread-1");
   });
 
+  it("fails closed when a mail row carries a forged messenger target", async () => {
+    const user = userEvent.setup();
+    const onOpenMessengerThread = vi.fn();
+    const hostile: CommsRailSnapshot = {
+      ...snapshot(),
+      mail: {
+        kind: "ready",
+        items: [{ ...items.mail, target: { kind: "inline", source: "messenger", id: "thread-1" } }],
+        loadedAt: "now",
+      },
+    };
+
+    render(<CommsRailView presentation="persistent" snapshot={hostile} copy={copy} onOpenMessengerThread={onOpenMessengerThread} />);
+    expect(screen.queryByRole("button", { name: /Invoice review/ })).not.toBeInTheDocument();
+    await user.click(screen.getByText("Invoice review"));
+    expect(onOpenMessengerThread).not.toHaveBeenCalled();
+  });
+
   function ControlledDrawer({ trigger }: { trigger: HTMLButtonElement }) {
     const [open, setOpen] = useState(true);
     return <CommsRailView
