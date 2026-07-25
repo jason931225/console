@@ -9,6 +9,10 @@ import { PolicyGated, usePolicyGate } from "../policy";
 import { objDrag, useOptionalWindowManager } from "../window";
 import "../tokens.css";
 import {
+  CANONICAL_ONTOLOGY_LIST,
+  canonicalOntologyDataAdapter,
+} from "./moduleScreens";
+import {
   columnVariantFor,
   detailVariantFor,
   getObjectType,
@@ -944,15 +948,17 @@ export function GenericModuleScreen({
 }) {
   // A keyed remount clears rows, stats, selection, detail, and retry/error state
   // during reconciliation, then effect cleanup aborts the superseded requests.
-  return <GenericModuleScreenBody key={`${config.id}:${authorityKey ?? "untrusted"}`} api={api} config={config} />;
+  return <GenericModuleScreenBody key={`${config.id}:${authorityKey ?? "untrusted"}`} api={api} config={config} authorityKey={authorityKey} />;
 }
 
 function GenericModuleScreenBody({
   config,
   api,
+  authorityKey,
 }: {
   config: ModuleScreenConfig;
   api?: ConsoleApiClient;
+  authorityKey?: string;
 }) {
   const gate = usePolicyGate();
   const windowManager = useOptionalWindowManager();
@@ -967,7 +973,12 @@ function GenericModuleScreenBody({
   // object links. Keeping this state in the shared shell lets its authority-key
   // remount and selected-row lifecycle fence the drill panel.
   const [ledgerAccountCode, setLedgerAccountCode] = useState<string | undefined>(undefined);
-  const loadRows = config.dataAdapter?.loadRows;
+  const canonicalOntology = config.data.list === CANONICAL_ONTOLOGY_LIST;
+  const canonicalAdapter = useMemo(
+    () => canonicalOntologyDataAdapter(config.objectKind, authorityKey),
+    [authorityKey, config.objectKind],
+  );
+  const loadRows = canonicalOntology ? canonicalAdapter.loadRows : config.dataAdapter?.loadRows;
   const loadDetail = config.dataAdapter?.loadDetail;
   const usesListLoader = Boolean(loadRows && api);
   const rows = useMemo(
@@ -976,10 +987,16 @@ function GenericModuleScreenBody({
   );
 
   // §18 registry binding: config picks WHICH fields, ONT_TYPES defines them.
-  const type = getObjectType(config.typeKey);
+  const type = getObjectType(config.typeKey, authorityKey);
+  const configuredColumns: ModuleColumnConfig[] = canonicalOntology && type
+    ? type.propSchema.map((property) => ({ key: property.id }))
+    : config.list.columns;
+  const configuredDetailFields: ModuleDetailFieldConfig[] = canonicalOntology && type
+    ? type.propSchema.map((property) => ({ key: property.id }))
+    : config.detail.fields;
   const columns = useMemo(
     () =>
-      config.list.columns.map((column) => {
+      configuredColumns.map((column) => {
         const prop = getProperty(type, column.key);
         return {
           ...column,
@@ -987,11 +1004,11 @@ function GenericModuleScreenBody({
           variant: column.variant ?? columnVariantFor(prop),
         };
       }),
-    [config.list.columns, type],
+    [configuredColumns, type],
   );
   const detailFields = useMemo(
     () =>
-      config.detail.fields.map((field) => {
+      configuredDetailFields.map((field) => {
         const prop = getProperty(type, field.key);
         return {
           ...field,
@@ -999,7 +1016,7 @@ function GenericModuleScreenBody({
           variant: field.variant ?? detailVariantFor(prop),
         };
       }),
-    [config.detail.fields, type],
+    [configuredDetailFields, type],
   );
   const laneChoices = config.list.laneGroupBy
     ? propChoices(getProperty(type, config.list.laneGroupBy))

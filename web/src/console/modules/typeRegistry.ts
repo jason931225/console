@@ -7,8 +7,7 @@
 import { ko } from "../../i18n/ko";
 import type { ObjectCardDescriptor, ObjectCardProperty } from "../objectcard";
 import {
-  registeredObjectType,
-  type RegistryObjectType,
+  canonicalObjectType,
 } from "../ontology/typeRegistrySource";
 import type {
   ModuleChipTone,
@@ -337,44 +336,59 @@ export const ONT_TYPES: Readonly<Record<string, OntObjectType>> = {
   },
 };
 
-/**
- * A registered-but-not-hand-authored type as a generic OntObjectType, so a
- * no-code type still opens as a card and drives a module surface. The registry
- * (GET /api/v1/object-types) only carries kind + code prefix + label; the rich
- * property/link/action schema for a projected type is not served yet, so the
- * generic type exposes just code + title — never fabricated columns.
- * wire-pending: W1-be-ontology GET /api/v1/ontology/object-types/{key} schema.
- */
-export function genericObjectType(registered: RegistryObjectType): OntObjectType {
+/** Canonical dynamic schema, reduced only to renderable real fields. */
+function canonicalOntologyObjectType(
+  canonical: NonNullable<ReturnType<typeof canonicalObjectType>>,
+): OntObjectType {
+  const definition = canonical.definition;
   return {
-    key: registered.kind,
-    code: `OT-${registered.kind.toUpperCase()}`,
-    // registry `description` is the backend's human label (real data); resolveText
-    // returns it verbatim when it is not a dotted ko key.
-    nameKey: registered.description || registered.kind,
-    codePrefix: registered.codePrefix ?? "",
-    propSchema: [
-      { id: "code", nameKey: "console.modules.generic.columns.code", type: "code", required: true },
-      { id: "title", nameKey: "console.modules.generic.columns.title", type: "text" },
-    ],
-    linkTypes: [],
+    key: definition.stableKey,
+    // The server stable key is the type identity; never mint a synthetic OT-KIND token.
+    code: definition.code,
+    nameKey: definition.title,
+    codePrefix: "",
+    propSchema: definition.properties.map((property) => ({
+      id: property.key,
+      nameKey: property.title,
+      required: property.required,
+      inPropertyPolicy: property.inPropertyPolicy,
+      // Values are rendered as text unless the real wire type has an existing,
+      // lossless module renderer. In particular, do not invent enum choices.
+      type:
+        property.type === "date" || property.type === "datetime" || property.type === "user"
+          ? property.type
+          : property.type === "object_ref"
+            ? "link"
+            : "text",
+    })),
+    linkTypes: definition.links.map((link) => ({
+      rel: link.stableKey,
+      nameKey: link.title,
+      to: link.toTypeKey,
+      cardinality: link.cardinality === "many_one" ? "one_many" : link.cardinality,
+    })),
+    // Dynamic action policy bindings require a backend resolver. Rendering no
+    // action is safer than guessing a policy action from a stable key.
     actions: [],
-    analytics: [],
+    analytics: definition.analytics.map((analytic) => ({
+      key: analytic.key,
+      nameKey: analytic.title,
+      formula: analytic.formula,
+      resultType: "text",
+    })),
   };
 }
 
 /**
- * The rich hand-authored def if present, else — for a type registered no-code
- * via the Ontology Manager — a generic def synthesised from the registry. This
- * is the ONT_TYPES "thin cache over the fetch": the *set* of types is
- * registry-driven; hand-authored defs remain the detail source until projected
- * schemas are served.
+ * Hand-authored types remain their existing authority. Registered unknown kinds
+ * have no render schema until their scoped canonical detail read succeeds.
  */
-export function getObjectType(key: string | undefined): OntObjectType | undefined {
+export function getObjectType(key: string | undefined, authorityKey?: string): OntObjectType | undefined {
   if (!key) return undefined;
   if (Object.prototype.hasOwnProperty.call(ONT_TYPES, key)) return ONT_TYPES[key];
-  const registered = registeredObjectType(key);
-  return registered ? genericObjectType(registered) : undefined;
+  const canonical = authorityKey ? canonicalObjectType(key, authorityKey) : undefined;
+  if (canonical) return canonicalOntologyObjectType(canonical);
+  return undefined;
 }
 
 export function getProperty(type: OntObjectType | undefined, propId: string): OntProperty | undefined {
