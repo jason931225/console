@@ -233,6 +233,95 @@ describe("WorkflowScheduleOperations", () => {
     expect(screen.queryByRole("form", { name: "예약 작업 추가" })).toBeNull();
   });
 
+  it("uses generated path params and a passkey proof for revision approval", async () => {
+    const proof = {
+      ceremony_id: "ceremony",
+      credential: { id: "credential", type: "public-key" },
+    };
+    mockAssertPasskeyStepUp.mockResolvedValueOnce(proof);
+    const GET = vi.fn((path: string) => {
+      if (path === "/api/v1/workflow-studio/schedules")
+        return { data: { items: [schedule] }, response: new Response() };
+      if (path === "/api/v1/workflow-studio/definitions")
+        return {
+          data: {
+            items: [
+              {
+                id: schedule.definition_id,
+                display_name: "KPI 정의",
+                pending_version: 4,
+                pending_staged_by: "another-user",
+              },
+            ],
+          },
+          response: new Response(),
+        };
+      if (path === "/api/v1/workflow-studio/schedules/{id}/runs")
+        return { data: { items: [] }, response: new Response() };
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const POST = vi.fn(() => ({
+      data: { id: schedule.definition_id },
+      response: new Response(),
+    }));
+    renderPanel({ GET, POST, PATCH: vi.fn() } as unknown as ConsoleApiClient);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "개정 승인" }),
+    );
+
+    await waitFor(() => {
+      expect(POST).toHaveBeenCalledWith(
+        "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/approve",
+        {
+          params: { path: { id: schedule.definition_id, rev: 4 } },
+          body: { step_up: proof },
+        },
+      );
+    });
+  });
+
+  it("fails closed without sending an approval when the passkey proof is absent", async () => {
+    mockAssertPasskeyStepUp.mockResolvedValueOnce(undefined);
+    const GET = vi.fn((path: string) => {
+      if (path === "/api/v1/workflow-studio/schedules")
+        return { data: { items: [schedule] }, response: new Response() };
+      if (path === "/api/v1/workflow-studio/definitions")
+        return {
+          data: {
+            items: [
+              {
+                id: schedule.definition_id,
+                display_name: "KPI 정의",
+                pending_version: 4,
+                pending_staged_by: "another-user",
+              },
+            ],
+          },
+          response: new Response(),
+        };
+      if (path === "/api/v1/workflow-studio/schedules/{id}/runs")
+        return { data: { items: [] }, response: new Response() };
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const POST = vi.fn(() => ({
+      data: { id: schedule.definition_id },
+      response: new Response(),
+    }));
+    renderPanel({ GET, POST, PATCH: vi.fn() } as unknown as ConsoleApiClient);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "개정 승인" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "예약 정보를 처리하지 못했습니다",
+    );
+    expect(
+      POST.mock.calls.some(([path]) => String(path).includes("/revisions/")),
+    ).toBe(false);
+  });
+
   it("blocks self-approval of a pending definition revision before a request", async () => {
     const GET = vi.fn((path: string) => {
       if (path === "/api/v1/workflow-studio/schedules")

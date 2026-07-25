@@ -107,6 +107,22 @@ function statusTone(status: string | null | undefined): string {
   return status ?? "실행 기록 없음";
 }
 
+type PasskeyStepUpAssertion = Awaited<ReturnType<typeof assertPasskeyStepUp>>;
+
+function isPasskeyStepUpAssertion(
+  value: unknown,
+): value is PasskeyStepUpAssertion {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "ceremony_id" in value &&
+    typeof value.ceremony_id === "string" &&
+    "credential" in value &&
+    typeof value.credential === "object" &&
+    value.credential !== null
+  );
+}
+
 function errorMessage(error: unknown): string {
   if (error instanceof ApiCallError) {
     if (error.status === 403)
@@ -357,22 +373,33 @@ function WorkflowScheduleScope({ api, gate, session }: WorkflowScheduleScopeProp
         setPendingId(selected?.id);
       setError(undefined);
       try {
-        const stepUp = action === "approve" ? await assertPasskeyStepUp(api) : undefined;
-        if (!isActive()) return;
         const params = {
-          path: { id: selectedDefinition.id, rev: selectedDefinition.pending_version },
+          params: {
+            path: {
+              id: selectedDefinition.id,
+              rev: selectedDefinition.pending_version,
+            },
+          },
         };
-        const response =
-          action === "approve"
-            ? await api.POST(
-                "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/approve",
-                { ...params, body: { step_up: stepUp } },
-              )
-            : await api.POST(
-                "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/withdraw",
-              params,
-              );
-        if (!response.data) throw new ApiCallError(response.response.status, response.error);
+        if (action === "approve") {
+          const stepUp: unknown = await assertPasskeyStepUp(api);
+          if (!isActive()) return;
+          if (!isPasskeyStepUpAssertion(stepUp))
+            throw new Error("passkey step-up assertion is required");
+          const response = await api.POST(
+            "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/approve",
+            { ...params, body: { step_up: stepUp } },
+          );
+          if (!response.data)
+            throw new ApiCallError(response.response.status, response.error);
+        } else {
+          const response = await api.POST(
+            "/api/v1/workflow-studio/definitions/{id}/revisions/{rev}/withdraw",
+            params,
+          );
+          if (!response.data)
+            throw new ApiCallError(response.response.status, response.error);
+        }
         if (!isActive()) return;
         await loadSchedules();
       } catch (caught) {
