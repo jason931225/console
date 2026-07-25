@@ -287,6 +287,14 @@ pub enum Feature {
     /// path in is a custom org-wide PBAC grant. See the payroll REST crate's
     /// module docs for the deny-by-omission rationale.
     PayrollRunRead,
+    /// Drive the payroll run lifecycle (attendance close, calculation,
+    /// exception resolution, submit/decide/withdraw, disbursement
+    /// scheduling/attestation, payslip issuance). Same matrix row and
+    /// org-wide gating as [`Self::PayrollRunRead`]: gated via
+    /// `authorize_org_wide` (the tables have `org_id` only), built-in access
+    /// EXECUTIVE + SUPER_ADMIN, ADMIN only via a custom org-wide PBAC grant,
+    /// branch-scoped callers denied.
+    PayrollRunManage,
     /// Create a draft board notice, publish it (issues the NT- code, snapshots
     /// every active org member as a recipient, and fans out a notification to
     /// each), and read 수령확인 progress. The HQ/announcement tier: ADMIN +
@@ -345,7 +353,7 @@ pub enum Feature {
 }
 
 impl Feature {
-    pub const ALL: [Self; 92] = [
+    pub const ALL: [Self; 93] = [
         Self::Login,
         Self::WorkOrderCreate,
         Self::WorkOrderEditIntake,
@@ -421,6 +429,7 @@ impl Feature {
         Self::PeriodLockManage,
         Self::LifecycleManage,
         Self::PayrollRunRead,
+        Self::PayrollRunManage,
         Self::NoticeManage,
         Self::FacilitiesManage,
         Self::FacilitiesDispatch,
@@ -518,6 +527,7 @@ impl Feature {
             Self::PeriodLockManage => "period_lock_manage",
             Self::LifecycleManage => "lifecycle_manage",
             Self::PayrollRunRead => "payroll_run_read",
+            Self::PayrollRunManage => "payroll_run_manage",
             Self::NoticeManage => "notice_manage",
             Self::FacilitiesManage => "facilities_manage",
             Self::FacilitiesDispatch => "facilities_dispatch",
@@ -660,6 +670,11 @@ impl Feature {
             // `authorize_org_wide` (requires BranchScope::All) since the
             // table has no branch_id to narrow a branch-scoped ADMIN.
             Self::PayrollRunRead => [D, D, D, A, A, A],
+            // Payroll run lifecycle writes: identical row + org-wide gating to
+            // PayrollRunRead (ADMIN cell only ever reachable through a custom
+            // org-wide PBAC grant — `authorize_org_wide`'s built-in path never
+            // grants ADMIN).
+            Self::PayrollRunManage => [D, D, D, A, A, A],
             // The HQ/announcement tier: ADMIN + EXECUTIVE + SUPER_ADMIN.
             Self::NoticeManage => [D, D, D, A, A, A],
             Self::FacilitiesManage => [D, D, D, A, D, A],
@@ -767,6 +782,7 @@ impl FromStr for Feature {
             "period_lock_manage" => Ok(Self::PeriodLockManage),
             "lifecycle_manage" => Ok(Self::LifecycleManage),
             "payroll_run_read" => Ok(Self::PayrollRunRead),
+            "payroll_run_manage" => Ok(Self::PayrollRunManage),
             "notice_manage" => Ok(Self::NoticeManage),
             "facilities_manage" => Ok(Self::FacilitiesManage),
             "facilities_dispatch" => Ok(Self::FacilitiesDispatch),

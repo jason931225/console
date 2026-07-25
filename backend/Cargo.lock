@@ -4463,6 +4463,7 @@ name = "mnt-payroll-adapter-postgres"
 version = "0.1.0"
 dependencies = [
  "mnt-kernel-core",
+ "mnt-payroll-domain",
  "mnt-platform-db",
  "mnt-platform-request-context",
  "mnt-platform-test-support",
@@ -4489,6 +4490,9 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "http",
+ "mnt-inbox-adapter-postgres",
+ "mnt-inbox-application",
+ "mnt-inbox-domain",
  "mnt-kernel-core",
  "mnt-payroll-adapter-postgres",
  "mnt-platform-auth",
