@@ -8,7 +8,23 @@ trap 'rm -rf "${scratch}"' EXIT
 cat >"${fake_bin}/docker" <<'DOCKER'
 #!/usr/bin/env bash
 { printf 'docker'; printf ' %q' "$@"; printf '\n'; } >>"${HARNESS_LOG}"
-case "$1" in run) echo fake-container;; cp|exec) exit 0;; port) echo 127.0.0.1:49123;; rm) exit 0;; *) exit 1;; esac
+case "$1" in
+  run) echo fake-container ;;
+  cp)
+    if [[ "$3" == *:/topology.env ]]; then
+      cut -d= -f1 "$2" | sort >"${HARNESS_LOG}.topology-env-keys"
+      printf '%s\n' "$2" >"${HARNESS_LOG}.topology-env-file"
+    fi
+    exit 0 ;;
+  exec)
+    if [[ " $* " == *" /topology.sh "* ]]; then
+      exit "${FAKE_DOCKER_EXEC_STATUS:-0}"
+    fi
+    exit 0 ;;
+  port) echo 127.0.0.1:49123 ;;
+  rm) exit 0 ;;
+  *) exit 1 ;;
+esac
 DOCKER
 cat >"${fake_bin}/openssl" <<'OPENSSL'
 #!/usr/bin/env bash
@@ -36,7 +52,27 @@ grep -Fq -- 'sh -ceu set\ -a\;\ .\ /topology.env\;\ exec\ bash\ /topology.sh' <<
 grep -Fq -- 'MNT_BUCK_POSTGRES_ENV_FILE=' <<<"${buck_calls}"
 ! grep -Fq -- 'secret-' <<<"${calls}"
 ! grep -Fq -- 'postgres://' <<<"${calls}"
+expected_topology_env_keys='MNT_APP_POSTGRES_PASSWORD
+MNT_LEAVE_COMMAND_POSTGRES_PASSWORD
+MNT_ONTOLOGY_COMMAND_POSTGRES_PASSWORD
+MNT_PLATFORM_FORCE_COMMAND_POSTGRES_PASSWORD
+MNT_RT_POSTGRES_PASSWORD
+POSTGRES_ADMIN_PASSWORD
+POSTGRES_ADMIN_USER
+POSTGRES_DB
+POSTGRES_HOST
+POSTGRES_PASSWORD
+POSTGRES_PORT
+POSTGRES_USER'
+[[ "$(cat "${log}.topology-env-keys")" == "${expected_topology_env_keys}" ]]
+! grep -Fq 'MNT_PLATFORM_FORCE_COMMAND_PASSWORD' "${log}.topology-env-keys"
 while IFS= read -r envfile; do [[ ! -e "${envfile}" ]]; done <"${log}.envfiles"
+setup_failure_log="${scratch}/setup-failure.log"
+if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${setup_failure_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_DOCKER_EXEC_STATUS=23 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
+grep -Fq 'docker rm -f' "${setup_failure_log}"
+! grep -q '^buck' "${setup_failure_log}"
+! grep -Fq -- 'secret-' "${setup_failure_log}"
+[[ ! -e "$(cat "${setup_failure_log}.topology-env-file")" ]]
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_BUCK_STATUS=17 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
 while IFS= read -r envfile; do [[ ! -e "${envfile}" ]]; done <"${log}.envfiles"
 signal_log="${scratch}/signal.log"

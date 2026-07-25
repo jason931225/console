@@ -75,32 +75,45 @@ class CommandLineTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.TestCase):
-    def test_requires_the_buck_owned_disposable_postgres_harness(self) -> None:
-        completed = subprocess.CompletedProcess(
-            ["tools/buck/test_needs_postgres.sh"], 0, "buck test passed\n", ""
-        )
+    @staticmethod
+    def successful_output(target: str) -> str:
+        names = gate.guarded_tests_by_target(valid_manifest()).get(target, ())
+        return "\n".join(f"test {name} ... ok" for name in names) + "\n"
 
-        with patch.object(gate, "run", return_value=completed) as run_mock:
+    def test_requires_the_buck_owned_disposable_postgres_harness(self) -> None:
+        completed = [
+            subprocess.CompletedProcess(
+                ["tools/buck/test_needs_postgres.sh"],
+                0,
+                self.successful_output(target),
+                "",
+            )
+            for target in gate.OPERATIONAL_SQLX_TARGETS
+        ]
+
+        with patch.object(gate, "run", side_effect=completed) as run_mock:
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
 
-        self.assertEqual(run_mock.call_count, 1)
-        command = run_mock.call_args.args[0]
-        self.assertEqual(command[0], str(SCRIPT.parents[1] / gate.BUCK_POSTGRES_HARNESS))
-        self.assertEqual(
-            command[1:],
-            [
-                "//tools/buck:pr473-ontology-key-revision-postgres",
-                "//tools/buck:pr473-leave-expand-postgres",
-                "//tools/buck:pr473-apalis-adapter-postgres",
-                "//tools/buck:pr473-apalis-schema-postgres",
-            ],
-        )
-        self.assertNotIn("cargo", command)
-        self.assertNotIn("DATABASE_URL", run_mock.call_args.kwargs["env"])
+        self.assertEqual(run_mock.call_count, len(gate.OPERATIONAL_SQLX_TARGETS))
+        for target, call in zip(gate.OPERATIONAL_SQLX_TARGETS, run_mock.call_args_list):
+            command = call.args[0]
+            self.assertEqual(
+                command,
+                [
+                    str(SCRIPT.parents[1] / gate.BUCK_POSTGRES_HARNESS),
+                    target,
+                    "--test-executor-stdout=-",
+                ],
+            )
+            self.assertNotIn("cargo", command)
+            self.assertNotIn("DATABASE_URL", call.kwargs["env"])
 
     def test_rejects_reusable_ci_database_urls_before_harness_invocation(self) -> None:
-        completed = subprocess.CompletedProcess(["buck"], 0, "", "")
+        completed = [
+            subprocess.CompletedProcess(["buck"], 0, self.successful_output(target), "")
+            for target in gate.OPERATIONAL_SQLX_TARGETS
+        ]
         inherited = {
             "DATABASE_URL": "postgres://superuser@ci/reusable",
             "MNT_APALIS_OWNER_DATABASE_URL": "postgres://owner@ci/reusable",
@@ -108,7 +121,7 @@ class ExecutionTests(unittest.TestCase):
             "MNT_APALIS_ADMIN_DATABASE_URL": "postgres://admin@ci/reusable",
         }
         with patch.dict(os.environ, inherited, clear=False):
-            with patch.object(gate, "run", return_value=completed) as run_mock:
+            with patch.object(gate, "run", side_effect=completed) as run_mock:
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
         environment = run_mock.call_args.kwargs["env"]
@@ -119,6 +132,25 @@ class ExecutionTests(unittest.TestCase):
         completed = subprocess.CompletedProcess(["buck"], 19, "", "")
         with patch.object(gate, "run", return_value=completed):
             with self.assertRaisesRegex(gate.GateError, "Buck2 disposable PostgreSQL"):
+                gate.execute(SCRIPT.parents[1])
+
+    def test_fails_closed_when_a_declared_test_did_not_report_one_success(self) -> None:
+        incomplete = subprocess.CompletedProcess(
+            ["buck"],
+            0,
+            "test migration_0165_upgrades_legacy_sibling_versions_without_tenant_leakage ... ok\n",
+            "",
+        )
+        with patch.object(gate, "run", return_value=incomplete):
+            with self.assertRaisesRegex(gate.GateError, "exactly one successful Rust test result"):
+                gate.execute(SCRIPT.parents[1])
+
+    def test_fails_closed_when_a_declared_test_reports_twice(self) -> None:
+        target = "//tools/buck:pr473-ontology-key-revision-postgres"
+        output = self.successful_output(target)
+        duplicate = subprocess.CompletedProcess(["buck"], 0, output + output, "")
+        with patch.object(gate, "run", return_value=duplicate):
+            with self.assertRaisesRegex(gate.GateError, "exactly one successful Rust test result"):
                 gate.execute(SCRIPT.parents[1])
 
 

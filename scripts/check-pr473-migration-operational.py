@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -52,6 +53,16 @@ OPERATIONAL_SQLX_TARGETS = (
     "//tools/buck:pr473-apalis-adapter-postgres",
     "//tools/buck:pr473-apalis-schema-postgres",
 )
+TARGET_BY_SOURCE_AND_BINARY = {
+    (
+        "backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs",
+        "key_revision_migration_upgrade",
+    ): "//tools/buck:pr473-ontology-key-revision-postgres",
+    (
+        "backend/crates/leave/adapter-postgres/tests/leave_migration_expand_contract.rs",
+        "leave_migration_expand_contract",
+    ): "//tools/buck:pr473-leave-expand-postgres",
+}
 
 
 class GateError(ValueError):
@@ -109,6 +120,29 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise GateError("manifest guarded_tests must equal the 11 exact expected tuples in canonical order")
 
 
+def guarded_tests_by_target(manifest: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    """Map each declared Rust test binary to its required named regressions."""
+    grouped: dict[str, list[str]] = {}
+    for test in manifest["guarded_tests"]:
+        target = TARGET_BY_SOURCE_AND_BINARY.get((test["source"], test["target"]))
+        if target is None:
+            raise GateError("guarded test does not map to a Buck2 PostgreSQL target")
+        grouped.setdefault(target, []).append(test["name"])
+    return {target: tuple(names) for target, names in grouped.items()}
+
+
+def assert_rust_test_results(output: str, names: tuple[str, ...], target: str) -> None:
+    """Require libtest's one-and-only-one successful result for every name."""
+    for name in names:
+        result = re.compile(rf"^test {re.escape(name)} \.\.\. ok$", re.MULTILINE)
+        count = len(result.findall(output))
+        if count != 1:
+            raise GateError(
+                f"Buck2 target {target} must report exactly one successful Rust test result "
+                f"for {name!r}; found {count}"
+            )
+
+
 def run(
     command: list[str], *, cwd: Path, env: dict[str, str], show_stdout: bool = True
 ) -> subprocess.CompletedProcess[str]:
@@ -130,7 +164,7 @@ def run(
 
 
 def execute(repo_root: Path) -> int:
-    load_manifest(repo_root / MANIFEST_PATH)
+    manifest = load_manifest(repo_root / MANIFEST_PATH)
     harness = repo_root / BUCK_POSTGRES_HARNESS
     if not harness.is_file() or not os.access(harness, os.X_OK):
         raise GateError(
@@ -149,11 +183,17 @@ def execute(repo_root: Path) -> int:
     ):
         env.pop(variable, None)
 
-    completed = run([str(harness), *OPERATIONAL_SQLX_TARGETS], cwd=repo_root, env=env)
-    if completed.returncode != 0:
-        raise GateError(
-            f"Buck2 disposable PostgreSQL operational targets exited {completed.returncode}"
+    guarded_by_target = guarded_tests_by_target(manifest)
+    for target in OPERATIONAL_SQLX_TARGETS:
+        completed = run(
+            [str(harness), target, "--test-executor-stdout=-"], cwd=repo_root, env=env
         )
+        if completed.returncode != 0:
+            raise GateError(
+                f"Buck2 disposable PostgreSQL target {target} exited {completed.returncode}"
+            )
+        if target in guarded_by_target:
+            assert_rust_test_results(completed.stdout, guarded_by_target[target], target)
     print(
         "PR 473 migration operational gate passed: "
         "Buck2 disposable PostgreSQL harness ran the 3 exact Apalis database tests "

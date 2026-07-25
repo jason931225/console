@@ -64,7 +64,7 @@ chmod 600 "${container_env_file}"
   printf 'POSTGRES_DB=%s\nPOSTGRES_USER=mnt_buck_admin\nPOSTGRES_PASSWORD=%s\n' "${database}" "${admin_password}"
   printf 'POSTGRES_HOST=127.0.0.1\nPOSTGRES_PORT=5432\nPOSTGRES_ADMIN_USER=mnt_buck_admin\nPOSTGRES_ADMIN_PASSWORD=%s\n' "${admin_password}"
   printf 'MNT_APP_POSTGRES_PASSWORD=%s\nMNT_RT_POSTGRES_PASSWORD=%s\n' "${app_password}" "${runtime_password}"
-  printf 'MNT_LEAVE_COMMAND_POSTGRES_PASSWORD=%s\nMNT_ONTOLOGY_COMMAND_POSTGRES_PASSWORD=%s\nMNT_PLATFORM_FORCE_COMMAND_PASSWORD=%s\n' "${leave_command_password}" "${ontology_command_password}" "${platform_force_command_password}"
+  printf 'MNT_LEAVE_COMMAND_POSTGRES_PASSWORD=%s\nMNT_ONTOLOGY_COMMAND_POSTGRES_PASSWORD=%s\nMNT_PLATFORM_FORCE_COMMAND_POSTGRES_PASSWORD=%s\n' "${leave_command_password}" "${ontology_command_password}" "${platform_force_command_password}"
 } >"${container_env_file}"
 
 docker run -d --rm --name "${container_name}" -p 127.0.0.1::5432 \
