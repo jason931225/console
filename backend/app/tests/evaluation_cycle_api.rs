@@ -1,12 +1,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! STORY-EVALUATION-001 end-to-end contract for the dark-landed evaluation
+//! STORY-EVALUATION-001 end-to-end contract for the authenticated evaluation
 //! console (CAP-EVALUATION-CONSOLE).
 //!
-//! The evaluation router is mounted directly (not through `build_router` —
-//! the module lands dark; the openapi drift gate couples `build_router` mounts
-//! with `openapi.yaml`, which the consolidation integrator owns). Every HTTP
-//! request executes as the genuine `mnt_rt` runtime role (NOSUPERUSER,
-//! NOBYPASSRLS) under FORCE RLS, never the BYPASSRLS superuser the default
+//! The first test exercises `build_router` so route composition and JWT
+//! authentication cannot regress. The workflow story below mounts the same
+//! evaluation router against an `mnt_rt` pool to exercise FORCE RLS
+//! (NOSUPERUSER, NOBYPASSRLS), never the BYPASSRLS superuser the default
 //! `#[sqlx::test]` pool connects as. Seed helpers live here rather than in the
 //! rest crate so the audit-coverage gate does not misread them as unaudited
 //! mutations.
@@ -42,7 +41,11 @@ async fn evaluation_routes_are_mounted_by_the_authenticated_app_router(pool: PgP
     );
 
     let (status, body) = send(&router, "GET", CYCLES, None, None).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "unmounted routes return 404: {body}");
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "app router must authenticate evaluation routes: {body}"
+    );
     assert_eq!(body["error"]["code"], "unauthorized");
 
     let (status, page) = send(&router, "GET", CYCLES, Some(&fixture.admin), None).await;
