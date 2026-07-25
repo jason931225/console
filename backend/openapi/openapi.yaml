@@ -1155,6 +1155,12 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/Uuid'
+      - name: site_id
+        in: query
+        required: false
+        description: Restrict to tickets linked to one customer site (the field-console queue).
+        schema:
+          $ref: '#/components/schemas/Uuid'
       - name: include_untriaged
         in: query
         required: false
@@ -15077,6 +15083,204 @@ paths:
       parameters: [{ name: count_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CycleCountVersionRequest' } } } }
       responses: { '200': { description: Cancelled cycle count, content: { application/json: { schema: { $ref: '#/components/schemas/CycleCountDetail' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/v1/support/tickets/{id}/link:
+    post:
+      tags:
+      - support
+      operationId: linkSupportTicket
+      summary: Bind a support ticket to the field object chain (customer site and/or dispatched work order)
+      description: Requires assignee_manage on the ticket branch (untriaged tickets require cross-branch authority). Linking
+        a site to an untriaged CUSTOMER ticket also sets its branch, and customer_id is denormalized from the site. A linked
+        work order must be dispatched to the ticket's linked site. Each body field distinguishes an absent field (leave the
+        link untouched) from an explicit null (clear the link).
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkSupportTicketRequest'
+      responses:
+        '200':
+          description: The updated ticket summary carrying the new links.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          description: JWT verification is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /api/v1/support/tickets/{id}/acceptance:
+    post:
+      tags:
+      - support
+      operationId: recordSupportTicketAcceptance
+      summary: Record the customer's acceptance verdict for a RESOLVED ticket (audited closure evidence)
+      description: Requires assignee_manage on the ticket branch and an Idempotency-Key header. CUSTOMER_ACCEPTED drives
+        RESOLVED to CLOSED; CUSTOMER_DECLINED requires a note, drives RESOLVED to IN_PROGRESS, and the note becomes a
+        customer-visible comment. A replay with the same key and the same request returns the stored acceptance; the same
+        key with a different request is a conflict. accepted_by is a business fact and is never logged.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordSupportTicketAcceptanceRequest'
+      responses:
+        '201':
+          description: The recorded acceptance, or the stored acceptance on an idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketAcceptance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          description: JWT verification is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /api/v1/field/sites:
+    get:
+      tags:
+      - field
+      operationId: listFieldSites
+      summary: List branch-scoped customer sites with their issue, visit, and SLA rollups
+      description: The field read gate is work_order_read_all, checked server-side because the overview carries customer
+        contact and geo data. Every count derives from the same aggregation as the rows.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: Substring match on site name or customer name.
+        schema:
+          type: string
+      - name: customer_id
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: sla
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/FieldSlaState'
+      - name: limit
+        in: query
+        required: false
+        description: Page size; clamped server-side to 1..=100.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+      - name: cursor
+        in: query
+        required: false
+        description: Keyset cursor — the site id of the previous page's last row.
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: A keyset page of field sites visible in the principal's branch scope, plus the unpaged total for the
+            same filters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldSitePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: JWT verification is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /api/v1/field/sites/{id}:
+    get:
+      tags:
+      - field
+      operationId: getFieldSite
+      summary: Get a field site with its SLA rollup and traversable ticket, work-order, attendance, and acceptance history
+      description: Scope resolution runs before the feature check, so an out-of-scope site is a 404 and never a 403. Each
+        history list is capped at 50, most relevant first.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Field site detail with its object chain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldSiteDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: JWT verification is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
 components:
   securitySchemes:
     basicAuth:
@@ -18004,6 +18208,11 @@ components:
       - updated_at
       - resolved_at
       - closed_at
+      - site_id
+      - site_name
+      - customer_id
+      - customer_name
+      - work_order_id
       properties:
         id:
           $ref: '#/components/schemas/Uuid'
@@ -18052,6 +18261,32 @@ components:
           - string
           - 'null'
           format: date-time
+        site_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Linked customer site (the field object chain); null until the ticket is linked.
+        site_name:
+          type:
+          - string
+          - 'null'
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Denormalized from the linked site on link; null until the ticket is linked.
+        customer_name:
+          type:
+          - string
+          - 'null'
+        work_order_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Work order dispatched for the visit; null until the ticket is linked.
     SupportTicketComment:
       type: object
       required:
@@ -30529,3 +30764,366 @@ components:
       additionalProperties: false
       required: [expectedVersion, decision]
       properties: { expectedVersion: { type: integer, minimum: 1 }, decision: { type: string, enum: [APPROVE, REJECT] }, memo: { type: string, nullable: true }, idempotencyKey: { type: string, nullable: true, minLength: 16, maxLength: 200 } }
+    FieldSlaState:
+      type: string
+      enum:
+      - OK
+      - AT_RISK
+      - BREACHED
+      description: Deterministic per-site SLA state over OPEN/IN_PROGRESS/ON_HOLD tickets — BREACHED when any due_at is
+        past, else AT_RISK when any due_at falls within 24 hours, else OK.
+    FieldSiteRow:
+      type: object
+      required:
+      - site_id
+      - site_name
+      - branch_id
+      - customer_id
+      - customer_name
+      - address
+      - latitude
+      - longitude
+      - open_ticket_count
+      - breached_ticket_count
+      - next_due_at
+      - active_work_order_count
+      - last_arrival_at
+      - sla
+      properties:
+        site_id:
+          $ref: '#/components/schemas/Uuid'
+        site_name:
+          type: string
+        branch_id:
+          $ref: '#/components/schemas/Uuid'
+        customer_id:
+          $ref: '#/components/schemas/Uuid'
+        customer_name:
+          type: string
+        address:
+          type:
+          - string
+          - 'null'
+        latitude:
+          type:
+          - number
+          - 'null'
+          format: double
+        longitude:
+          type:
+          - number
+          - 'null'
+          format: double
+        open_ticket_count:
+          type: integer
+          format: int64
+          description: Tickets in OPEN/IN_PROGRESS/ON_HOLD linked to the site.
+        breached_ticket_count:
+          type: integer
+          format: int64
+          description: Open tickets whose SLA due_at has already passed.
+        next_due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        active_work_order_count:
+          type: integer
+          format: int64
+          description: Work orders for the site in a non-terminal status.
+        last_arrival_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        sla:
+          $ref: '#/components/schemas/FieldSlaState'
+    FieldSitePage:
+      type: object
+      required:
+      - items
+      - next_cursor
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldSiteRow'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Id to pass as `cursor` for the next page, or null on the last page.
+        total:
+          type: integer
+          format: int64
+    FieldSiteSummary:
+      type: object
+      required:
+      - id
+      - name
+      - branch_id
+      - customer_id
+      - customer_name
+      - address
+      - province
+      - city
+      - postal_code
+      - latitude
+      - longitude
+      - geofence_radius_m
+      - contact_name
+      - contact_phone
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        branch_id:
+          $ref: '#/components/schemas/Uuid'
+        customer_id:
+          $ref: '#/components/schemas/Uuid'
+        customer_name:
+          type: string
+        address:
+          type:
+          - string
+          - 'null'
+        province:
+          type:
+          - string
+          - 'null'
+        city:
+          type:
+          - string
+          - 'null'
+        postal_code:
+          type:
+          - string
+          - 'null'
+        latitude:
+          type:
+          - number
+          - 'null'
+          format: double
+        longitude:
+          type:
+          - number
+          - 'null'
+          format: double
+        geofence_radius_m:
+          type:
+          - number
+          - 'null'
+          format: double
+        contact_name:
+          type:
+          - string
+          - 'null'
+        contact_phone:
+          type:
+          - string
+          - 'null'
+    FieldSlaSummary:
+      type: object
+      required:
+      - state
+      - open
+      - breached
+      - next_due_at
+      - resolved_within_sla_90d
+      - resolved_breached_90d
+      properties:
+        state:
+          $ref: '#/components/schemas/FieldSlaState'
+        open:
+          type: integer
+          format: int64
+        breached:
+          type: integer
+          format: int64
+        next_due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        resolved_within_sla_90d:
+          type: integer
+          format: int64
+        resolved_breached_90d:
+          type: integer
+          format: int64
+    FieldWorkOrderRef:
+      type: object
+      required:
+      - id
+      - request_no
+      - status
+      - priority
+      - target_due_at
+      - report_submitted_at
+      - result_type
+      - created_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        request_no:
+          type: string
+        status:
+          type: string
+          description: Workorder-crate status vocabulary, read-only here.
+        priority:
+          type: string
+        target_due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        report_submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        result_type:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    FieldAttendanceEvent:
+      type: object
+      required:
+      - user_id
+      - user_name
+      - work_order_id
+      - kind
+      - occurred_at
+      properties:
+        user_id:
+          $ref: '#/components/schemas/Uuid'
+        user_name:
+          type:
+          - string
+          - 'null'
+          description: Same-org display-name lookup; null when the account no longer exists.
+        work_order_id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          type: string
+          description: Compliance attendance vocabulary, read-only here — ARRIVAL or DEPARTURE.
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+    FieldSiteDetail:
+      type: object
+      required:
+      - site
+      - sla
+      - tickets
+      - work_orders
+      - attendance
+      - acceptances
+      properties:
+        site:
+          $ref: '#/components/schemas/FieldSiteSummary'
+        sla:
+          $ref: '#/components/schemas/FieldSlaSummary'
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportTicketSummary'
+        work_orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldWorkOrderRef'
+        attendance:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldAttendanceEvent'
+        acceptances:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportTicketAcceptance'
+    LinkSupportTicketRequest:
+      type: object
+      description: At least one of site_id / work_order_id must be present. An absent field leaves that link untouched; an
+        explicit null clears it.
+      properties:
+        site_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        work_order_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    SupportTicketAcceptanceKind:
+      type: string
+      enum:
+      - CUSTOMER_ACCEPTED
+      - CUSTOMER_DECLINED
+    SupportTicketAcceptanceChannel:
+      type: string
+      enum:
+      - IN_PERSON
+      - PHONE
+      - EMAIL
+      - MESSENGER
+    RecordSupportTicketAcceptanceRequest:
+      type: object
+      required:
+      - kind
+      - channel
+      - accepted_by
+      properties:
+        kind:
+          $ref: '#/components/schemas/SupportTicketAcceptanceKind'
+        channel:
+          $ref: '#/components/schemas/SupportTicketAcceptanceChannel'
+        accepted_by:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Customer-side acknowledger name (business fact, never logged).
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+          description: Required when kind is CUSTOMER_DECLINED; it becomes the customer-visible comment on the reopen.
+    SupportTicketAcceptance:
+      type: object
+      required:
+      - id
+      - ticket_id
+      - kind
+      - channel
+      - accepted_by
+      - note
+      - recorded_by_user_id
+      - recorded_by_name
+      - occurred_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        ticket_id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          $ref: '#/components/schemas/SupportTicketAcceptanceKind'
+        channel:
+          $ref: '#/components/schemas/SupportTicketAcceptanceChannel'
+        accepted_by:
+          type: string
+        note:
+          type:
+          - string
+          - 'null'
+        recorded_by_user_id:
+          $ref: '#/components/schemas/Uuid'
+        recorded_by_name:
+          type:
+          - string
+          - 'null'
+          description: Recorder display name via a same-org lookup; null when the account no longer exists.
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
