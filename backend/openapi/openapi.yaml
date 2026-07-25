@@ -799,6 +799,24 @@ paths:
           type: array
           items:
             $ref: '#/components/schemas/PriorityLevel'
+      - name: maintenance_type
+        in: query
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceType'
+      - name: maintenance_cause
+        in: query
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceCause'
       - name: assigned_to
         in: query
         required: false
@@ -815,6 +833,12 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/Uuid'
+      - name: equipment_id
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Uuid'
+        description: Restricts to one asset's orders (asset → work-order history).
       - name: branch_id
         in: query
         required: false
@@ -15281,6 +15305,172 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
+  /api/v1/work-orders/{workOrderId}/settlement:
+    get:
+      tags:
+      - maintenance
+      operationId: getWorkOrderSettlement
+      summary: Fetch the live (non-VOID) cost settlement of a work order
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/WorkOrderId'
+      responses:
+        '200':
+          description: The live cost settlement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - maintenance
+      operationId: createWorkOrderSettlement
+      summary: Open a DRAFT cost settlement on a report-submitted, admin-review, or final-completed order
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/WorkOrderId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+        description: Replaying the same key with an identical body returns the existing settlement without a second audit
+          event; the same key with a different body is a 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSettlementRequest'
+      responses:
+        '201':
+          description: The draft settlement, also returned on an idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/settlements/{settlementId}/submit:
+    post:
+      tags:
+      - maintenance
+      operationId: submitSettlement
+      summary: Submit a DRAFT settlement for review (creator or completion reviewer)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: settlementId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The submitted settlement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/settlements/{settlementId}/review:
+    post:
+      tags:
+      - maintenance
+      operationId: reviewSettlement
+      summary: Four-eyes review of a SUBMITTED settlement; the reviewer must differ from the submitter
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: settlementId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewSettlementRequest'
+      responses:
+        '200':
+          description: The reviewed settlement, APPROVED or RETURNED back to DRAFT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/settlements/{settlementId}/void:
+    post:
+      tags:
+      - maintenance
+      operationId: voidSettlement
+      summary: Void a DRAFT or SUBMITTED settlement (completion reviewer holding an admin-tier role; reason required)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: settlementId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidSettlementRequest'
+      responses:
+        '200':
+          description: The voided settlement; VOID frees the one-live-settlement slot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 components:
   securitySchemes:
     basicAuth:
@@ -17660,6 +17850,10 @@ components:
           type: string
         target_due_at:
           $ref: '#/components/schemas/Timestamp'
+        maintenance_type:
+          $ref: '#/components/schemas/MaintenanceType'
+        maintenance_cause:
+          $ref: '#/components/schemas/MaintenanceCause'
     UpdateWorkOrderIntakeRequest:
       type: object
       minProperties: 1
@@ -17668,6 +17862,10 @@ components:
           type: string
         customer_request:
           type: string
+        maintenance_type:
+          $ref: '#/components/schemas/MaintenanceType'
+        maintenance_cause:
+          $ref: '#/components/schemas/MaintenanceCause'
     AssignWorkOrderRequest:
       type: object
       required:
@@ -21188,6 +21386,8 @@ components:
       - status
       - priority
       - result_type
+      - maintenance_type
+      - maintenance_cause
       - target_due_at
       - created_at
       - updated_at
@@ -21210,6 +21410,14 @@ components:
           $ref: '#/components/schemas/PriorityLevel'
         result_type:
           $ref: '#/components/schemas/WorkResultType'
+        maintenance_type:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/MaintenanceType'
+        maintenance_cause:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/MaintenanceCause'
         target_due_at:
           type:
           - string
@@ -21285,6 +21493,8 @@ components:
       - p1_count
       - overdue_open_count
       - unassigned_count
+      - preventive_on_time_rate
+      - mttr_minutes
       properties:
         total_count:
           type: integer
@@ -21298,17 +21508,41 @@ components:
         unassigned_count:
           type: integer
           format: int64
+        preventive_on_time_rate:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Share (0..1) of closed preventive orders that reached FINAL_COMPLETED no later than their target due
+            date; null when the filtered set has no basis.
+        mttr_minutes:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Mean minutes from the first IN_PROGRESS transition to the first REPORT_SUBMITTED transition (OT-13
+            MTTR); null when no order has completed that span.
     WorkOrderLensFacets:
       type: object
       required:
       - status
       - priority
+      - maintenance_type
+      - maintenance_cause
       properties:
         status:
           type: array
           items:
             $ref: '#/components/schemas/WorkOrderFacetBucket'
         priority:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderFacetBucket'
+        maintenance_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderFacetBucket'
+        maintenance_cause:
           type: array
           items:
             $ref: '#/components/schemas/WorkOrderFacetBucket'
@@ -21592,6 +21826,7 @@ components:
         - approval_line
         - status_history
         - evidence
+        - settlement
         properties:
           symptom:
             type: string
@@ -21641,6 +21876,11 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/EvidenceSummary'
+          settlement:
+            description: The live (non-VOID) cost settlement of this order, if one exists.
+            oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementSummary'
     SyncBatchRequest:
       type: object
       required:
@@ -22743,6 +22983,8 @@ components:
       - status
       - priority
       - result_type
+      - maintenance_type
+      - maintenance_cause
       - evidence_verified
       properties:
         id:
@@ -22764,6 +23006,14 @@ components:
           $ref: '#/components/schemas/PriorityLevel'
         result_type:
           $ref: '#/components/schemas/WorkResultType'
+        maintenance_type:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/MaintenanceType'
+        maintenance_cause:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/MaintenanceCause'
         evidence_verified:
           type: boolean
     TargetChangeRequestSummary:
@@ -31126,4 +31376,168 @@ components:
           - 'null'
           description: Recorder display name via a same-org lookup; null when the account no longer exists.
         occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+    MaintenanceType:
+      type: string
+      description: Typed maintenance classification (유형).
+      enum: [EMERGENCY, CORRECTIVE, PREVENTIVE, INSPECTION]
+    MaintenanceCause:
+      type: string
+      description: Typed maintenance cause (원인).
+      enum: [BREAKDOWN, RETURN_PREP, SCHEDULED, INSPECTION_FINDING, OTHER]
+    SettlementStatus:
+      type: string
+      description: Cost-settlement lifecycle (정산 → 전표). VOID is terminal and frees the one-live-settlement slot.
+      enum: [DRAFT, SUBMITTED, APPROVED, VOID]
+    SettlementLineKind:
+      type: string
+      enum: [LABOR, PART, OUTSOURCE, OTHER]
+    SettlementLineRequest:
+      type: object
+      required:
+      - kind
+      - label
+      - amount_krw
+      properties:
+        kind:
+          $ref: '#/components/schemas/SettlementLineKind'
+        label:
+          type: string
+          minLength: 1
+        amount_krw:
+          type: integer
+          format: int64
+          minimum: 0
+        source_ref:
+          type: string
+          description: PO/IV/outsource code when known.
+        sort_order:
+          type: integer
+          format: int32
+          description: Defaults to the line's position in the array.
+    CreateSettlementRequest:
+      type: object
+      required:
+      - lines
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SettlementLineRequest'
+        note:
+          type: string
+    ReviewSettlementRequest:
+      type: object
+      required:
+      - decision
+      properties:
+        decision:
+          type: string
+          enum: [APPROVED, RETURNED]
+        comment:
+          type: string
+          description: Required (non-empty after trim) when decision is RETURNED.
+    VoidSettlementRequest:
+      type: object
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+    SettlementLineSummary:
+      type: object
+      required:
+      - id
+      - kind
+      - label
+      - amount_krw
+      - source_ref
+      - sort_order
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          $ref: '#/components/schemas/SettlementLineKind'
+        label:
+          type: string
+        amount_krw:
+          type: integer
+          format: int64
+        source_ref:
+          type:
+          - string
+          - 'null'
+        sort_order:
+          type: integer
+          format: int32
+    SettlementSummary:
+      type: object
+      required:
+      - id
+      - work_order_id
+      - branch_id
+      - status
+      - total_amount_krw
+      - voucher_ref
+      - note
+      - lines
+      - created_by
+      - submitted_by
+      - submitted_at
+      - approved_by
+      - approved_at
+      - created_at
+      - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        work_order_id:
+          $ref: '#/components/schemas/Uuid'
+        branch_id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          $ref: '#/components/schemas/SettlementStatus'
+        total_amount_krw:
+          type: integer
+          format: int64
+        voucher_ref:
+          type:
+          - string
+          - 'null'
+          description: Finance journal/voucher code once posted (finance-gl lane).
+        note:
+          type:
+          - string
+          - 'null'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementLineSummary'
+        created_by:
+          $ref: '#/components/schemas/Uuid'
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        approved_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
           $ref: '#/components/schemas/Timestamp'
