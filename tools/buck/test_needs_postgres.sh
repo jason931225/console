@@ -6,11 +6,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 postgres_image="postgres:18.4@sha256:65f70a152846cf504dff86e807007e9aeac98c3aeb7b62541b2c55ab9d264e56"
 container_name="mnt-buck-postgres-${USER:-user}-$$"
 buck_bin="${MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK:-${repo_root}/tools/buck2}"
-safe_user="${USER:-user}"
-safe_user="${safe_user//[^[:alnum:]_.-]/_}"
-repo_hash="$(printf '%s' "${repo_root}" | cksum | awk '{print $1}')"
-isolation_name="${MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR:-mnt-buck-postgres-${safe_user}-${repo_hash}}"
-if [[ ! "${isolation_name}" =~ ^[[:alnum:]_.-]+$ ]]; then
+isolation_name="${MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR:-}"
+if [[ -n "${isolation_name}" && ! "${isolation_name}" =~ ^[[:alnum:]_.-]+$ ]]; then
   echo "buck-postgres: isolation name must contain only letters, digits, dot, underscore, or dash" >&2
   exit 1
 fi
@@ -106,8 +103,15 @@ test_executor_args=(--env "MNT_BUCK_POSTGRES_ENV_FILE=${test_env_file}" --env RU
 if [[ -n "${exact_test}" ]]; then
   test_executor_args+=(--env "MNT_BUCK_RUST_TEST_EXACT=${exact_test}")
 fi
-BUCK_ISOLATION_DIR="${isolation_name}" "${buck_bin}" test --local-only "$@" \
-  -- "${test_executor_args[@]}" &
+# Reuse the caller's/default Buck daemon so PostgreSQL integration tests share
+# the same-worktree analysis and compile cache. Callers that need an isolated
+# daemon can still opt in explicitly without forcing every run cold.
+if [[ -n "${isolation_name}" ]]; then
+  BUCK_ISOLATION_DIR="${isolation_name}" "${buck_bin}" test --local-only "$@" \
+    -- "${test_executor_args[@]}" &
+else
+  "${buck_bin}" test --local-only "$@" -- "${test_executor_args[@]}" &
+fi
 active_buck_pid="$!"
 if wait "${active_buck_pid}"; then
   buck_status=0

@@ -33,6 +33,7 @@ OPENSSL
 cat >"${scratch}/buck" <<'BUCK'
 #!/usr/bin/env bash
 { printf 'buck'; printf ' %q' "$@"; printf '\n'; } >>"${HARNESS_LOG}"
+printf 'buck-isolation %s\n' "${BUCK_ISOLATION_DIR-<unset>}" >>"${HARNESS_LOG}"
 env_file=""; for arg in "$@"; do case "${arg}" in MNT_BUCK_POSTGRES_ENV_FILE=*) env_file="${arg#*=}";; esac; done
 [[ -f "${env_file}" && "$(stat -f '%Lp' "${env_file}")" == 600 ]]
 grep -Fq 'DATABASE_URL=postgres://mnt_buck_admin:' "${env_file}"
@@ -46,6 +47,7 @@ BUCK
 chmod +x "${fake_bin}/docker" "${fake_bin}/openssl" "${scratch}/buck"
 PATH="${fake_bin}:${PATH}" HARNESS_LOG="${log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
 calls="$(cat "${log}")"; buck_calls="$(grep '^buck' "${log}")"
+grep -Fxq 'buck-isolation <unset>' "${log}"
 grep -Fq -- '--env-file ' <<<"${calls}"
 grep -Fq -- ':/topology.env' <<<"${calls}"
 grep -Fq -- 'sh -ceu set\ -a\;\ .\ /topology.env\;\ exec\ bash\ /topology.sh' <<<"${calls}"
@@ -71,6 +73,12 @@ exact_log="${scratch}/exact.log"
 PATH="${fake_bin}:${PATH}" HARNESS_LOG="${exact_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT=one_exact_test "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
 grep -Fq 'MNT_BUCK_RUST_TEST_EXACT=one_exact_test' "${exact_log}"
 ! grep -Fq -- 'secret-' "${exact_log}"
+isolation_log="${scratch}/isolation.log"
+PATH="${fake_bin}:${PATH}" HARNESS_LOG="${isolation_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR=postgres-proof "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
+grep -Fxq 'buck-isolation postgres-proof' "${isolation_log}"
+invalid_isolation_log="${scratch}/invalid-isolation.log"
+if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${invalid_isolation_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR='bad isolation' "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
+! grep -q '^buck' "${invalid_isolation_log}" 2>/dev/null
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${exact_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT='bad test' "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
 setup_failure_log="${scratch}/setup-failure.log"
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${setup_failure_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_DOCKER_EXEC_STATUS=23 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
