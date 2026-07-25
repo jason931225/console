@@ -28,6 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: ./.github/actions/setup-trivy
+      - name: Verify canonical Trivy exception projection
+        run: node scripts/generate-trivy-dev-codegen-exceptions.mjs --check
       - name: Trivy filesystem scan (vuln + secret, dev/codegen exceptions only)
         run: |
           trivy fs --scanners vuln,secret --ignore-unfixed \

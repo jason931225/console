@@ -1440,6 +1440,14 @@ export function evaluateWorkflowHardeningChecks(readText) {
     "security workflow portable gate: scoped Trivy exceptions",
     "security workflow must scope full-scan Trivy exceptions to the checked-in YAML policy",
   );
+  requirement(
+    result,
+    workflowHasRun(securityWorkflow, [
+      /node scripts\/generate-trivy-dev-codegen-exceptions\.mjs --check/,
+    ]),
+    "security workflow portable gate: canonical Trivy exception projection",
+    "security workflow must verify canonical Trivy exception parity before the full-scan YAML policy is used",
+  );
 
   return result;
 }

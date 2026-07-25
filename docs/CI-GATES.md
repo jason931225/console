@@ -908,5 +908,8 @@ fail-closed: every entry must match the exact GHSA, package, installed version,
 and lockfile path; it must name an owner/tracker/rationale, be `dev-codegen`
 scoped, and expire within 30 days. A stale entry, an unmatched advisory, or any
 new HIGH/CRITICAL result fails CI. The full Trivy filesystem scan uses only the
-matching, explicit `security/trivy-dev-codegen-exceptions.yaml`; production npm
-audit is intentionally unfiltered.
+matching, explicit `security/trivy-dev-codegen-exceptions.yaml`. That YAML is a
+byte-for-byte deterministic projection of the canonical JSON registry and CI
+verifies the projection immediately before passing it to Trivy, so rogue,
+widened, missing, stale, or expiry-mismatched YAML entries fail before scanning.
+Production npm audit is intentionally unfiltered.

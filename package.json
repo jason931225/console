@@ -84,7 +84,9 @@
     "kic:generate-nhis-loss-report-fixture": "node scripts/korean-connectivity/nhis-edi-loss-report.mjs",
     "kic:local-cert-login-fixture": "node scripts/korean-connectivity/local-certificate-agent.mjs",
     "check:node-audit-exceptions": "node scripts/check-node-audit-exceptions.mjs",
-    "test:node-audit-exceptions": "node --test scripts/check-node-audit-exceptions.test.mjs"
+    "test:node-audit-exceptions": "node --test scripts/check-node-audit-exceptions.test.mjs",
+    "check:trivy-dev-codegen-exceptions": "node scripts/generate-trivy-dev-codegen-exceptions.mjs --check",
+    "test:trivy-dev-codegen-exceptions": "node --test scripts/generate-trivy-dev-codegen-exceptions.test.mjs"
   },
   "dependencies": {
     "pg": "8.21.0"

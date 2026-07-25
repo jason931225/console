@@ -878,6 +878,8 @@ jobs:
           trivy config --severity HIGH,CRITICAL --exit-code 1 "$RUNNER_TEMP/rendered-k8s"
   filesystem:
     steps:
+      - name: Verify canonical Trivy exception projection
+        run: node scripts/generate-trivy-dev-codegen-exceptions.mjs --check
       - name: Trivy filesystem scan
         run: trivy fs --scanners vuln,secret --ignore-unfixed --ignorefile security/trivy-dev-codegen-exceptions.yaml --severity HIGH,CRITICAL --exit-code 1 .
   rust-advisories:

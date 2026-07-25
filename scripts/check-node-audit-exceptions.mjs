@@ -25,7 +25,7 @@ const failures = [];
 const used = new Set();
 for (const [index, entry] of registry.entries.entries()) {
   const label = `exception[${index}]`;
-  for (const key of ["advisory", "package", "version", "path", "scope", "owner", "tracking", "rationale", "expires_on"]) {
+  for (const key of ["advisory", "package", "version", "path", "scope", "owner", "tracking", "rationale", "trivy_statement", "expires_on"]) {
     if (typeof entry[key] !== "string" || !entry[key].trim()) failures.push(`${label} missing ${key}`);
   }
   if (entry.scope !== "dev-codegen") failures.push(`${label} must be dev-codegen scoped`);
