@@ -31,6 +31,16 @@ final class CameraCaptureUITests: FieldUITestCase {
         capture.tap()
         app.tap()
 
+        let systemPermissionAlert = app.alerts.firstMatch
+        let permissionResolutionDeadline = Date().addingTimeInterval(5)
+        while systemPermissionAlert.exists && Date() < permissionResolutionDeadline {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertFalse(
+            systemPermissionAlert.exists,
+            "The system camera permission alert must resolve before the app-owned camera controls are used."
+        )
+
         // The Simulator can deterministically reach a preview, a denied or
         // unavailable state, or leave the system prompt pending. The app-owned
         // pending state is terminal only when it preserves the Cancel escape.
@@ -65,6 +75,7 @@ final class CameraCaptureUITests: FieldUITestCase {
             return
         }
 
+        XCTAssertTrue(cancel.exists, "Every camera terminal state must retain the Cancel escape.")
         cancel.tap()
         XCTAssertTrue(
             cancel.waitForNonExistence(timeout: 5),

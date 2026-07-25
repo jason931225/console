@@ -14,7 +14,8 @@
 //! users / non-terminal equipment); the DB constraints remain the second net.
 use mnt_governance_domain::{Dependent, OnDelete, assess_impact};
 use mnt_kernel_core::{
-    AuditAction, AuditEvent, ErrorKind, KernelError, OrgId, TraceContext, UserId,
+    AuditAction, AuditClassification, AuditEvent, ErrorKind, KernelError, OrgId, TraceContext,
+    UserId,
 };
 use mnt_orgchange_domain::{
     ApprovalRoleKey, ApprovalStepView, OrgChangeDetail, OrgChangeEventView, OrgChangeKind,
@@ -22,7 +23,9 @@ use mnt_orgchange_domain::{
     OrgProposalOp, PreflightBlocker, PreflightReport, PreflightWarning, SettlementItemView,
     SettlementKey, StepDecision, TargetKind, validate_proposal,
 };
-use mnt_platform_db::{DbError, with_audits, with_org_conn};
+use mnt_platform_db::{
+    DbError, PeriodLockDomain, assert_period_open, with_audit, with_audits, with_org_conn,
+};
 use mnt_platform_request_context::current_org;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -36,6 +39,13 @@ pub enum PgOrgChangeError {
     Db(#[from] DbError),
     #[error(transparent)]
     Domain(#[from] KernelError),
+    /// §3.9.1 변경 동결 창: a live org mutation was refused because the period
+    /// it takes effect in is closed. Distinct from `Domain` so the caller can
+    /// record the refused attempt (`record_freeze_refusal`) before the 409
+    /// leaves the store — the business transaction, and any audit row inside
+    /// it, has already rolled back by then.
+    #[error(transparent)]
+    Frozen(KernelError),
 }
 
 impl From<sqlx::Error> for PgOrgChangeError {
@@ -48,7 +58,7 @@ impl PgOrgChangeError {
     #[must_use]
     pub fn kind(&self) -> ErrorKind {
         match self {
-            Self::Domain(e) => e.kind,
+            Self::Domain(e) | Self::Frozen(e) => e.kind,
             Self::Db(DbError::Sqlx(sqlx::Error::RowNotFound)) => ErrorKind::NotFound,
             Self::Db(DbError::Sqlx(sqlx::Error::Database(e)))
                 // unique violation (idempotency/code race), CHECK violation
@@ -64,7 +74,7 @@ impl PgOrgChangeError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
-            Self::Domain(e) => e.message.clone(),
+            Self::Domain(e) | Self::Frozen(e) => e.message.clone(),
             Self::Db(DbError::Sqlx(sqlx::Error::Database(e))) => match e.code().as_deref() {
                 Some("23514") => "기안자는 자신의 조직 개편을 승인할 수 없습니다.".to_owned(),
                 Some("23505") => "a conflicting record already exists".to_owned(),
@@ -492,6 +502,7 @@ async fn compute_preflight(
     kind: OrgChangeKind,
     target: &OrgChangeTarget,
     proposal: &[OrgProposalOp],
+    effective_date: Date,
     now: OffsetDateTime,
 ) -> Result<PreflightReport, PgOrgChangeError> {
     let mut blockers = Vec::new();
@@ -581,20 +592,41 @@ async fn compute_preflight(
         dependents_total += headcount;
     }
 
-    // Design §3.9.1 review chips: imperative reminders, not computed claims —
-    // the open-docs / freeze-window signal reads are registered follow-ups.
+    // Design §3.9.1 review chip: an imperative reminder, not a computed claim —
+    // the open-docs signal read is a registered follow-up.
     warnings.push(PreflightWarning {
         code: "OPEN_DOCS_REVIEW".to_owned(),
         label: "진행 중 공고·결재 종결 필요".to_owned(),
         dependent_kind: None,
         count: None,
     });
-    warnings.push(PreflightWarning {
-        code: "FREEZE_WINDOW_REVIEW".to_owned(),
-        label: "급여 마감·회계 결산 동결창 확인".to_owned(),
-        dependent_kind: None,
-        count: None,
-    });
+    // §3.9.1 동결 창 — computed, not a reminder: literally the read
+    // `assert_change_window_open` enforces at apply time, so the chip and the
+    // refusal can never disagree. Surfaced early so the approval chain is not
+    // spent on a change effectuate would refuse. It stays a warning rather than
+    // a blocker because a lock can be lifted before the effective date arrives;
+    // the hard stop lives at effectuate.
+    let mut frozen = Vec::new();
+    for domain in FREEZE_DOMAINS {
+        match assert_period_open(tx, domain, effective_date).await {
+            Ok(()) => {}
+            Err(refusal) if refusal.kind == ErrorKind::Conflict => {
+                frozen.push(freeze_domain_label(domain));
+            }
+            Err(other) => return Err(other.into()),
+        }
+    }
+    // One chip however many domains block: the console keys this list by `code`
+    // (`web/src/console/org/OrgChangeModal.tsx`), so a second row under the same
+    // code is a duplicate React key, not a second signal.
+    if !frozen.is_empty() {
+        warnings.push(PreflightWarning {
+            code: "FREEZE_WINDOW_REVIEW".to_owned(),
+            label: format!("{} 동결 — 발효일 조정 필요", frozen.join("·")),
+            dependent_kind: None,
+            count: None,
+        });
+    }
 
     // Governance verdict: Restrict dependents ⇒ deny (arch §15).
     let impact = assess_impact(restrict_dependents);
@@ -681,18 +713,70 @@ async fn store_preflight(
 // Apply executor — replays the approved proposal inside the caller's tx.
 // ---------------------------------------------------------------------------
 
+/// The freeze domains §3.9.1 names — 급여 마감 and 회계 결산. One list, so the
+/// preflight chip and the apply gate can never check a different set.
+const FREEZE_DOMAINS: [PeriodLockDomain; 2] =
+    [PeriodLockDomain::Payroll, PeriodLockDomain::Accounting];
+
+/// Console-facing name of a freeze domain. The platform refusal message is
+/// English and shared with the financial surface; the preflight chip sits in a
+/// Korean list (`OrgChangeModal.tsx`), so it names the domain in Korean.
+const fn freeze_domain_label(domain: PeriodLockDomain) -> &'static str {
+    match domain {
+        PeriodLockDomain::Payroll => "급여 마감",
+        PeriodLockDomain::Accounting => "회계 결산",
+    }
+}
+
+/// §3.9.1 변경 동결 창 — refuse a live org mutation whose effective date falls
+/// inside a closed payroll or accounting period, in which case the run whose
+/// scope and attribution it would rewrite is already sealed.
+///
+/// This is the platform period-lock mechanism (migration 0107,
+/// `mnt_platform_db::period_lock`), not a second freeze concept: the lookup
+/// runs in the caller's already-armed transaction, so RLS confines it to the
+/// caller's own tenant and the refusal rolls the whole apply back.
+async fn assert_change_window_open(
+    tx: Tx<'_, '_>,
+    effective_date: Date,
+) -> Result<(), PgOrgChangeError> {
+    for domain in FREEZE_DOMAINS {
+        match assert_period_open(tx, domain, effective_date).await {
+            Ok(()) => {}
+            // Conflict = that window is closed. The platform phrases its own
+            // refusal in English for the financial back office; this crate's
+            // conflicts reach the approval modal verbatim (`orgApi.ts` →
+            // `OrgChangeModal.tsx`) beside 발효일/SoD refusals that are Korean,
+            // so the freeze refusal is named the same way there.
+            Err(refusal) if refusal.kind == ErrorKind::Conflict => {
+                return Err(PgOrgChangeError::Frozen(KernelError::conflict(format!(
+                    "{} 기간에 포함된 발효일({effective_date})에는 조직 변경을 적용할 수 없습니다.",
+                    freeze_domain_label(domain)
+                ))));
+            }
+            Err(other) => return Err(other.into()),
+        }
+    }
+    Ok(())
+}
+
 async fn apply_ops(
     tx: Tx<'_, '_>,
     org: OrgId,
     actor: UserId,
     ops: &[OrgProposalOp],
+    effective_date: Date,
     now: OffsetDateTime,
 ) -> Result<Vec<AuditEvent>, PgOrgChangeError> {
+    // Both live-apply entry points (effectuate for NEW/REORG, archive for the
+    // deferred DISSOLVE ops) route through here, so the freeze gate sits here
+    // rather than in each caller.
+    assert_change_window_open(tx, effective_date).await?;
     let mut audits = Vec::with_capacity(ops.len());
     for (index, op) in ops.iter().enumerate() {
         let event = apply_op(tx, org, actor, op, now).await.map_err(|e| {
             let message = match &e {
-                PgOrgChangeError::Domain(k) => k.message.clone(),
+                PgOrgChangeError::Domain(k) | PgOrgChangeError::Frozen(k) => k.message.clone(),
                 PgOrgChangeError::Db(_) => "database rejected the operation".to_owned(),
             };
             PgOrgChangeError::from(KernelError::conflict(format!(
@@ -1191,9 +1275,15 @@ impl PgOrgChangeStore {
                     )
                     .into());
                 }
-                let report =
-                    compute_preflight(tx, request.kind, &request.target, &request.proposal, now)
-                        .await?;
+                let report = compute_preflight(
+                    tx,
+                    request.kind,
+                    &request.target,
+                    &request.proposal,
+                    request.effective_date,
+                    now,
+                )
+                .await?;
                 let next = if report.blockers.is_empty() {
                     OrgChangeStatus::Prechecked
                 } else {
@@ -1258,9 +1348,15 @@ impl PgOrgChangeStore {
                     .can_transition_to(OrgChangeStatus::InApproval)?;
                 // Fresh, in-transaction recheck: a stored receipt can go stale
                 // between preflight and submit; the current state decides.
-                let report =
-                    compute_preflight(tx, request.kind, &request.target, &request.proposal, now)
-                        .await?;
+                let report = compute_preflight(
+                    tx,
+                    request.kind,
+                    &request.target,
+                    &request.proposal,
+                    request.effective_date,
+                    now,
+                )
+                .await?;
                 if !report.blockers.is_empty() {
                     return Err(KernelError::conflict(
                         "preflight blockers are present; resolve them and re-run preflight",
@@ -1465,6 +1561,43 @@ impl PgOrgChangeStore {
         .await
     }
 
+    /// Commit the §3.10-⑥ detection record for a freeze-window refusal.
+    ///
+    /// The refused business transaction rolled back and took every audit row
+    /// inside it with it, so the attempt is recorded in its own transaction —
+    /// otherwise a blocked apply would leave no trace that it was tried.
+    /// Anything but a `Frozen` outcome passes through untouched.
+    async fn record_freeze_refusal(
+        &self,
+        org: OrgId,
+        actor: UserId,
+        id: Uuid,
+        action: &str,
+        outcome: Result<OrgChangeDetail, PgOrgChangeError>,
+    ) -> Result<OrgChangeDetail, PgOrgChangeError> {
+        let Err(PgOrgChangeError::Frozen(refusal)) = &outcome else {
+            return outcome;
+        };
+        let event = audit(
+            org,
+            actor,
+            action,
+            "org_change_request",
+            id.to_string(),
+            OffsetDateTime::now_utc(),
+        )?
+        .with_classification(AuditClassification {
+            badges: None,
+            anomaly: Some(true),
+            reason: Some(refusal.message.clone()),
+        });
+        with_audit(&self.pool, event, |_tx| {
+            Box::pin(async { Ok::<(), PgOrgChangeError>(()) })
+        })
+        .await?;
+        outcome
+    }
+
     pub async fn effectuate(
         &self,
         actor: UserId,
@@ -1472,7 +1605,7 @@ impl PgOrgChangeStore {
     ) -> Result<OrgChangeDetail, PgOrgChangeError> {
         let org = current_org().map_err(KernelError::from)?;
         let now = OffsetDateTime::now_utc();
-        with_audits(&self.pool, org, |tx| {
+        let outcome = with_audits(&self.pool, org, |tx| {
             Box::pin(async move {
                 let request = lock_request(tx, id).await?;
                 if request.status != OrgChangeStatus::Approved {
@@ -1487,13 +1620,24 @@ impl PgOrgChangeStore {
                 let mut audits = Vec::new();
                 let next = match request.kind {
                     OrgChangeKind::New | OrgChangeKind::Reorg => {
-                        audits = apply_ops(tx, org, actor, &request.proposal, now).await?;
+                        audits = apply_ops(
+                            tx,
+                            org,
+                            actor,
+                            &request.proposal,
+                            request.effective_date,
+                            now,
+                        )
+                        .await?;
                         OrgChangeStatus::Applied
                     }
                     OrgChangeKind::Dissolve => {
                         // Dissolve does not deactivate yet: it opens settlement;
                         // the proposal ops replay at archive after every item
-                        // is settled (참조 무결성).
+                        // is settled (참조 무결성). Opening settlement is itself
+                        // a live org change, so it takes the same freeze gate
+                        // `apply_ops` applies to the other kinds.
+                        assert_change_window_open(tx, request.effective_date).await?;
                         for key in SettlementKey::ALL {
                             sqlx::query(
                                 "INSERT INTO org_change_settlement_items \
@@ -1541,7 +1685,9 @@ impl PgOrgChangeStore {
                 Ok((detail, audits))
             })
         })
-        .await
+        .await;
+        self.record_freeze_refusal(org, actor, id, "org_change.effectuate.refused", outcome)
+            .await
     }
 
     pub async fn complete_settlement_item(
@@ -1629,7 +1775,7 @@ impl PgOrgChangeStore {
     ) -> Result<OrgChangeDetail, PgOrgChangeError> {
         let org = current_org().map_err(KernelError::from)?;
         let now = OffsetDateTime::now_utc();
-        with_audits(&self.pool, org, |tx| {
+        let outcome = with_audits(&self.pool, org, |tx| {
             Box::pin(async move {
                 let request = lock_request(tx, id).await?;
                 if request.status != OrgChangeStatus::Settling {
@@ -1656,7 +1802,15 @@ impl PgOrgChangeStore {
                 // The deferred dissolve ops run now, inside this one tx; the
                 // referential guards re-verify (settlement must have actually
                 // cleared the dependents, or this rolls back with a conflict).
-                let mut audits = apply_ops(tx, org, actor, &request.proposal, now).await?;
+                let mut audits = apply_ops(
+                    tx,
+                    org,
+                    actor,
+                    &request.proposal,
+                    request.effective_date,
+                    now,
+                )
+                .await?;
                 sqlx::query(
                     "UPDATE org_change_requests SET status = 'ARCHIVED', updated_at = $2 \
                      WHERE id = $1",
@@ -1689,7 +1843,9 @@ impl PgOrgChangeStore {
                 Ok((detail, audits))
             })
         })
-        .await
+        .await;
+        self.record_freeze_refusal(org, actor, id, "org_change.archive.refused", outcome)
+            .await
     }
 
     pub async fn cancel(

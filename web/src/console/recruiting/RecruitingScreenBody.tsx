@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import { useAuth } from "../../context/auth";
 import { RecruitingScreen } from "./RecruitingScreen";

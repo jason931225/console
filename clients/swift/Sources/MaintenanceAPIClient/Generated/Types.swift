@@ -45805,28 +45805,28 @@ public enum Components {
                 public struct HandoverPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/components/schemas/Equipment3rCaseDetailView/value2/handover/recipientName`.
                     public var recipientName: Swift.String?
-                    /// - Remark: Generated from `#/components/schemas/Equipment3rCaseDetailView/value2/handover/evidenceReference`.
-                    public var evidenceReference: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/Equipment3rCaseDetailView/value2/handover/evidenceObjectId`.
+                    public var evidenceObjectId: Components.Schemas.Uuid?
                     /// - Remark: Generated from `#/components/schemas/Equipment3rCaseDetailView/value2/handover/handedOverAt`.
                     public var handedOverAt: Foundation.Date?
                     /// Creates a new `HandoverPayload`.
                     ///
                     /// - Parameters:
                     ///   - recipientName:
-                    ///   - evidenceReference:
+                    ///   - evidenceObjectId:
                     ///   - handedOverAt:
                     public init(
                         recipientName: Swift.String? = nil,
-                        evidenceReference: Swift.String? = nil,
+                        evidenceObjectId: Components.Schemas.Uuid? = nil,
                         handedOverAt: Foundation.Date? = nil
                     ) {
                         self.recipientName = recipientName
-                        self.evidenceReference = evidenceReference
+                        self.evidenceObjectId = evidenceObjectId
                         self.handedOverAt = handedOverAt
                     }
                     public enum CodingKeys: String, CodingKey {
                         case recipientName
-                        case evidenceReference
+                        case evidenceObjectId
                         case handedOverAt
                     }
                 }
@@ -156366,28 +156366,28 @@ public enum Operations {
                 public struct JsonPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/paths/api/v1/equipment-3r/rental-cases/{case_id}/handover/POST/requestBody/json/recipientName`.
                     public var recipientName: Swift.String
-                    /// - Remark: Generated from `#/paths/api/v1/equipment-3r/rental-cases/{case_id}/handover/POST/requestBody/json/evidenceReference`.
-                    public var evidenceReference: Swift.String
+                    /// - Remark: Generated from `#/paths/api/v1/equipment-3r/rental-cases/{case_id}/handover/POST/requestBody/json/evidenceObjectId`.
+                    public var evidenceObjectId: Components.Schemas.Uuid
                     /// - Remark: Generated from `#/paths/api/v1/equipment-3r/rental-cases/{case_id}/handover/POST/requestBody/json/handedOverAt`.
                     public var handedOverAt: Foundation.Date
                     /// Creates a new `JsonPayload`.
                     ///
                     /// - Parameters:
                     ///   - recipientName:
-                    ///   - evidenceReference:
+                    ///   - evidenceObjectId:
                     ///   - handedOverAt:
                     public init(
                         recipientName: Swift.String,
-                        evidenceReference: Swift.String,
+                        evidenceObjectId: Components.Schemas.Uuid,
                         handedOverAt: Foundation.Date
                     ) {
                         self.recipientName = recipientName
-                        self.evidenceReference = evidenceReference
+                        self.evidenceObjectId = evidenceObjectId
                         self.handedOverAt = handedOverAt
                     }
                     public enum CodingKeys: String, CodingKey {
                         case recipientName
-                        case evidenceReference
+                        case evidenceObjectId
                         case handedOverAt
                     }
                 }

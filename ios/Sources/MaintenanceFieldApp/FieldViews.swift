@@ -1158,6 +1158,7 @@ struct WorkOrderDetailView: View {
                 // translucent material behind the Form.
                 .scrollContentBackground(.hidden)
                 .background(Color.opaqueFieldDetailBackground)
+                .tint(.primary)
                 .accessibilityIdentifier(FieldAccessibilityID.detailView)
                 .navigationTitle(Text("detail_title"))
                 .inlineNavigationTitle()

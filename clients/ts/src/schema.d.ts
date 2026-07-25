@@ -16411,7 +16411,7 @@ export interface components {
             } | null;
             handover?: {
                 recipientName?: string;
-                evidenceReference?: string;
+                evidenceObjectId?: components["schemas"]["Uuid"];
                 /** Format: date-time */
                 handedOverAt?: string;
             } | null;
@@ -31728,7 +31728,7 @@ export interface operations {
             content: {
                 "application/json": {
                     recipientName: string;
-                    evidenceReference: string;
+                    evidenceObjectId: components["schemas"]["Uuid"];
                     /** Format: date-time */
                     handedOverAt: string;
                 };

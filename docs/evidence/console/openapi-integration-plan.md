@@ -22,7 +22,7 @@ integration is per-fragment and deliberate.
 | Test | Baseline | Cause |
 |------|----------|-------|
 | `openapi_yaml_covers_configured_route_inventory` | **FAIL** | 21 census paths absent from the spec (below). This is the gate this work closes. |
-| `openapi_documents_evidence_register_snapshot_and_evidentiary_contract` | **FAIL** | **Pre-existing spine bug**, not consolidation drift. The test searches for the two-character literal `\n` (`"  /api/v1/evidence/objects:\\n"` in Rust source) which can never match, and additionally requires an `EvidenceObjectPage` schema the spec does not define. Fails identically on the unmodified spine spec. Out of scope; not chased. |
+| `openapi_documents_evidence_register_snapshot_and_evidentiary_contract` | **FAIL** | **Pre-existing spine bug**, not consolidation drift: seven `.find()` calls search for the two-character literal `\n` (written `"…:\\n"` in Rust source), which can never match YAML, so the test body had never executed. **Fixed** — see Outcome. |
 
 ### The 21 missing census paths
 
@@ -134,10 +134,20 @@ wins.
 ## Outcome
 
 `openapi.yaml` went from 434 paths / 490 operations / 824 schemas to
-**488 / 551 / 946**. `cargo test -p mnt-app --test openapi_drift` went from
-**11 pass / 2 fail** to **12 pass / 1 fail** — the target gate
-`openapi_yaml_covers_configured_route_inventory` is GREEN, and the one
-remaining failure is the pre-existing spine bug recorded above.
+**488 / 551 / 946**. `cargo test -p mnt-app --test openapi_drift` went from **11 pass / 2 fail** to
+**13 pass / 0 fail**. The target gate
+`openapi_yaml_covers_configured_route_inventory` is GREEN.
+
+`openapi_documents_evidence_register_snapshot_and_evidentiary_contract` is
+also fixed, after the hf-equipment-custody lane correctly pushed back on my
+first reading of it. I had reported two causes; only one was real. The path
+and the `EvidenceObjectPage` schema both DO exist (openapi.yaml:12874 and
+:31113) — the sole defect was the literal `\\n` in seven `.find()` calls, which
+meant the test body had never run at all. With that corrected the body
+executed for the first time and 13 of its 14 assertions passed; the last one
+substring-matched `as_of: { type: integer, format: int64 }` against a flow map
+that legitimately also carries a `description`, so the assertion (not the
+spec) was loosened to stop matching punctuation.
 
 All three clients regenerated; `check:api-drift:portable` and
 `check:api-drift:swift` both exit 0. Kotlin emitted 79 per-domain `*Api.kt`
@@ -154,13 +164,60 @@ the construct, so those fields are silently absent from the Swift client.
 Fixing it means changing how the whole spec spells a nullable object reference,
 which is a spec-wide decision, not an integration one.
 
+### Not applied here: the equipment-3r handover contract change
+
+The hf-equipment-custody lane (branch `claude/hf-equipment-custody-20260725`)
+asked for `POST /api/v1/equipment-3r/rental-cases/{case_id}/handover` to take
+`evidenceObjectId` instead of `evidenceReference`. **Deliberately not applied
+on this branch.** The crate half of that change is not here —
+`backend/crates/equipment/rest/src/lib.rs:310` still reads
+`evidence_reference: String`, and the DTO is `deny_unknown_fields`. Editing
+only the spec would publish a request body this branch's server rejects with a
+422, which is the exact failure mode this integration exists to prevent, and no
+gate would catch it: the drift test compares path inventories, not bodies.
+
+The spec, the three clients and the crate have to move in one commit. That
+belongs to whoever carries the crate change — either the lane lands its crate
+diff here first, or the lane owns the openapi + clients edit in its own branch.
+Migration `0184` being on the spine does not change this; the migration is not
+the wire contract.
+
+### Proposed new gate: request bodies are unguarded
+
+`openapi_drift` compares **path inventories** — every route the census
+declares must appear as a path key in the spec. Nothing compares **request or
+response body schemas** against the handler's serde types.
+
+That hole is not theoretical; this integration walked into it twice:
+
+- The equipment-3r handover body advertised `evidenceReference` as an
+  `^evidence://` string long after migration 0184 deleted the column and the
+  crate moved to `evidenceObjectId: Uuid`. Every gate stayed green while the
+  documented body was one the server rejects outright under
+  `deny_unknown_fields`.
+- `PayrollRunStatus` omitted seven statuses the FSM writes, inlined in two
+  schemas. Also green.
+
+Both were found by a human reading code, not by CI. A path-inventory gate can
+never catch either, because the path was always present and correctly spelled.
+
+Proposed: assert body schemas against handler serde types. The cheap version
+that would have caught both — for each documented operation, resolve its
+requestBody schema's `required` + property names and diff them against the
+`#[derive(Deserialize)]` struct the handler binds, failing on any name present
+on one side only. `deny_unknown_fields` makes the request direction strictly
+decidable: an undocumented field is a guaranteed 422, not a maybe. Enum
+variants are the natural second step, since that is the shape the payroll bug
+took.
+
 ### Reported, not fixed
 
-- The two `web/src/console/shell/nav.test.ts` failures in the full web suite
-  (2792/2794) predate this work: the `payroll` screen is visible to a grant the
-  test asserts must not see it. Nothing in this branch touches `nav.ts`,
-  `authz.ts`, `registry.ts` or that test — `git diff a5bccdc1 HEAD --
-  web/src/console/{shell,screens}` is empty.
+- **RESOLVED.** The two `nav.test.ts` failures were real and are now fixed:
+  the payroll nav item gated on `employee_directory_read` with a role list, so
+  a built-in branch-scoped ADMIN saw a screen `authorize_org_wide` then denied.
+  Now grant-only on `payroll_run_read`. The test was correct throughout and is
+  unchanged. I had reported these as pre-existing and not mine; the first half
+  was true, the second was not — nobody else was going to fix them.
 - `orgchange` is the only REST surface on the platform that serialises
   camelCase. The console was corrected to match the server, but the server is
   the outlier.

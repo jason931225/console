@@ -11,26 +11,48 @@ const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
 const ciPreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs";
 const consoleRouteInventoryTestCommand = "node --test scripts/console/route-inventory.test.mjs";
+const consoleTruthLedgerCommand = "npm run check:console-truth-ledger";
+const consoleAuthorityTrainTestCommand = "node --test scripts/console/verify-console-authority-train.test.mjs";
 const consoleTruthLedgerTestCommand = "node --test scripts/console/validate-console-truth-ledger.test.mjs";
 const consoleFanoutPlannerTestCommand = "node --test scripts/console/plan-fanout.test.mjs";
+const consoleFanoutPlannerAdmissionCommand = 'node scripts/console/plan-fanout.mjs --candidate "$CONSOLE_CANDIDATE_SHA" --authority-tip "$CONSOLE_AUTHORITY_TIP_SHA" --synthetic-merge "$CONSOLE_SYNTHETIC_MERGE_SHA"';
+const consolePrCondition = "${{ github.event_name == 'pull_request' }}";
+const consoleTrainDerivation = [
+  "set -euo pipefail",
+  'CONSOLE_SYNTHETIC_MERGE_SHA="$(git rev-parse "$GITHUB_SHA^{commit}")"',
+  'test "$(git rev-parse HEAD)" = "$CONSOLE_SYNTHETIC_MERGE_SHA"',
+  'CONSOLE_AUTHORITY_TIP_SHA="$(git rev-parse "$CONSOLE_SYNTHETIC_MERGE_SHA^2")"',
+  'CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"',
+  "{",
+  "printf 'CONSOLE_CANDIDATE_SHA=%s\\n' \"$CONSOLE_CANDIDATE_SHA\"",
+  "printf 'CONSOLE_AUTHORITY_TIP_SHA=%s\\n' \"$CONSOLE_AUTHORITY_TIP_SHA\"",
+  "printf 'CONSOLE_SYNTHETIC_MERGE_SHA=%s\\n' \"$CONSOLE_SYNTHETIC_MERGE_SHA\"",
+  '} >> "$GITHUB_ENV"',
+];
 const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
 const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
-const consoleIntegrationTipEnv = "CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}";
 const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
-  "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \\",
-  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \\",
-  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
+  "//tools/buck:dispatch-p1-postgres \\",
+  "//tools/buck:attendance-cancel-substitution-postgres \\",
+  "//tools/buck:attendance-concurrency-postgres",
 ];
+const postgresWrapperContracts = [
+  ["dispatch-p1-postgres", "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch"],
+  ["attendance-cancel-substitution-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution"],
+  ["attendance-concurrency-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
+  ["app-inline-postgres", "//backend/app:mnt-app-itest-inline-postgres"],
+  ["app-dev-auth-persona-guard-postgres", "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
+];
+const postgresWrapperLoader = "run_test_with_postgres_env.sh";
+const postgresWrapperLabels = '["test.integration", "resource.postgres", "needs-postgres"]';
+const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", import.meta.url), "utf8");
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
-  "npm run check:console-truth-ledger",
   ciPreflightTestCommand,
   consoleRouteInventoryTestCommand,
-  consoleTruthLedgerTestCommand,
-  consoleFanoutPlannerTestCommand,
   buckPostgresEnvironmentTestCommand,
   buckPostgresHarnessTestCommand,
   "npm run check:ci-preflight",
@@ -99,16 +121,53 @@ function multilineRunCommands(step) {
     .filter(Boolean);
 }
 
-function hasEnvironment(step, entry) {
-  return step.includes(`        env:\n          ${entry}\n`);
-}
-
 function requireUnconditionalRun(steps, command, job, failures) {
   const matchingSteps = steps.filter((step) => runScalar(step) === command);
   if (matchingSteps.length === 0) {
     failures.push(`${job} must run ${command}`);
   } else if (matchingSteps.some((step) => !isUnconditional(step))) {
     failures.push(`${job} must run ${command} unconditionally without if or continue-on-error`);
+  }
+}
+
+function requireConsoleExactMergeProof(workflow, steps, failures) {
+  const derive = steps.filter((step) => stepName(step) === "Derive exact console C/T/M train");
+  if (derive.length !== 1 || !hasOnlyExpectedCondition(derive[0], consolePrCondition) || multilineRunCommands(derive[0]).join("\n") !== consoleTrainDerivation.join("\n")) {
+    failures.push("preflight must derive exact C/T/M from the pull-request synthetic merge");
+  }
+  for (const command of [consoleTruthLedgerCommand, consoleFanoutPlannerAdmissionCommand]) {
+    const matching = steps.filter((step) => runScalar(step) === command);
+    if (matching.length !== 1 || !hasOnlyExpectedCondition(matching[0], consolePrCondition)) failures.push(`preflight must run ${command} only after exact C/T/M derivation on pull requests`);
+  }
+  for (const command of [consoleAuthorityTrainTestCommand, consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
+    const matching = steps.filter((step) => runScalar(step) === command);
+    if (matching.length !== 1 || !isUnconditional(matching[0])) failures.push(`preflight must run ${command} unconditionally on pull requests and main`);
+  }
+  if (workflow.includes("CONSOLE_INTEGRATION_TIP_SHA")) failures.push("preflight must not reference legacy CONSOLE_INTEGRATION_TIP_SHA");
+}
+
+function requirePostgresWrapperContracts(buildFile, failures) {
+  for (const [name, binary] of postgresWrapperContracts) {
+    const block = buildFile.match(new RegExp(`sh_test\\(\\n    name = "${name}",[\\s\\S]*?\\n\\)`, "m"))?.[0];
+    if (!block) {
+      failures.push(`tools/buck/BUCK must define PostgreSQL wrapper ${name}`);
+      continue;
+    }
+    const expectedArgs = `args = ["$(location ${binary})"],`;
+    const expectedDeps = `deps = ["${binary}"],`;
+    const hasExactAttribute = (attribute) => (
+      [...block.matchAll(new RegExp(`^    ${attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "gm"))].length === 1
+    );
+    const hasExactlyOneField = (field) => (
+      [...block.matchAll(new RegExp(`^    ${field} = .+$`, "gm"))].length === 1
+    );
+    if (!hasExactAttribute(`test = "${postgresWrapperLoader}",`)
+      || !hasExactAttribute(expectedArgs)
+      || !hasExactAttribute(expectedDeps)
+      || !hasExactAttribute(`labels = ${postgresWrapperLabels},`)
+      || !["test", "args", "deps", "labels"].every(hasExactlyOneField)) {
+      failures.push(`tools/buck/BUCK must bind PostgreSQL wrapper ${name} to the loader and exact Rust binary`);
+    }
   }
 }
 
@@ -295,7 +354,7 @@ function requireEffectiveDotSlashBootstrap(block, job, failures) {
   }
 }
 
-export function evaluateCiPreflight(workflow) {
+export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBuildFile) {
   const failures = [];
   for (const trigger of ["push", "pull_request"]) {
     if (!triggerPathEntries(workflow, trigger).includes("toolchains/**")) {
@@ -328,19 +387,15 @@ export function evaluateCiPreflight(workflow) {
   for (const command of requiredPreflightCommands) {
     requireUnconditionalRun(preflightSteps, command, "preflight", failures);
   }
-  for (const command of ["npm run check:console-truth-ledger", consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
-    const step = preflightSteps.find((candidate) => runScalar(candidate) === command);
-    if (!step || !hasEnvironment(step, consoleIntegrationTipEnv)) {
-      failures.push(`preflight must pass ${consoleIntegrationTipEnv} to ${command}`);
-    }
-  }
-
+  requireConsoleExactMergeProof(workflow, preflightSteps, failures);
   const supportDomainUnit = jobBlock(workflow, "support-domain-unit");
   if (supportDomainUnit) {
     const steps = stepBlocks(supportDomainUnit);
     requireUnconditionalRun(steps, supportDomainUnitCommand, "support-domain-unit", failures);
     requireOnlyLockedRuns(steps, [dotSlashBootstrap, supportDomainUnitCommand], "support-domain-unit", failures);
   }
+
+  requirePostgresWrapperContracts(buckBuildFile, failures);
 
   const postgresDomainReachability = jobBlock(workflow, "postgres-domain-reachability");
   if (postgresDomainReachability) {
@@ -400,9 +455,9 @@ export function evaluateCiPreflight(workflow) {
         {
           name: "Buck2 mnt-app inline PostgreSQL suites",
           run: [
-            "tools/buck/test_needs_postgres.sh \\",
-            "//backend/app:mnt-app-itest-inline-postgres \\",
-            "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature",
+            "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+            "//tools/buck:app-inline-postgres \\",
+            "//tools/buck:app-dev-auth-persona-guard-postgres",
           ].join("\n"),
           if: failFastIf,
         },

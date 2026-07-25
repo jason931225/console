@@ -16,17 +16,20 @@
 
 Authority model (2026-07-09 directive):
 
-Truth-ledger candidate model (C/T): the **product candidate C** is the signed,
-full Git SHA declared in `console-capability-registry.json`; its current frozen
-value is `88c57a1d519b43bc4c0e7b721c62bc248b938b38`. **Authority
-commit(s)** may be later signed commits that change only the console authority
-and control surface. The explicit **integration tip T** is supplied as
-`CONSOLE_INTEGRATION_TIP_SHA` (or planner `--integration-tip`), must descend
-from C, and may not change product paths after C. Route/source facts are always
-read immutably from C, never a PR branch or T worktree. Promotion receipts bind
-C plus canonical registry and Korea-jurisdiction digests; receipt fields are
-excluded from that registry digest to prevent a digest-rebinding loop. Korea
-remains exactly `JUR-KR-001` and unconditional `HOLD`.
+Truth-ledger candidate model (C/T/M): the **product candidate C** is the signed,
+full Git SHA declared in `console-capability-registry.json`. The signed
+**authority tip T** must be the direct single-parent child of C and may change
+exactly the three console authority documents—no product paths. The structural
+**synthetic merge M** must resolve to exactly two parents with T as its second
+parent and must have the same tree as T with an empty `T..M` diff. CI supplies
+these immutable objects as `CONSOLE_CANDIDATE_SHA`,
+`CONSOLE_AUTHORITY_TIP_SHA`, and `CONSOLE_SYNTHETIC_MERGE_SHA`; the planner
+accepts the equivalent `--candidate`, `--authority-tip`, and
+`--synthetic-merge` flags. Route/source facts are always read immutably from C,
+never a moving PR branch or an M worktree. Promotion receipts bind C plus
+canonical registry and Korea-jurisdiction digests; receipt fields are excluded
+from that registry digest to prevent a digest-rebinding loop. Korea remains
+exactly `JUR-KR-001` and unconditional `HOLD`.
 
 - **Frontend design authority** = Claude Design project `9c7c313a` (dc.html prototype + design-system grammar) + `docs/design/oyatie-console/*`.
 - **Backend design authority** = the referenced markdowns (`AGENTS/CLAUDE/DESIGN/README/ROADMAP/TODO`) **+ `HANDOFF.md`** — they define the backend contract required to make the frontend fully functional (DX- ingest, WORM evidence, mox mail, office editor, DLP, lifecycle engine §15, guardrails §16, enterprise standard §17, ontology engine §18, CRUD matrix §20).
