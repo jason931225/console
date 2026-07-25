@@ -98,6 +98,7 @@ describe("AssetWorkspace", () => {
     expect(screen.getByRole("link", { name: "고객 A" })).toHaveAttribute("href", "/customers/customer-1");
     expect(screen.getByText("생애주기 비용")).toBeVisible();
     expect(screen.getByText("대차")).toBeVisible();
+    expect(screen.getByText("이 화면에서는 현재 세션에서 만든 대차만 반납할 수 있습니다. 새로고침 또는 세션 변경 뒤에는 이 화면에서 해당 대차를 확인하거나 반납할 수 없습니다.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "되돌림" }));
 
     await waitFor(() => {
