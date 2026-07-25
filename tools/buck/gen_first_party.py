@@ -159,6 +159,7 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/audit_api.rs': 'postgres',
             'tests/auth_rest.rs': 'postgres',
             'tests/benefit_catalog_api.rs': 'postgres',
+            'tests/board_ack_api.rs': 'postgres',
             'tests/cedar_freshness_mint.rs': 'postgres',
             'tests/cedar_parity_shadow.rs': 'postgres',
             'tests/cedar_shadow_role_manage.rs': 'postgres',
@@ -173,7 +174,9 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/dev_seed_notification_links.rs': 'none',
             'tests/dispatch_pipeline_api.rs': 'postgres',
             'tests/equipment_3r_api.rs': 'postgres',
+            'tests/evaluation_cycle_api.rs': 'postgres',
             'tests/facilities_pilot_story.rs': 'postgres',
+            'tests/field_visit_api.rs': 'postgres',
             'tests/finance_gl_voucher_sod.rs': 'postgres',
             'tests/health_readiness.rs': 'postgres',
             'tests/hr_attendance_manager_scope.rs': 'postgres',
@@ -182,7 +185,9 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/hr_people_create_api.rs': 'postgres',
             'tests/logistics_pilot_story.rs': 'postgres',
             'tests/m2_real_engine_drive.rs': 'postgres',
+            'tests/maintenance_chain_api.rs': 'postgres',
             'tests/mobile_api.rs': 'postgres',
+            'tests/notif_routing_api.rs': 'postgres',
             'tests/notifications_api.rs': 'postgres',
             'tests/object_graph_api.rs': 'postgres',
             'tests/object_links_api.rs': 'postgres',
@@ -191,9 +196,11 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/office_versions.rs': 'postgres',
             'tests/openapi_drift.rs': 'none',
             'tests/openslo_files.rs': 'none',
+            'tests/org_change_api.rs': 'postgres',
             'tests/platform_onboarding_e2e.rs': 'postgres',
             'tests/purchase_request_collection_api.rs': 'postgres',
             'tests/realtime_ws.rs': 'postgres',
+            'tests/recruiting_pipeline_api.rs': 'postgres',
             'tests/registry_api.rs': 'postgres',
             'tests/router_layers.rs': 'postgres',
             'tests/search_api.rs': 'postgres',
@@ -598,8 +605,13 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/publish_auto_create_action_as_runtime_role.rs': 'postgres',
         },
     },
+    'mnt-orgchange-domain': {
+        'unit': 'none',
+    },
     'mnt-payroll-adapter-postgres': {
+        'unit': 'none',
         'integration': {
+            'tests/payroll_lifecycle_rls_as_runtime_role.rs': 'postgres',
             'tests/payroll_rls_surfaces_as_runtime_role.rs': 'postgres',
         },
     },
@@ -610,6 +622,7 @@ TEST_RESOURCE_REQUIREMENTS = {
         'unit': 'none',
         'integration': {
             'tests/api.rs': 'postgres',
+            'tests/run_lifecycle_api.rs': 'postgres',
         },
     },
     'mnt-platform-audit-chain': {
@@ -761,6 +774,12 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/equipment_admin.rs': 'postgres',
         },
     },
+    'mnt-recruiting-application': {
+        'unit': 'none',
+    },
+    'mnt-recruiting-domain': {
+        'unit': 'none',
+    },
     'mnt-reporting-adapter-postgres': {
         'unit': 'none',
         'integration': {
@@ -841,6 +860,7 @@ TEST_RESOURCE_REQUIREMENTS = {
         'integration': {
             'tests/approval_and_assignment.rs': 'none',
             'tests/serde_roundtrips.rs': 'none',
+            'tests/settlement_fsm.rs': 'none',
             'tests/workorder_fsm.rs': 'none',
         },
     },
