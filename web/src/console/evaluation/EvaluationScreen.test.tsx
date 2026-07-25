@@ -90,6 +90,20 @@ const preflight = (): EvaluationPreflightReport => ({
   advisories: [],
 });
 
+const blockedPreflight = (
+  nextTransition: EvaluationPreflightReport["next_transition"],
+): EvaluationPreflightReport => ({
+  next_transition: nextTransition,
+  blockers: [
+    {
+      code: "MISSING_GOALS",
+      message: "목표를 저장해야 다음 단계로 진행할 수 있습니다.",
+      subject_id: "subject-1",
+    },
+  ],
+  advisories: [],
+});
+
 const task = (): EvaluationTaskSummary => ({
   subject_id: "subject-1",
   cycle_id: "cycle-1",
@@ -304,6 +318,89 @@ describe("EvaluationScreen", () => {
     const subjects = await screen.findByRole("list", { name: text.subjects });
     await waitFor(() => {
       expect(subjects).toHaveTextContent("최민석");
+    });
+  });
+
+  it("replaces goals then reloads server preflight before enabling cycle open", async () => {
+    const routes = defaultRoutes();
+    let preflightCalls = 0;
+    routes["/api/v1/evaluation/cycles"] = () => ok({ items: [cycle("DRAFT")], total: 1 });
+    routes["/api/v1/evaluation/cycles/{cycle_id}"] = () => ok(detail("DRAFT"));
+    routes["/api/v1/evaluation/cycles/{cycle_id}/preflight"] = () => {
+      preflightCalls += 1;
+      return ok(preflightCalls === 1 ? blockedPreflight("open") : { ...blockedPreflight("open"), blockers: [] });
+    };
+    const { impl, api } = client(routes);
+    impl.PUT.mockResolvedValue(ok(subjectDetail()));
+    renderScreen(manage, api);
+    await openCycleRow();
+    const cyclePanel = await screen.findByRole("region", { name: cycle().name });
+    expect(within(cyclePanel).getByRole("button", { name: text.transition.OPEN })).toBeDisabled();
+    await userEvent.click(
+      within(screen.getByRole("list", { name: text.subjects })).getByRole("button", {
+        name: /^조이슨/,
+      }),
+    );
+    await screen.findByRole("region", { name: "조이슨" });
+    await userEvent.click(screen.getByRole("button", { name: text.saveGoals }));
+    await waitFor(() => {
+      expect(preflightCalls).toBe(2);
+    });
+    await userEvent.click(screen.getByRole("button", { name: text.back }));
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("region", { name: cycle().name })).getByRole("button", {
+          name: text.transition.OPEN,
+        }),
+      ).toBeEnabled();
+    });
+  });
+
+  it("calibrates then reloads server preflight before enabling finalization", async () => {
+    const routes = defaultRoutes();
+    let preflightCalls = 0;
+    routes["/api/v1/evaluation/cycles"] = () => ok({ items: [cycle("CALIBRATION")], total: 1 });
+    routes["/api/v1/evaluation/cycles/{cycle_id}"] = () => ok(detail("CALIBRATION"));
+    routes["/api/v1/evaluation/cycles/{cycle_id}/preflight"] = () => {
+      preflightCalls += 1;
+      return ok(preflightCalls === 1 ? blockedPreflight("finalize") : { ...blockedPreflight("finalize"), blockers: [] });
+    };
+    routes["/api/v1/evaluation/subjects/{subject_id}"] = () =>
+      ok({ ...subjectDetail(), state: "REVIEWED" });
+    const { impl, api } = client(routes);
+    impl.POST.mockResolvedValue(
+      ok({
+        ...subjectDetail(),
+        state: "CALIBRATED",
+        calibrated_grade: "A",
+        calibrated_by: "user-admin",
+        calibrated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    renderScreen(manage, api);
+    await openCycleRow();
+    const cyclePanel = await screen.findByRole("region", { name: cycle().name });
+    expect(
+      within(cyclePanel).getByRole("button", { name: text.transition.FINALIZED }),
+    ).toBeDisabled();
+    await userEvent.click(
+      within(screen.getByRole("list", { name: text.subjects })).getByRole("button", {
+        name: /^조이슨/,
+      }),
+    );
+    await screen.findByRole("region", { name: "조이슨" });
+    await userEvent.click(screen.getByRole("button", { name: "A" }));
+    await userEvent.click(screen.getByRole("button", { name: text.calibrate }));
+    await waitFor(() => {
+      expect(preflightCalls).toBe(2);
+    });
+    await userEvent.click(screen.getByRole("button", { name: text.back }));
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("region", { name: cycle().name })).getByRole("button", {
+          name: text.transition.FINALIZED,
+        }),
+      ).toBeEnabled();
     });
   });
 

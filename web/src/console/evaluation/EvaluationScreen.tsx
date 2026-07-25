@@ -332,6 +332,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
   const [view, setView] = useState<EvaluationView>(restored.view ?? { kind: "cycle" });
   const [scorecard, setScorecard] = useState<{
     subjectId: string;
+    cycleId: string;
     kind: EvaluationReviewKind;
     employeeName: string;
     cycleName: string;
@@ -472,6 +473,17 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     void runCard((signal) => evaluationApi.getSubject(scorecard.subjectId, signal));
   }, [scorecard, runCard, resetCard, evaluationApi]);
 
+  const reconcilePreflightFromServer = useCallback(
+    (cycleId: string) => {
+      // A committed mutation invalidates every local blocker/ready decision.
+      // Keep the gate hidden until the server returns a fresh preflight report.
+      resetPreflight();
+      if (!capabilities.canManage) return;
+      void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+    },
+    [capabilities.canManage, evaluationApi, resetPreflight, runPreflight],
+  );
+
   const runTransition = async (target: EvaluationCycleStage) => {
     const cycleId = selectedCycleId;
     if (!cycleId || !capabilities.canManage) return;
@@ -489,7 +501,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     reconcileCycles((current) =>
       current?.map((cycle) => (cycle.id === next.id ? next : cycle)),
     );
-    void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+    reconcilePreflightFromServer(cycleId);
   };
 
   const createCycle = async (event: SyntheticEvent<HTMLFormElement>) => {
@@ -534,7 +546,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
           }
         : current,
     );
-    void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+    reconcilePreflightFromServer(cycleId);
     return true;
   };
 
@@ -542,7 +554,9 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     const next = await mutate((signal) =>
       evaluationApi.replaceGoals(subjectId, { goals }, signal),
     );
-    if (next) reconcileSubject(() => next);
+    if (!next) return;
+    reconcileSubject(() => next);
+    reconcilePreflightFromServer(next.cycle_id);
   };
 
   const calibrate = async (
@@ -568,6 +582,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
           }
         : current,
     );
+    reconcilePreflightFromServer(next.cycle_id);
   };
 
   const saveScorecardDraft = async (fields: SaveEvaluationReviewRequest) => {
@@ -591,6 +606,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     });
     if (!submitted) return;
     setScorecard(undefined);
+    reconcilePreflightFromServer(open.cycleId);
     loadTasks();
     if (view.kind === "subject" && view.subjectId === open.subjectId) {
       loadSubject(open.subjectId);
@@ -775,6 +791,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                             onClick={() => {
                               setScorecard({
                                 subjectId: task.subject_id,
+                                cycleId: task.cycle_id,
                                 kind: task.kind,
                                 employeeName: task.employee_name,
                                 cycleName: task.cycle_name,
@@ -841,9 +858,10 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                 onCalibrate={(subjectId, grade, reason) =>
                   void calibrate(subjectId, grade, reason)
                 }
-                onWriteManager={(subjectId, employeeName, cycleName) => {
+                onWriteManager={(subjectId, cycleId, employeeName, cycleName) => {
                   setScorecard({
                     subjectId,
+                    cycleId,
                     kind: "MANAGER",
                     employeeName,
                     cycleName,
@@ -1349,7 +1367,12 @@ function SubjectZone({
   onOpenPerson: (employeeId: string, employeeName: string) => void;
   onSaveGoals: (subjectId: string, goals: EvaluationGoalInput[]) => void;
   onCalibrate: (subjectId: string, grade: EvaluationGrade, reason: string) => void;
-  onWriteManager: (subjectId: string, employeeName: string, cycleName: string) => void;
+  onWriteManager: (
+    subjectId: string,
+    cycleId: string,
+    employeeName: string,
+    cycleName: string,
+  ) => void;
 }) {
   const [calGrade, setCalGrade] = useState<EvaluationGrade>();
   const [calReason, setCalReason] = useState("");
@@ -1479,7 +1502,7 @@ function SubjectZone({
                   className="evaluation__solid"
                   disabled={busy}
                   onClick={() => {
-                    onWriteManager(data.id, data.employee_name, cycleName ?? "");
+                    onWriteManager(data.id, data.cycle_id, data.employee_name, cycleName ?? "");
                   }}
                 >
                   {text.write}
