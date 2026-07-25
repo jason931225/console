@@ -271,6 +271,11 @@ fn idem(key: &str) -> Result<(), PgLogisticsError> {
 fn fingerprint(v: &Value) -> String {
     hex::encode(Sha256::digest(v.to_string()))
 }
+// Every caller passes a `&'static str` literal that already satisfies the
+// `AuditAction` shape, so the validation cannot fail at runtime. Returning a
+// `Result` here would change this helper's contract and the error behaviour of
+// all nine call sites; the sibling adapters that do propagate use `?` instead.
+#[allow(clippy::expect_used)]
 fn audit(
     org: OrgId,
     actor: UserId,

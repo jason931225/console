@@ -53,6 +53,11 @@ pub(crate) fn parse_basic_credentials(value: Option<&str>) -> Option<BasicCreden
     Some(BasicCredentials { client_id, secret })
 }
 
+// `Hmac::new_from_slice` is infallible for every input `Hmac` accepts: keys
+// shorter than the block size are zero-padded and longer ones are hashed down,
+// so `InvalidLength` is unreachable — and the key here is a fixed `[u8; 32]`.
+// Propagating a `Result` would add a dead error branch to an auth path.
+#[allow(clippy::expect_used)]
 #[must_use]
 pub(crate) fn verifier(
     key: &[u8; 32],
