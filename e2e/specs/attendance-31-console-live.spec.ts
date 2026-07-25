@@ -632,10 +632,15 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
     .toBe("1");
 
   // Cancellation is a visible screen workflow, not a REST call; persist both
-  // state and its corresponding immutable audit event.
-  const cancellationButton = page.getByRole("button", { name: "대근 취소" });
-  await expect(cancellationButton).toBeVisible({ timeout: 15_000 });
-  await cancellationButton.click();
+  // state and its corresponding immutable audit event. Scope the action to the
+  // exact worker row created above: other seeded substitutions may also render
+  // a cancellation control, but are a different operational fact.
+  const assignedCandidateDayRow = page
+    .locator(".attendance__dayrow")
+    .filter({ has: page.getByText(eligibleCandidateName, { exact: true }) })
+    .filter({ has: page.getByText("대근 투입", { exact: true }) });
+  await expect(assignedCandidateDayRow).toHaveCount(1, { timeout: 15_000 });
+  await assignedCandidateDayRow.getByRole("button", { name: "대근 취소" }).click();
   const cancellationDialog = page.getByRole("dialog", {
     name: "대근 편성 취소",
   });
