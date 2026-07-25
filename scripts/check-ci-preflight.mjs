@@ -132,6 +132,147 @@ function multilineRunCommands(step) {
     .filter(Boolean);
 }
 
+function runScript(step) {
+  const scalar = runScalar(step);
+  if (scalar && scalar !== "|") return scalar;
+  const multiline = step.match(/^        run: \|\n((?:          [^\n]*(?:\n|$))*)/m)?.[1];
+  return multiline?.replace(/^          /gm, "") ?? "";
+}
+
+function stripShellComment(line) {
+  let quote = null;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (escaped) {
+      escaped = false;
+    } else if (character === "\\") {
+      escaped = true;
+    } else if (quote) {
+      if (character === quote) quote = null;
+    } else if (character === "'" || character === '"') {
+      quote = character;
+    } else if (character === "#" && (index === 0 || /\s/.test(line[index - 1]))) {
+      return line.slice(0, index);
+    }
+  }
+  return line;
+}
+
+function shellCommandTokens(script) {
+  const commands = [];
+  let command = "";
+  for (const physicalLine of script.split(/\r?\n/)) {
+    const line = stripShellComment(physicalLine.trim());
+    if (!line) continue;
+    const continued = /\\\s*$/.test(line);
+    command += (command ? " " : "") + (continued ? line.replace(/\\\s*$/, "") : line);
+    if (!continued) {
+      commands.push(command);
+      command = "";
+    }
+  }
+  if (command) commands.push(command);
+
+  return commands.map((surface) => {
+    const tokens = [];
+    let token = "";
+    let quote = null;
+    let escaped = false;
+    const flush = () => {
+      if (token) tokens.push(token);
+      token = "";
+    };
+    for (let index = 0; index < surface.length; index += 1) {
+      const character = surface[index];
+      if (escaped) {
+        token += character;
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (quote) {
+        if (character === quote) quote = null;
+        else token += character;
+      } else if (character === "'" || character === '"') {
+        quote = character;
+      } else if (/\s/.test(character)) {
+        flush();
+      } else if (";|&".includes(character)) {
+        flush();
+        tokens.push(character);
+      } else {
+        token += character;
+      }
+    }
+    if (escaped) token += "\\";
+    flush();
+    return tokens;
+  });
+}
+
+function cargoTestPackagesInStep(step) {
+  const packages = new Set();
+  for (const tokens of shellCommandTokens(runScript(step))) {
+    let segment = [];
+    const inspectSegment = () => {
+      let index = 0;
+      while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[index] ?? "")) index += 1;
+      if (segment[index] === "env") {
+        index += 1;
+        while (segment[index]) {
+          if (segment[index] === "--") {
+            index += 1;
+            break;
+          }
+          if (["-u", "--unset", "-C", "--chdir"].includes(segment[index])) {
+            index += 2;
+          } else if (segment[index].startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[index])) {
+            index += 1;
+          } else {
+            break;
+          }
+        }
+      }
+      if (segment[index] === "command") {
+        index += 1;
+        while (segment[index]?.startsWith("-")) index += 1;
+      }
+      if (segment[index] !== "cargo") return;
+      index += 1;
+      if (segment[index] === "test") {
+        index += 1;
+      } else if (segment[index] === "nextest" && segment[index + 1] === "run") {
+        index += 2;
+      } else {
+        return;
+      }
+      for (; index < segment.length; index += 1) {
+        const argument = segment[index];
+        let packageName = null;
+        if (argument === "-p" || argument === "--package") {
+          packageName = segment[index + 1];
+          index += 1;
+        } else if (argument.startsWith("-p=")) {
+          packageName = argument.slice(3);
+        } else if (argument.startsWith("--package=")) {
+          packageName = argument.slice("--package=".length);
+        }
+        if (packageName) packages.add(packageName);
+      }
+    };
+    for (const token of tokens) {
+      if (token === ";" || token === "|" || token === "&") {
+        inspectSegment();
+        segment = [];
+      } else {
+        segment.push(token);
+      }
+    }
+    inspectSegment();
+  }
+  return packages;
+}
+
 function requireUnconditionalRun(steps, command, job, failures) {
   const matchingSteps = steps.filter((step) => runScalar(step) === command);
   if (matchingSteps.length === 0) {
@@ -487,12 +628,12 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       "backend",
       failures,
     );
-    for (const command of [
-      "cargo test -p mnt-platform-auth-rest",
-      "cargo test -p mnt-platform-provisioning",
-    ]) {
-      if (backend.includes(command)) {
-        failures.push(`backend must not run direct Cargo PostgreSQL command ${command}`);
+    const directCargoTestPackages = new Set(
+      steps.flatMap((step) => [...cargoTestPackagesInStep(step)]),
+    );
+    for (const packageName of ["mnt-platform-auth-rest", "mnt-platform-provisioning"]) {
+      if (directCargoTestPackages.has(packageName)) {
+        failures.push("backend must not run direct Cargo PostgreSQL tests for " + packageName);
       }
     }
   }
