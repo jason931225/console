@@ -19,6 +19,11 @@ use time::{Duration, OffsetDateTime, macros::offset};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+/// `(org_id, actor, anomaly, reason)` as read back from `audit_events` — every
+/// column is nullable in the table, so the row shape is wide enough that
+/// `clippy::type_complexity` (denied workspace-wide) rejects it inline.
+type RefusalAuditRow = (Option<Uuid>, Option<Uuid>, Option<bool>, Option<String>);
+
 const ISSUER: &str = "mnt-platform-auth";
 const AUDIENCE: &str = "mnt-api";
 const CHANGES: &str = "/api/v1/org-changes";
@@ -1170,7 +1175,7 @@ async fn effectuate_is_frozen_inside_a_locked_period_and_records_the_attempt(poo
 
     // The attempt IS on the record — its own committed transaction, anomaly
     // flagged, reason naming the window, scoped to this tenant only.
-    let refusals: Vec<(Option<Uuid>, Option<Uuid>, Option<bool>, Option<String>)> = sqlx::query_as(
+    let refusals: Vec<RefusalAuditRow> = sqlx::query_as(
         "SELECT org_id, actor, anomaly, reason FROM audit_events \
              WHERE action = 'org_change.effectuate.refused' AND target_id = $1 \
              ORDER BY occurred_at",
