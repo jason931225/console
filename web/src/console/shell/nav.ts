@@ -56,6 +56,13 @@ const OPERATIONAL_ROLES = [
 const ROLE_MANAGE_ROLES = [ROLES.SUPER_ADMIN];
 /** HR directory read (ADMIN/EXECUTIVE/SUPER_ADMIN). */
 const DIRECTORY_ROLES = MANAGEMENT_ROLES;
+/**
+ * Payroll run surfaces are org-wide: the backend's `authorize_org_wide`
+ * built-in path admits EXECUTIVE/SUPER_ADMIN only. `ConsoleGrants` flattens
+ * feature capabilities without their branch scope, so a feature hint cannot
+ * safely prove the custom all-branch grant required by payroll.
+ */
+const PAYROLL_ORG_WIDE_ROLES = [ROLES.EXECUTIVE, ROLES.SUPER_ADMIN];
 /** Integrity/compliance findings (EXECUTIVE/SUPER_ADMIN — ADMIN excluded by design). */
 const INTEGRITY_ROLES = [ROLES.EXECUTIVE, ROLES.SUPER_ADMIN];
 
@@ -209,7 +216,7 @@ export const NAV_GROUPS: readonly ConsoleNavGroup[] = [
         screen: "payroll",
         labelKey: "console.shell.nav.payroll",
         icon: "calc",
-        gate: g(DIRECTORY_ROLES, [FEATURES.EMPLOYEE_DIRECTORY_READ]),
+        gate: g(PAYROLL_ORG_WIDE_ROLES),
       },
       // Personal attendance self-service is available to every authenticated
       // principal in the mounted inventory. Manager workspace access remains
