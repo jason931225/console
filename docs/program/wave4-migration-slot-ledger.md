@@ -170,3 +170,18 @@ real out-of-order hazard, a *permanent* hole is a permanent hazard, and every
 wave-4 lane inherits the red. The L-A1 lane pushed back on it. `0201` is now
 spent by a documented no-op migration, the sequence is contiguous from 0001, and
 reserved gaps are no longer a thing this ledger creates.
+
+### 5.1 A dropped slot is backfilled or the tail renumbers
+
+Raised by L-A1 after the 0203↔0211 swap left it holding the highest assigned
+number. If any of 0204–0210 is **dropped rather than landed**, 0211 leaves a
+permanent contiguity gap behind it — the same defect as the old 0201
+reservation, produced by lane attrition instead of pre-assignment.
+
+Rule: when an assigned slot is abandoned, the integrator either backfills it
+(a documented no-op, as `0201_release_reserved_evidence_retention_slot.sql`
+does) or renumbers the tail down before the train lands. A gap is never left
+open, because the number can never be safely reclaimed afterwards — a database
+already past it rejects anything that later tries to fill it.
+
+This is the general form of §5: **holes are not free, whoever creates them.**
