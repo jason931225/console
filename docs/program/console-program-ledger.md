@@ -303,3 +303,6 @@ Nine lanes, 18 agents, zero errors. **Hotfixes:** shared `transition_lifecycle` 
 
 ## CANDIDATE REBIND (2026-07-25, cross-platform stat fix)
 Candidate advanced to the commit fixing `tools/buck/run_test_with_postgres_env.sh`, whose 0600 mode check could never pass on Linux: it tried the BSD `stat -f` form first, which on Linux means `--file-system` and *succeeds* with a filesystem dump, so the GNU `-c` fallback never fired. Unreachable until today — CI preflight died earlier, at the Buck metadata and authority-train gates. Every capability, binding, control and trace re-binds to the new candidate and remains HOLD; nothing is promoted.
+
+## CANDIDATE REBIND (2026-07-25, migration contiguity)
+Candidate advanced to the commit renumbering the ontology catalog migration 0211 → 0204. The migration-safety gate was the only failing step in the backend job — fmt, clippy and the test suites passed — because 0203 jumped to 0211 while 0204–0210 sat pre-assigned to CRM lanes that have not landed. Fixed by the policy already in §5: the integrator assigns at merge, taking the next free number. All records re-bind and remain HOLD.
