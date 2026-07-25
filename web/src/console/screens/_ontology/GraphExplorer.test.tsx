@@ -101,6 +101,37 @@ describe("GraphExplorer", () => {
     expect(screen.getByText(G.zoomLevel(110))).toBeInTheDocument();
   });
 
+  it("does not restart governed object reads while zooming or panning the same entity", async () => {
+    const resolve = vi.fn((reference: RuntimeReference) => {
+      const node =
+        model.nodes.find((candidate) => candidate.id === reference.id) ??
+        model.nodes[0];
+      return Promise.resolve(resolvedDescriptor(node));
+    });
+    const view = render(
+      <GraphExplorer model={model} {...governedProps(runtimeFor(resolve))} />,
+    );
+    await waitFor(() => {
+      expect(resolve).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: G.zoomIn }));
+    const pane = screen.getByLabelText(G.pane);
+    const panSurface = pane.querySelector<HTMLDivElement>(
+      'div[aria-hidden="true"]',
+    );
+    if (!panSurface) throw new Error("expected graph pan surface");
+    fireEvent.pointerDown(panSurface, { clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(window, { clientX: 40, clientY: 25 });
+    fireEvent.pointerUp(window);
+
+    await waitFor(() => {
+      expect(screen.getByText(G.zoomLevel(110))).toBeInTheDocument();
+      expect(resolve).toHaveBeenCalledTimes(1);
+    });
+    view.unmount();
+  });
+
   it("stacks the graph and contextual rail below the narrow viewport breakpoint", () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 800 });

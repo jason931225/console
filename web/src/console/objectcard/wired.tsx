@@ -2,7 +2,7 @@
 // real action + governance REST (§16 gate chain, §20 override, lifecycle
 // preflight). Composition keeps ObjectCard presentational: the card's action /
 // edit gestures route into the flows below instead of bare host callbacks.
-import { useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 
 import {
   executeOntologyAction,
@@ -30,7 +30,7 @@ import type { ConsoleApiClient } from "../../api/client";
 import { AuthContext } from "../../context/auth";
 import { ko } from "../../i18n/ko";
 import { StatusChip } from "../components";
-import type { EntityRef } from "../runtime/entityRef";
+import { entityRefKey, type EntityRef } from "../runtime/entityRef";
 import type { ObjectRuntimePort } from "../runtime/objectRuntime";
 import { PolicyGated, usePolicyGate, type PolicyGate } from "../policy";
 import { ObjectCard } from "./ObjectCard";
@@ -278,19 +278,32 @@ export function GovernedObjectCard({
   refreshEpoch,
 }: GovernedObjectCardProps) {
   const [attempt, setAttempt] = useState(0);
-  const referenceKey = [
-    reference.authority,
-    reference.tenantScopeKey,
-    reference.authorityKey,
-    reference.objectTypeId,
-    reference.id,
-  ].join("|");
-  const requestKey = [
+  // Resolution is keyed only by scoped identity. Display hints are deliberately
+  // excluded, and rebuilding the same reference during pan/zoom cannot restart
+  // authenticated reads.
+  const runtimeReference = useMemo<EntityRef>(
+    () => ({
+      authority: reference.authority,
+      tenantScopeKey: reference.tenantScopeKey,
+      authorityKey: reference.authorityKey,
+      objectTypeId: reference.objectTypeId,
+      id: reference.id,
+    }),
+    [
+      reference.authority,
+      reference.authorityKey,
+      reference.id,
+      reference.objectTypeId,
+      reference.tenantScopeKey,
+    ],
+  );
+  const referenceKey = entityRefKey(runtimeReference);
+  const requestKey = JSON.stringify([
     referenceKey,
     identityId(runtime),
     identityId(api),
     attempt,
-  ].join("|");
+  ]);
   const [state, setState] = useState<RuntimeCardState>({
     requestKey: "",
     status: "loading",
@@ -302,7 +315,7 @@ export function GovernedObjectCard({
 
   useEffect(() => {
     const controller = new AbortController();
-    void runtime.resolve(reference, { signal: controller.signal })
+    void runtime.resolve(runtimeReference, { signal: controller.signal })
       .then((descriptor) => {
         if (controller.signal.aborted) return;
         setState(
@@ -318,7 +331,7 @@ export function GovernedObjectCard({
     return () => {
       controller.abort();
     };
-  }, [reference, requestKey, runtime]);
+  }, [requestKey, runtime, runtimeReference]);
 
   if (visibleState.status === "loading") {
     return <section aria-busy="true" aria-label="Loading object" style={panelStyle} />;
@@ -740,9 +753,16 @@ function GovernedObjectCardContent({
     onAction: (action) => {
       startAction(action);
     },
-    onEdit: (ctx) => {
-      void onEdit(ctx);
-    },
+    ...(handlers?.onEdit
+      ? {
+          onEdit: (ctx: {
+            mode: "direct" | "override";
+            reason?: string;
+          }) => {
+            void onEdit(ctx);
+          },
+        }
+      : {}),
     onResolveCode: async (code) => {
       try {
         const resolved = await resolveInstanceCode(api, code);
@@ -751,12 +771,6 @@ function GovernedObjectCardContent({
         // fail-closed: a resolve error reads as unresolved, never a fabricated title
         return null;
       }
-    },
-    onActingChipClick: (chip) => {
-      // wire-pending: HANDOFF §acting-navigate — no console page routes the
-      // automation/policy catalog by id yet; the host supplies the real
-      // window-open target (Automate / Policy canvas pin) via this seam.
-      handlers?.onActingChipClick?.(chip);
     },
   };
 
