@@ -317,10 +317,21 @@ const retiredAuthorityPatterns = [
   [/~\/\.codex(?:\/agents)?\b/i, "developer-home role authority"],
   [/\b(?:developer[- ]home|home[- ])(?:role|profile|agent)\s+authority\b/i, "developer-home role authority"],
 ];
+function requireOnlyReactNativeHermesEngineLines(path) {
+  const allowedLine = /^\s*(?:[-*]\s+)?`?React Native Hermes JS engine`?(?: technical dependency)?[.!]?\s*$/i;
+  for (const [index, line] of read(path).split(/\r?\n/).entries()) {
+    if (/\bhermes\b/i.test(line) && !allowedLine.test(line)) {
+      throw new Error(`${path}:${index + 1} must not use Hermes outside the exact React Native Hermes JS engine technical line`);
+    }
+  }
+  passes.push(`${path} permits only exact React Native Hermes JS engine technical lines`);
+}
+
 for (const path of liveAuthorityContracts) {
   for (const [pattern, label] of retiredAuthorityPatterns) {
     requireAbsent(path, pattern, `${path} excludes retired ${label}`);
   }
+  requireOnlyReactNativeHermesEngineLines(path);
 }
 if (foundationGateText.includes("Concurrent-delivery authority")) {
   passes.push("repository-owned concurrent execution authority recorded in foundation contract");

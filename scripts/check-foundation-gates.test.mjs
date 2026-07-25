@@ -22,7 +22,7 @@ function runChecker() {
 function withInjectedContractText(path, text, callback) {
   const absolutePath = resolve(root, path);
   const original = readFileSync(absolutePath, "utf8");
-  writeFileSync(absolutePath, `${original}\n<!-- hostile-regression: ${text} -->\n`);
+  writeFileSync(absolutePath, `${original}\n${text}\n`);
   try {
     callback();
   } finally {
@@ -33,6 +33,8 @@ function withInjectedContractText(path, text, callback) {
 test("foundation gate rejects retired authority reentry in every live authority contract", () => {
   const hostileLiterals = [
     "hermes kanban",
+    "Hermes agent authority",
+    "hermes session authority",
     "OMC",
     "GJC",
     "NousResearch Hermes",
@@ -44,7 +46,7 @@ test("foundation gate rejects retired authority reentry in every live authority 
       withInjectedContractText(path, hostileLiteral, () => {
         const result = runChecker();
         assert.notEqual(result.status, 0, `${path} accepted ${hostileLiteral}`);
-        assert.match(result.stderr, /excludes retired/i);
+        assert.match(result.stderr, /excludes retired|React Native Hermes JS engine/i);
       });
     }
   }
