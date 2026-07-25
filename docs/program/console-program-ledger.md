@@ -17,8 +17,8 @@
 Authority model (2026-07-09 directive):
 
 Truth-ledger candidate model (C/T): the **product candidate C** is the signed,
-full Git SHA declared in `console-capability-registry.json`; its current
-provisional value is `e766d35c4f1cd327bcf50bb51d7efb4d6132fcda`. **Authority
+full Git SHA declared in `console-capability-registry.json`; its current frozen
+value is `42bd5a225c224bed87ff403dbb675e78aad891c7`. **Authority
 commit(s)** may be later signed commits that change only the console authority
 and control surface. The explicit **integration tip T** is supplied as
 `CONSOLE_INTEGRATION_TIP_SHA` (or planner `--integration-tip`), must descend
