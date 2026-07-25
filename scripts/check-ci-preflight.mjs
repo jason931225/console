@@ -9,11 +9,12 @@ const reindeerToolchainSource = `source ${reindeerToolchainLock}`;
 const reindeerToolchainInstall = 'rustup toolchain install "$REINDEER_TOOLCHAIN" --profile minimal';
 const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
+const consolePreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs scripts/console/route-inventory.test.mjs";
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
   "npm run check:console-truth-ledger",
-  "node --test scripts/check-ci-preflight.test.mjs",
+  consolePreflightTestCommand,
   "npm run check:ci-preflight",
   "npm run check:root-workspaces",
   "npm run test:root-workspaces",
@@ -161,7 +162,7 @@ function requirePreflightRustToolchainBefore(steps, failures) {
     return;
   }
   for (const command of [
-    "node --test scripts/check-ci-preflight.test.mjs",
+    consolePreflightTestCommand,
     "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null",
   ]) {
     const commandIndex = steps.findIndex((step) => runScalar(step) === command);

@@ -9,6 +9,7 @@ import { evaluateCiPreflight } from "./check-ci-preflight.mjs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
+const consolePreflightTests = "node --test scripts/check-ci-preflight.test.mjs scripts/console/route-inventory.test.mjs";
 const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Cargo.lock consistency
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
@@ -350,13 +351,20 @@ describe("CI preflight contract", () => {
   it("requires the pinned Rust toolchain before Cargo-dependent preflight tests", () => {
     expectFailure(
       workflow.replace(preflightRustToolchainSetup, "").replace(
-        "      - name: CI preflight contract tests\n        run: node --test scripts/check-ci-preflight.test.mjs",
+        `      - name: CI preflight contract tests\n        run: ${consolePreflightTests}`,
         `      - name: CI preflight contract tests
-        run: node --test scripts/check-ci-preflight.test.mjs
+        run: ${consolePreflightTests}
 
 ${preflightRustToolchainSetup.trimEnd()}`,
       ),
-      "preflight must install the pinned Rust toolchain before node --test scripts/check-ci-preflight.test.mjs",
+      `preflight must install the pinned Rust toolchain before ${consolePreflightTests}`,
+    );
+  });
+
+  it("rejects a preflight that omits the route inventory regression", () => {
+    expectFailure(
+      workflow.replace(consolePreflightTests, "node --test scripts/check-ci-preflight.test.mjs"),
+      consolePreflightTests,
     );
   });
 
