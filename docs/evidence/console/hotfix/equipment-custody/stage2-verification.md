@@ -161,21 +161,28 @@ charter's RESERVED slot (§0).
 
 ## 7. Open items this stage did not fix
 
-1. **`backend/openapi/openapi.yaml` + `clients/**` — blocking, openapi-integrator.**
-   Stage 1's manifest is accurate and was re-verified on disk: `:14453`
-   (`handoverEquipment3rCase`) and `:32564` (`Equipment3rCaseDetailView`) still
-   carry `evidenceReference`. `:14322` is the *logistics* POD endpoint and must
-   NOT be changed. The landing-order constraint in `report.md §5.5` is correct —
-   `openapi_drift` compares path inventories, not request bodies, so a spec-first
-   landing would 422 every handover with no gate catching it.
-2. **`web/src/console/equipment/**` needs an owner** — still posts and renders
-   `evidenceReference` as free text (`equipmentApi.ts:83,170`,
-   `EquipmentCaseDetail.tsx:171,334,446`). Broken at HEAD already (0184 dropped
-   the column); no live exposure, `EXPOSED_SCREEN_KEYS` is `[]`. **Add to the
-   handover for that owner:** the server's deliberate flat `not_found` cannot
-   tell an operator *why* a document was refused, so the picker must only offer
-   objects that are `ADMISSIBLE`, not disposed, and have a `VERIFIED` ORIGINAL
-   copy — the refusal is a last-resort guard, not the UI's explanation channel.
+1. **`backend/openapi/openapi.yaml` + `clients/**` — CLOSED, verified from this
+   worktree.** openapi-integrator landed it in the §5.5 order. On
+   `wave23-consolidation-20260724` (`33ee3344`): `:14453` requires
+   `evidenceObjectId`, `:32564` returns it, `clients/ts/src/schema.d.ts` is
+   regenerated, and `:14322` — the *logistics* POD endpoint — correctly still
+   carries its own unrelated `^evidence://` string. `c08a12db` is an ancestor of
+   the spine, so **only the two stage-2 commits are outstanding** and they touch
+   one test file plus this evidence directory.
+2. **`web/src/console/equipment/**` is now the last unfixed half, and it has no
+   gate.** Re-checked against the spine at `33ee3344`, not against this branch:
+   `equipmentApi.ts:83,170` still declare `evidenceReference: string` and
+   `EquipmentCaseDetail.tsx:171,334,446` still post and render it. The server
+   rejects unknown fields, so the console handover now **422s**, and
+   `detail.handover.evidenceReference` is `undefined`. **Nothing catches this:**
+   those are hand-written local interfaces, not generated types, so `tsc -b` and
+   both api-drift gates stay green while the screen is broken. No live exposure
+   (`EXPOSED_SCREEN_KEYS` is `[]`, the screen is DARK), which is the only reason
+   this is not a production incident. **For whoever owns it:** the fix is not a
+   rename. The server's deliberate flat `not_found` cannot tell an operator *why*
+   a document was refused, so the field becomes a picker over Docs/Evidence
+   objects that are `ADMISSIBLE`, not disposed, and carry a `VERIFIED` ORIGINAL
+   copy — the 404 is a last-resort guard, not the UI's explanation channel.
 3. **`docs_equipment_handover_custody` permits one evidence object on many
    cases** — `UNIQUE (org_id, equipment_case_id)` binds a case to one object but
    not an object to one case. Defensible (one signed delivery sheet can cover a
