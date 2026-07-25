@@ -600,24 +600,32 @@ async fn compute_preflight(
         dependent_kind: None,
         count: None,
     });
-    // §3.9.1 동결 창 — computed, not a reminder: the same period-lock read
-    // `assert_change_window_open` enforces at apply time, surfaced early so the
-    // approval chain is not spent on a change effectuate would refuse. It stays
-    // a warning rather than a blocker because a lock can be lifted before the
-    // effective date arrives; the hard stop lives at effectuate.
-    for domain in [PeriodLockDomain::Payroll, PeriodLockDomain::Accounting] {
+    // §3.9.1 동결 창 — computed, not a reminder: literally the read
+    // `assert_change_window_open` enforces at apply time, so the chip and the
+    // refusal can never disagree. Surfaced early so the approval chain is not
+    // spent on a change effectuate would refuse. It stays a warning rather than
+    // a blocker because a lock can be lifted before the effective date arrives;
+    // the hard stop lives at effectuate.
+    let mut frozen = Vec::new();
+    for domain in FREEZE_DOMAINS {
         match assert_period_open(tx, domain, effective_date).await {
             Ok(()) => {}
             Err(refusal) if refusal.kind == ErrorKind::Conflict => {
-                warnings.push(PreflightWarning {
-                    code: "FREEZE_WINDOW_REVIEW".to_owned(),
-                    label: format!("발효일 동결 — 적용 불가: {}", refusal.message),
-                    dependent_kind: None,
-                    count: None,
-                })
+                frozen.push(freeze_domain_label(domain));
             }
             Err(other) => return Err(other.into()),
         }
+    }
+    // One chip however many domains block: the console keys this list by `code`
+    // (`web/src/console/org/OrgChangeModal.tsx`), so a second row under the same
+    // code is a duplicate React key, not a second signal.
+    if !frozen.is_empty() {
+        warnings.push(PreflightWarning {
+            code: "FREEZE_WINDOW_REVIEW".to_owned(),
+            label: format!("{} 동결 — 발효일 조정 필요", frozen.join("·")),
+            dependent_kind: None,
+            count: None,
+        });
     }
 
     // Governance verdict: Restrict dependents ⇒ deny (arch §15).
@@ -705,6 +713,21 @@ async fn store_preflight(
 // Apply executor — replays the approved proposal inside the caller's tx.
 // ---------------------------------------------------------------------------
 
+/// The freeze domains §3.9.1 names — 급여 마감 and 회계 결산. One list, so the
+/// preflight chip and the apply gate can never check a different set.
+const FREEZE_DOMAINS: [PeriodLockDomain; 2] =
+    [PeriodLockDomain::Payroll, PeriodLockDomain::Accounting];
+
+/// Console-facing name of a freeze domain. The platform refusal message is
+/// English and shared with the financial surface; the preflight chip sits in a
+/// Korean list (`OrgChangeModal.tsx`), so it names the domain in Korean.
+const fn freeze_domain_label(domain: PeriodLockDomain) -> &'static str {
+    match domain {
+        PeriodLockDomain::Payroll => "급여 마감",
+        PeriodLockDomain::Accounting => "회계 결산",
+    }
+}
+
 /// §3.9.1 변경 동결 창 — refuse a live org mutation whose effective date falls
 /// inside a closed payroll or accounting period, in which case the run whose
 /// scope and attribution it would rewrite is already sealed.
@@ -717,10 +740,22 @@ async fn assert_change_window_open(
     tx: Tx<'_, '_>,
     effective_date: Date,
 ) -> Result<(), PgOrgChangeError> {
-    for domain in [PeriodLockDomain::Payroll, PeriodLockDomain::Accounting] {
-        assert_period_open(tx, domain, effective_date)
-            .await
-            .map_err(PgOrgChangeError::Frozen)?;
+    for domain in FREEZE_DOMAINS {
+        match assert_period_open(tx, domain, effective_date).await {
+            Ok(()) => {}
+            // Conflict = that window is closed. The platform phrases its own
+            // refusal in English for the financial back office; this crate's
+            // conflicts reach the approval modal verbatim (`orgApi.ts` →
+            // `OrgChangeModal.tsx`) beside 발효일/SoD refusals that are Korean,
+            // so the freeze refusal is named the same way there.
+            Err(refusal) if refusal.kind == ErrorKind::Conflict => {
+                return Err(PgOrgChangeError::Frozen(KernelError::conflict(format!(
+                    "{} 기간에 포함된 발효일({effective_date})에는 조직 변경을 적용할 수 없습니다.",
+                    freeze_domain_label(domain)
+                ))));
+            }
+            Err(other) => return Err(other.into()),
+        }
     }
     Ok(())
 }

@@ -548,7 +548,7 @@ async fn dissolve_settles_then_archives_with_referential_net(pool: PgPool) {
         frozen["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("accounting"),
+            .contains("회계 결산"),
         "refusal names the blocking window: {frozen}"
     );
     let still_active: Option<OffsetDateTime> =
@@ -1043,9 +1043,21 @@ async fn effectuate_is_frozen_inside_a_locked_period_and_records_the_attempt(poo
         "급여 마감",
     )
     .await;
+    let accounting_lock = seed_period_lock(
+        &pool,
+        org,
+        "accounting",
+        window_start,
+        today_kst() + Duration::days(3),
+        "회계 결산",
+    )
+    .await;
 
     // Preflight computes the freeze signal from the same locks — it is a read,
-    // not a reminder chip, so it names the window that would refuse the apply.
+    // not a reminder chip, so it names the domains that would refuse the apply.
+    // With BOTH domains locked it stays ONE warning: the console keys the
+    // warning list by `code`, so a second `FREEZE_WINDOW_REVIEW` row would be a
+    // duplicate React key rather than a second signal.
     let (status, prechecked) = send(
         &rt,
         &keys,
@@ -1064,11 +1076,14 @@ async fn effectuate_is_frozen_inside_a_locked_period_and_records_the_attempt(poo
         .filter(|w| w["code"] == "FREEZE_WINDOW_REVIEW")
         .map(|w| w["label"].as_str().unwrap())
         .collect();
-    assert_eq!(freeze_labels.len(), 1, "one freeze warning: {prechecked}");
+    assert_eq!(
+        freeze_labels.len(),
+        1,
+        "one freeze warning however many domains block: {prechecked}"
+    );
     assert!(
-        freeze_labels[0].contains("payroll")
-            && freeze_labels[0].contains(&window_start.to_string()),
-        "freeze warning names the blocking window: {}",
+        freeze_labels[0].contains("급여 마감") && freeze_labels[0].contains("회계 결산"),
+        "the one chip names every blocking domain, in the console's language: {}",
         freeze_labels[0]
     );
 
@@ -1098,22 +1113,10 @@ async fn effectuate_is_frozen_inside_a_locked_period_and_records_the_attempt(poo
         assert_eq!(status, StatusCode::OK, "decide: {decided}");
     }
 
-    // Both freeze domains block, and each refusal names its own window.
-    for (domain, lock) in [
-        ("payroll", payroll_lock),
-        (
-            "accounting",
-            seed_period_lock(
-                &pool,
-                org,
-                "accounting",
-                window_start,
-                today_kst() + Duration::days(3),
-                "회계 결산",
-            )
-            .await,
-        ),
-    ] {
+    // Both freeze domains block, and each refusal names its own window. The
+    // second pass proves the accounting domain gates on its own, with the
+    // payroll lock already lifted.
+    for (domain, lock) in [("급여 마감", payroll_lock), ("회계 결산", accounting_lock)] {
         let (status, frozen) = send(
             &rt,
             &keys,
@@ -1127,8 +1130,8 @@ async fn effectuate_is_frozen_inside_a_locked_period_and_records_the_attempt(poo
         assert_eq!(status, StatusCode::CONFLICT, "{domain} freeze: {frozen}");
         let message = frozen["error"]["message"].as_str().unwrap();
         assert!(
-            message.contains(domain) && message.contains(&window_start.to_string()),
-            "refusal names the blocking {domain} window: {message}"
+            message.contains(domain) && message.contains(&today_kst().to_string()),
+            "refusal names the blocking {domain} window in the console's language: {message}"
         );
         let (_, still) = send(
             &rt,
@@ -1177,7 +1180,7 @@ async fn effectuate_is_frozen_inside_a_locked_period_and_records_the_attempt(poo
     .await
     .unwrap();
     assert_eq!(refusals.len(), 2, "one detection row per refused attempt");
-    for (index, domain) in ["payroll", "accounting"].iter().enumerate() {
+    for (index, domain) in ["급여 마감", "회계 결산"].iter().enumerate() {
         let (row_org, actor, anomaly, reason) = &refusals[index];
         assert_eq!(row_org.as_ref(), Some(org.as_uuid()), "tenant-scoped");
         assert_eq!(actor.as_ref(), Some(approver.as_uuid()), "actor recorded");
