@@ -98,6 +98,7 @@ the lane is later dropped, the number is not recycled.
 | 7 | 0208 | L-X5 | Won → contract `C-` + large-deal threshold object | assigned | 2026-07-25 |
 | 8 | 0209 | L-X7 | ontology projections (deal / listing / inquiry) | assigned | 2026-07-25 |
 | 9 | 0210 | L-X8 | lead PII: consent, retention, masking, audited sensitive view | assigned | 2026-07-25 |
+| 10 | 0211 | hf-leaveapi-revoke | REVOKE PUBLIC on leave_api.assert_employee_directory_manager (SECURITY DEFINER authz helper) + restore the six→seven deny-by-default tripwire | assigned | 2026-07-25 |
 
 Next free slot after the seeded assignments: **0211**.
 
@@ -123,3 +124,13 @@ slot request
 
 The integrator appends a row to §4 and replies with the number. There is no
 self-service path.
+
+> **Integrator deviation, recorded 2026-07-25.** Slot 0211 was assigned after the
+> integrator first mis-allocated 0203 by surveying migration *files* across refs
+> instead of reading §4 — the exact failure rule 1.4 forbids. The lane caught it
+> and did not self-reassign. Its migration was also written directly into
+> `backend/crates/platform/db/migrations/` rather than handed over as a §1.3
+> manifest, because the integrator briefed it that way; accepted as-is this once
+> since the integrator lands it immediately, and a manifest round-trip would add
+> a copy step with drift risk and no safety gain. §1.3 still stands for lanes the
+> integrator is not landing in the same pass.
