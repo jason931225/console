@@ -1143,7 +1143,9 @@ describe("MyWorkBody calendar workbench", () => {
   });
 
   it("does not promise a collaboration route to a plain Feature::Login member", async () => {
-    expect(canOpenCalendarOwner(["MEMBER"], undefined, [])).toBe(false);
+    expect(canOpenCalendarOwner(["MEMBER"], [])).toBe(false);
+    expect(canOpenCalendarOwner(["MECHANIC"], [])).toBe(true);
+    expect(canOpenCalendarOwner(["MEMBER"], ["work_order_read_all"])).toBe(true);
     const user = userEvent.setup();
     const api = Object.assign(stubApi(), {
       loadWorkbench: vi.fn().mockResolvedValue(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false })),
@@ -1159,5 +1161,14 @@ describe("MyWorkBody calendar workbench", () => {
 
     expect(await screen.findByText(`${C.created}: Prepare weekly close`)).toBeVisible();
     expect(screen.queryByRole("button", { name: C.openCreated })).not.toBeInTheDocument();
+  });
+
+  it("keeps the receipt affordance aligned to collaboration's operational audience", () => {
+    for (const role of ["SUPER_ADMIN", "ADMIN", "EXECUTIVE", "MECHANIC", "RECEPTIONIST"]) {
+      expect(canOpenCalendarOwner([role], [])).toBe(true);
+    }
+    expect(canOpenCalendarOwner(["MEMBER"], [])).toBe(false);
+    expect(canOpenCalendarOwner(undefined, ["work_order_read_all"])).toBe(true);
+    expect(canOpenCalendarOwner(undefined, ["work_order_create"])).toBe(false);
   });
 });

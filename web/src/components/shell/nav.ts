@@ -32,6 +32,11 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
+
+import {
+  COLLABORATION_ROUTE_FEATURE,
+  COLLABORATION_ROUTE_ROLES,
+} from "../../lib/collaborationRoutePolicy";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -252,7 +257,7 @@ const ITEM_ROLE_GATES = new Map<string, readonly Role[]>([
   ["intake", LOGISTICS_MAINTENANCE_ROLES],
   ["support", LOGISTICS_MAINTENANCE_ROLES],
   ["reporting", LOGISTICS_MAINTENANCE_ROLES],
-  ["collaboration", LOGISTICS_MAINTENANCE_ROLES],
+  ["collaboration", COLLABORATION_ROUTE_ROLES],
   // Facilities/IFM case visibility mirrors backend FacilitiesObserve: all
   // operational roles, or an explicit tenant-scoped observation grant.
   ["facilities", OPERATIONAL_ROLES],
@@ -336,7 +341,7 @@ const ITEM_FEATURE_GATES = new Map<string, readonly FeatureGrant[]>([
   ["intake", [FEATURES.WORK_ORDER_CREATE]],
   ["support", [FEATURES.WORK_ORDER_READ_ALL]],
   ["reporting", [FEATURES.EXCEL_DOWNLOAD]],
-  ["collaboration", [FEATURES.WORK_ORDER_READ_ALL]],
+  ["collaboration", [COLLABORATION_ROUTE_FEATURE]],
   ["facilities", [FEATURES.FACILITIES_OBSERVE]],
   ["approvals", [FEATURES.COMPLETION_REVIEW]],
   [

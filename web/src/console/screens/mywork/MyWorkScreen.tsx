@@ -11,8 +11,8 @@ export default function MyWorkScreen() {
   const { api, session } = useAuth();
   const myWorkApi = useMemo(() => createMyWorkApi(api), [api]);
   const canOpenOwner = useMemo(
-    () => canOpenCalendarOwner(session?.roles, session?.group_roles, session?.feature_grants),
-    [session?.feature_grants, session?.group_roles, session?.roles],
+    () => canOpenCalendarOwner(session?.roles, session?.feature_grants),
+    [session?.feature_grants, session?.roles],
   );
   return <MyWorkBody api={myWorkApi} canOpenCalendarOwner={canOpenOwner} />;
 }
