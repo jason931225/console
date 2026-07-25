@@ -139,6 +139,37 @@ describe("CommsRailView", () => {
     expect(onOpenMessengerThread).toHaveBeenCalledWith("thread-1");
   });
 
+  it("opens an explicitly typed notification-origin messenger thread", async () => {
+    const user = userEvent.setup();
+    const onOpenMessengerThread = vi.fn();
+    const messengerMention: CommsRailSnapshot = {
+      ...snapshot(),
+      notifications: {
+        kind: "ready",
+        items: [{
+          ...items.notifications,
+          target: {
+            kind: "messenger-thread",
+            source: "notifications",
+            id: "thread-2",
+          },
+        }],
+        loadedAt: "now",
+      },
+    };
+
+    render(
+      <CommsRailView
+        presentation="persistent"
+        snapshot={messengerMention}
+        copy={copy}
+        onOpenMessengerThread={onOpenMessengerThread}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Approval requested/ }));
+    expect(onOpenMessengerThread).toHaveBeenCalledWith("thread-2");
+  });
+
   it("fails closed when a mail row carries a forged messenger target", async () => {
     const user = userEvent.setup();
     const onOpenMessengerThread = vi.fn();

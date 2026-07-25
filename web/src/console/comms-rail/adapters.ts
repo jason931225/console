@@ -137,19 +137,26 @@ function notifications(value: unknown): NotificationSummary[] | undefined {
   if (!record(value) || !Array.isArray(value.items)) return undefined;
   return value.items.every((item) => record(item) && validUuid(item.id) && validUuid(item.recipient_user_id) &&
     typeof item.category === "string" && typeof item.kind === "string" && typeof item.text === "string" &&
-    typeof item.unread === "boolean" && validTimestamp(item.created_at) &&
+    typeof item.unread === "boolean" && typeof item.muted === "boolean" && validTimestamp(item.created_at) &&
     (item.read_at === null || validTimestamp(item.read_at)) && (item.resolved_at === null || validTimestamp(item.resolved_at)) &&
     validNotificationLink(item.link)) ? value.items as NotificationSummary[] : undefined;
 }
 
 function validNotificationLink(value: unknown): boolean {
   if (!record(value) || typeof value.type !== "string") return false;
-  return value.type === "screen" ? typeof value.screen === "string" :
-    value.type === "object" && typeof value.kind === "string" && validUuid(value.id);
+  return value.type === "screen"
+    ? typeof value.screen === "string" && value.screen.trim().length > 0
+    : value.type === "object" && typeof value.kind === "string" && value.kind.trim().length > 0 &&
+      typeof value.id === "string" && value.id.trim().length > 0;
 }
 
 function safeNotificationTarget(notification: NotificationSummary): CommsRailItem["target"] | undefined {
-  if (notification.link.type !== "screen" || !SAFE_SCREENS.has(notification.link.screen)) return undefined;
+  if (notification.link.type === "object") {
+    return notification.link.kind === "messenger_thread" && validUuid(notification.link.id)
+      ? { kind: "messenger-thread", source: "notifications", id: notification.link.id }
+      : undefined;
+  }
+  if (!SAFE_SCREENS.has(notification.link.screen)) return undefined;
   const route = notification.link.screen === "notifications" ? "/notifications" : `/${notification.link.screen}`;
   return { kind: "full-screen", source: "notifications", id: notification.id, route };
 }

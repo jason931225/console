@@ -234,6 +234,7 @@ function RailCategory({
     const target = item.target;
     if (!target || target.source !== item.source) return false;
     if (target.kind === "full-screen") return Boolean(onOpenFullModule);
+    if (target.kind === "messenger-thread") return Boolean(onOpenMessengerThread);
     if (target.source === "messenger") return Boolean(onOpenMessengerThread);
     if (target.source === "mail") return Boolean(onOpenMailThread);
     return Boolean(onOpenNotice);
@@ -244,6 +245,10 @@ function RailCategory({
     if (!target || target.source !== item.source) return;
     if (target.kind === "full-screen") {
       onOpenFullModule?.(item, target);
+      return;
+    }
+    if (target.kind === "messenger-thread") {
+      onOpenMessengerThread?.(target.id);
       return;
     }
     if (target.source === "messenger") {
