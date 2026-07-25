@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -8,9 +9,18 @@ import test from 'node:test';
 
 import { createConsoleCandidateSourceResolver, promotionAuthorityDigests, validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
 import { verifyCommitWithCandidateSshPolicy } from './ssh-signature-policy.mjs';
+import { extractConsoleRouteFactsFromTexts } from './route-inventory.mjs';
 
 const registry = JSON.parse(readFileSync(new URL('../../docs/program/console-capability-registry.json', import.meta.url)));
 const jurisdiction = JSON.parse(readFileSync(new URL('../../docs/program/console-jurisdiction-register.json', import.meta.url)));
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+
+function immutableCandidateRouteFacts() {
+  return extractConsoleRouteFactsFromTexts(
+    execFileSync('git', ['-C', repoRoot, 'show', `${registry.candidate.sha}:web/src/console/shell/nav.ts`], { encoding: 'utf8' }),
+    execFileSync('git', ['-C', repoRoot, 'show', `${registry.candidate.sha}:web/src/console/screens/registry.ts`], { encoding: 'utf8' }),
+  );
+}
 
 test('current candidate truth ledger is structurally complete but remains candidate-bound HOLD where evidence is absent', () => {
   assert.doesNotThrow(() => validateConsoleTruthLedger(registry, jurisdiction, { expectedCandidateSha: registry.candidate.sha }));
@@ -86,10 +96,12 @@ test('required Buck target fails closed when resolver rejects it', () => {
   assert.throws(() => validateConsoleTruthLedger(bad, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveBuckTarget: () => false }), /invalid\/nonexistent Buck target/);
 });
 
-test('attestation rejects TOCTOU mutation after validation', async () => {
+test('attestation rejects TOCTOU mutation after candidate-bound validation', async () => {
   const { isValidatedConsoleTruthLedger } = await import('./validate-console-truth-ledger.mjs');
   const value = structuredClone(registry);
-  validateConsoleTruthLedger(value, jurisdiction, { expectedCandidateSha: registry.candidate.sha, routeFacts: (await import('./route-inventory.mjs')).extractConsoleRouteFacts(process.cwd()) });
+  // Product facts must come from immutable C rather than the later authority
+  // checkout (or any subsequently advanced working directory).
+  validateConsoleTruthLedger(value, jurisdiction, { expectedCandidateSha: registry.candidate.sha, routeFacts: immutableCandidateRouteFacts() });
   assert.equal(isValidatedConsoleTruthLedger(value), true);
   value.capabilities[0].truth.exposure = 'EXPOSED';
   assert.equal(isValidatedConsoleTruthLedger(value), false);
