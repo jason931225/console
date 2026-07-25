@@ -1017,7 +1017,7 @@ function SitePane({
                 <span>{event.user_name ?? ko.common.unknown}</span>
                 <StatusChip tone={event.kind === "ARRIVAL" ? "ok" : "neutral"}>
                   {/* kind is the compliance crate's open vocabulary, not a closed enum */}
-                  {text.attendanceKind[event.kind as keyof typeof text.attendanceKind] ?? event.kind}
+                  {(text.attendanceKind as Record<string, string>)[event.kind] ?? event.kind}
                 </StatusChip>
                 <span>{formatDateTime(event.occurred_at)}</span>
               </li>

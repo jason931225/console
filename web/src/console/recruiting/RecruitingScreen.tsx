@@ -15,7 +15,6 @@ import {
   type RecruitApplicantDetailResponse,
   type RecruitApplicantRouting,
   type RecruitApplicantRow,
-  type RecruitApplicantView,
   type RecruitPostingRow,
   type RecruitPostingView,
   type RecruitTalentPoolItem,

@@ -98,27 +98,10 @@ function parseChecks(error: unknown): RecruitPreflightCheck[] | undefined {
   return checks.length > 0 ? checks : undefined;
 }
 
-interface TransportInit {
-  params?: {
-    path?: Record<string, string>;
-    query?: Record<string, string | undefined>;
-  };
-  body?: unknown;
-  signal?: AbortSignal;
-  headers?: Record<string, string>;
-}
-
 interface TransportResult {
   data?: unknown;
   error?: unknown;
   response: Response;
-}
-
-/** The verbs of the openapi-fetch client, untyped over the recruiting paths. */
-interface RecruitingTransport {
-  GET: (path: string, init?: TransportInit) => Promise<TransportResult>;
-  POST: (path: string, init?: TransportInit) => Promise<TransportResult>;
-  PUT: (path: string, init?: TransportInit) => Promise<TransportResult>;
 }
 
 function requireData(result: TransportResult): unknown {

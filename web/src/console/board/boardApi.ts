@@ -63,7 +63,7 @@ export function createBoardApi(api: ConsoleApiClient) {
         body: input,
         signal,
       });
-      return requireData(response) as BoardNotice;
+      return requireData(response);
     },
     publish: async (id: string, signal?: AbortSignal) => {
       const response = await api.POST("/api/v1/notices/{id}/publish", {

@@ -256,9 +256,7 @@ export function CandidateCard(props: Props) {
                 </span>
                 <span className="recruiting__section-note">{text.card.offerSentPrefix}{dateTimeLabel(offer.extended_at)}</span>
               </div>
-              {offer.reply_deadline !== null && (
-                <div className="recruiting__section-note">{text.card.replyDeadline} {dateTimeLabel(offer.reply_deadline)}</div>
-              )}
+              <div className="recruiting__section-note">{text.card.replyDeadline} {dateTimeLabel(offer.reply_deadline)}</div>
               {capabilities.canManage && offer.status === "EXTENDED" && (
                 <>
                   <div className="recruiting__req-row">
