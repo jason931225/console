@@ -359,6 +359,38 @@ jobs:
       - name: clippy -D warnings
         if: ${{ !cancelled() }}
         run: SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings
+      - name: Layer-boundary gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-layer-boundary
+
+      - name: Audit-coverage gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-audit-coverage
+
+      - name: Migration-safety gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-migration-safety
+
+      - name: Tenant-isolation gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-tenant-isolation
+
+      - name: PII-no-logs gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-pii-no-logs
+
+      - name: RLS-arming gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-rls-arming
+
+      - name: Dev-auth-absence gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-dev-auth-absence
+
+      - name: IaC tier-discipline gate
+        if: ${{ !cancelled() }}
+        run: cargo run -p mnt-gate-iac-tier
+
 
       # Migration 0165 fails closed unless the portable seven-role topology
       # already exists. Reconcile it before any database test applies the
@@ -495,38 +527,6 @@ jobs:
             exit 1
           fi
 
-      - name: Layer-boundary gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-layer-boundary
-
-      - name: Audit-coverage gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-audit-coverage
-
-      - name: Migration-safety gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-migration-safety
-
-      - name: Tenant-isolation gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-tenant-isolation
-
-      - name: PII-no-logs gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-pii-no-logs
-
-      - name: RLS-arming gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-rls-arming
-
-      - name: Dev-auth-absence gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-dev-auth-absence
-
-      - name: IaC tier-discipline gate
-        if: ${{ !cancelled() }}
-        run: cargo run -p mnt-gate-iac-tier
-
       - name: Dev-auth feature build/tests
         if: ${{ !cancelled() }}
         # `dev-auth` is NOT in default features (proven above) — build/test it
@@ -541,11 +541,15 @@ jobs:
           SQLX_OFFLINE=true cargo test -p mnt-platform-provisioning --test dev_principal_upsert_race --no-fail-fast -- --test-threads=1 || rc=1
           exit $rc
 
-      - name: Buck2 mnt-app unit and inline PostgreSQL suites
+      - name: Buck2 mnt-app unit suite
+        if: ${{ !cancelled() }}
+        working-directory: .
+        run: env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit
+
+      - name: Buck2 mnt-app inline PostgreSQL suites
         if: ${{ !cancelled() }}
         working-directory: .
         run: |
-          env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit
           tools/buck/test_needs_postgres.sh \
             //backend/app:mnt-app-itest-inline-postgres \
             //backend/app:mnt-app-itest-dev_auth_persona_guard_feature
@@ -564,6 +568,9 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
+
+      - name: dev-up compose contract unit test
+        run: node --test scripts/dev-up-compose.test.mjs
 
       - name: Install pinned DotSlash runtime
         run: tools/buck/install_dotslash.sh
@@ -586,9 +593,6 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-
-      - name: dev-up compose contract unit test
-        run: node --test scripts/dev-up-compose.test.mjs
 
       - name: PostgreSQL topology integration regression
         run: ops/postgres-topology.integration.test.sh

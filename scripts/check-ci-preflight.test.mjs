@@ -533,4 +533,66 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       "support-domain-unit must contain only the locked ordered Buck2 run steps",
     );
   });
+
+  it("preserves fail-fast backend and dev-up ordering", () => {
+    const sourceGateDisplaced = workflow
+      .replace("      - name: Layer-boundary gate\n", "      - name: Displaced source gate\n")
+      .replace("      - name: Reconcile portable PostgreSQL role topology\n", "      - name: Layer-boundary gate\n");
+    expectFailure(sourceGateDisplaced, "backend must run source-only gates immediately after clippy");
+
+    const unitAfterPostgres = workflow
+      .replace("      - name: Buck2 mnt-app unit suite\n", "      - name: Temporary Buck2 step\n")
+      .replace("      - name: Buck2 mnt-app inline PostgreSQL suites\n", "      - name: Buck2 mnt-app unit suite\n");
+    expectFailure(unitAfterPostgres, "backend must preserve the locked fail-fast step order");
+
+    const devUpContractAfterDiskPurge = workflow
+      .replace("      - name: dev-up compose contract unit test\n", "      - name: Temporary dev-up step\n")
+      .replace("      - name: Free runner disk for Rust backend\n", "      - name: dev-up compose contract unit test\n");
+    expectFailure(devUpContractAfterDiskPurge, "dev-up-smoke must preserve the locked fail-fast step order");
+  });
+
+  it("fails closed when optimized gates or targets are commented, weakened, or duplicated", () => {
+    expectFailure(
+      workflow.replace(
+        "        run: cargo run -p mnt-gate-layer-boundary",
+        "        # cargo run -p mnt-gate-layer-boundary",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Audit-coverage gate\n        if: ${{ !cancelled() }}",
+        "      - name: Audit-coverage gate\n        if: ${{ false }}",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Migration-safety gate\n        if: ${{ !cancelled() }}",
+        "      - name: Migration-safety gate\n        if: ${{ !cancelled() }}\n        continue-on-error: true",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Audit-coverage gate\n",
+        "      - name: Layer-boundary gate\n        if: ${{ !cancelled() }}\n        run: cargo run -p mnt-gate-layer-boundary\n\n      - name: Audit-coverage gate\n",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "        run: env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit",
+        "        # env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: dev-up compose contract unit test\n        run: node --test scripts/dev-up-compose.test.mjs",
+        "      - name: dev-up compose contract unit test\n        continue-on-error: true\n        run: node --test scripts/dev-up-compose.test.mjs",
+      ),
+      "dev-up-smoke must preserve the locked fail-fast step multiset and failure semantics",
+    );
+  });
 });
