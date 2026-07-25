@@ -18,7 +18,7 @@ use mnt_kernel_core::{
 };
 use mnt_platform_auth::JwtVerifier;
 use mnt_platform_authz::{
-    Action, Feature, Principal, Role, ServicePrincipal, authorize, authorize_service,
+    Action, Feature, Principal, ServicePrincipal, authorize, authorize_service,
 };
 use mnt_platform_db::{DbError, insert_audit_event, with_audits, with_org_conn};
 use serde::{Deserialize, Serialize};

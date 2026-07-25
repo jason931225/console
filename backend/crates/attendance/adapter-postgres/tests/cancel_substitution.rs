@@ -502,7 +502,7 @@ async fn open_no_show_commit_blocks_the_single_connection_adapter_then_conflicts
         sqlx::query("INSERT INTO attendance_exceptions (org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) VALUES ($1,$2,'NO_SHOW',$3,$4,$5,'unavailable',$6,$7,$8)")
             .bind(*OrgId::knl().as_uuid()).bind(format!("AT-{worker}")).bind(worker).bind(*branch.as_uuid()).bind(day).bind(*actor.as_uuid()).bind(format!("open-no-show-{worker}")).bind("a".repeat(64)).execute(&mut *writer).await.unwrap();
         let store = PgAttendanceStore::new(reader);
-        let mut task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "open-no-show-race"))).await });
+        let task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "open-no-show-race"))).await });
         wait_for_advisory_lock_waiter(&owner_pool, &reader_session, &writer_session).await;
         writer.commit().await.unwrap();
         let error = task.await.unwrap().expect_err("fresh eligibility query must reject committed NO_SHOW");
@@ -540,7 +540,7 @@ async fn no_show_resolution_commit_releases_single_connection_adapter(owner_pool
         sqlx::query("UPDATE attendance_exceptions SET status='RESOLVED' WHERE id=$1").bind(exception).execute(&mut *writer).await.unwrap();
         let caller = CallerScope { org_id: *OrgId::knl().as_uuid(), user_id: *actor.as_uuid(), branch_ids: vec![*branch.as_uuid()], org_wide: false };
         let store = PgAttendanceStore::new(reader);
-        let mut task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "resolution-no-show-race"))).await });
+        let task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "resolution-no-show-race"))).await });
         wait_for_advisory_lock_waiter(&owner_pool, &reader_session, &writer_session).await;
         writer.commit().await.unwrap();
         assert!(task.await.unwrap().is_ok(), "resolved NO_SHOW must permit assignment");
@@ -592,7 +592,7 @@ async fn legacy_assignment_rechecks_after_leave_commit(owner_pool: PgPool) {
             .execute(&mut *leave)
             .await
             .unwrap();
-        let mut legacy = tokio::spawn(async move { sqlx::query("INSERT INTO attendance_substitutions (org_id,site,branch_id,role,cover_date,from_minutes,to_minutes,covered_employee_id,reason_kind,worker_employee_id,worker_name,worker_type,created_by,idempotency_key,request_fingerprint) VALUES ($1,'site',$2,'role',$3,480,960,$4,'OTHER',$4,'legacy','REGULAR',$5,'legacy-recheck',$6)").bind(*OrgId::knl().as_uuid()).bind(*branch.as_uuid()).bind(day).bind(worker).bind(*actor.as_uuid()).bind("a".repeat(64)).execute(&reader).await });
+        let legacy = tokio::spawn(async move { sqlx::query("INSERT INTO attendance_substitutions (org_id,site,branch_id,role,cover_date,from_minutes,to_minutes,covered_employee_id,reason_kind,worker_employee_id,worker_name,worker_type,created_by,idempotency_key,request_fingerprint) VALUES ($1,'site',$2,'role',$3,480,960,$4,'OTHER',$4,'legacy','REGULAR',$5,'legacy-recheck',$6)").bind(*OrgId::knl().as_uuid()).bind(*branch.as_uuid()).bind(day).bind(worker).bind(*actor.as_uuid()).bind("a".repeat(64)).execute(&reader).await });
         wait_for_advisory_lock_waiter(&owner_pool, &reader_session, &writer_session).await;
         leave.commit().await.unwrap();
         let error = legacy.await.unwrap().expect_err("legacy trigger rechecks committed leave");

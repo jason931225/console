@@ -182,13 +182,11 @@ async fn principal(s: &FacilitiesRestState, h: &HeaderMap) -> Result<Principal, 
     resolve_principal(v, &s.pool, h).await.map_err(|e| match e {
         RequestContextError::MissingBearer
         | RequestContextError::InvalidToken
-        | RequestContextError::InvalidClaim(_) => {
-            (RestError::new(
-                StatusCode::UNAUTHORIZED,
-                "unauthorized",
-                "invalid bearer token",
-            ))
-        }
+        | RequestContextError::InvalidClaim(_) => RestError::new(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "invalid bearer token",
+        ),
         _ => RestError::new(
             StatusCode::FORBIDDEN,
             "forbidden",

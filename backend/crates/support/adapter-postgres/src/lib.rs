@@ -1270,7 +1270,7 @@ impl PgSupportStore {
         // Character count, not bytes — the 0194 CHECK is char_length, so a
         // multibyte key must fail here as validation, not later as a 500.
         let key_chars = key.chars().count();
-        if key_chars < 16 || key_chars > 200 {
+        if !(16..=200).contains(&key_chars) {
             return Err(
                 KernelError::validation("Idempotency-Key must be 16..=200 characters").into(),
             );
