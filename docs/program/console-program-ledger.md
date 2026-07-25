@@ -14,6 +14,29 @@
 > older Buck2-CI charter below is historical context and cannot authorize Cargo
 > product-test completion evidence.
 
+## Phase 0 Support SLO truth-down (2026-07-25)
+
+This Support-only source overlay is anchored to exact revision
+`55d00f8aacaf8d1ba4db87b2f5345605af856a27` and supersedes the historical
+Support SLO parity/completion language later in this ledger. Status is
+**PARTIAL**:
+
+- six local `SupportTicketCategory` defaults currently drive timers, breach
+  counts, and alert targets;
+- ticket `due_at` is derived SLA state and is not SLO policy authority;
+- the separately seeded `support_slo_setting` ontology type uses the legacy
+  three-bucket `incident`/`request`/`change` taxonomy, is incompatible with the
+  six ticket categories, and does not serve the timer/alert computations;
+- settings approval is a client-only staging-actor check followed by independent
+  browser-issued writes, not one backend-atomic approval; and
+- the approved next architecture is one Support-owned immutable six-category
+  elapsed-only policy aggregate with backend atomic approval.
+
+The approved architecture is not implementation evidence. This ledger does not
+claim its migration identifier, backend route, parity, deployment, or
+completion. The machine-readable capability registry still controls admission;
+this historical ledger cannot promote Support exposure.
+
 Authority model (2026-07-09 directive):
 
 Truth-ledger candidate model (C/T/M): the **product candidate C** is the signed,
