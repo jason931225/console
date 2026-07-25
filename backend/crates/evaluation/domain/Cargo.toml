@@ -1,7 +1,6 @@
 [package]
 name = "mnt-evaluation-domain"
 version = "0.1.0"
-description = "Pure performance-review lifecycle, review, rubric, and visibility invariants."
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -10,8 +9,6 @@ publish.workspace = true
 [dependencies]
 mnt-kernel-core = { workspace = true }
 serde = { workspace = true }
-time = { workspace = true }
-uuid = { workspace = true }
 
 [lints]
 workspace = true

@@ -23,7 +23,7 @@ const ROLES: [Role; 6] = [
     Role::SuperAdmin,
 ];
 
-fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 93] {
+fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 96] {
     use Feature::{
         AiAssist, ApprovalFinalize, AssigneeManage, AuditLogRead, AuditStreamAccessLogRead,
         AuditStreamRead, BenefitCatalogManage, BenefitCatalogRead, BranchManage, CompletionReview,
@@ -32,7 +32,8 @@ fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 93] {
         EmployeeDirectoryManage, EmployeeDirectoryRead, Equipment3rApprove, Equipment3rAssess,
         Equipment3rDispatch, Equipment3rDisposition, Equipment3rInspect, Equipment3rObserve,
         Equipment3rQuote, Equipment3rRegistry, EquipmentCostLedgerRead, EquipmentCostLedgerWrite,
-        EquipmentManage, EvidenceAttach, ExcelDownload, ExitCaseHqConfirm, ExitCaseHrConfirm,
+        EquipmentManage, EvaluationManage, EvaluationRead, EvaluationSubmit, EvidenceAttach,
+        ExcelDownload, ExitCaseHqConfirm, ExitCaseHrConfirm,
         ExitCaseReport, ExitSettlementManage, FacilitiesAccept, FacilitiesDispatch,
         FacilitiesExecute, FacilitiesManage, FacilitiesObserve, InspectionRoundComplete,
         InspectionScheduleManage, IntegrityFindingTriage, IntegrityFindingsRead, InventoryConsume,
@@ -181,6 +182,9 @@ fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 93] {
         // read-only) and is gated org-wide like EmployeeDirectory*.
         (RecruitingRead, [D, D, D, A, A, A]),
         (RecruitingManage, [D, D, D, A, D, A]),
+        (EvaluationRead, [D, D, D, A, A, A]),
+        (EvaluationManage, [D, D, D, A, D, A]),
+        (EvaluationSubmit, [D, D, D, A, A, A]),
     ]
 }
 
@@ -842,7 +846,7 @@ fn cedar_compiled_bundle_cache_key_requires_versioned_identity() {
 #[test]
 fn permission_matrix_is_exhaustive_and_matches_inherited_table() {
     let matrix = expected_matrix();
-    assert_eq!(Feature::ALL.len(), 93);
+    assert_eq!(Feature::ALL.len(), 96);
     assert_eq!(matrix.len(), Feature::ALL.len());
 
     for feature in Feature::ALL {

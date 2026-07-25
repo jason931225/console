@@ -164,6 +164,8 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+mnt-evaluation-adapter-postgres = { workspace = true }
+mnt-evaluation-rest = { workspace = true }
 mnt-financial-application = { workspace = true }
 mnt-financial-domain = { workspace = true }
 mnt-governance-application = { workspace = true }

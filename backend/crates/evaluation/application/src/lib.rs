@@ -1,959 +1,294 @@
-//! Evaluation commands and transactional application ports.
+//! HTTP-independent contracts for the evaluation console.
 //!
-//! Adapters derive actor/tenant from the authenticated, RLS-armed request. No
-//! command accepts `org_id`; persistence is reached only through one atomic
-//! unit of work that owns aggregate, audit, RV, and receipt commit.
+//! Field names are the wire contract (snake_case, mirroring the design
+//! contract §4 and the openapi fragment); `org_id` is deliberately absent —
+//! the adapter derives the tenant from the authenticated request context.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use mnt_evaluation_domain::{
-    EvaluationCycle, EvaluationCycleId, EvaluationCycleState, EvaluationEvidenceLink,
-    EvaluationSubject, EvaluationSubjectId, ReviewKind, RubricLevel, SubjectVisibility,
+    CycleKind, CycleStage, CycleTransition, EvidenceKind, Grade, MetricKind, ReviewKind,
+    ReviewStatus, SubjectState,
 };
-use mnt_kernel_core::{KernelError, OrgId, Timestamp, TraceContext, UserId};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use time::{Date, OffsetDateTime};
+use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvaluationActorContext {
-    /// Server-derived tenant context, never caller input.
-    pub org_id: OrgId,
-    pub user_id: UserId,
-    pub may_manage: bool,
-    pub may_submit: bool,
-    pub may_calibrate: bool,
-}
+/// `time::Date` wire format (`YYYY-MM-DD`), shared by requests and views.
+pub mod date_fmt {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use time::Date;
+    use time::format_description::well_known::Iso8601;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CommandMetadata {
-    pub actor: UserId,
-    pub trace: TraceContext,
-    /// Aggregate OCC token: cycle for cycle actions, selected subject for calibration,
-    /// selected review for draft edit/submit.
-    pub expected_version: u64,
-    pub idempotency_key: String,
-    pub fingerprint: String,
-}
-impl CommandMetadata {
-    pub fn validate(&self, context: &EvaluationActorContext) -> Result<(), KernelError> {
-        if self.actor != context.user_id {
-            return Err(KernelError::forbidden(
-                "command actor must match authenticated principal",
-            ));
-        }
-        if !(16..=200).contains(&self.idempotency_key.trim().len()) {
-            return Err(KernelError::validation(
-                "idempotency key must be 16..=200 characters",
-            ));
-        }
-        if self.fingerprint.trim().is_empty() || self.fingerprint.len() > 128 {
-            return Err(KernelError::validation(
-                "command fingerprint is required and bounded",
-            ));
-        }
-        Ok(())
+    pub fn serialize<S: Serializer>(date: &Date, ser: S) -> Result<S::Ok, S::Error> {
+        let text = date
+            .format(&Iso8601::DATE)
+            .map_err(serde::ser::Error::custom)?;
+        ser.serialize_str(&text)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Date, D::Error> {
+        let text = String::deserialize(de)?;
+        Date::parse(&text, &Iso8601::DATE).map_err(serde::de::Error::custom)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenCycleCommand {
-    pub cycle_id: EvaluationCycleId,
-    pub metadata: CommandMetadata,
+// ---------------------------------------------------------------------------
+// Inputs (validated at the REST boundary before they reach the adapter)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateCycleInput {
+    pub name: String,
+    pub kind: CycleKind,
+    pub period_label: String,
+    #[serde(with = "date_fmt")]
+    pub due_date: Date,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StartCalibrationCommand {
-    pub cycle_id: EvaluationCycleId,
-    pub metadata: CommandMetadata,
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoalInput {
+    pub title: String,
+    pub metric_kind: MetricKind,
+    pub target_label: String,
+    pub weight_pct: i16,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FinalizeCycleCommand {
-    pub cycle_id: EvaluationCycleId,
-    pub metadata: CommandMetadata,
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceInput {
+    pub object_kind: EvidenceKind,
+    pub object_ref: String,
+    pub label: String,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CalibrateSubjectCommand {
-    pub cycle_id: EvaluationCycleId,
-    pub subject_id: EvaluationSubjectId,
-    pub grade: RubricLevel,
-    pub rationale: String,
-    pub metadata: CommandMetadata,
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewDraftInput {
+    pub grade: Option<Grade>,
+    pub note: Option<String>,
+    pub evidence_links: Vec<EvidenceInput>,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditReviewDraftCommand {
-    pub cycle_id: EvaluationCycleId,
-    pub subject_id: EvaluationSubjectId,
+
+/// Normalized cycle-list query (limit already clamped by the REST boundary).
+#[derive(Debug, Clone, Copy)]
+pub struct CycleQuery {
+    pub stage: Option<CycleStage>,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+// ---------------------------------------------------------------------------
+// Views
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CycleSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub kind: CycleKind,
+    pub period_label: String,
+    #[serde(with = "date_fmt")]
+    pub due_date: Date,
+    pub stage: CycleStage,
+    pub subjects_total: i64,
+    pub manager_submitted: i64,
+    pub self_submitted: i64,
+    pub calibrated: i64,
+    pub finalized: i64,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CyclePage {
+    pub items: Vec<CycleSummary>,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnitProgress {
+    pub org_unit: Option<String>,
+    pub total: i64,
+    pub manager_submitted: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CycleDetail {
+    pub id: Uuid,
+    pub name: String,
+    pub kind: CycleKind,
+    pub period_label: String,
+    #[serde(with = "date_fmt")]
+    pub due_date: Date,
+    pub stage: CycleStage,
+    pub subjects_total: i64,
+    pub manager_submitted: i64,
+    pub self_submitted: i64,
+    pub calibrated: i64,
+    pub finalized: i64,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub opened_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub calibration_started_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub finalized_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub archived_at: Option<OffsetDateTime>,
+    pub created_by: Uuid,
+    pub progress_by_unit: Vec<UnitProgress>,
+    pub subjects: Vec<SubjectSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubjectSummary {
+    pub id: Uuid,
+    pub cycle_id: Uuid,
+    pub employee_id: Uuid,
+    pub employee_name: String,
+    pub org_unit: Option<String>,
+    pub manager_user_id: Uuid,
+    pub state: SubjectState,
+    pub final_grade: Option<Grade>,
+    pub rv_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubjectDetail {
+    pub id: Uuid,
+    pub cycle_id: Uuid,
+    pub employee_id: Uuid,
+    pub employee_name: String,
+    pub org_unit: Option<String>,
+    pub manager_user_id: Uuid,
+    pub state: SubjectState,
+    pub final_grade: Option<Grade>,
+    pub rv_code: Option<String>,
+    pub goals: Vec<GoalView>,
+    pub reviews: Vec<ReviewView>,
+    pub calibrated_grade: Option<Grade>,
+    pub calibration_reason: Option<String>,
+    pub calibrated_by: Option<Uuid>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub calibrated_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub finalized_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoalView {
+    pub id: Uuid,
+    pub title: String,
+    pub metric_kind: MetricKind,
+    pub target_label: String,
+    pub weight_pct: i16,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewView {
+    pub id: Uuid,
+    pub subject_id: Uuid,
     pub kind: ReviewKind,
-    pub grade: RubricLevel,
-    pub rationale: String,
-    /// Adapter supplies only server-resolved tenant-visible links.
-    pub evidence_links: Vec<EvaluationEvidenceLink>,
-    pub metadata: CommandMetadata,
+    pub status: ReviewStatus,
+    pub evaluator_user_id: Uuid,
+    pub grade: Option<Grade>,
+    pub note: Option<String>,
+    pub evidence_links: Vec<EvidenceLinkView>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub submitted_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubmitReviewCommand {
-    pub cycle_id: EvaluationCycleId,
-    pub subject_id: EvaluationSubjectId,
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceLinkView {
+    pub id: Uuid,
+    pub object_kind: EvidenceKind,
+    pub object_ref: String,
+    pub label: String,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskItem {
+    pub subject_id: Uuid,
+    pub cycle_id: Uuid,
+    pub cycle_name: String,
+    #[serde(with = "date_fmt")]
+    pub due_date: Date,
+    pub employee_id: Uuid,
+    pub employee_name: String,
     pub kind: ReviewKind,
-    pub metadata: CommandMetadata,
+    pub review_status: Option<ReviewStatus>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ActionReceipt {
-    pub tenant: OrgId,
-    pub action: String,
-    pub idempotency_key: String,
-    pub fingerprint: String,
-    pub response: Value,
-    pub occurred_at: Timestamp,
-}
-#[derive(Debug, Clone, PartialEq)]
-pub enum IdempotencyDecision {
-    Execute,
-    Replay(Value),
-}
-pub fn decide_idempotency(
-    existing: Option<&ActionReceipt>,
-    tenant: OrgId,
-    action: &str,
-    metadata: &CommandMetadata,
-) -> Result<IdempotencyDecision, KernelError> {
-    let Some(existing) = existing else {
-        return Ok(IdempotencyDecision::Execute);
-    };
-    if existing.tenant != tenant
-        || existing.action != action
-        || existing.idempotency_key != metadata.idempotency_key
-    {
-        return Err(KernelError::conflict("idempotency receipt key collision"));
-    }
-    if existing.fingerprint != metadata.fingerprint {
-        return Err(KernelError::conflict(
-            "idempotency key reused with a different payload",
-        ));
-    }
-    Ok(IdempotencyDecision::Replay(existing.response.clone()))
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPage {
+    pub items: Vec<TaskItem>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvaluationAuditIntent {
-    pub action: &'static str,
-    pub actor: UserId,
-    pub trace: TraceContext,
-    pub target_id: String,
-}
-#[derive(Debug, Clone, PartialEq)]
-pub struct EvaluationCommit {
-    pub cycle: EvaluationCycle,
-    pub subjects: Vec<EvaluationSubject>,
-    pub audit: EvaluationAuditIntent,
-    pub receipt: ActionReceipt,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LedgerEntry {
+    pub rv_code: String,
+    pub cycle_id: Uuid,
+    pub cycle_name: String,
+    pub period_label: String,
+    pub final_grade: Grade,
+    #[serde(with = "time::serde::rfc3339")]
+    pub finalized_at: OffsetDateTime,
+    pub subject_id: Uuid,
 }
 
-/// A transaction owns all persistence side effects. `commit` is one operation:
-/// adapters must atomically persist aggregate, RV allocation, audit, and receipt or roll back all of them.
-pub trait EvaluationUnitOfWork {
-    fn receipt(&mut self, action: &str, key: &str) -> Result<Option<ActionReceipt>, KernelError>;
-    fn load_cycle_for_update(
-        &mut self,
-        cycle_id: EvaluationCycleId,
-    ) -> Result<(EvaluationCycle, Vec<EvaluationSubject>), KernelError>;
-    fn reserve_rv_codes(&mut self, count: usize) -> Result<Vec<String>, KernelError>;
-    fn commit(&mut self, commit: EvaluationCommit) -> Result<(), KernelError>;
-}
-/// Implementations must begin/commit/rollback the closure as one physical transaction.
-pub trait EvaluationRepository {
-    type Transaction: EvaluationUnitOfWork;
-    fn transaction<T>(
-        &mut self,
-        operation: impl FnOnce(&mut Self::Transaction) -> Result<T, KernelError>,
-    ) -> Result<T, KernelError>;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LedgerPage {
+    pub items: Vec<LedgerEntry>,
 }
 
-/// Which aggregate owns the optimistic-concurrency token in this response.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ActionVersionScope {
-    Cycle,
-    Subject,
-    Review,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreflightItem {
+    pub code: String,
+    pub message: String,
+    pub subject_id: Option<Uuid>,
 }
 
-/// Exact persisted/replayed command response. `version` belongs to `version_scope`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CycleActionResult {
-    pub cycle_id: EvaluationCycleId,
-    pub state: EvaluationCycleState,
-    pub version_scope: ActionVersionScope,
-    pub version: u64,
-    pub changed_subject_ids: Vec<EvaluationSubjectId>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct MutationOutcome {
-    changed_subject_ids: Vec<EvaluationSubjectId>,
-    version_scope: ActionVersionScope,
-    version: u64,
-}
-impl MutationOutcome {
-    fn cycle(changed_subject_ids: Vec<EvaluationSubjectId>, version: u64) -> Self {
-        Self {
-            changed_subject_ids,
-            version_scope: ActionVersionScope::Cycle,
-            version,
-        }
-    }
-    fn subject(changed_subject_ids: Vec<EvaluationSubjectId>, version: u64) -> Self {
-        Self {
-            changed_subject_ids,
-            version_scope: ActionVersionScope::Subject,
-            version,
-        }
-    }
-    fn review(changed_subject_ids: Vec<EvaluationSubjectId>, version: u64) -> Self {
-        Self {
-            changed_subject_ids,
-            version_scope: ActionVersionScope::Review,
-            version,
-        }
-    }
-}
-
-pub fn open_cycle<R: EvaluationRepository>(
-    repository: &mut R,
-    context: &EvaluationActorContext,
-    command: OpenCycleCommand,
-    at: Timestamp,
-) -> Result<CycleActionResult, KernelError> {
-    require_manage(context, &command.metadata)?;
-    execute_cycle_action(
-        repository,
-        context,
-        "evaluation.cycle.open",
-        command.cycle_id,
-        &command.metadata,
-        at,
-        |cycle, subjects| {
-            cycle.open(command.metadata.expected_version, subjects, at)?;
-            Ok(MutationOutcome::cycle(Vec::new(), cycle.version()))
-        },
-    )
-}
-pub fn start_calibration<R: EvaluationRepository>(
-    repository: &mut R,
-    context: &EvaluationActorContext,
-    command: StartCalibrationCommand,
-    at: Timestamp,
-) -> Result<CycleActionResult, KernelError> {
-    require_manage(context, &command.metadata)?;
-    execute_cycle_action(
-        repository,
-        context,
-        "evaluation.cycle.start_calibration",
-        command.cycle_id,
-        &command.metadata,
-        at,
-        |cycle, subjects| {
-            cycle.start_calibration(command.metadata.expected_version, subjects, at)?;
-            Ok(MutationOutcome::cycle(Vec::new(), cycle.version()))
-        },
-    )
-}
-pub fn edit_review_draft<R: EvaluationRepository>(
-    repository: &mut R,
-    context: &EvaluationActorContext,
-    command: EditReviewDraftCommand,
-    at: Timestamp,
-) -> Result<CycleActionResult, KernelError> {
-    require_submitter(context, &command.metadata)?;
-    execute_cycle_action(
-        repository,
-        context,
-        "evaluation.review.edit_draft",
-        command.cycle_id,
-        &command.metadata,
-        at,
-        |cycle, subjects| {
-            if cycle.state() != EvaluationCycleState::Open {
-                return Err(KernelError::conflict(
-                    "review drafts are only mutable while cycle is open",
-                ));
-            }
-            let subject = selected_subject(subjects, command.subject_id)?;
-            require_selected_evaluator(context.user_id, subject, command.kind)?;
-            subject.edit_review(
-                command.kind,
-                command.metadata.expected_version,
-                command.grade,
-                command.rationale.clone(),
-                command.evidence_links.clone(),
-            )?;
-            Ok(MutationOutcome::review(
-                vec![subject.id()],
-                subject.review_version(command.kind),
-            ))
-        },
-    )
-}
-pub fn submit_review<R: EvaluationRepository>(
-    repository: &mut R,
-    context: &EvaluationActorContext,
-    command: SubmitReviewCommand,
-    at: Timestamp,
-) -> Result<CycleActionResult, KernelError> {
-    require_submitter(context, &command.metadata)?;
-    execute_cycle_action(
-        repository,
-        context,
-        "evaluation.review.submit",
-        command.cycle_id,
-        &command.metadata,
-        at,
-        |cycle, subjects| {
-            if cycle.state() != EvaluationCycleState::Open {
-                return Err(KernelError::conflict(
-                    "review drafts are only mutable while cycle is open",
-                ));
-            }
-            let subject = selected_subject(subjects, command.subject_id)?;
-            require_selected_evaluator(context.user_id, subject, command.kind)?;
-            subject.submit_review(command.kind, command.metadata.expected_version, at)?;
-            Ok(MutationOutcome::review(
-                vec![subject.id()],
-                subject.review_version(command.kind),
-            ))
-        },
-    )
-}
-pub fn calibrate_subject<R: EvaluationRepository>(
-    repository: &mut R,
-    context: &EvaluationActorContext,
-    command: CalibrateSubjectCommand,
-    at: Timestamp,
-) -> Result<CycleActionResult, KernelError> {
-    command.metadata.validate(context)?;
-    if !context.may_calibrate {
-        return Err(KernelError::forbidden(
-            "evaluation calibration permission required",
-        ));
-    }
-    execute_cycle_action(
-        repository,
-        context,
-        "evaluation.subject.calibrate",
-        command.cycle_id,
-        &command.metadata,
-        at,
-        |cycle, subjects| {
-            if cycle.state() != EvaluationCycleState::Calibration {
-                return Err(KernelError::conflict(
-                    "calibration is only available during calibration",
-                ));
-            }
-            let subject = selected_subject(subjects, command.subject_id)?;
-            // Calibration OCC is deliberately the subject aggregate, not the cycle.
-            subject.calibrate(
-                command.metadata.expected_version,
-                context.user_id,
-                command.grade,
-                command.rationale.clone(),
-                at,
-            )?;
-            Ok(MutationOutcome::subject(
-                vec![subject.id()],
-                subject.version(),
-            ))
-        },
-    )
-}
-pub fn finalize_cycle<R: EvaluationRepository>(
-    repository: &mut R,
-    context: &EvaluationActorContext,
-    command: FinalizeCycleCommand,
-    at: Timestamp,
-) -> Result<CycleActionResult, KernelError> {
-    require_manage(context, &command.metadata)?;
-    let action = "evaluation.cycle.finalize";
-    repository.transaction(|transaction| {
-        if let IdempotencyDecision::Replay(value) =
-            receipt_decision(transaction, context, action, &command.metadata)?
-        {
-            return decode_result(value);
-        }
-        let (mut cycle, mut subjects) = transaction.load_cycle_for_update(command.cycle_id)?;
-        cycle.finalize(
-            command.metadata.expected_version,
-            &subjects,
-            context.user_id,
-            at,
-        )?;
-        let codes = transaction.reserve_rv_codes(subjects.len())?;
-        if codes.len() != subjects.len() {
-            return Err(KernelError::internal(
-                "RV allocator returned an incomplete reservation",
-            ));
-        }
-        for (subject, code) in subjects.iter_mut().zip(codes) {
-            subject.finalize(code, at)?;
-        }
-        let changed_subject_ids = subjects.iter().map(EvaluationSubject::id).collect();
-        let outcome = MutationOutcome::cycle(changed_subject_ids, cycle.version());
-        commit_result(
-            transaction,
-            context,
-            action,
-            &command.metadata,
-            at,
-            cycle,
-            subjects,
-            outcome,
-            context.user_id,
-        )
-    })
-}
-
-fn execute_cycle_action<R: EvaluationRepository>(
-    repository: &mut R,
-    context: &EvaluationActorContext,
-    action: &'static str,
-    cycle_id: EvaluationCycleId,
-    metadata: &CommandMetadata,
-    at: Timestamp,
-    mutate: impl FnOnce(
-        &mut EvaluationCycle,
-        &mut [EvaluationSubject],
-    ) -> Result<MutationOutcome, KernelError>,
-) -> Result<CycleActionResult, KernelError> {
-    repository.transaction(|transaction| {
-        if let IdempotencyDecision::Replay(value) =
-            receipt_decision(transaction, context, action, metadata)?
-        {
-            return decode_result(value);
-        }
-        let (mut cycle, mut subjects) = transaction.load_cycle_for_update(cycle_id)?;
-        let outcome = mutate(&mut cycle, &mut subjects)?;
-        commit_result(
-            transaction,
-            context,
-            action,
-            metadata,
-            at,
-            cycle,
-            subjects,
-            outcome,
-            context.user_id,
-        )
-    })
-}
-fn receipt_decision<T: EvaluationUnitOfWork>(
-    transaction: &mut T,
-    context: &EvaluationActorContext,
-    action: &str,
-    metadata: &CommandMetadata,
-) -> Result<IdempotencyDecision, KernelError> {
-    let existing = transaction.receipt(action, &metadata.idempotency_key)?;
-    decide_idempotency(existing.as_ref(), context.org_id, action, metadata)
-}
-fn commit_result<T: EvaluationUnitOfWork>(
-    transaction: &mut T,
-    context: &EvaluationActorContext,
-    action: &'static str,
-    metadata: &CommandMetadata,
-    at: Timestamp,
-    cycle: EvaluationCycle,
-    subjects: Vec<EvaluationSubject>,
-    outcome: MutationOutcome,
-    actor: UserId,
-) -> Result<CycleActionResult, KernelError> {
-    let result = CycleActionResult {
-        cycle_id: cycle.id(),
-        state: cycle.state(),
-        version_scope: outcome.version_scope,
-        version: outcome.version,
-        changed_subject_ids: outcome.changed_subject_ids,
-    };
-    let response = serde_json::to_value(&result).map_err(|error| {
-        KernelError::internal(format!("cannot serialize cycle result: {error}"))
-    })?;
-    transaction.commit(EvaluationCommit {
-        audit: EvaluationAuditIntent {
-            action,
-            actor,
-            trace: metadata.trace.clone(),
-            target_id: cycle.id().to_string(),
-        },
-        receipt: ActionReceipt {
-            tenant: context.org_id,
-            action: action.to_owned(),
-            idempotency_key: metadata.idempotency_key.clone(),
-            fingerprint: metadata.fingerprint.clone(),
-            response,
-            occurred_at: at,
-        },
-        cycle,
-        subjects,
-    })?;
-    Ok(result)
-}
-fn decode_result(value: Value) -> Result<CycleActionResult, KernelError> {
-    serde_json::from_value(value).map_err(|error| {
-        KernelError::internal(format!("stored evaluation receipt is invalid: {error}"))
-    })
-}
-fn selected_subject(
-    subjects: &mut [EvaluationSubject],
-    id: EvaluationSubjectId,
-) -> Result<&mut EvaluationSubject, KernelError> {
-    subjects
-        .iter_mut()
-        .find(|subject| subject.id() == id)
-        .ok_or_else(|| KernelError::not_found("evaluation subject not found"))
-}
-fn require_selected_evaluator(
-    actor: UserId,
-    subject: &EvaluationSubject,
-    kind: ReviewKind,
-) -> Result<(), KernelError> {
-    if subject.review_evaluator(kind) == actor {
-        Ok(())
-    } else {
-        Err(KernelError::forbidden(
-            "review action requires the selected review evaluator",
-        ))
-    }
-}
-fn require_manage(
-    context: &EvaluationActorContext,
-    metadata: &CommandMetadata,
-) -> Result<(), KernelError> {
-    metadata.validate(context)?;
-    if context.may_manage {
-        Ok(())
-    } else {
-        Err(KernelError::forbidden(
-            "evaluation management permission required",
-        ))
-    }
-}
-fn require_submitter(
-    context: &EvaluationActorContext,
-    metadata: &CommandMetadata,
-) -> Result<(), KernelError> {
-    metadata.validate(context)?;
-    if context.may_submit {
-        Ok(())
-    } else {
-        Err(KernelError::forbidden(
-            "evaluation submission permission required",
-        ))
-    }
-}
-
-/// Query adapters must use this gate before building a response; unrelated actors get no projection.
-pub fn may_read_subject(
-    context: &EvaluationActorContext,
-    subject: &EvaluationSubject,
-    cycle_state: EvaluationCycleState,
-) -> SubjectVisibility {
-    subject.visibility(context.user_id, context.may_calibrate, cycle_state)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreflightReport {
+    pub next_transition: Option<CycleTransition>,
+    pub blockers: Vec<PreflightItem>,
+    pub advisories: Vec<PreflightItem>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mnt_evaluation_domain::{
-        EmployeeId, EvaluationGoal, EvaluationRubricId, GoalMetricKind, SubjectSnapshot,
-    };
-    use std::collections::BTreeMap;
-    use time::macros::date;
-    use uuid::Uuid;
-    #[derive(Debug, Clone, Copy)]
-    enum Failure {
-        None,
-        Audit,
-        Receipt,
-        Rv,
-    }
-    #[derive(Clone)]
-    struct State {
-        cycle: EvaluationCycle,
-        subjects: Vec<EvaluationSubject>,
-        receipts: BTreeMap<(String, String), ActionReceipt>,
-        audits: usize,
-        next_rv: u32,
-    }
-    struct MemoryRepository {
-        state: State,
-        failure: Failure,
-    }
-    struct MemoryTransaction {
-        state: State,
-        failure: Failure,
-    }
-    impl EvaluationRepository for MemoryRepository {
-        type Transaction = MemoryTransaction;
-        fn transaction<T>(
-            &mut self,
-            operation: impl FnOnce(&mut Self::Transaction) -> Result<T, KernelError>,
-        ) -> Result<T, KernelError> {
-            let mut transaction = MemoryTransaction {
-                state: self.state.clone(),
-                failure: self.failure,
-            };
-            let output = operation(&mut transaction)?;
-            self.state = transaction.state;
-            Ok(output)
-        }
-    }
-    impl EvaluationUnitOfWork for MemoryTransaction {
-        fn receipt(
-            &mut self,
-            action: &str,
-            key: &str,
-        ) -> Result<Option<ActionReceipt>, KernelError> {
-            Ok(self
-                .state
-                .receipts
-                .get(&(action.to_owned(), key.to_owned()))
-                .cloned())
-        }
-        fn load_cycle_for_update(
-            &mut self,
-            id: EvaluationCycleId,
-        ) -> Result<(EvaluationCycle, Vec<EvaluationSubject>), KernelError> {
-            if id == self.state.cycle.id() {
-                Ok((self.state.cycle.clone(), self.state.subjects.clone()))
-            } else {
-                Err(KernelError::not_found("cycle"))
-            }
-        }
-        fn reserve_rv_codes(&mut self, count: usize) -> Result<Vec<String>, KernelError> {
-            if matches!(self.failure, Failure::Rv) {
-                return Err(KernelError::internal("RV failure"));
-            }
-            let start = self.state.next_rv;
-            self.state.next_rv += count as u32;
-            Ok((start..start + count as u32)
-                .map(|value| format!("RV-{value:04}"))
-                .collect())
-        }
-        fn commit(&mut self, commit: EvaluationCommit) -> Result<(), KernelError> {
-            if matches!(self.failure, Failure::Audit) {
-                return Err(KernelError::internal("audit failure"));
-            }
-            if matches!(self.failure, Failure::Receipt) {
-                return Err(KernelError::internal("receipt failure"));
-            }
-            self.state.cycle = commit.cycle;
-            self.state.subjects = commit.subjects;
-            self.state.audits += 1;
-            self.state.receipts.insert(
-                (
-                    commit.receipt.action.clone(),
-                    commit.receipt.idempotency_key.clone(),
-                ),
-                commit.receipt,
-            );
-            Ok(())
-        }
-    }
-    fn context() -> EvaluationActorContext {
-        EvaluationActorContext {
-            org_id: OrgId::knl(),
-            user_id: UserId::new(),
-            may_manage: true,
-            may_submit: true,
-            may_calibrate: true,
-        }
-    }
-    fn metadata(actor: UserId, expected_version: u64, fingerprint: &str) -> CommandMetadata {
-        CommandMetadata {
-            actor,
-            trace: TraceContext::generate(),
-            expected_version,
-            idempotency_key: "evaluation-command-0001".to_owned(),
-            fingerprint: fingerprint.to_owned(),
-        }
-    }
-    fn metadata_with_key(
-        actor: UserId,
-        expected_version: u64,
-        fingerprint: &str,
-        idempotency_key: &str,
-    ) -> CommandMetadata {
-        CommandMetadata {
-            actor,
-            trace: TraceContext::generate(),
-            expected_version,
-            idempotency_key: idempotency_key.to_owned(),
-            fingerprint: fingerprint.to_owned(),
-        }
-    }
-    fn subject(self_user: UserId) -> EvaluationSubject {
-        let mut subject = EvaluationSubject::new(
-            SubjectSnapshot {
-                employee_id: EmployeeId::new(),
-                manager_user_id: UserId::new(),
-                home_branch_id: Uuid::new_v4(),
-                org_unit_id: None,
-                position_id: None,
-                team_id: None,
-            },
-            self_user,
+    use mnt_evaluation_domain::{CycleKind, Grade, ReviewKind};
+    use time::Month;
+
+    #[test]
+    fn wire_shapes_match_the_design_contract() {
+        let input: CreateCycleInput = serde_json::from_str(
+            r#"{"name":"2026 H2","kind":"REGULAR","period_label":"2026-H2","due_date":"2026-08-31"}"#,
         )
-        .unwrap();
-        subject
-            .replace_goals(
-                0,
-                vec![EvaluationGoal::new(GoalMetricKind::Kpi, "outcome", 100, 0).unwrap()],
-            )
-            .unwrap();
-        subject
-    }
-    fn repository(
-        state: EvaluationCycleState,
-        failure: Failure,
-        actor: UserId,
-    ) -> MemoryRepository {
-        let mut subject = subject(actor);
-        let mut cycle = EvaluationCycle::draft(
-            "cycle",
-            date!(2026 - 01 - 01),
-            date!(2026 - 12 - 31),
-            EvaluationRubricId::new(),
-        )
-        .unwrap();
-        if state != EvaluationCycleState::Draft {
-            cycle
-                .open(0, std::slice::from_mut(&mut subject), Timestamp::now_utc())
-                .unwrap();
-        }
-        MemoryRepository {
-            state: State {
-                cycle,
-                subjects: vec![subject],
-                receipts: BTreeMap::new(),
-                audits: 0,
-                next_rv: 2500,
-            },
-            failure,
-        }
-    }
-    #[test]
-    fn exact_replay_and_changed_fingerprint_conflict() {
-        let context = context();
-        let now = Timestamp::now_utc();
-        let mut repository =
-            repository(EvaluationCycleState::Draft, Failure::None, context.user_id);
-        let command = OpenCycleCommand {
-            cycle_id: repository.state.cycle.id(),
-            metadata: metadata(context.user_id, 0, "same"),
-        };
-        let first = open_cycle(&mut repository, &context, command.clone(), now).unwrap();
-        let replay = open_cycle(&mut repository, &context, command, now).unwrap();
-        assert_eq!(first, replay);
-        assert_eq!(first.version_scope, ActionVersionScope::Cycle);
-        assert_eq!(first.version, 1);
-        assert_eq!(repository.state.audits, 1);
-        let changed = OpenCycleCommand {
-            cycle_id: repository.state.cycle.id(),
-            metadata: metadata(context.user_id, 0, "changed"),
-        };
-        assert!(open_cycle(&mut repository, &context, changed, now).is_err());
-    }
-    #[test]
-    fn commit_failure_rolls_back_cycle_audit_and_receipt() {
-        let context = context();
-        let now = Timestamp::now_utc();
-        for failure in [Failure::Audit, Failure::Receipt] {
-            let mut repository = repository(EvaluationCycleState::Draft, failure, context.user_id);
-            let id = repository.state.cycle.id();
-            let result = open_cycle(
-                &mut repository,
-                &context,
-                OpenCycleCommand {
-                    cycle_id: id,
-                    metadata: metadata(context.user_id, 0, "same"),
-                },
-                now,
-            );
-            assert!(result.is_err());
-            assert_eq!(repository.state.cycle.state(), EvaluationCycleState::Draft);
-            assert_eq!(repository.state.audits, 0);
-            assert!(repository.state.receipts.is_empty());
-        }
-    }
-    #[test]
-    fn calibration_is_subject_occ_and_actor_bound() {
-        let mut context = context();
-        context.user_id = UserId::new();
-        let now = Timestamp::now_utc();
-        let mut repository = repository(EvaluationCycleState::Open, Failure::None, UserId::new());
-        let (subject_id, stale, manager) = {
-            let subject = &mut repository.state.subjects[0];
-            subject
-                .edit_review(ReviewKind::SelfReview, 0, RubricLevel::A, "self", vec![])
-                .unwrap();
-            subject
-                .submit_review(ReviewKind::SelfReview, 1, now)
-                .unwrap();
-            let manager = subject.review_evaluator(ReviewKind::Manager);
-            subject
-                .edit_review(ReviewKind::Manager, 0, RubricLevel::A, "manager", vec![])
-                .unwrap();
-            subject.submit_review(ReviewKind::Manager, 1, now).unwrap();
-            (subject.id(), subject.version() - 1, manager)
-        };
-        repository
-            .state
-            .cycle
-            .start_calibration(1, &repository.state.subjects, now)
-            .unwrap();
-        let command = CalibrateSubjectCommand {
-            cycle_id: repository.state.cycle.id(),
-            subject_id,
-            grade: RubricLevel::A,
-            rationale: "calibration".to_owned(),
-            metadata: metadata(context.user_id, stale, "calibrate-000001"),
-        };
-        assert!(calibrate_subject(&mut repository, &context, command, now).is_err());
-        let current = repository.state.subjects[0].version();
-        let command = CalibrateSubjectCommand {
-            cycle_id: repository.state.cycle.id(),
-            subject_id,
-            grade: RubricLevel::A,
-            rationale: "calibration".to_owned(),
-            metadata: metadata(context.user_id, current, "calibrate-000002"),
-        };
-        calibrate_subject(&mut repository, &context, command, now).unwrap();
-        assert_eq!(repository.state.subjects[0].version(), current + 1);
-        // A second writer using the same pre-commit subject version loses OCC,
-        // even though it uses a distinct idempotency key.
-        let concurrent_loser = CalibrateSubjectCommand {
-            cycle_id: repository.state.cycle.id(),
-            subject_id,
-            grade: RubricLevel::A,
-            rationale: "late calibration".to_owned(),
-            metadata: metadata(context.user_id, current, "calibrate-000003"),
-        };
-        assert!(calibrate_subject(&mut repository, &context, concurrent_loser, now).is_err());
-        assert_ne!(manager, context.user_id);
-    }
-    #[test]
-    fn review_commands_require_the_selected_evaluator_and_return_fresh_review_tokens() {
-        let context = context();
-        let now = Timestamp::now_utc();
-        let mut repository = repository(EvaluationCycleState::Open, Failure::None, UserId::new());
-        let subject_id = repository.state.subjects[0].id();
-        let denied = EditReviewDraftCommand {
-            cycle_id: repository.state.cycle.id(),
-            subject_id,
+        .expect("contract-shaped request parses");
+        assert_eq!(input.kind, CycleKind::Regular);
+        assert_eq!(input.due_date.year(), 2026);
+        assert_eq!(input.due_date.month(), Month::August);
+
+        let task = TaskItem {
+            subject_id: Uuid::nil(),
+            cycle_id: Uuid::nil(),
+            cycle_name: "cycle".into(),
+            due_date: Date::from_calendar_date(2026, Month::August, 31).expect("valid date"),
+            employee_id: Uuid::nil(),
+            employee_name: "employee".into(),
             kind: ReviewKind::SelfReview,
-            grade: RubricLevel::A,
-            rationale: "evidence".to_owned(),
-            evidence_links: vec![],
-            metadata: metadata(context.user_id, 0, "denied"),
+            review_status: None,
         };
-        assert!(edit_review_draft(&mut repository, &context, denied, now).is_err());
-        let self_user = repository.state.subjects[0].review_evaluator(ReviewKind::SelfReview);
-        let allowed_context = EvaluationActorContext {
-            user_id: self_user,
-            ..context
-        };
-        for (expected, key) in [
-            (0, "edit-review-key-001"),
-            (1, "edit-review-key-002"),
-            (2, "edit-review-key-003"),
-        ] {
-            let edit = EditReviewDraftCommand {
-                cycle_id: repository.state.cycle.id(),
-                subject_id,
-                kind: ReviewKind::SelfReview,
-                grade: RubricLevel::A,
-                rationale: format!("evidence revision {expected}"),
-                evidence_links: vec![],
-                metadata: metadata_with_key(self_user, expected, "same-logical-edit", key),
-            };
-            let result = edit_review_draft(&mut repository, &allowed_context, edit, now).unwrap();
-            assert_eq!(result.version_scope, ActionVersionScope::Review);
-            assert_eq!(result.version, expected + 1);
-        }
-        let submit = SubmitReviewCommand {
-            cycle_id: repository.state.cycle.id(),
-            subject_id,
-            kind: ReviewKind::SelfReview,
-            metadata: metadata_with_key(self_user, 3, "submit", "submit-review-key-001"),
-        };
-        let result = submit_review(&mut repository, &allowed_context, submit, now).unwrap();
-        assert_eq!(result.version_scope, ActionVersionScope::Review);
-        assert_eq!(result.version, 4);
-        let retry_edit = EditReviewDraftCommand {
-            cycle_id: repository.state.cycle.id(),
-            subject_id,
-            kind: ReviewKind::SelfReview,
-            grade: RubricLevel::S,
-            rationale: "rewrite".to_owned(),
-            evidence_links: vec![],
-            metadata: metadata_with_key(self_user, 4, "rewrite", "edit-review-key-004"),
-        };
-        assert!(edit_review_draft(&mut repository, &allowed_context, retry_edit, now).is_err());
-        let no_submit = EvaluationActorContext {
-            may_submit: false,
-            ..allowed_context
-        };
-        let command = SubmitReviewCommand {
-            cycle_id: repository.state.cycle.id(),
-            subject_id,
-            kind: ReviewKind::SelfReview,
-            metadata: metadata_with_key(self_user, 4, "submit-again", "submit-review-key-002"),
-        };
-        assert!(submit_review(&mut repository, &no_submit, command, now).is_err());
-    }
-    #[test]
-    fn rv_reservation_failure_rolls_back_the_finalization_unit_of_work() {
-        let mut context = context();
-        context.user_id = UserId::new();
-        let now = Timestamp::now_utc();
-        let mut repository = repository(EvaluationCycleState::Open, Failure::Rv, UserId::new());
-        {
-            let subject = &mut repository.state.subjects[0];
-            subject
-                .edit_review(ReviewKind::SelfReview, 0, RubricLevel::A, "self", vec![])
-                .unwrap();
-            subject
-                .submit_review(ReviewKind::SelfReview, 1, now)
-                .unwrap();
-            subject
-                .edit_review(ReviewKind::Manager, 0, RubricLevel::A, "manager", vec![])
-                .unwrap();
-            subject.submit_review(ReviewKind::Manager, 1, now).unwrap();
-        }
-        repository
-            .state
-            .cycle
-            .start_calibration(1, &repository.state.subjects, now)
-            .unwrap();
-        let subject = &mut repository.state.subjects[0];
-        subject
-            .calibrate(
-                subject.version(),
-                context.user_id,
-                RubricLevel::A,
-                "cross-check",
-                now,
-            )
-            .unwrap();
-        let cycle_version = repository.state.cycle.version();
-        let before_rv = repository.state.next_rv;
-        let command = FinalizeCycleCommand {
-            cycle_id: repository.state.cycle.id(),
-            metadata: metadata(context.user_id, cycle_version, "finalize-rv-0001"),
-        };
-        assert!(finalize_cycle(&mut repository, &context, command, now).is_err());
-        assert_eq!(
-            repository.state.cycle.state(),
-            EvaluationCycleState::Calibration
-        );
-        assert_eq!(repository.state.next_rv, before_rv);
-        assert_eq!(repository.state.audits, 0);
-        assert!(repository.state.receipts.is_empty());
+        let json = serde_json::to_value(&task).expect("task serializes");
+        assert_eq!(json["due_date"], "2026-08-31");
+        assert_eq!(json["kind"], "SELF");
+
+        let grade = serde_json::to_value(Grade::S).expect("grade serializes");
+        assert_eq!(grade, "S");
     }
 }

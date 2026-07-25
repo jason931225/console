@@ -350,10 +350,25 @@ pub enum Feature {
     /// SUPER_ADMIN, mirroring `EmployeeDirectoryManage`; hire additionally
     /// requires `EmployeeDirectoryManage` (the owning HR domain's gate).
     RecruitingManage,
+    /// Read evaluation cycles, subjects, preflight reports, and the finalized
+    /// person ledger. HR-sensitive — mirrors the `EmployeeDirectoryRead` tier
+    /// (ADMIN + EXECUTIVE + SUPER_ADMIN); the person-ledger read is itself
+    /// audited (`evaluation.history.viewed`).
+    EvaluationRead,
+    /// Drive the evaluation cycle lifecycle (create/open/start-calibration/
+    /// finalize/archive), enroll subjects, replace goals, and calibrate.
+    /// Mirrors the `EmployeeDirectoryManage` tier (ADMIN + SUPER_ADMIN); the
+    /// calibration handler additionally enforces four-eyes SoD in code.
+    EvaluationManage,
+    /// Record and submit self/manager review drafts and read one's own
+    /// evaluation task list. The per-subject check (caller is the subject's
+    /// assigned manager, or holds `EvaluationManage`) is enforced in code with
+    /// deny-by-omission 404s.
+    EvaluationSubmit,
 }
 
 impl Feature {
-    pub const ALL: [Self; 93] = [
+    pub const ALL: [Self; 96] = [
         Self::Login,
         Self::WorkOrderCreate,
         Self::WorkOrderEditIntake,
@@ -447,6 +462,9 @@ impl Feature {
         Self::Equipment3rObserve,
         Self::RecruitingRead,
         Self::RecruitingManage,
+        Self::EvaluationRead,
+        Self::EvaluationManage,
+        Self::EvaluationSubmit,
     ];
 
     #[must_use]
@@ -545,6 +563,9 @@ impl Feature {
             Self::Equipment3rObserve => "equipment_3r_observe",
             Self::RecruitingRead => "recruiting_read",
             Self::RecruitingManage => "recruiting_manage",
+            Self::EvaluationRead => "evaluation_read",
+            Self::EvaluationManage => "evaluation_manage",
+            Self::EvaluationSubmit => "evaluation_submit",
         }
     }
 
@@ -698,6 +719,13 @@ impl Feature {
             // HR-owned data with EXECUTIVE read-only visibility.
             Self::RecruitingRead => [D, D, D, A, A, A],
             Self::RecruitingManage => [D, D, D, A, D, A],
+            // Evaluation is HR-sensitive: read/submit mirror the
+            // EmployeeDirectoryRead tier, manage mirrors EmployeeDirectoryManage.
+            // The per-subject submit check and calibration four-eyes SoD are
+            // additionally enforced in the evaluation REST/adapter code.
+            Self::EvaluationRead => [D, D, D, A, A, A],
+            Self::EvaluationManage => [D, D, D, A, D, A],
+            Self::EvaluationSubmit => [D, D, D, A, A, A],
         }
     }
 }
@@ -800,6 +828,9 @@ impl FromStr for Feature {
             "equipment_3r_observe" => Ok(Self::Equipment3rObserve),
             "recruiting_read" => Ok(Self::RecruitingRead),
             "recruiting_manage" => Ok(Self::RecruitingManage),
+            "evaluation_read" => Ok(Self::EvaluationRead),
+            "evaluation_manage" => Ok(Self::EvaluationManage),
+            "evaluation_submit" => Ok(Self::EvaluationSubmit),
             _ => Err(KernelError::validation(format!(
                 "unknown feature key: {raw}"
             ))),
