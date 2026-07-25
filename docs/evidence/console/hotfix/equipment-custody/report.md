@@ -3,6 +3,15 @@
 **Lane** `hf-equipment-custody` · branch `claude/hf-equipment-custody-20260725`
 · base `4cabe239` (wave-4 spine, PR #488) · 2026-07-25.
 
+**Independently verified** by a fresh-eyes stage-2 pass —
+[`stage2-verification.md`](stage2-verification.md). That pass reproduced the red,
+proved every assertion load-bearing with four revert/mutation runs, and closed
+two coverage gaps this report did not have: nothing asserted that a *permitted*
+handover writes the custody row, and the
+`GET /api/v1/equipment-3r/rental-cases/{id}` read path was untested (returning
+`evidenceObjectId: null` passed). Both are now asserted in
+`repair_lifecycle_completes_with_audits_history_and_no_finance_posting`.
+
 ## 1. Reproduction
 
 ```
