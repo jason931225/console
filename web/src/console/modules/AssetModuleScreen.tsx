@@ -12,23 +12,22 @@ import { AssetWorkspace } from "../asset/AssetWorkspace";
 function useAssetGate(): PolicyGate {
   const { api, session } = useAuth();
   const key = `${session?.client_session_incarnation ?? ""}:${session?.access_token ?? ""}`;
-  const [gate, setGate] = useState(() => makePolicyGate(DENY_ALL_PROJECTION, false));
+  const [resolved, setResolved] = useState(() => ({ key: "", api, gate: makePolicyGate(DENY_ALL_PROJECTION, false) }));
 
   useEffect(() => {
     const controller = new AbortController();
-    void Promise.resolve().then(() => {
-      setGate(makePolicyGate(DENY_ALL_PROJECTION, false));
-    });
     void api.GET("/api/v1/me/authz", { signal: controller.signal }).then((response) => {
       if (controller.signal.aborted || !response.data) return;
-      setGate(makePolicyGate(parseAuthzResponse(response.data), true));
+      setResolved({ key, api, gate: makePolicyGate(parseAuthzResponse(response.data), true) });
     }).catch(() => {
       // The asset surface intentionally stays deny-by-omission on authz failure.
     });
     return () => { controller.abort(); };
   }, [api, key]);
 
-  return gate;
+  return resolved.key === key && resolved.api === api
+    ? resolved.gate
+    : makePolicyGate(DENY_ALL_PROJECTION, false);
 }
 
 /** Authoritative authz-backed asset screen. JWT claims are never used as UI authority. */

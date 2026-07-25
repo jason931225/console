@@ -2,7 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createConsoleApiClient } from "../../api/client";
+import { AuthContext, type AuthContextValue } from "../../context/auth";
 import { AssetWorkspace } from "../asset/AssetWorkspace";
+import { AssetModuleScreen } from "./AssetModuleScreen";
 
 const equipmentId = "00000000-0000-4000-8000-000000000001";
 const row = {
@@ -43,6 +45,31 @@ function apiForTest() {
 }
 
 describe("AssetWorkspace", () => {
+  it("never mounts an old authorized asset workspace after the session changes", async () => {
+    let resolveOld!: (value: unknown) => void;
+    const oldAuthz = new Promise<unknown>((resolve) => { resolveOld = resolve; });
+    const api = createConsoleApiClient("asset-test-token");
+    let authzCalls = 0;
+    vi.spyOn(api, "GET").mockImplementation(((path: string) => {
+      if (path === "/api/v1/me/authz") {
+        authzCalls += 1;
+        return authzCalls === 1 ? oldAuthz : new Promise(() => undefined);
+      }
+      return Promise.resolve({ data: { items: [row], total: 1, limit: 50, offset: 0 } });
+    }) as never);
+    const authValue = (token: string, incarnation: string) => ({
+      api, session: { access_token: token, client_session_incarnation: incarnation, branches: [row.branch_id] }, restoring: false,
+      login: vi.fn(), logout: vi.fn(), refresh: vi.fn(), acceptTokens: vi.fn(), clearPasskeySetup: vi.fn(), viewAs: undefined, enterViewAs: vi.fn(), exitViewAs: vi.fn(),
+    }) as unknown as AuthContextValue;
+    const view = render(<AuthContext.Provider value={authValue("old", "old-session")}><AssetModuleScreen /></AuthContext.Provider>);
+    await waitFor(() => { expect(authzCalls).toBe(1); });
+    view.rerender(<AuthContext.Provider value={authValue("new", "new-session")}><AssetModuleScreen /></AuthContext.Provider>);
+    await waitFor(() => { expect(authzCalls).toBe(2); });
+    resolveOld({ capabilities: [{ feature: "work_order_read_all", permission: "allow", branch_scope: { kind: "all" } }] });
+    expect(await screen.findByRole("status")).toHaveTextContent("권한을 확인하는 중입니다.");
+    expect(screen.queryByRole("heading", { name: "자산" })).not.toBeInTheDocument();
+  });
+
   it("discards a stale list response after a session switch", async () => {
     let resolveFirst!: (value: unknown) => void;
     const first = new Promise<unknown>((resolve) => { resolveFirst = resolve; });
