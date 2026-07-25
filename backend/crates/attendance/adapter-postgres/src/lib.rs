@@ -13,7 +13,10 @@ use mnt_attendance_application::{
     RaiseException, ResolveException, SubstitutionCandidateFacts, SubstitutionCandidateQuery,
     SubstitutionCandidateRead, Week52AcknowledgementRead, Week52Read,
 };
-use mnt_attendance_domain::{AttendanceDateRange, ExceptionKind, HistoricalAbsence};
+use mnt_attendance_domain::{
+    AttendanceDateRange, ExceptionKind, HistoricalAbsence, StrictDurationEvent,
+    StrictDurationEventKind, StrictDurationWindow, strict_pair_seconds,
+};
 use mnt_kernel_core::{AuditAction, AuditEvent, BranchId, OrgId, TraceContext};
 use mnt_platform_db::{DbError, issue_code, with_audits, with_org_conn};
 use serde_json::{Value, json};
@@ -615,9 +618,14 @@ impl PgAttendanceStore {
                 .bind(branch_id).fetch_all(tx.as_mut()).await?;
             // Pair the complete employee timeline. Filtering by `work_date` (or by either
             // week boundary) loses a side of a shift that crosses that boundary.
-            let rows = sqlx::query("SELECT r.employee_id,r.kind,r.occurred_at FROM employee_attendance_records r JOIN employees e ON e.id=r.employee_id AND e.org_id=r.org_id WHERE e.employment_status='ACTIVE' AND ($1::uuid IS NULL OR e.home_branch_id=$1) ORDER BY r.employee_id,r.occurred_at,r.id")
+            let rows = sqlx::query("SELECT r.id,r.employee_id,r.kind,r.occurred_at FROM employee_attendance_records r JOIN employees e ON e.id=r.employee_id AND e.org_id=r.org_id WHERE e.employment_status='ACTIVE' AND ($1::uuid IS NULL OR e.home_branch_id=$1) ORDER BY r.employee_id,r.occurred_at,r.id")
                 .bind(branch_id).fetch_all(tx.as_mut()).await?;
-            let events = rows.iter().map(|row| Ok(Week52Event { employee_id: row.try_get("employee_id")?, kind: row.try_get("kind")?, occurred_at: row.try_get("occurred_at")? })).collect::<Result<Vec<_>, AttendanceStoreError>>()?;
+            let events = rows.iter().map(|row| Ok(StrictDurationEvent {
+                id: row.try_get("id")?,
+                employee_id: row.try_get("employee_id")?,
+                kind: strict_duration_event_kind(&row.try_get::<String, _>("kind")?),
+                occurred_at: row.try_get("occurred_at")?,
+            })).collect::<Result<Vec<_>, AttendanceStoreError>>()?;
             let hours = week52_hours(&events, week_start_at, week_end_at)?;
             let acknowledgements = sqlx::query("SELECT a.employee_id,a.acknowledged_at FROM attendance_week52_acknowledgements a JOIN employees e ON e.id=a.employee_id AND e.org_id=a.org_id WHERE a.week_start=$1 AND e.employment_status='ACTIVE' AND ($2::uuid IS NULL OR e.home_branch_id=$2)")
                 .bind(week_start).bind(branch_id).fetch_all(tx.as_mut()).await?.into_iter().map(|row| Ok((row.try_get::<Uuid,_>("employee_id")?, row.try_get::<OffsetDateTime,_>("acknowledged_at")?))).collect::<Result<BTreeMap<_,_>, AttendanceStoreError>>()?;
@@ -626,62 +634,26 @@ impl PgAttendanceStore {
     }
 }
 
-#[derive(Debug, Clone)]
-struct Week52Event {
-    employee_id: Uuid,
-    kind: String,
-    occurred_at: OffsetDateTime,
-}
-
-/// Only complete CLOCK_IN/CLOCK_OUT pairs contribute time. A duplicate open
-/// clock-in or unmatched clock-out/open clock-in fails the whole read instead
-/// of inventing a duration.
 fn week52_hours(
-    events: &[Week52Event],
+    events: &[StrictDurationEvent],
     week_start: OffsetDateTime,
     week_end: OffsetDateTime,
 ) -> Result<BTreeMap<Uuid, f64>, AttendanceStoreError> {
-    if week_end <= week_start {
-        return Err(AttendanceStoreError::Conflict);
-    }
-    let mut open = BTreeMap::<Uuid, OffsetDateTime>::new();
-    let mut seconds = BTreeMap::<Uuid, i64>::new();
-    let mut ordered_events = events.iter().collect::<Vec<_>>();
-    ordered_events.sort_by_key(|event| event.occurred_at);
-    for event in ordered_events {
-        match event.kind.as_str() {
-            "CLOCK_IN" => {
-                if open.insert(event.employee_id, event.occurred_at).is_some() {
-                    return Err(AttendanceStoreError::Conflict);
-                }
-            }
-            "CLOCK_OUT" => {
-                let start = open
-                    .remove(&event.employee_id)
-                    .ok_or(AttendanceStoreError::Conflict)?;
-                let elapsed = (event.occurred_at - start).whole_seconds();
-                if elapsed < 0 {
-                    return Err(AttendanceStoreError::Conflict);
-                }
-                let clipped_start = start.max(week_start);
-                let clipped_end = event.occurred_at.min(week_end);
-                if clipped_end > clipped_start {
-                    let entry = seconds.entry(event.employee_id).or_default();
-                    *entry = entry
-                        .checked_add((clipped_end - clipped_start).whole_seconds())
-                        .ok_or(AttendanceStoreError::Conflict)?;
-                }
-            }
-            _ => {}
-        }
-    }
-    if !open.is_empty() {
-        return Err(AttendanceStoreError::Conflict);
-    }
-    Ok(seconds
+    let window = StrictDurationWindow::new(week_start, week_end)
+        .map_err(|_| AttendanceStoreError::Conflict)?;
+    Ok(strict_pair_seconds(events, window)
+        .map_err(|_| AttendanceStoreError::Conflict)?
         .into_iter()
         .map(|(employee, seconds)| (employee, seconds as f64 / 3600.0))
         .collect())
+}
+
+fn strict_duration_event_kind(kind: &str) -> StrictDurationEventKind {
+    match kind {
+        "CLOCK_IN" => StrictDurationEventKind::ClockIn,
+        "CLOCK_OUT" => StrictDurationEventKind::ClockOut,
+        _ => StrictDurationEventKind::Other,
+    }
 }
 
 fn week52_inputs_for_active(
@@ -1492,10 +1464,16 @@ mod tests {
             substitution_fingerprint(&caller, &whitespace)
         );
     }
-    fn event_at(employee_id: Uuid, kind: &str, hours: i64) -> Week52Event {
-        Week52Event {
+    fn event_at(
+        employee_id: Uuid,
+        id: u128,
+        kind: StrictDurationEventKind,
+        hours: i64,
+    ) -> StrictDurationEvent {
+        StrictDurationEvent {
             employee_id,
-            kind: kind.to_owned(),
+            id: Uuid::from_u128(id),
+            kind,
             occurred_at: OffsetDateTime::UNIX_EPOCH + Duration::hours(hours),
         }
     }
@@ -1504,9 +1482,9 @@ mod tests {
         let employee = Uuid::new_v4();
         let hours = week52_hours(
             &[
-                event_at(employee, "CLOCK_IN", 0),
-                event_at(employee, "OUT_FOR_WORK", 1),
-                event_at(employee, "CLOCK_OUT", 9),
+                event_at(employee, 1, StrictDurationEventKind::ClockIn, 0),
+                event_at(employee, 2, StrictDurationEventKind::Other, 1),
+                event_at(employee, 3, StrictDurationEventKind::ClockOut, 9),
             ],
             OffsetDateTime::UNIX_EPOCH,
             OffsetDateTime::UNIX_EPOCH + Duration::days(7),
@@ -1519,19 +1497,33 @@ mod tests {
         let employee = Uuid::new_v4();
         let start = OffsetDateTime::UNIX_EPOCH;
         let end = start + Duration::days(7);
-        assert!(week52_hours(&[event_at(employee, "CLOCK_OUT", 1)], start, end).is_err());
+        assert!(
+            week52_hours(
+                &[event_at(employee, 1, StrictDurationEventKind::ClockOut, 1)],
+                start,
+                end
+            )
+            .is_err()
+        );
         assert!(
             week52_hours(
                 &[
-                    event_at(employee, "CLOCK_IN", 0),
-                    event_at(employee, "CLOCK_IN", 1)
+                    event_at(employee, 1, StrictDurationEventKind::ClockIn, 0),
+                    event_at(employee, 2, StrictDurationEventKind::ClockIn, 1)
                 ],
                 start,
                 end
             )
             .is_err()
         );
-        assert!(week52_hours(&[event_at(employee, "CLOCK_IN", 0)], start, end).is_err());
+        assert!(
+            week52_hours(
+                &[event_at(employee, 1, StrictDurationEventKind::ClockIn, 0)],
+                start,
+                end
+            )
+            .is_err()
+        );
     }
     #[test]
     fn week52_clips_pairs_crossing_both_week_boundaries() {
@@ -1540,10 +1532,10 @@ mod tests {
         let end = start + Duration::days(7);
         let hours = week52_hours(
             &[
-                event_at(employee, "CLOCK_IN", 7 * 24 - 2),
-                event_at(employee, "CLOCK_OUT", 7 * 24 + 3),
-                event_at(employee, "CLOCK_IN", 14 * 24 - 3),
-                event_at(employee, "CLOCK_OUT", 14 * 24 + 2),
+                event_at(employee, 1, StrictDurationEventKind::ClockIn, 7 * 24 - 2),
+                event_at(employee, 2, StrictDurationEventKind::ClockOut, 7 * 24 + 3),
+                event_at(employee, 3, StrictDurationEventKind::ClockIn, 14 * 24 - 3),
+                event_at(employee, 4, StrictDurationEventKind::ClockOut, 14 * 24 + 2),
             ],
             start,
             end,
@@ -1558,8 +1550,8 @@ mod tests {
         let end = start + Duration::days(7);
         let hours = week52_hours(
             &[
-                event_at(employee, "CLOCK_OUT", 9),
-                event_at(employee, "CLOCK_IN", 0),
+                event_at(employee, 2, StrictDurationEventKind::ClockOut, 9),
+                event_at(employee, 1, StrictDurationEventKind::ClockIn, 0),
             ],
             start,
             end,
