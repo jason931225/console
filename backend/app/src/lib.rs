@@ -4652,7 +4652,9 @@ mod trusted_ingress_tests {
     }
 }
 
-#[cfg(test)]
+// Every test in this module is `#[cfg(feature = "test-postgres")]`, so without
+// that feature the whole module is helpers and imports with no consumer.
+#[cfg(all(test, feature = "test-postgres"))]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod readiness_tests {
     use axum::extract::State;
@@ -5035,6 +5037,9 @@ mod migration_database_budget_tests {
         reset_migration_database_connection,
     };
 
+    // Consumed only by the `test-postgres` test below; this module also holds
+    // non-featured tests, so it cannot be gated wholesale.
+    #[allow(dead_code)]
     fn isolated_owner_budget_pool_options() -> PgPoolOptions {
         PgPoolOptions::new()
             .max_connections(1)
@@ -5047,6 +5052,7 @@ mod migration_database_budget_tests {
             })
     }
 
+    #[allow(dead_code)]
     async fn cluster_identity_snapshot(pool: &PgPool) -> String {
         sqlx::query_scalar(
             r#"SELECT jsonb_build_object(
@@ -5100,6 +5106,7 @@ mod migration_database_budget_tests {
         .expect("cluster identity snapshot reads")
     }
 
+    #[allow(dead_code)]
     async fn assert_migration_session(pool: &PgPool, expected_user: &str) {
         let (session_user, current_user, lock_timeout, statement_timeout): (
             String,
@@ -5193,7 +5200,9 @@ mod migration_database_budget_tests {
     }
 }
 
-#[cfg(test)]
+// As with `readiness_tests`: the single test here is feature-gated, so the
+// module has no non-featured content to compile.
+#[cfg(all(test, feature = "test-postgres"))]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod serving_database_timeout_tests {
     use std::time::Duration;

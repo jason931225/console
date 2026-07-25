@@ -211,8 +211,17 @@ pub enum SourceFailure {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScopeFailure {
-    Denied { code: &'static str },
-    Unavailable { code: &'static str },
+    // Matched in `preflight_explicit_branch` but never constructed: every
+    // current `ScopeFuture` yields `Ok` or `Unavailable`, so a source-level
+    // denial cannot presently be distinguished from a source outage. Kept
+    // deliberately — the match arm is the intended 403 path.
+    #[allow(dead_code)]
+    Denied {
+        code: &'static str,
+    },
+    Unavailable {
+        code: &'static str,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

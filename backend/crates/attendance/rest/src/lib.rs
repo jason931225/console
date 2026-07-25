@@ -68,6 +68,9 @@ const EXCEPTION_MANAGE: Feature = Feature::AttendanceExceptionManage;
 const SUBSTITUTION_MANAGE: Feature = Feature::AttendanceSubstitutionManage;
 const CLOSE: Feature = Feature::PeriodLockManage;
 const ATTENDANCE_REST_READS_TOTAL: &str = "attendance_rest_reads_total";
+// Asserted by `attendance_read_surfaces_are_static_and_complete`; nothing on
+// the serving path reads it, so it does not belong in a non-test build.
+#[cfg(test)]
 const ATTENDANCE_READ_SURFACES: [&str; 8] = [
     "substitutions",
     "substitution_candidates",
