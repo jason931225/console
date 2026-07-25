@@ -109,7 +109,6 @@ public struct WorkOrderRepository: Sendable {
             await cache.markPending(id: id)
             return .pending
         }
-        _ = try await detail(id: id)
         return .synced
     }
 
