@@ -990,3 +990,24 @@ binding on **L-X1's** wire contract: the deal aggregate must not repeat the defe
 `time` type crossing the REST boundary carries `serde-human-readable`, and one test
 asserts an RFC 3339 string on the wire — the smallest possible check that stops R-2 from
 propagating into a second domain while the sweep is queued.
+
+### L-X7 — MANDATORY ADDITION (L-A1-D4, 2026-07-25)
+
+L-A1 makes the catalog upgrade *possible*; **nothing makes it happen.**
+`TenantConfigSeeder` has exactly one call site — the tenant-onboarding handler
+at `backend/crates/platform/platform-rest/src/lib.rs:602`, for a brand-new org.
+There is no re-seed route, no startup reconcile, and no migration that calls the
+installer. So once L-X7 bumps `BUILTIN_CATALOG_VERSION`, every tenant onboarded
+before that deploy stays at 27 types forever: no `deal`, no `DL-` resolution, an
+absent CRM ontology surface. Every test in the suite drives the installer
+directly, so CI cannot see this.
+
+L-X7 therefore delivers the **existing-tenant upgrade trigger** as part of its
+scope, not as a follow-up: `mnt_ontology_cmd` credentials, `scope_org` per
+tenant, deny-by-default authz, an audit row, and a test against a tenant seeded
+at the OLDER version. The installer is already idempotent, so the trigger needs
+no guard rails of its own.
+
+Without this line, L-X7 ships a CRM ontology that exists only for orgs created
+after the deploy — which is indistinguishable, from any existing tenant's seat,
+from not shipping it at all.

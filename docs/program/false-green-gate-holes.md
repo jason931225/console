@@ -71,6 +71,26 @@ matches the lockfile, and a lint that fails on importing a package absent from
 the manifest. `npm ls <pkg>` exits non-zero for undeclared packages; that alone
 would have caught it.
 
+## H-5 · A migration red/green proof can be a stale binary
+
+`sqlx::migrate!` embeds the migration set at **compile time**, and cargo does
+not track `.sql` files as inputs. So the standard red-proof ritual — remove the
+migration, watch the test go red, restore it, watch it go green — produces a
+**valid red and a meaningless green**: the restoring run links the stale binary
+that still has the migration embedded, and would have passed either way.
+
+Found first-hand by the L-A1 stage-2 verifier, which hit it while proving its
+own work and reported it rather than banking the green.
+
+**Rule for every backend lane.** A cargo red/green over a migration must touch a
+crate source file, or `cargo clean -p <crate>`, *between the halves*. Otherwise
+the green proves nothing. Buck is unaffected — the migrations tree is a declared
+input there, so it rebuilds correctly.
+
+This one is worse than H-1…H-4 in a specific way: those hid defects in the
+product. This hides defects in **the evidence** — it can make a lane's proof of
+correctness fraudulent without the lane intending anything of the kind.
+
 ## The meta-finding
 
 `openapi_drift`, the api-drift checks, `tsc`, `vitest`, `eslint` and

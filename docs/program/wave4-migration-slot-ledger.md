@@ -99,6 +99,7 @@ the lane is later dropped, the number is not recycled.
 | 8 | 0209 | L-X7 | ontology projections (deal / listing / inquiry) | assigned | 2026-07-25 |
 | 9 | 0210 | L-X8 | lead PII: consent, retention, masking, audited sensitive view | assigned | 2026-07-25 |
 | 10 | 0211 | L-A1 | ontology catalog additive-upgrade path (swapped from 0203, lane had written nothing) | assigned | 2026-07-25 |
+| 11 | 0212 | hf-audit-guard | extend protected_audit_writer_guard to the two builtin-catalog audit actions (mnt_rt can currently forge them) | assigned | 2026-07-25 |
 
 Next free slot after the seeded assignments: **0211**.
 
