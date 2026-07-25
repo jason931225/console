@@ -329,6 +329,8 @@ describe("EvaluationScreen", () => {
     await userEvent.type(screen.getByLabelText(text.evidenceRef), "KPI-SLA");
     await userEvent.type(screen.getByLabelText(text.evidenceLabel), "고객 응답 97%");
     await userEvent.click(screen.getByRole("button", { name: text.addEvidence }));
+    expect(screen.getByText(text.notFound)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /KPI.*KPI-SLA/ })).toBeNull();
     expect(submit).toBeEnabled();
     await userEvent.click(submit);
     expect(impl.PUT).toHaveBeenCalledWith(

@@ -35,6 +35,14 @@ import {
   type SaveEvaluationReviewRequest,
 } from "./evaluationApi";
 import type { EvaluationCapabilities } from "./evaluationCapabilities";
+import {
+  evidenceRoutePolicy,
+  parseEvaluationEvidenceKind,
+  parseEvaluationMetricKind,
+  restoreEvaluationState,
+  type EvaluationStoredState,
+  type EvaluationView,
+} from "./evaluationUiPolicy";
 import "./evaluation.css";
 
 type Props = {
@@ -46,15 +54,14 @@ type Props = {
   sessionKey: string | undefined;
 };
 
-const apiFenceIds = new WeakMap<object, number>();
+const apiFenceIds = new WeakMap<ConsoleApiClient, number>();
 let nextApiFenceId = 1;
 
 function apiFenceKey(api: ConsoleApiClient): number {
-  const reference = api as object;
-  const existing = apiFenceIds.get(reference);
+  const existing = apiFenceIds.get(api);
   if (existing) return existing;
   const id = nextApiFenceId++;
-  apiFenceIds.set(reference, id);
+  apiFenceIds.set(api, id);
   return id;
 }
 
@@ -181,23 +188,15 @@ function transitionTarget(
 
 const GRADES: EvaluationGrade[] = ["S", "A", "B", "C", "D"];
 
-/** Cross-module drill target per evidence kind; unmapped kinds render as data chips. */
-const EVIDENCE_SCREEN: Partial<Record<EvaluationEvidenceKind, string>> = {
-  WORK_ORDER: "mywork",
-  APPROVAL: "appr",
-  KPI: "dashboard",
-};
-
 function stageLabel(stage: string): string {
-  return stage in text.stage
-    ? text.stage[stage as keyof typeof text.stage]
-    : text.stage.unknown;
+  return Object.entries(text.stage).find(([key]) => key === stage)?.[1] ?? text.stage.unknown;
 }
 
 function stateLabel(state: string): string {
-  return state in text.subjectState
-    ? text.subjectState[state as keyof typeof text.subjectState]
-    : text.subjectState.unknown;
+  return (
+    Object.entries(text.subjectState).find(([key]) => key === state)?.[1] ??
+    text.subjectState.unknown
+  );
 }
 
 function dueChip(dueDate: string): { label: string; tone: Tone } {
@@ -279,43 +278,30 @@ async function listManagerOptions(
     .map((user) => ({ id: user.id, display_name: user.display_name }));
 }
 
-type EvaluationView =
-  | { kind: "cycle" }
-  | { kind: "subject"; subjectId: string }
-  | { kind: "person"; employeeId: string; employeeName: string };
-
-interface StoredState {
-  cycleId?: string;
-  view?: EvaluationView;
-}
-
-function restoreState(key: string): StoredState {
-  try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as {
-      cycleId?: unknown;
-      view?: { kind?: unknown; subjectId?: unknown; employeeId?: unknown; employeeName?: unknown };
-    };
-    const cycleId = typeof parsed.cycleId === "string" ? parsed.cycleId : undefined;
-    const view = parsed.view;
-    if (view?.kind === "subject" && typeof view.subjectId === "string") {
-      return { cycleId, view: { kind: "subject", subjectId: view.subjectId } };
-    }
-    if (
-      view?.kind === "person" &&
-      typeof view.employeeId === "string" &&
-      typeof view.employeeName === "string"
-    ) {
-      return {
-        cycleId,
-        view: { kind: "person", employeeId: view.employeeId, employeeName: view.employeeName },
-      };
-    }
-    return { cycleId, view: { kind: "cycle" } };
-  } catch {
-    return {};
+function EvidenceLinkDisplay({
+  kind,
+  objectRef,
+  label,
+}: {
+  kind: EvaluationEvidenceKind;
+  objectRef: string;
+  label: string;
+}) {
+  const policy = evidenceRoutePolicy(kind);
+  if (policy.kind === "non-drillable") {
+    return (
+      <span
+        className="evaluation__evidence-chip"
+        aria-label={`${text.evidenceKind[kind]} · ${text.notFound}`}
+      >
+        <span className={CHIP_CLASS.muted}>{text.evidenceKind[kind]}</span>
+        <span className="evaluation__code">{objectRef}</span>
+        <span>{label}</span>
+        <span className={CHIP_CLASS.muted}>{text.notFound}</span>
+      </span>
+    );
   }
+  return null;
 }
 
 /**
@@ -338,7 +324,10 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
   const evaluationApi = useMemo(() => createEvaluationApi(api), [api]);
   const navigate = useNavigate();
   const storageKey = `evaluation:view:${actorId ?? "anon"}`;
-  const restored = useMemo(() => restoreState(storageKey), [storageKey]);
+  const restored: EvaluationStoredState = useMemo(
+    () => restoreEvaluationState(sessionStorage.getItem(storageKey)),
+    [storageKey],
+  );
 
   const [stageFilter, setStageFilter] = useState<EvaluationCycleStage>();
   const [selectedCycleId, setSelectedCycleId] = useState(restored.cycleId);
@@ -610,13 +599,6 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     }
   };
 
-  const drillEvidence = (kind: EvaluationEvidenceKind) => {
-    const screen = EVIDENCE_SCREEN[kind];
-    if (!screen) return;
-    setScorecard(undefined);
-    void navigate(consoleScreenPath(screen));
-  };
-
   if (!capabilities.canRead && !capabilities.canSubmit) {
     return (
       <main className="evaluation">
@@ -869,7 +851,6 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                     cycleName,
                   });
                 }}
-                onDrillEvidence={drillEvidence}
               />
             )}
             {view.kind === "person" && (
@@ -969,7 +950,6 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
           }}
           onSaveDraft={(fields) => void saveScorecardDraft(fields)}
           onSubmit={(fields) => void submitScorecard(fields)}
-          onDrillEvidence={drillEvidence}
         />
       )}
     </main>
@@ -1358,7 +1338,6 @@ function SubjectZone({
   onSaveGoals,
   onCalibrate,
   onWriteManager,
-  onDrillEvidence,
 }: {
   actorId: string | undefined;
   capabilities: EvaluationCapabilities;
@@ -1373,7 +1352,6 @@ function SubjectZone({
   onSaveGoals: (subjectId: string, goals: EvaluationGoalInput[]) => void;
   onCalibrate: (subjectId: string, grade: EvaluationGrade, reason: string) => void;
   onWriteManager: (subjectId: string, employeeName: string, cycleName: string) => void;
-  onDrillEvidence: (kind: EvaluationEvidenceKind) => void;
 }) {
   const [calGrade, setCalGrade] = useState<EvaluationGrade>();
   const [calReason, setCalReason] = useState("");
@@ -1517,29 +1495,11 @@ function SubjectZone({
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((link) => (
                     <li key={link.id}>
-                      {EVIDENCE_SCREEN[link.object_kind] ? (
-                        <button
-                          type="button"
-                          className="evaluation__evidence-chip"
-                          onClick={() => {
-                            onDrillEvidence(link.object_kind);
-                          }}
-                        >
-                          <span className={CHIP_CLASS.muted}>
-                            {text.evidenceKind[link.object_kind]}
-                          </span>
-                          <span className="evaluation__code">{link.object_ref}</span>
-                          <span>{link.label}</span>
-                        </button>
-                      ) : (
-                        <span className="evaluation__evidence-chip">
-                          <span className={CHIP_CLASS.muted}>
-                            {text.evidenceKind[link.object_kind]}
-                          </span>
-                          <span className="evaluation__code">{link.object_ref}</span>
-                          <span>{link.label}</span>
-                        </span>
-                      )}
+                      <EvidenceLinkDisplay
+                        kind={link.object_kind}
+                        objectRef={link.object_ref}
+                        label={link.label}
+                      />
                     </li>
                   ))}
               </ul>
@@ -1663,9 +1623,8 @@ function GoalsEditor({
             value={row.metric_kind}
             aria-label={text.metric}
             onChange={(event) => {
-              update(index, {
-                metric_kind: event.currentTarget.value as EvaluationGoalInput["metric_kind"],
-              });
+              const metricKind = parseEvaluationMetricKind(event.currentTarget.value);
+              if (metricKind) update(index, { metric_kind: metricKind });
             }}
           >
             <option value="KPI">{text.metricKind.KPI}</option>
@@ -1742,7 +1701,6 @@ function ScorecardDialog({
   onClose,
   onSaveDraft,
   onSubmit,
-  onDrillEvidence,
 }: {
   open: { subjectId: string; kind: EvaluationReviewKind; employeeName: string; cycleName: string };
   detail: EvaluationSubjectDetail | undefined;
@@ -1754,14 +1712,13 @@ function ScorecardDialog({
   onClose: () => void;
   onSaveDraft: (fields: SaveEvaluationReviewRequest) => void;
   onSubmit: (fields: SaveEvaluationReviewRequest) => void;
-  onDrillEvidence: (kind: EvaluationEvidenceKind) => void;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    const previous = document.activeElement;
     dialogRef.current?.focus();
     return () => {
-      previous?.focus();
+      if (previous instanceof HTMLElement) previous.focus();
     };
   }, []);
   const title = open.cycleName
@@ -1814,7 +1771,6 @@ function ScorecardDialog({
             onClose={onClose}
             onSaveDraft={onSaveDraft}
             onSubmit={onSubmit}
-            onDrillEvidence={onDrillEvidence}
           />
         )}
       </div>
@@ -1829,7 +1785,6 @@ function ScorecardForm({
   onClose,
   onSaveDraft,
   onSubmit,
-  onDrillEvidence,
 }: {
   kind: EvaluationReviewKind;
   detail: EvaluationSubjectDetail;
@@ -1837,7 +1792,6 @@ function ScorecardForm({
   onClose: () => void;
   onSaveDraft: (fields: SaveEvaluationReviewRequest) => void;
   onSubmit: (fields: SaveEvaluationReviewRequest) => void;
-  onDrillEvidence: (kind: EvaluationEvidenceKind) => void;
 }) {
   const existing = detail.reviews.find((review) => review.kind === kind);
   const [grade, setGrade] = useState<EvaluationGrade | undefined>(existing?.grade ?? undefined);
@@ -1886,29 +1840,11 @@ function ScorecardForm({
           <ul className="evaluation__evidence" aria-label={text.evidence}>
             {evidence.map((link, index) => (
               <li key={`${link.object_ref}:${String(index)}`}>
-                {EVIDENCE_SCREEN[link.object_kind] ? (
-                  <button
-                    type="button"
-                    className="evaluation__evidence-chip"
-                    onClick={() => {
-                      onDrillEvidence(link.object_kind);
-                    }}
-                  >
-                    <span className={CHIP_CLASS.muted}>
-                      {text.evidenceKind[link.object_kind]}
-                    </span>
-                    <span className="evaluation__code">{link.object_ref}</span>
-                    <span>{link.label}</span>
-                  </button>
-                ) : (
-                  <span className="evaluation__evidence-chip">
-                    <span className={CHIP_CLASS.muted}>
-                      {text.evidenceKind[link.object_kind]}
-                    </span>
-                    <span className="evaluation__code">{link.object_ref}</span>
-                    <span>{link.label}</span>
-                  </span>
-                )}
+                <EvidenceLinkDisplay
+                  kind={link.object_kind}
+                  objectRef={link.object_ref}
+                  label={link.label}
+                />
                 <button
                   type="button"
                   onClick={() => {
@@ -1928,7 +1864,8 @@ function ScorecardForm({
             value={draftKind}
             aria-label={text.evidence}
             onChange={(event) => {
-              setDraftKind(event.currentTarget.value as EvaluationEvidenceKind);
+              const evidenceKind = parseEvaluationEvidenceKind(event.currentTarget.value);
+              if (evidenceKind) setDraftKind(evidenceKind);
             }}
           >
             <option value="ATTENDANCE">{text.evidenceKind.ATTENDANCE}</option>
