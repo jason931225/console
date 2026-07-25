@@ -188,7 +188,22 @@ The five story assertions now proven as `mnt_rt`:
 
 Manifests: `docs/evidence/console/hotfix/equipment-custody/manifests/`.
 
-### 5.1 `backend/openapi/openapi.yaml` — blocking, openapi-integrator
+### 5.1 `backend/openapi/openapi.yaml` — LANDED (was blocking, openapi-integrator)
+
+Closed by openapi-integrator on `wave23-consolidation-20260724`: `cc69ebf8`
+(merge of this lane) then `b6915340` (spec + `clients/{ts,kotlin,swift}` regen),
+in that order — the §5.5 ordering held. Verified from this worktree: `:14453`
+now requires `evidenceObjectId`, and this branch's tip `c08a12db` is contained
+in the spine. `openapi_drift` 13/0, both drift gates 0/0, web 2792/2792.
+
+One thing the fragment got right by accident of scoping, worth recording
+because the next person will grep: **`evidenceReference` occurs three times in
+the spec, not two.** The third is `verifyLogisticsPod` at `openapi.yaml:14322`,
+a different lane, where it is still legitimately an `^evidence://` string. A
+name-based sweep of the retired field would silently break logistics. The
+fragment named the two `equipment-3r` sites explicitly and left it alone.
+
+Original statement of the item:
 
 `handoverEquipment3rCase` still requires `evidenceReference` (`^evidence://`) at
 `openapi.yaml:14453`, and `Equipment3rCaseDetailView` still returns it at
@@ -240,7 +255,7 @@ what this lane reported**, recorded because the original claim was too small:
   substring match. That test asserts YAML *formatting* in several places and
   will break again on any reformat.
 
-### 5.5 Landing order for §5.1 — resolved with openapi-integrator
+### 5.5 Landing order for §5.1 — agreed, then executed as agreed
 
 The spec edit must **not** be applied to the spine ahead of the crate diff. The
 crate half lives only on this branch; `wave23-consolidation-20260724` still has
