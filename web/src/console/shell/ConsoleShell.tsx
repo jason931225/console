@@ -330,12 +330,19 @@ export function ConsoleShell({
   const badges = useNavBadges(session?.access_token);
 
   // §4.7 window model. One host for the whole console, above every screen body,
-  // so a pinned object card and the 작업 트레이 survive screen navigation.
-  // Persistence is bound to the exact incarnation; a session without an owned
-  // one still gets the complete in-memory model (the rendered tray keeps
-  // interaction enabled) and simply never touches storage.
-  // ponytail: layout retention is browser-local; the server-persisted
-  // per-user workspace layout is the upgrade path when that contract exists.
+  // so a pinned object card and the 작업 트레이 survive screen navigation. That
+  // — the in-memory arrangement across navigation — is what this mount delivers.
+  //
+  // `authorityPartition` scopes the layout STORAGE KEY to the exact incarnation,
+  // and that is all it does today: nothing in the console calls the manager's
+  // `saveLayout()`, so the key is never written, and nothing calls `register()`,
+  // so a saved arrangement could not be re-applied either (`WindowEntry.render`
+  // is a closure only the owning screen can re-supply). Passing the partition is
+  // the cross-incarnation isolation guarantee for the day a writer exists — not
+  // a claim that layouts persist. See the L-F1 verification note.
+  // ponytail: browser-local retention is a phantom; the real upgrade path is the
+  // server-persisted `GET/PUT /api/v1/me/workspace` contract, and the client
+  // storage layer should be deleted rather than extended when it lands.
   const windowAuthority = useMemo(
     () => sessionWindowAuthorityKey(session, viewAs),
     [session, viewAs],

@@ -246,7 +246,10 @@ describe("console shell window host", () => {
     }
   });
 
-  it("partitions the saved layout by the exact session incarnation", async () => {
+  // Named for what it proves: the layout key is READ under a per-incarnation
+  // partition. It deliberately does not claim layouts persist — see the
+  // inert-storage tripwire below.
+  it("reads the layout key under a partition scoped to the exact session incarnation", async () => {
     const getItem = vi.spyOn(Storage.prototype, "getItem");
 
     const first = render(
@@ -283,5 +286,35 @@ describe("console shell window host", () => {
 
     first.unmount();
     second.unmount();
+  });
+
+  /**
+   * TRIPWIRE, not an endorsement. Layout retention is inert today: `saveLayout()`
+   * is the only writer and nothing calls it, and `register()` is the only
+   * restorer and nothing calls it either. Mounting the host must not be mistaken
+   * for shipping persistence, so pin an object under an OWNED incarnation — the
+   * case that would persist if anything did — and require that no layout write
+   * happens. When someone wires a real writer this goes red, which is the point:
+   * the partitioning, the do-not-ship-ban-#9 localStorage ceiling and the orphan
+   * `ko.console.window.{saveLayout,restoreDefault}` strings all have to be
+   * re-decided in that same change.
+   */
+  it("does not persist a layout — retention is inert until a writer exists", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    render(
+      <MemoryRouter initialEntries={["/console"]}>
+        <AuthTestProvider session={ownedSession("incarnation-owned")}>
+          <ConsoleApp screenKeys={MOUNTED_SCREEN_KEYS} />
+        </AuthTestProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTestId("probe-open-a"));
+    fireEvent.click(screen.getByTestId("probe-open-b"));
+    expect(screen.getByRole("region", { name: ENTRY_B_TITLE })).toBeVisible();
+
+    for (const call of setItem.mock.calls) {
+      expect(call[0]).not.toContain("oyatie.console.window.layout");
+    }
   });
 });

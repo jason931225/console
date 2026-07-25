@@ -33,6 +33,19 @@ interface SavedLayout {
   panelWidth: number;
 }
 
+/**
+ * ponytail: this storage layer is INERT in the shipped app and must not be
+ * extended. `writeSavedLayout` runs only from `saveLayout()`, which no console
+ * or shell surface calls; `savedStatesRef` is consumed only by `register()`,
+ * which nothing calls either — and could not restore a pin anyway, because
+ * `WindowEntry.render` is a closure only the owning screen can re-supply. So the
+ * key below is read on mount and never written. It is kept (rather than deleted
+ * mid-wave) because the partitioning is the cross-incarnation isolation
+ * guarantee a future writer must inherit. Upgrade path: the server-persisted
+ * `GET/PUT /api/v1/me/workspace` contract — at which point delete this layer,
+ * `saveLayout`, `restoreDefault` and `ko.console.window.{saveLayout,
+ * restoreDefault}` instead of porting them (do-not-ship ban #9).
+ */
 const PARTITIONED_STORAGE_PREFIX = "oyatie.console.window.layout.v2";
 
 function layoutStorageKey(
