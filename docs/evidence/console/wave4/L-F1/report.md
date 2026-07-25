@@ -46,10 +46,12 @@ path; no new state machine was added (D-4 keeps the 4-state engine deferred).
   passes `display:flex / flexDirection:column / flex:1 1 auto / minHeight:0 / minWidth:0`;
   the split padding stays manager-owned. jsdom cannot catch this — the browser check does.
 - **Partition.** `ontologyWorkspaceAuthorityKey(session, viewAs)` is reused verbatim, so
-  the key is byte-identical to the one the nested provider used. A user's saved layout
-  keeps its partition, and the cross-incarnation isolation the nested provider was
-  security-reviewed for is preserved, now shell-wide. `key={windowAuthority ?? ...}` on the
-  provider makes an authority change tear the arrangement down.
+  the key is byte-identical to the one the nested provider used, and the cross-incarnation
+  isolation the nested provider was security-reviewed for is preserved, now shell-wide.
+  `key={windowAuthority ?? ...}` on the provider makes an authority change tear the
+  arrangement down. **Correction (stage-2 verification):** this scopes the storage KEY, not
+  a working saved layout — nothing writes that key and nothing restores from it. See
+  `verification.md` §2.
 - **`retentionEnabled={windowAuthority !== undefined}` + rendered tray.** A session
   without an owned org/user/incarnation gets the **complete in-memory** window model and
   **never touches storage**. This is deliberate: gating interaction on an owned partition
@@ -134,8 +136,10 @@ Run on the merged tree (`f07f591c`; spine `8c3da1cd` plain-merged in per the D-2
 
 ## 6. Named gaps and open items — nothing here is silently deferred
 
-1. **`localStorage` layout ceiling (do-not-ship ban #9).** The saved arrangement lives in
-   `oyatie.console.window.layout.v2.<partition>` (`WindowManager.tsx:36`). Partitioning by
+1. **`localStorage` layout ceiling (do-not-ship ban #9).** The arrangement *would* live in
+   `oyatie.console.window.layout.v2.<partition>` — stage-2 verification found nothing ever
+   writes or restores it, so the ceiling is a phantom rather than a live localStorage
+   dependency (`verification.md` §2). Partitioning by
    the exact incarnation is the mitigation, not the fix. The `ponytail:` comment naming the
    upgrade path is on the `windowAuthority` memo in `ConsoleShell.tsx`; the
    server-persisted per-user workspace endpoint (`GET/PUT /api/v1/me/workspace`, already
