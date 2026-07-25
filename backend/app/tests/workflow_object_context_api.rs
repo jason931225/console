@@ -47,14 +47,7 @@ async fn workflow_object_context_is_exact_pair_scoped_and_read_only(pool: PgPool
     let cross_branch_user = UserId::new();
     seed_user(&pool, org, initiator, "ADMIN", branch_a).await;
     seed_user(&pool, org, same_branch_stranger, "ADMIN", branch_a).await;
-    seed_user(
-        &pool,
-        org,
-        unrelated_same_branch_user,
-        "ADMIN",
-        branch_a,
-    )
-    .await;
+    seed_user(&pool, org, unrelated_same_branch_user, "ADMIN", branch_a).await;
     seed_user(&pool, org, cross_branch_user, "ADMIN", branch_b).await;
     let other_org = OrgId::from_uuid(Uuid::from_u128(0x2));
     seed_org(&pool, other_org).await;
