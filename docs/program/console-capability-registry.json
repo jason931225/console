@@ -2289,7 +2289,7 @@
    "state": {
     "design_contract": "committed_contract",
     "backend": "integrated_dark_review_remediation_pending",
-    "frontend": "integrated_dark_review_remediation_pending",
+    "frontend": "integrated_dark_contract_drifted_from_server",
     "e2e": "mnt_rt_story_and_focused_tests_passed_browser_replay_pending",
     "runtime": "blocked",
     "independent_review": "request_changes_2026_07_23",
@@ -2476,7 +2476,12 @@
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
-   ]
+   ],
+   "lane_assignments": {
+    "consolidation": {
+     "integration_notes": "2026-07-25 OPEN HALF: web/src/console/equipment/** still sends evidenceReference and will 422 against the 0184 server. NO GATE CATCHES IT — the module uses hand-written local interfaces, not generated types, so tsc -b and both api-drift gates stay green. Not a rename: the field must become a picker over ADMISSIBLE, non-disposed objects holding a VERIFIED ORIGINAL copy, because the server 404s flat and deliberately cannot say why a document was refused. No live exposure (EXPOSED_SCREEN_KEYS is []). Deferred by D-0 depth-first (equipment is not the CRM focus module); must land before equipment is ever exposed."
+    }
+   }
   },
   {
    "id": "CAP-CONSULTING-PILOT",
