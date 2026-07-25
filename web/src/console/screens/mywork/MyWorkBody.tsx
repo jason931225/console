@@ -58,9 +58,12 @@ export interface MyWorkBodyProps {
   now?: Date;
   /** Assigned-item drill; invoked only when a canonical source-object link resolves. */
   onOpen?: (item: ActionInboxItem) => void;
+  /** Mirrors the collaboration route guard; receipt navigation is omitted when
+   * the authenticated session cannot enter the owner surface. */
+  canOpenCalendarOwner?: boolean;
 }
 
-export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
+export function MyWorkBody({ api, now, onOpen, canOpenCalendarOwner = false }: MyWorkBodyProps) {
   const S = useMemo(() => myWorkStrings(), []);
   const navigate = useNavigate();
   const today = useMemo(() => now ?? new Date(), [now]);
@@ -854,7 +857,7 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
                       {dueFmt.format(new Date(createdCalendarEvent.starts_at))} – {dueFmt.format(new Date(createdCalendarEvent.ends_at))}
                     </time>
                   </div>
-                  {createdCalendarRoute(createdCalendarEvent) ? (
+                  {canOpenCalendarOwner && createdCalendarRoute(createdCalendarEvent) ? (
                     <button
                       type="button"
                       data-window-control="true"

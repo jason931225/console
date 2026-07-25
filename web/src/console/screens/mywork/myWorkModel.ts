@@ -4,6 +4,7 @@
 // unit-testable without a DOM.
 
 import { ko } from "../../../i18n/ko";
+import { isNavItemVisible } from "../../../components/shell/nav";
 import { resolveActionInboxLinkRoute } from "../../../lib/objectRegistry";
 import type { ActionInboxItem } from "../overview/overviewModel";
 import type { CalendarEventResponse, MyWorkbenchResponse, WorkbenchCalendarItem } from "./myWorkApi";
@@ -226,6 +227,17 @@ export function calendarTargetRoute(item: WorkbenchCalendarItem): string | undef
  * created event.  The returned receipt is not injected into the aggregate. */
 export function createdCalendarRoute(event: CalendarEventResponse): string | undefined {
   return event.status === "ACTIVE" ? "/collaboration" : undefined;
+}
+
+/** Mirrors the route guard before we advertise a receipt navigation control.
+ * A backend Login member can create a personal event without necessarily
+ * having the operational collaboration-nav grant. */
+export function canOpenCalendarOwner(
+  roles: readonly string[] | undefined,
+  groupRoles: readonly string[] | undefined,
+  featureGrants: readonly string[] | undefined,
+): boolean {
+  return isNavItemVisible("collaboration", roles, groupRoles, featureGrants);
 }
 
 /** Converts a datetime-local KST entry to a real RFC3339 instant without using

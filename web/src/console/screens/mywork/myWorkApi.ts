@@ -78,7 +78,7 @@ export function createMyWorkApi(client: ConsoleApiClient): MyWorkApi {
       return data;
     },
     createPersonalCalendarEvent: async ({ title, startsAt, endsAt }) => {
-      const { data, error } = await client.POST("/api/v1/collaboration/calendar/events", {
+      const { data } = await client.POST("/api/v1/collaboration/calendar/events", {
         body: {
           scope_type: "PERSONAL",
           title,
@@ -87,7 +87,7 @@ export function createMyWorkApi(client: ConsoleApiClient): MyWorkApi {
           all_day: false,
         },
       });
-      if (error || !data) throw new Error("calendar event failed");
+      if (!data) throw new Error("calendar event failed");
       return data;
     },
   };

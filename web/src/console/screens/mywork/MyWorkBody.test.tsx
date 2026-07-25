@@ -8,6 +8,7 @@ import { ko } from "../../../i18n/ko";
 import type { MyWorkApi, TodoSummary } from "./myWorkApi";
 import {
   myWorkStrings,
+  canOpenCalendarOwner,
   type ActionInboxItem,
   type ActionInboxResponse,
 } from "./myWorkModel";
@@ -1014,7 +1015,7 @@ describe("MyWorkBody calendar workbench", () => {
     );
     const createPersonalCalendarEvent = vi.fn().mockResolvedValue(createdCalendarEvent);
     const api = Object.assign(stubApi(), { loadWorkbench, createPersonalCalendarEvent });
-    renderBody(api);
+    renderBody(api, { canOpenCalendarOwner: true });
 
     expect(await screen.findByRole("region", { name: C.title })).toBeVisible();
     expect(screen.getByText("Morning operational review")).toBeVisible();
@@ -1087,7 +1088,9 @@ describe("MyWorkBody calendar workbench", () => {
     const calendar = await screen.findByRole("region", { name: C.title });
     expect(within(calendar).getByText(C.loadFailed)).toBeVisible();
     await userEvent.click(within(calendar).getByRole("button", { name: S.retry }));
-    await waitFor(() => expect(loadWorkbench).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(loadWorkbench).toHaveBeenCalledTimes(2);
+    });
     expect(await within(calendar).findByText(C.empty)).toBeVisible();
   });
 
@@ -1110,7 +1113,9 @@ describe("MyWorkBody calendar workbench", () => {
     expect(screen.getByLabelText(C.focusTitle)).toHaveValue("Retry focus block");
 
     await user.click(submit);
-    await waitFor(() => expect(createPersonalCalendarEvent).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(createPersonalCalendarEvent).toHaveBeenCalledTimes(2);
+    });
     expect(await screen.findByText(`${C.created}: Prepare weekly close`)).toBeVisible();
   });
 
@@ -1135,5 +1140,24 @@ describe("MyWorkBody calendar workbench", () => {
       pending.resolve(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false }));
       await pending.promise;
     });
+  });
+
+  it("does not promise a collaboration route to a plain Feature::Login member", async () => {
+    expect(canOpenCalendarOwner(["MEMBER"], undefined, [])).toBe(false);
+    const user = userEvent.setup();
+    const api = Object.assign(stubApi(), {
+      loadWorkbench: vi.fn().mockResolvedValue(workbench({ status: "ok", as_of: "2026-07-08T09:00:00Z", items: [], total: 0, truncated: false })),
+      createPersonalCalendarEvent: vi.fn().mockResolvedValue(createdCalendarEvent),
+    });
+    renderBody(api, { canOpenCalendarOwner: false });
+
+    await screen.findByRole("region", { name: C.title });
+    await user.type(screen.getByLabelText(C.focusTitle), "Member focus block");
+    await user.type(screen.getByLabelText(C.startsAt), "2026-07-10T09:00");
+    await user.type(screen.getByLabelText(C.endsAt), "2026-07-10T10:00");
+    await user.click(screen.getByRole("button", { name: C.schedule }));
+
+    expect(await screen.findByText(`${C.created}: Prepare weekly close`)).toBeVisible();
+    expect(screen.queryByRole("button", { name: C.openCreated })).not.toBeInTheDocument();
   });
 });
