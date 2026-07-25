@@ -501,7 +501,6 @@ impl PgEquipment3rStore {
         authorize: BranchAuthorization,
     ) -> Result<Value, PgEquipment3rError> {
         required(&cmd.recipient_name, "recipientName", 160)?;
-        evidence_reference(&cmd.evidence_reference)?;
         let org = current_org().map_err(KernelError::from)?;
         let now = OffsetDateTime::now_utc();
         with_audits(&self.pool, org, |tx| {
@@ -512,6 +511,15 @@ impl PgEquipment3rStore {
                 let state = CaseState::from_db(&row.try_get::<String, _>("status")?)?;
                 state.can_transition_to(CaseState::HandedOver)?;
                 let unit: Uuid = row.try_get("unit_id")?;
+                bind_handover_custody(
+                    tx,
+                    org,
+                    branch,
+                    case,
+                    cmd.evidence_object_id,
+                    actor,
+                )
+                .await?;
                 let moved = sqlx::query(
                     "UPDATE equipment_3r_units SET availability=$1, updated_at=$2 WHERE id=$3 AND availability=$4",
                 )
@@ -526,11 +534,11 @@ impl PgEquipment3rStore {
                     return Err(KernelError::conflict("unit is not reserved for handover").into());
                 }
                 let updated = sqlx::query(
-                    "UPDATE equipment_3r_rental_cases SET status=$1, recipient_name=$2, handover_evidence_reference=$3, handed_over_at=$4, updated_at=$5 WHERE id=$6 AND status=$7",
+                    "UPDATE equipment_3r_rental_cases SET status=$1, recipient_name=$2, handover_evidence_object_id=$3, handed_over_at=$4, updated_at=$5 WHERE id=$6 AND status=$7",
                 )
                 .bind(CaseState::HandedOver.as_db())
                 .bind(cmd.recipient_name.trim())
-                .bind(&cmd.evidence_reference)
+                .bind(cmd.evidence_object_id)
                 .bind(cmd.handed_over_at)
                 .bind(now)
                 .bind(case)
@@ -979,7 +987,7 @@ async fn case_detail_tx(
         "SELECT c.id,c.unit_id,c.status,c.customer_name,c.site_reference,c.monthly_rate_minor,c.duration_months,c.currency_code,c.branch_id, \
          c.approval_decision,c.approval_reason,c.approved_by,c.approved_at, \
          c.carrier_name,c.vehicle_reference,c.dispatched_at, \
-         c.recipient_name,c.handover_evidence_reference,c.handed_over_at,c.returned_at, \
+         c.recipient_name,c.handover_evidence_object_id,c.handed_over_at,c.returned_at, \
          c.created_by,c.created_at,c.updated_at, \
          a.condition_grade,a.findings AS assessment_findings,a.disposition AS assessment_disposition,a.assessed_by,a.assessed_at, \
          d.id AS disposition_id \
@@ -1016,7 +1024,7 @@ async fn case_detail_tx(
     let handover = match row.try_get::<Option<String>, _>("recipient_name")? {
         Some(recipient) => json!({
             "recipientName": recipient,
-            "evidenceReference": row.try_get::<Option<String>, _>("handover_evidence_reference")?,
+            "evidenceObjectId": row.try_get::<Option<Uuid>, _>("handover_evidence_object_id")?,
             "handedOverAt": opt_rfc3339(row.try_get("handed_over_at")?)?,
         }),
         None => Value::Null,
@@ -1138,21 +1146,60 @@ fn idem(key: &str) -> Result<(), PgEquipment3rError> {
     }
 }
 
-fn evidence_reference(value: &str) -> Result<(), PgEquipment3rError> {
-    let rest = value.strip_prefix("evidence://").ok_or_else(|| {
-        KernelError::validation("evidenceReference must be an immutable evidence:// reference")
-    })?;
-    let len = rest.chars().count();
-    let charset_ok = rest
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '/' | '-'));
-    if (8..=400).contains(&len) && charset_ok {
+/// Bind the Docs-owned immutable custody relation for one handover, inside the
+/// caller's audited transaction.
+///
+/// The eligibility predicate below mirrors the trigger
+/// `docs_equipment_handover_custody_eligible()` installed by migration 0184,
+/// which stays the enforcing authority: this statement only *resolves* the
+/// `ORIGINAL` copy the custody FK requires (at most one exists per object —
+/// `docs_evidence_copies_one_original_per_object`) and shapes the refusal. Selecting
+/// zero rows conceals every rejection class — foreign tenant (RLS), unknown
+/// object, non-`ADMISSIBLE`, disposed, or an original whose WORM copy was never
+/// verified — behind one `not_found`, so a caller cannot probe another org's
+/// evidence estate. A predicate drift between the two is caught by the
+/// `handover_conceals_ineligible_or_foreign_evidence_and_denies_foreign_branch`
+/// story test, which drives each rejection class through the HTTP boundary: if
+/// this query ever admits a row the trigger refuses, the trigger raises and the
+/// case fails to transition instead of returning 404.
+///
+/// The equipment adapter issues this SQL directly rather than calling
+/// `mnt-docs-adapter-postgres`, because adapter → adapter is an illegal layer
+/// edge (`mnt-gate-layer-boundary`).
+async fn bind_handover_custody(
+    tx: &mut Transaction<'_, Postgres>,
+    org: OrgId,
+    branch: BranchId,
+    case: Uuid,
+    evidence_object: Uuid,
+    actor: UserId,
+) -> Result<(), PgEquipment3rError> {
+    let bound = sqlx::query(
+        "INSERT INTO docs_equipment_handover_custody \
+         (org_id,branch_id,equipment_case_id,evidence_object_id,original_copy_id,created_by) \
+         SELECT $1,$2,$3,o.id,c.id,$5 \
+         FROM docs_evidence_objects o \
+         JOIN docs_evidence_copies c ON c.evidence_object_id=o.id AND c.org_id=o.org_id \
+         WHERE o.id=$4 \
+           AND o.admissibility_status='ADMISSIBLE' \
+           AND o.disposed_at IS NULL \
+           AND o.current_custody_stage <> 'DISPOSED' \
+           AND c.copy_kind='ORIGINAL' \
+           AND c.worm_status='VERIFIED' \
+           AND c.verified_at IS NOT NULL",
+    )
+    .bind(*org.as_uuid())
+    .bind(*branch.as_uuid())
+    .bind(case)
+    .bind(evidence_object)
+    .bind(*actor.as_uuid())
+    .execute(tx.as_mut())
+    .await?
+    .rows_affected();
+    if bound == 1 {
         Ok(())
     } else {
-        Err(KernelError::validation(
-            "evidenceReference must be evidence:// followed by 8..400 charset-bounded characters",
-        )
-        .into())
+        Err(KernelError::not_found("eligible handover evidence was not found").into())
     }
 }
 
