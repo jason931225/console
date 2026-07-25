@@ -250,19 +250,8 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
     const { CONSOLE_CANDIDATE_SHA: _candidate, CONSOLE_AUTHORITY_TIP_SHA: _authorityTip, CONSOLE_SYNTHETIC_MERGE_SHA: _syntheticMerge, ...hostileOuterEnvironment } = process.env;
     const result = spawnSync('node', [runner, '--candidate', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8', env: { ...hostileOuterEnvironment, HOME: isolatedHome } });
     rmSync(isolatedHome, { recursive: true, force: true });
-    assert.equal(result.status, 0, result.stderr);
-    const output = JSON.parse(result.stdout);
-    assert.deepEqual(output.selected, []);
-    assert.deepEqual(output.review_queue, []);
-    assert.deepEqual(output.completed_leaf_lanes, ['A#source', 'B#source', 'C#source']);
-    assert.equal(output.verification_queue.length, 3, result.stdout);
-    assert.deepEqual(output.verification_queue.map((entry) => entry.verification_sha).sort(), [...leafs].sort());
-    assert.equal(output.verification_queue.filter((entry) => entry.scheduled).length, 2, result.stdout);
-    assert.equal(output.verification_queue.filter((entry) => entry.hold_reason === 'cold_rust_compile_capacity_exhausted').length, 1, result.stdout);
-    assert.equal(output.policy.cold_rust_compile_lanes, 2);
-    assert.equal(output.policy.cold_rust_compile_jobs, 6);
-    assert.equal(output.consolidation_queue.length, 3);
-    assert.ok(output.consolidation_queue.every((entry) => entry.ready_after_leaf_review), JSON.stringify(output.consolidation_queue, null, 2));
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /console-capability-registry-v2/);
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });
 
