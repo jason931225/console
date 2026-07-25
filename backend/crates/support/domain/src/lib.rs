@@ -436,23 +436,85 @@ impl SupportCase {
                 ));
             }
         }
-        let mut seen_evidence = std::collections::BTreeSet::new();
-        if evidence_bindings
-            .iter()
-            .any(|binding| !seen_evidence.insert(binding.evidence_object_id))
-        {
-            return Err(KernelError::validation(
-                "support case evidence bindings must be unique",
-            ));
-        }
-        if let Some(handoff) = &dispatch_handoff {
-            if handoff.status.is_terminal() != handoff.resolved_at.is_some()
-                || handoff.resolved_at.is_some() != handoff.resolved_by.is_some()
-            {
+        let mut reconstructed_status = TicketStatus::Open;
+        let mut reconstructed_handoff = None;
+        let mut reconstructed_evidence = Vec::new();
+        for entry in &history {
+            if reconstructed_status.is_terminal() {
                 return Err(KernelError::validation(
-                    "support case handoff resolution fields are inconsistent",
+                    "support case history changes a terminal case",
                 ));
             }
+            match entry.event {
+                CaseEvent::StatusTransition { from, to } => {
+                    if from != reconstructed_status || from.transition_to(to).is_err() {
+                        return Err(KernelError::validation(
+                            "support case history contains an invalid status transition",
+                        ));
+                    }
+                    reconstructed_status = to;
+                }
+                CaseEvent::DispatchHandoffRequested { work_order_id } => {
+                    if reconstructed_handoff.is_some() {
+                        return Err(KernelError::validation(
+                            "support case history contains multiple dispatch handoff requests",
+                        ));
+                    }
+                    reconstructed_handoff = Some(DispatchHandoff {
+                        work_order_id,
+                        status: DispatchHandoffStatus::Requested,
+                        requested_by: entry.actor,
+                        requested_at: entry.occurred_at,
+                        resolved_by: None,
+                        resolved_at: None,
+                    });
+                }
+                CaseEvent::DispatchHandoffResolved {
+                    work_order_id,
+                    status: handoff_status,
+                } => {
+                    let Some(handoff) = reconstructed_handoff.as_mut() else {
+                        return Err(KernelError::validation(
+                            "support case history resolves a missing dispatch handoff",
+                        ));
+                    };
+                    if handoff.work_order_id != work_order_id
+                        || !handoff.status.can_transition_to(handoff_status)
+                    {
+                        return Err(KernelError::validation(
+                            "support case history contains an invalid dispatch handoff transition",
+                        ));
+                    }
+                    handoff.status = handoff_status;
+                    handoff.resolved_by = Some(entry.actor);
+                    handoff.resolved_at = Some(entry.occurred_at);
+                }
+                CaseEvent::EvidenceBound { evidence_object_id } => {
+                    if reconstructed_evidence
+                        .iter()
+                        .any(|binding: &CaseEvidenceBinding| {
+                            binding.evidence_object_id == evidence_object_id
+                        })
+                    {
+                        return Err(KernelError::validation(
+                            "support case history binds evidence more than once",
+                        ));
+                    }
+                    reconstructed_evidence.push(CaseEvidenceBinding {
+                        evidence_object_id,
+                        bound_by: entry.actor,
+                        bound_at: entry.occurred_at,
+                    });
+                }
+            }
+        }
+        if status != reconstructed_status
+            || dispatch_handoff != reconstructed_handoff
+            || evidence_bindings != reconstructed_evidence
+        {
+            return Err(KernelError::validation(
+                "support case projection does not match durable history",
+            ));
         }
         Ok(Self {
             id,
@@ -878,7 +940,7 @@ mod tests {
     #[test]
     fn rehydration_preserves_valid_case_through_read_only_accessors() {
         let now = datetime!(2026-07-24 09:00 UTC);
-        let opened = SupportCase::open(
+        let mut opened = SupportCase::open(
             SupportTicketId::new(),
             CaseScope::new(OrgId::new(), BranchId::new()),
             TicketPriority::Medium,
@@ -886,6 +948,21 @@ mod tests {
             SlaPolicy::default(),
         )
         .unwrap();
+        let actor = UserId::new();
+        let work_order_id = WorkOrderId::new();
+        let evidence_object_id = EvidenceObjectId::new();
+        opened
+            .request_dispatch_handoff(0, actor, work_order_id, now)
+            .unwrap();
+        opened
+            .resolve_dispatch_handoff(1, actor, DispatchHandoffStatus::Accepted, now)
+            .unwrap();
+        opened
+            .bind_evidence(2, actor, evidence_object_id, now)
+            .unwrap();
+        opened
+            .transition(3, actor, TicketStatus::InProgress, now)
+            .unwrap();
         let rehydrated = SupportCase::rehydrate(
             opened.id(),
             opened.scope(),
@@ -899,6 +976,87 @@ mod tests {
         )
         .unwrap();
         assert_eq!(rehydrated.id(), opened.id());
-        assert_eq!(rehydrated.status(), TicketStatus::Open);
+        assert_eq!(rehydrated.status(), TicketStatus::InProgress);
+        assert_eq!(
+            rehydrated.evidence_bindings()[0].evidence_object_id,
+            evidence_object_id
+        );
+        assert_eq!(
+            rehydrated.dispatch_handoff().unwrap().work_order_id,
+            work_order_id
+        );
+    }
+
+    #[test]
+    fn rehydration_rejects_status_projection_that_disagrees_with_history() {
+        let now = datetime!(2026-07-24 09:00 UTC);
+        let result = SupportCase::rehydrate(
+            SupportTicketId::new(),
+            CaseScope::new(OrgId::new(), BranchId::new()),
+            TicketPriority::Medium,
+            TicketStatus::Open,
+            now,
+            1,
+            None,
+            Vec::new(),
+            vec![CaseHistoryEntry {
+                version: 1,
+                event: CaseEvent::StatusTransition {
+                    from: TicketStatus::Open,
+                    to: TicketStatus::InProgress,
+                },
+                actor: UserId::new(),
+                occurred_at: now,
+            }],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rehydration_rejects_incoherent_handoff_and_evidence_history() {
+        let now = datetime!(2026-07-24 09:00 UTC);
+        let scope = CaseScope::new(OrgId::new(), BranchId::new());
+        let actor = UserId::new();
+        let missing_handoff = SupportCase::rehydrate(
+            SupportTicketId::new(),
+            scope,
+            TicketPriority::Medium,
+            TicketStatus::Open,
+            now,
+            1,
+            None,
+            Vec::new(),
+            vec![CaseHistoryEntry {
+                version: 1,
+                event: CaseEvent::DispatchHandoffResolved {
+                    work_order_id: WorkOrderId::new(),
+                    status: DispatchHandoffStatus::Accepted,
+                },
+                actor,
+                occurred_at: now,
+            }],
+        );
+        assert!(missing_handoff.is_err());
+
+        let evidence = EvidenceObjectId::new();
+        let missing_evidence_projection = SupportCase::rehydrate(
+            SupportTicketId::new(),
+            scope,
+            TicketPriority::Medium,
+            TicketStatus::Open,
+            now,
+            1,
+            None,
+            Vec::new(),
+            vec![CaseHistoryEntry {
+                version: 1,
+                event: CaseEvent::EvidenceBound {
+                    evidence_object_id: evidence,
+                },
+                actor,
+                occurred_at: now,
+            }],
+        );
+        assert!(missing_evidence_projection.is_err());
     }
 }
