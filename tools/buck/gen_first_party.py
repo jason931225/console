@@ -770,6 +770,9 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/work_diary_rls_surfaces_as_runtime_role.rs': 'postgres',
         },
     },
+    'mnt-reporting-application': {
+        'unit': 'none',
+    },
     'mnt-reporting-domain': {
         'unit': 'none',
     },
