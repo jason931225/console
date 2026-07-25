@@ -40,14 +40,14 @@ impl RecruitingHireState {
     }
 }
 
+pub const RECRUITING_HIRE_PATH: &str = "/api/v1/recruiting/applicants/{applicant_id}/hire";
+pub const RECRUITING_HIRE_ROUTE_PATHS: &[&str] = &[RECRUITING_HIRE_PATH];
+
 pub(crate) fn router(state: RecruitingHireState) -> Router {
     let verifier = state.jwt.clone();
     let pool = state.pool.clone();
     let router = Router::new()
-        .route(
-            "/api/v1/recruiting/applicants/{applicant_id}/hire",
-            post(hire),
-        )
+        .route(RECRUITING_HIRE_PATH, post(hire))
         .with_state(state);
     mnt_platform_request_context::with_request_context(router, verifier, pool)
 }

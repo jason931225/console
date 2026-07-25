@@ -232,6 +232,30 @@ const CONFIGURED_ROUTE_SOURCES: &[RouteSource] = &[
         source: include_str!("../../crates/equipment/rest/src/lib.rs"),
         ignored_route_refs: &[],
     },
+    RouteSource {
+        name: "notifications REST router",
+        surface: "notifications",
+        source: include_str!("../../crates/notifications/rest/src/lib.rs"),
+        ignored_route_refs: &[],
+    },
+    RouteSource {
+        name: "orgchange REST router",
+        surface: "orgchange",
+        source: include_str!("../../crates/orgchange/rest/src/lib.rs"),
+        ignored_route_refs: &[],
+    },
+    RouteSource {
+        name: "recruiting REST router",
+        surface: "recruiting",
+        source: include_str!("../../crates/recruiting/rest/src/lib.rs"),
+        ignored_route_refs: &[],
+    },
+    RouteSource {
+        name: "recruiting hire app router",
+        surface: "recruiting-hire",
+        source: include_str!("../src/recruiting_hire.rs"),
+        ignored_route_refs: &[],
+    },
 ];
 
 #[test]

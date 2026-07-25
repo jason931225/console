@@ -335,11 +335,10 @@ pub const CONFIGURED_ROUTE_SURFACES: &[ConfiguredRouteSurface] = &[
         name: "governance",
         paths: mnt_governance_rest::GOVERNANCE_ROUTE_PATHS,
     },
-    // NOTE(CAP-ORG-CONSOLE): the mounted orgchange surface
-    // (`mnt_orgchange_rest::ORG_CHANGE_ROUTE_PATHS`) joins this census in the
-    // SAME integrator commit that adds its paths to backend/openapi/openapi.yaml
-    // and its RouteSource to openapi_drift.rs — the census⊆openapi gate makes a
-    // lane-side entry red until then (see the lane's integration-manifest.json).
+    ConfiguredRouteSurface {
+        name: "orgchange",
+        paths: mnt_orgchange_rest::ORG_CHANGE_ROUTE_PATHS,
+    },
     ConfiguredRouteSurface {
         name: "policy",
         paths: mnt_platform_authz_rest::CEDAR_POLICY_ROUTE_PATHS,
@@ -367,6 +366,22 @@ pub const CONFIGURED_ROUTE_SURFACES: &[ConfiguredRouteSurface] = &[
     ConfiguredRouteSurface {
         name: "equipment-3r",
         paths: mnt_equipment_rest::EQUIPMENT_3R_ROUTE_PATHS,
+    },
+    ConfiguredRouteSurface {
+        name: "notifications",
+        paths: mnt_notifications_rest::NOTIFICATIONS_ROUTE_PATHS,
+    },
+    ConfiguredRouteSurface {
+        name: "recruiting",
+        paths: mnt_recruiting_rest::RECRUITING_ROUTE_PATHS,
+    },
+    // The hire handshake is the one recruiting route that lives in the app
+    // crate (acceptance → employee creation must go through the HR-owned core
+    // in one transaction), so it is its own surface rather than an entry the
+    // recruiting crate could export.
+    ConfiguredRouteSurface {
+        name: "recruiting-hire",
+        paths: recruiting_hire::RECRUITING_HIRE_ROUTE_PATHS,
     },
 ];
 
