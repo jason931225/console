@@ -879,7 +879,7 @@ jobs:
   filesystem:
     steps:
       - name: Trivy filesystem scan
-        run: trivy fs --scanners vuln,secret --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 .
+        run: trivy fs --scanners vuln,secret --ignore-unfixed --ignorefile security/trivy-dev-codegen-exceptions.yaml --severity HIGH,CRITICAL --exit-code 1 .
   rust-advisories:
     steps:
       - name: Run cargo audit
@@ -891,7 +891,11 @@ jobs:
   node-advisories:
     steps:
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: |
+          npm audit --omit=dev --audit-level=high --json > report.json
+          node scripts/check-node-audit-exceptions.mjs --mode production --audit-report report.json
+          npm audit --audit-level=high --json > report.json
+          node scripts/check-node-audit-exceptions.mjs --mode dev-codegen --audit-report report.json
 `,
   ".github/workflows/image-release.yml": `name: Image Release
 on:

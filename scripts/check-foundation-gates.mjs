@@ -250,13 +250,22 @@ for (const ciNeedle of [
 }
 for (const securityNeedle of [
   "trivy fs --scanners vuln,secret",
+  "--ignorefile security/trivy-dev-codegen-exceptions.yaml",
   "trivy config --severity HIGH,CRITICAL --exit-code 1",
   "cargo audit",
   "cargo deny --manifest-path backend/Cargo.toml check",
-  "npm audit --audit-level=high",
+  "npm audit --omit=dev --audit-level=high --json",
+  "check-node-audit-exceptions.mjs --mode production",
+  "npm audit --audit-level=high --json",
+  "check-node-audit-exceptions.mjs --mode dev-codegen",
 ]) {
   requireIncludes(".github/workflows/security.yml", securityNeedle, `security workflow: ${securityNeedle}`);
 }
+requireFile("security/node-audit-exceptions.json", "Node audit exception registry");
+requireFile("security/trivy-dev-codegen-exceptions.yaml", "Trivy dev/codegen exception registry");
+requireFile("scripts/check-node-audit-exceptions.mjs", "Node audit exception gate");
+requireFile("scripts/check-node-audit-exceptions.test.mjs", "Node audit exception gate regressions");
+requireIncludes("package.json", "\"test:node-audit-exceptions\"", "Node audit exception regression script");
 for (const releaseNeedle of [
   "docs/specs/**",
   "Wait for CI success",

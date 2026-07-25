@@ -82,13 +82,15 @@
     "check:korean-institutional-connectivity": "node scripts/check-korean-institutional-connectivity.mjs",
     "kic:scrape-public-docs": "node scripts/korean-connectivity/public-doc-scraper.mjs",
     "kic:generate-nhis-loss-report-fixture": "node scripts/korean-connectivity/nhis-edi-loss-report.mjs",
-    "kic:local-cert-login-fixture": "node scripts/korean-connectivity/local-certificate-agent.mjs"
+    "kic:local-cert-login-fixture": "node scripts/korean-connectivity/local-certificate-agent.mjs",
+    "check:node-audit-exceptions": "node scripts/check-node-audit-exceptions.mjs",
+    "test:node-audit-exceptions": "node --test scripts/check-node-audit-exceptions.test.mjs"
   },
   "dependencies": {
     "pg": "8.21.0"
   },
   "devDependencies": {
-    "@openapitools/openapi-generator-cli": "2.38.0",
+    "@openapitools/openapi-generator-cli": "2.40.1",
     "@types/node": "25.9.3",
     "@types/pg": "8.20.0",
     "openapi-typescript": "7.13.0",
@@ -97,6 +99,7 @@
   },
   "overrides": {
     "js-yaml@4.x": "4.3.0",
-    "shell-quote": "1.10.0"
+    "shell-quote": "1.10.0",
+    "postcss": "8.5.23"
   }
 }

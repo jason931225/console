@@ -898,3 +898,15 @@ dependencies are available:
   CI-contextual gates.
 - Gate provenance and the incidents that motivated several checks are recorded in
   [MISTAKES-LEDGER.md](MISTAKES-LEDGER.md).
+
+## Node dependency advisories
+
+`security.yml` first runs `npm audit --omit=dev --audit-level=high` through the
+repository-owned gate with **zero exceptions**. It then evaluates the full
+workspace audit against `security/node-audit-exceptions.json`. That registry is
+fail-closed: every entry must match the exact GHSA, package, installed version,
+and lockfile path; it must name an owner/tracker/rationale, be `dev-codegen`
+scoped, and expire within 30 days. A stale entry, an unmatched advisory, or any
+new HIGH/CRITICAL result fails CI. The full Trivy filesystem scan uses only the
+matching, explicit `security/trivy-dev-codegen-exceptions.yaml`; production npm
+audit is intentionally unfiltered.
