@@ -58,7 +58,7 @@ function shellCommsRailCopy(): CommsRailCopy {
       "mark-notification-read": ko.console.mail.read.markRead,
     },
     unread: (count) => overview.rail.unread(count),
-    viewAll: (source) => `${source} 전체 보기`,
+    viewAll: shell.viewAll,
     collapse: (source) => `${source} ${ko.shell.commsRail.collapse}`,
     expand: (source) => `${source} ${ko.commsRail.open}`,
     detail: ko.shell.commsRail.back,

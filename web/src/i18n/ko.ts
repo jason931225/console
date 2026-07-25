@@ -4134,6 +4134,7 @@ export const ko = {
     commsRail: {
       label: "커뮤니케이션",
       collapse: "커뮤니케이션 레일 접기",
+      viewAll: (source: string) => `${source} 전체 보기`,
       openNotifications: "알림 열기",
       back: "뒤로",
       openSection: {
