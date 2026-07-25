@@ -675,11 +675,12 @@ function hasStrictAccessibility(files) {
     /return\s+false/,
   ].every((pattern) => pattern.test(nonDynamicType))
     && !/issue\.detailedDescription|element\?*\.\s*(?:label|value)/.test(nonDynamicType);
-  const sanitizedDiagnostics = /guard\s+let\s+identifier\s*,\s*identifier\.isEmpty\s*==\s*false\s+else\s*\{\s*return\s+"<empty>"\s*\}/.test(identifierSanitizer)
-    && /CharacterSet\.alphanumerics\.union\(CharacterSet\(charactersIn:\s*"\._-"\)\)/.test(identifierSanitizer)
-    && /identifier\.unicodeScalars\.allSatisfy\(allowed\.contains\)/.test(identifierSanitizer)
-    && /return\s+"<redacted>"/.test(identifierSanitizer)
-    && /String\(identifier\.prefix\(160\)\)/.test(identifierSanitizer);
+  // Accessibility identifiers can carry resource UUIDs even when their
+  // characters look harmless. The audit diagnostic must use a fixed token,
+  // never a transformed, truncated, or allow-listed identifier value.
+  const sanitizedDiagnostics = /^\s*"<redacted>"\s*$/m.test(identifierSanitizer)
+    && !/\bidentifier\b/.test(identifierSanitizer)
+    && !/\b(?:prefix|suffix|unicodeScalars|CharacterSet)\b/.test(identifierSanitizer);
   const auditBody = (name) => extractFunctionBody(
     auditTests,
     new RegExp(`func\\s+${name}\\s*\\(\\s*\\)\\s+async\\s+throws`),

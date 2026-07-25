@@ -712,10 +712,11 @@ class FieldUITestCase: XCTestCase {
         }
     }
 
-    private func sanitizedAccessibilityIdentifier(_ identifier: String?) -> String {
-        guard let identifier, identifier.isEmpty == false else { return "<empty>" }
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
-        guard identifier.unicodeScalars.allSatisfy(allowed.contains) else { return "<redacted>" }
-        return String(identifier.prefix(160))
+    /// Accessibility identifiers can be data-bearing even when they only contain
+    /// identifier-safe characters (for example a resource UUID). Diagnostics
+    /// must never emit them; audit output preserves only the fact that an
+    /// element was present through its separately logged semantic type.
+    private func sanitizedAccessibilityIdentifier(_: String?) -> String {
+        "<redacted>"
     }
 }

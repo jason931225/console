@@ -580,6 +580,14 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
         "identifier=\\(element?.label.debugDescription ?? \"none\")",
       ),
     }), strictGate);
+    const normalDynamicIdentifier = "messenger.threadRow.123e4567-e89b-12d3-a456-426614174000";
+    expectsFailure(evaluate({
+      "ios/UITests/Support/FieldUITestCase.swift": mutateFile(
+        fieldCase,
+        '"<redacted>"',
+        `identifier ?? "${normalDynamicIdentifier}"`,
+      ),
+    }), strictGate);
     expectsFailure(evaluate({
       "ios/UITests/AccessibilityAuditUITests.swift": `${validFiles["ios/UITests/AccessibilityAuditUITests.swift"]}\nlet issueHandler = { _ in }`,
     }), strictGate);
