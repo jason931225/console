@@ -400,48 +400,40 @@ impl PgEvaluationStore {
         .await
     }
 
-    /// Whether a submit-capable actor may view a subject in order to complete
-    /// their own review. This is intentionally relationship-scoped rather
-    /// than role-scoped: a linked employee may view their SELF review and a
-    /// linked assigned manager may view their MANAGER review. Every write
-    /// repeats the same check after locking the subject row.
-    pub async fn can_review_subject(
+    /// Load a subject for a submit-capable actor only when that actor holds a
+    /// canonical, current relationship to it. The subject, identity, and
+    /// detail are handled in one RLS-armed transaction: a concurrent employee
+    /// relink or unlink cannot slip between the relationship predicate and
+    /// the response body.
+    pub async fn get_subject_for_review_actor(
         &self,
         actor: UserId,
         subject_id: Uuid,
-    ) -> Result<bool, PgEvaluationError> {
+    ) -> Result<Option<SubjectDetail>, PgEvaluationError> {
         let org = current_org().map_err(KernelError::from)?;
         with_org_conn(&self.pool, org, move |tx| {
             Box::pin(async move {
-                let row = sqlx::query(
-                    "SELECT s.employee_id, s.manager_user_id, u.employee_id AS actor_employee_id \
-                     FROM evaluation_subjects s \
-                     JOIN users u ON u.id = $2 \
-                     WHERE s.id = $1",
-                )
-                .bind(subject_id)
-                .bind(*actor.as_uuid())
-                .fetch_optional(tx.as_mut())
-                .await?;
-                let Some(row) = row else {
-                    return Ok(false);
+                let Some(subject) = lock_subject(tx, subject_id).await? else {
+                    return Ok(None);
                 };
-                let actor_employee_id: Option<Uuid> = row.try_get("actor_employee_id")?;
-                let subject_employee_id: Uuid = row.try_get("employee_id")?;
-                let manager_user_id = UserId::from_uuid(row.try_get("manager_user_id")?);
-                Ok(review_relationship_allows(
+                let actor_employee_id = lock_actor_employee_id(tx, actor).await?;
+                let allowed = review_relationship_allows(
                     actor,
                     actor_employee_id,
-                    subject_employee_id,
-                    manager_user_id,
+                    subject.employee_id,
+                    subject.manager_user_id,
                     ReviewKind::SelfReview,
                 ) || review_relationship_allows(
                     actor,
                     actor_employee_id,
-                    subject_employee_id,
-                    manager_user_id,
+                    subject.employee_id,
+                    subject.manager_user_id,
                     ReviewKind::Manager,
-                ))
+                );
+                if !allowed {
+                    return Ok(None);
+                }
+                load_subject_detail(tx, subject_id).await
             })
         })
         .await
@@ -953,12 +945,7 @@ async fn require_review_relationship(
     subject: &LockedSubject,
     kind: ReviewKind,
 ) -> Result<(), PgEvaluationError> {
-    let actor_employee_id: Option<Uuid> =
-        sqlx::query_scalar("SELECT employee_id FROM users WHERE id = $1")
-            .bind(*actor.as_uuid())
-            .fetch_optional(tx.as_mut())
-            .await?
-            .flatten();
+    let actor_employee_id = lock_actor_employee_id(tx, actor).await?;
     let permitted = review_relationship_allows(
         actor,
         actor_employee_id,
@@ -974,6 +961,22 @@ async fn require_review_relationship(
         // assignments by probing subject ids or review kinds.
         Err(KernelError::not_found("evaluation subject was not found").into())
     }
+}
+
+/// Lock the canonical actor identity with a mode that conflicts with the
+/// `UPDATE users SET employee_id = ...` path used for link/unlink changes.
+/// This keeps a review authorization decision and its protected operation
+/// serialized with identity relinking, without trusting a JWT employee claim.
+async fn lock_actor_employee_id(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: UserId,
+) -> Result<Option<Uuid>, PgEvaluationError> {
+    sqlx::query_scalar("SELECT employee_id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*actor.as_uuid())
+        .fetch_optional(tx.as_mut())
+        .await
+        .map(|employee_id: Option<Option<Uuid>>| employee_id.flatten())
+        .map_err(Into::into)
 }
 
 fn review_relationship_allows(

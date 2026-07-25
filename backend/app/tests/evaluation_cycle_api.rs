@@ -23,6 +23,7 @@ use p256::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use std::time::Duration as StdDuration;
 use time::{Duration, OffsetDateTime};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -938,6 +939,137 @@ async fn review_identity_relationships_fail_closed_by_kind(pool: PgPool) {
     assert_eq!(saved["kind"], "MANAGER");
 }
 
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: PgPool) {
+    let f = Fixture::new(&pool).await;
+    let router = f.router(&pool).await;
+
+    let (_, cycle) = send(
+        &router,
+        "POST",
+        CYCLES,
+        Some(&f.admin),
+        Some(json!({"name": "신원 잠금", "kind": "REGULAR", "period_label": "2026-Q4", "due_date": "2026-12-31"})),
+    )
+    .await;
+    let cycle_id = cycle["id"].as_str().unwrap();
+    let (_, subject) = send(
+        &router,
+        "POST",
+        SUBJECTS,
+        Some(&f.admin),
+        Some(json!({"cycle_id": cycle_id, "employee_id": f.employee_a, "manager_user_id": f.manager_id})),
+    )
+    .await;
+    let subject_id = subject["id"].as_str().unwrap().to_owned();
+    let (_, _) = send(
+        &router,
+        "PUT",
+        &format!("{SUBJECTS}/{subject_id}/goals"),
+        Some(&f.manager),
+        Some(json!({"goals": [{"title": "신원 잠금", "metric_kind": "KPI", "target_label": "완료", "weight_pct": 100}]})),
+    )
+    .await;
+    let (status, _) = send(
+        &router,
+        "POST",
+        &format!("{CYCLES}/{cycle_id}/open"),
+        Some(&f.admin),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // A relink transaction holds the same update-conflicting user lock used by
+    // submit-only detail reads. The request cannot observe the pre-unlink
+    // relationship and then load a body after the unlink commits.
+    let mut relink = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*f.subject_user_id.as_uuid())
+        .fetch_one(&mut *relink)
+        .await
+        .unwrap();
+    let detail_router = router.clone();
+    let detail_token = f.subject.clone();
+    let detail_path = format!("{SUBJECTS}/{subject_id}");
+    let mut detail = tokio::spawn(async move {
+        send(
+            &detail_router,
+            "GET",
+            &detail_path,
+            Some(&detail_token),
+            None,
+        )
+        .await
+    });
+    assert!(
+        tokio::time::timeout(StdDuration::from_millis(100), &mut detail)
+            .await
+            .is_err(),
+        "submit-only detail read must wait for the concurrent identity relink"
+    );
+    sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
+        .bind(*f.subject_user_id.as_uuid())
+        .execute(&mut *relink)
+        .await
+        .unwrap();
+    relink.commit().await.unwrap();
+    let (status, _) = tokio::time::timeout(StdDuration::from_secs(5), detail)
+        .await
+        .expect("detail request completes after relink")
+        .unwrap();
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Restore the canonical link, then prove the same serialization protects
+    // the review write itself: a relink that wins the lock race leaves no
+    // authored review behind.
+    link_user_employee(&pool, OrgId::knl(), f.subject_user_id, f.employee_a).await;
+    let mut unlink = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*f.subject_user_id.as_uuid())
+        .fetch_one(&mut *unlink)
+        .await
+        .unwrap();
+    let write_router = router.clone();
+    let write_token = f.subject.clone();
+    let write_path = format!("{SUBJECTS}/{subject_id}/reviews/self");
+    let mut write = tokio::spawn(async move {
+        send(
+            &write_router,
+            "PUT",
+            &write_path,
+            Some(&write_token),
+            Some(json!({"grade": "A", "evidence_links": []})),
+        )
+        .await
+    });
+    assert!(
+        tokio::time::timeout(StdDuration::from_millis(100), &mut write)
+            .await
+            .is_err(),
+        "review write must wait for the concurrent identity relink"
+    );
+    sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
+        .bind(*f.subject_user_id.as_uuid())
+        .execute(&mut *unlink)
+        .await
+        .unwrap();
+    unlink.commit().await.unwrap();
+    let (status, _) = tokio::time::timeout(StdDuration::from_secs(5), write)
+        .await
+        .expect("review write completes after relink")
+        .unwrap();
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let authored: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM evaluation_reviews WHERE subject_id = $1 AND kind = 'SELF'",
+    )
+    .bind(Uuid::parse_str(&subject_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(authored, 0, "unlinked actor must not author a review");
+}
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
@@ -952,6 +1084,7 @@ struct Fixture {
     foreign_admin: String,
     admin_id: UserId,
     manager_id: UserId,
+    subject_user_id: UserId,
     employee_a: Uuid,
     employee_b: Uuid,
     public_pem: String,
@@ -1042,6 +1175,7 @@ impl Fixture {
             ),
             admin_id,
             manager_id,
+            subject_user_id,
             employee_a,
             employee_b,
             public_pem,

@@ -391,24 +391,23 @@ async fn get_subject(
             "evaluation access requires a granted capability",
         )));
     }
-    // A Submit-only actor can inspect only a subject for which the adapter
-    // resolves a canonical employee or manager relationship. The subsequent
-    // write transaction repeats this check after locking the subject.
-    if !can_read
-        && !state
+    let detail = if can_read {
+        state
             .store
-            .can_review_subject(principal.user_id, subject_id)
+            .get_subject(subject_id)
             .await
             .map_err(RestError::from_store)?
-    {
-        return Err(not_found_subject());
-    }
-    let detail = state
-        .store
-        .get_subject(subject_id)
-        .await
-        .map_err(RestError::from_store)?
-        .ok_or_else(not_found_subject)?;
+            .ok_or_else(not_found_subject)?
+    } else {
+        // The adapter locks the canonical users.employee_id row, evaluates the
+        // SELF/MANAGER relationship, and loads this body in one transaction.
+        state
+            .store
+            .get_subject_for_review_actor(principal.user_id, subject_id)
+            .await
+            .map_err(RestError::from_store)?
+            .ok_or_else(not_found_subject)?
+    };
     Ok(Json(detail))
 }
 
