@@ -8,6 +8,7 @@ import {
   type PolicyGate,
 } from "../policy/authz";
 import { AssetWorkspace } from "../asset/AssetWorkspace";
+import { assetStrings as text } from "../../i18n/asset";
 
 function useAssetGate(): PolicyGate {
   const { api, session } = useAuth();
@@ -38,7 +39,7 @@ export function AssetModuleScreen() {
   const sessionKey = `${session?.client_session_incarnation ?? ""}:${session?.access_token ?? ""}`;
   const allows = (feature: string, branch?: string) => gate.ready && gate.allows({ feature, branch });
 
-  if (!gate.ready) return <main className="min-h-full bg-canvas p-6 text-sm text-steel" role="status">권한을 확인하는 중입니다.</main>;
+  if (!gate.ready) return <main className="min-h-full bg-canvas p-6 text-sm text-steel" role="status">{text.authorizationChecking}</main>;
   if (!allows("work_order_read_all", activeBranchId)) return null;
   return <AssetWorkspace
     key={sessionKey}
