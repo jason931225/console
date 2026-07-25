@@ -1,12 +1,10 @@
-// wire-pending: Phase C — these intermediary shapes match the backend contract
-// (be-ontology-engine-arch.md §2 ont_property_defs / §5 simulate) so wiring is a
-// swap, not a rewrite. A consumer normally supplies its own registry + samples;
-// these exist for tests and as a reference mount.
+// Test-only canvas fixtures. Production consumers supply governed registries,
+// samples, and persisted documents through their own adapters.
 
 import type { CanvasDoc, FieldRegistry, SampleRow } from "./types";
 
 /** Reference field registry (mirrors ont_property_defs {key,title,type,config}). */
-export const STUB_FIELD_REGISTRY: FieldRegistry = [
+export const TEST_FIELD_REGISTRY: FieldRegistry = [
   { key: "absence_count", label: "absence_count", type: "number" },
   { key: "days_open", label: "days_open", type: "number" },
   { key: "opened_at", label: "opened_at", type: "date" },
@@ -25,14 +23,14 @@ export const STUB_FIELD_REGISTRY: FieldRegistry = [
 ];
 
 /** Seed sample object-set the simulation panel evaluates over. */
-export const STUB_SAMPLES: readonly SampleRow[] = [
+export const TEST_SAMPLES: readonly SampleRow[] = [
   { absence_count: 3, days_open: 2, opened_at: "2026-07-01", is_active: true, priority: "high", work_order: "WO-2643" },
   { absence_count: 1, days_open: 9, opened_at: "2026-06-20", is_active: true, priority: "med", work_order: "WO-2650" },
   { absence_count: 4, days_open: 1, opened_at: "2026-07-08", is_active: false, priority: "low", work_order: "WO-2661" },
 ];
 
-/** Reference Trigger→Condition→Branch→Action doc for tests / a demo mount. */
-export function stubCanvasDoc(): CanvasDoc {
+/** Reference Trigger→Condition→Branch→Action document for tests. */
+export function testCanvasDoc(): CanvasDoc {
   return {
     version: 1,
     nodes: [
