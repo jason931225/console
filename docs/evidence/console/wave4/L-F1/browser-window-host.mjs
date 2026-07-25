@@ -10,11 +10,17 @@
  *   2. Inserting that wrapper did not break the flex chain: the shell still
  *      fills the viewport, the screen body keeps real height, and the document
  *      has no horizontal scroll (C-42).
+ *   3. Padding on that host produces DESIGN §4.7-2's "진짜 split" — the shell
+ *      reflows sideways by exactly the pinned panel's width instead of being
+ *      overlaid. A flex chain that swallowed the padding would leave the mount
+ *      cosmetic, and jsdom cannot tell the two apart.
  *
  * No backend. The boot silent-refresh and every `/api/**` read are fulfilled by
- * route handlers, so this runs against a plain `vite dev` origin:
+ * route handlers, so this runs against a plain `vite dev` origin. The dev server
+ * starts in `web/`; the script path is repo-relative, so run it from the REPO
+ * ROOT (there is no `web/docs`):
  *
- *   cd web && VITE_CONSOLE_DEV_PREVIEW=1 npx vite --host 127.0.0.1 --port 5199
+ *   (cd web && VITE_CONSOLE_DEV_PREVIEW=1 npx vite --host 127.0.0.1 --port 5199) &
  *   node docs/evidence/console/wave4/L-F1/browser-window-host.mjs
  */
 import { mkdirSync } from "node:fs";
@@ -151,6 +157,56 @@ check(
   `scrollWidth=${String(observed.scrollWidth)} clientWidth=${String(observed.clientWidth)}`,
 );
 check("no uncaught page error", pageErrors.length === 0, pageErrors[0]);
+
+// The pin is a real split, not an overlay (DESIGN §4.7-2: "본문이 옆으로 재배치
+// … 오버레이 아닌 진짜 split"). The manager expresses that as `paddingRight` on
+// the host, so apply the same padding the pinned panel would and require the
+// shell to actually give the space back. Applied and reverted here rather than
+// driven through a card, because opening one needs backend object data.
+// `transition: padding 0.18s` means the split animates; measure after it lands
+// (measuring synchronously reads the pre-transition width and reports a false
+// "overlay" verdict).
+const SPLIT_PROBE_PX = 360;
+const SPLIT_SETTLE_MS = 400;
+const beforeWidth = await page.evaluate(
+  () => document.querySelector("[data-cshell-root]")?.getBoundingClientRect().width ?? null,
+);
+await page.evaluate((probe) => {
+  const host = document.querySelector("[data-window-host]");
+  if (host instanceof HTMLElement) host.style.paddingRight = `${String(probe)}px`;
+}, SPLIT_PROBE_PX);
+await page.waitForTimeout(SPLIT_SETTLE_MS);
+const afterProbe = await page.evaluate(() => ({
+  width: document.querySelector("[data-cshell-root]")?.getBoundingClientRect().width ?? null,
+  overflowed:
+    document.documentElement.scrollWidth > document.documentElement.clientWidth,
+}));
+await page.evaluate(() => {
+  const host = document.querySelector("[data-window-host]");
+  if (host instanceof HTMLElement) host.style.paddingRight = "";
+});
+await page.waitForTimeout(SPLIT_SETTLE_MS);
+const restoredWidth = await page.evaluate(
+  () => document.querySelector("[data-cshell-root]")?.getBoundingClientRect().width ?? null,
+);
+const split =
+  beforeWidth === null || afterProbe.width === null || restoredWidth === null
+    ? null
+    : {
+        before: beforeWidth,
+        after: afterProbe.width,
+        restored: restoredWidth,
+        overflowed: afterProbe.overflowed,
+      };
+
+check("host padding reflows the shell (real split, not overlay)",
+  split !== null && Math.abs(split.before - split.after - SPLIT_PROBE_PX) <= 1,
+  split === null ? "host or shell root missing" : `${String(split.before)} -> ${String(split.after)}`);
+check("the split does not push the document into horizontal scroll",
+  split !== null && !split.overflowed);
+check("removing the padding restores the full width",
+  split !== null && Math.abs(split.before - split.restored) <= 1,
+  split === null ? undefined : `restored=${String(split.restored)}`);
 
 mkdirSync(OUT_DIR, { recursive: true });
 await page.screenshot({ path: `${OUT_DIR}/console-window-host.png` });
