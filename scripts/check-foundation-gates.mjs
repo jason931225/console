@@ -11,7 +11,7 @@ const textGate = createTextGate({
   includeFailure: ({ path, needle, label }) => `${label}: ${path} must include ${JSON.stringify(needle)}`,
   notIncludeFailure: ({ path, needle, label }) => `${label}: ${path} must not include ${JSON.stringify(needle)}`,
 });
-const { checks: passes, read, requireIncludes, requireNotIncludes } = textGate;
+const { checks: passes, read, requireIncludes, requireNotIncludes, requireAbsent } = textGate;
 
 // The drift-inventory checks below collect (rather than throw) so every drift is
 // reported at once; they surface through this failures[] gate at the end. The
@@ -304,14 +304,24 @@ for (const [path, needle, label] of [
 ]) {
   requireIncludes(path, needle, label);
 }
-for (const retiredLiteral of ["omx", "OMX", "Hermes", "hermes", "~/.codex"]) {
-  requireNotIncludes("docs/specs/foundation-gates.md", retiredLiteral, "foundation contract excludes retired local authority");
-}
-requireNotIncludes(
+const liveAuthorityContracts = [
+  "docs/specs/foundation-gates.md",
   "docs/specs/review-fix-merge-governance.md",
-  "Hermes",
-  "review governance excludes retired profile authority",
-);
+];
+const retiredAuthorityPatterns = [
+  [/\bnousresearch\s+hermes\b/i, "NousResearch Hermes authority"],
+  [/\bhermes\s+(?:kanban|profile)\b/i, "Hermes Kanban/profile authority"],
+  [/\bomx\b/i, "OMX authority"],
+  [/\bomc\b/i, "OMC authority"],
+  [/\bgjc\b/i, "GJC authority"],
+  [/~\/\.codex(?:\/agents)?\b/i, "developer-home role authority"],
+  [/\b(?:developer[- ]home|home[- ])(?:role|profile|agent)\s+authority\b/i, "developer-home role authority"],
+];
+for (const path of liveAuthorityContracts) {
+  for (const [pattern, label] of retiredAuthorityPatterns) {
+    requireAbsent(path, pattern, `${path} excludes retired ${label}`);
+  }
+}
 if (foundationGateText.includes("Concurrent-delivery authority")) {
   passes.push("repository-owned concurrent execution authority recorded in foundation contract");
 } else {
