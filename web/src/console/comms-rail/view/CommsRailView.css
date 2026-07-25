@@ -42,7 +42,7 @@
 }
 
 .commsRail__top h2 { margin: 0; font-size: var(--text-card-title); }
-.commsRail__compose, .commsRail__close, .commsRail__retry, .commsRail__collapse, .commsRail__row {
+.commsRail__compose, .commsRail__close, .commsRail__retry, .commsRail__collapse, .commsRail__row, .commsRail__viewAll {
   min-height: 44px;
   border: 0;
   font: inherit;
@@ -51,6 +51,7 @@
   cursor: pointer;
 }
 .commsRail__compose, .commsRail__close, .commsRail__retry { padding: 0 10px; border-radius: var(--radius-chip); }
+.commsRail__viewAll { flex: none; padding: 0 4px; color: var(--accent-tx); font-size: var(--text-micro); }
 .commsRail__compose { color: var(--accent-tx); background: var(--accent-bg); }
 .commsRail__close, .commsRail__retry { border: 1px solid var(--border); }
 .commsRail__category { min-width: 0; border-top: 1px solid var(--border); }

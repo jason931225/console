@@ -16,6 +16,7 @@ const copy: CommsRailCopy = {
     loading: "Loading", empty: "Nothing here", denied: "Access denied", malformed: "Invalid response",
     error: "Unavailable", retry: "Retry", retrying: "Retrying",
   },
+  viewAll: (source) => `View all ${source}`,
   unread: (count) => `${String(count)} unread`,
   collapse: (source) => `Collapse ${source}`,
   expand: (source) => `Expand ${source}`,
@@ -137,6 +138,21 @@ describe("CommsRailView", () => {
 
     await user.click(messenger);
     expect(onOpenMessengerThread).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("keeps a full-screen row static when the embedding shell rejects its route contract", () => {
+    render(view({ onOpenFullModule: vi.fn(), canOpenFullModule: () => false }));
+    expect(screen.queryByRole("button", { name: /Approval requested/ })).not.toBeInTheDocument();
+  });
+
+  it("offers source promotion only when the embedding shell supplied an exact destination", async () => {
+    const user = userEvent.setup();
+    const openNotifications = vi.fn();
+    render(view({ onViewAll: { notifications: openNotifications } }));
+
+    await user.click(screen.getByRole("button", { name: "View all Notifications" }));
+    expect(openNotifications).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "View all Notices" })).not.toBeInTheDocument();
   });
 
   it("opens an explicitly typed notification-origin messenger thread", async () => {

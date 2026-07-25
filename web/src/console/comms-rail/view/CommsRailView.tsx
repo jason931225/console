@@ -32,6 +32,7 @@ export interface CommsRailCopy {
   };
   action: Record<CommsRailAction["kind"], string>;
   unread: (count: number) => string;
+  viewAll: (source: string) => string;
   collapse: (source: string) => string;
   expand: (source: string) => string;
   detail: string;
@@ -60,6 +61,10 @@ interface CommsRailViewCommonProps {
   onOpenNotice?: (item: CommsRailItem, target: InlineTarget) => void;
   /** Full module navigation remains with the embedding router surface. */
   onOpenFullModule?: (item: CommsRailItem, target: FullModuleTarget) => void;
+  /** The embedding owner validates its exact route contract before exposing a row. */
+  canOpenFullModule?: (target: FullModuleTarget) => boolean;
+  /** Source-level promotion appears only when the shell supplies a real route. */
+  onViewAll?: Partial<Record<CommsRailSource, () => void>>;
   /** The store-backed mutation owner is injected by the container. */
   onAction?: (action: CommsRailAction) => void;
   /** Compose is omitted unless both label and real command are available. */
@@ -207,6 +212,8 @@ function RailCategory({
   onOpenMailThread,
   onOpenNotice,
   onOpenFullModule,
+  canOpenFullModule,
+  onViewAll,
   onAction,
   renderInlineDetail,
 }: {
@@ -219,6 +226,8 @@ function RailCategory({
   onOpenMailThread?: (item: CommsRailItem, target: InlineTarget) => void;
   onOpenNotice?: (item: CommsRailItem, target: InlineTarget) => void;
   onOpenFullModule?: (item: CommsRailItem, target: FullModuleTarget) => void;
+  canOpenFullModule?: (target: FullModuleTarget) => boolean;
+  onViewAll?: Partial<Record<CommsRailSource, () => void>>;
   onAction?: (action: CommsRailAction) => void;
   renderInlineDetail?: (item: CommsRailItem) => ReactNode;
 }) {
@@ -229,11 +238,12 @@ function RailCategory({
   const items = categoryItems(source, state);
   const malformed = state.kind === "ready" && items === undefined;
   const unread = items ? unreadCount(items) : 0;
+  const viewAll = onViewAll?.[source];
 
   const canOpenItem = (item: CommsRailItem): boolean => {
     const target = item.target;
     if (!target || target.source !== item.source) return false;
-    if (target.kind === "full-screen") return Boolean(onOpenFullModule);
+    if (target.kind === "full-screen") return Boolean(onOpenFullModule) && (canOpenFullModule?.(target) ?? true);
     if (target.kind === "messenger-thread") return Boolean(onOpenMessengerThread);
     if (target.source === "messenger") return Boolean(onOpenMessengerThread);
     if (target.source === "mail") return Boolean(onOpenMailThread);
@@ -278,6 +288,16 @@ function RailCategory({
           <span>{name}</span>
           {unread > 0 ? <span className="commsRail__unread" aria-label={copy.unread(unread)}>{unread}</span> : null}
         </button>
+        {viewAll ? (
+          <button
+            type="button"
+            className="commsRail__viewAll"
+            data-testid={`latest-comms-view-all-${source}`}
+            onClick={viewAll}
+          >
+            {copy.viewAll(name)}
+          </button>
+        ) : null}
       </div>
       {expanded ? (
         <div id={sectionId}>
@@ -350,6 +370,8 @@ export function CommsRailView({
   onOpenMailThread,
   onOpenNotice,
   onOpenFullModule,
+  canOpenFullModule,
+  onViewAll,
   onAction,
   compose,
   renderInlineDetail,
@@ -380,6 +402,8 @@ export function CommsRailView({
           onOpenMailThread={onOpenMailThread}
           onOpenNotice={onOpenNotice}
           onOpenFullModule={onOpenFullModule}
+          canOpenFullModule={canOpenFullModule}
+          onViewAll={onViewAll}
           onAction={onAction}
           renderInlineDetail={renderInlineDetail}
         />

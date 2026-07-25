@@ -3,6 +3,7 @@ import type {
   MessengerThreadSummary,
   NotificationSummary,
 } from "../../api/types";
+import { consoleScreenPath } from "../shell/nav";
 
 import type {
   CommsRailAction,
@@ -62,7 +63,12 @@ export type DecodedRailResult =
   | { kind: "error"; code: "network_error" | "server_error" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const SAFE_SCREENS = new Set(["overview", "messenger", "mail", "notifications", "board"]);
+/**
+ * A notification may promote only to a module with a published console route
+ * contract. Other server-owned screen strings remain honest static rows until
+ * their owner publishes an equivalent contract.
+ */
+const NOTIFICATION_CENTER_SCREEN = "notif";
 /**
  * Wire shape of the generated `NoticeSummary` response for `GET /api/v1/notices`.
  * The installed API client declaration has not yet exposed this schema, so keep the
@@ -156,9 +162,13 @@ function safeNotificationTarget(notification: NotificationSummary): CommsRailIte
       ? { kind: "messenger-thread", source: "notifications", id: notification.link.id }
       : undefined;
   }
-  if (!SAFE_SCREENS.has(notification.link.screen)) return undefined;
-  const route = notification.link.screen === "notifications" ? "/notifications" : `/${notification.link.screen}`;
-  return { kind: "full-screen", source: "notifications", id: notification.id, route };
+  if (notification.link.screen !== NOTIFICATION_CENTER_SCREEN) return undefined;
+  return {
+    kind: "full-screen",
+    source: "notifications",
+    id: notification.id,
+    route: consoleScreenPath(NOTIFICATION_CENTER_SCREEN),
+  };
 }
 
 export function decodeMessengerRail(response: CommsRailResponse<unknown>): DecodedRailResult {

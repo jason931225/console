@@ -34,4 +34,16 @@ describe("CommsRailPanel", () => {
     expect(captured.props).not.toHaveProperty("onOpenNotice");
     expect(captured.props).not.toHaveProperty("onOpenFullModule");
   });
+
+  it("passes only canonical notification and notice-list promotions supplied by the shell", () => {
+    const onOpenNotificationCenter = vi.fn();
+    const onOpenNoticeBoard = vi.fn();
+    render(<CommsRailPanel onOpenNotificationCenter={onOpenNotificationCenter} onOpenNoticeBoard={onOpenNoticeBoard} />);
+
+    expect(captured.props?.onViewAll).toEqual(expect.objectContaining({
+      notifications: onOpenNotificationCenter,
+      notices: onOpenNoticeBoard,
+    }));
+    expect(captured.props?.onOpenFullModule).toEqual(expect.any(Function));
+  });
 });

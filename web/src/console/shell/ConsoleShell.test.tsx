@@ -326,6 +326,43 @@ describe("ConsoleShell chrome", () => {
     });
   });
 
+  it("promotes only the canonical notification-center and notice-list routes from the right rail", async () => {
+    server.use(
+      http.get("*/api/v1/me/notifications", () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: "78787878-7878-4787-8787-787878787878",
+              recipient_user_id: "11111111-1111-4111-8111-111111111111",
+              category: "알림",
+              kind: "feed",
+              text: "알림 센터에서 확인할 항목",
+              link: { type: "screen", screen: "notif" },
+              unread: true,
+              created_at: "2026-07-03T08:50:00Z",
+              read_at: null,
+              resolved_at: null,
+              muted: false,
+            },
+          ],
+        }),
+      ),
+    );
+    const notificationView = renderConsole(ADMIN, ["/console/audit"]);
+
+    await userEvent.click(await screen.findByRole("button", { name: /알림 센터에서 확인할 항목/ }));
+    await waitFor(() => {
+      expect(document.querySelector("[data-router-location]")).toHaveTextContent("/console/notif");
+    });
+
+    notificationView.unmount();
+    renderConsole(ADMIN, ["/console/audit"]);
+    await userEvent.click(await screen.findByRole("button", { name: "공지 전체 보기" }));
+    await waitFor(() => {
+      expect(document.querySelector("[data-router-location]")).toHaveTextContent("/console/board");
+    });
+  });
+
   it("closes the mobile comms drawer before promoting a rail row into the main route", async () => {
     stubViewport(390);
     server.use(

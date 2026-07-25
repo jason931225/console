@@ -14,6 +14,7 @@ const copy: CommsRailCopy = {
   landmark: "Communications", drawerTitle: "Communications", close: "Close", open: "Open",
   source: { messenger: "Messenger", mail: "Mail", notifications: "Notifications", notices: "Notices" },
   state: { loading: "Loading", empty: "Empty", denied: "Denied", malformed: "Malformed", error: "Error", retry: "Retry", retrying: "Retrying" },
+  viewAll: (source) => `View all ${source}`,
   action: { "mark-messenger-read": "Mark read", "mark-mail-read": "Mark read", "mark-notification-read": "Mark read" },
   unread: (count) => `${String(count)} unread`, collapse: (name) => `Collapse ${name}`,
   expand: (name) => `Expand ${name}`, detail: "Detail", occurredAt: (value) => value,
@@ -63,4 +64,3 @@ describe("CommsRailContainer", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
-

@@ -9,6 +9,7 @@
 import { formatKoreanTime } from "../../lib/datetime";
 import { ko } from "../../i18n/ko";
 import { CommsRailContainer, type CommsRailCopy } from "../comms-rail";
+import { NOTIF_ROUTE_CONTRACT_FIXTURE } from "../notif";
 import { overviewStrings, railCategoryStrings } from "../screens/overview/strings";
 import type { CommsRailApi } from "../screens/overview/overviewApi";
 
@@ -21,6 +22,10 @@ export interface CommsRailPanelProps {
   onOpenMessengerThread?: (threadId: string) => void;
   /** Opens only a real API-issued mail thread route supplied by ConsoleShell. */
   onOpenMailThread?: (threadId: string) => void;
+  /** Opens the canonical notification-center list; no per-row query contract is assumed. */
+  onOpenNotificationCenter?: () => void;
+  /** Opens the canonical published-notice list; individual notices have no shell detail contract. */
+  onOpenNoticeBoard?: () => void;
 }
 
 function shellCommsRailCopy(): CommsRailCopy {
@@ -53,6 +58,7 @@ function shellCommsRailCopy(): CommsRailCopy {
       "mark-notification-read": ko.console.mail.read.markRead,
     },
     unread: (count) => overview.rail.unread(count),
+    viewAll: (source) => `${source} 전체 보기`,
     collapse: (source) => `${source} ${ko.shell.commsRail.collapse}`,
     expand: (source) => `${source} ${ko.commsRail.open}`,
     detail: ko.shell.commsRail.back,
@@ -64,12 +70,33 @@ function shellCommsRailCopy(): CommsRailCopy {
  * Production mount for the shell rail. Messenger and mail routes are shell-owned;
  * every other target remains an honest static row.
  */
-export function CommsRailPanel({ onOpenMessengerThread, onOpenMailThread }: CommsRailPanelProps) {
+export function CommsRailPanel({
+  onOpenMessengerThread,
+  onOpenMailThread,
+  onOpenNotificationCenter,
+  onOpenNoticeBoard,
+}: CommsRailPanelProps) {
   return (
     <CommsRailContainer
       copy={shellCommsRailCopy()}
       embedded
       onOpenMessengerThread={onOpenMessengerThread}
+      {...(onOpenNotificationCenter ? {
+        canOpenFullModule: (target: { source: string; route: string }) => (
+          target.source === "notifications" && target.route === NOTIF_ROUTE_CONTRACT_FIXTURE.path
+        ),
+        onOpenFullModule: (_item, target) => {
+          if (target.source === "notifications" && target.route === NOTIF_ROUTE_CONTRACT_FIXTURE.path) {
+            onOpenNotificationCenter();
+          }
+        },
+      } : {})}
+      {...(onOpenNotificationCenter || onOpenNoticeBoard ? {
+        onViewAll: {
+          ...(onOpenNotificationCenter ? { notifications: onOpenNotificationCenter } : {}),
+          ...(onOpenNoticeBoard ? { notices: onOpenNoticeBoard } : {}),
+        },
+      } : {})}
       {...(onOpenMailThread ? {
         onOpenMailThread: (_item, target) => {
           const threadId = target.id.trim();
