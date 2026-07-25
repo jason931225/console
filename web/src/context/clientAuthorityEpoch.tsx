@@ -81,7 +81,7 @@ function authorityScopeKey({
 
 /**
  * Provider-local committed state. It is created for an initial mount only and
- * advances from a layout effect, never while React is rendering a replacement.
+ * advances from an insertion effect, never while React is rendering a replacement.
  */
 class ClientAuthorityEpochStore {
   private current: ClientAuthorityEpoch | undefined;
