@@ -340,9 +340,7 @@ test('receipt-controlled grouping ignores caller-provided consolidated-tip hints
   assert.ok(groups.every((group) => group.cache_affinity !== fakeConsolidatedTip));
 });
 
-test('v2 truth ledger remains planner-compatible and preserves held legacy lanes', () => {
-  const v2 = reg([cap('V2-HOLD', ['backend/crates/v2-hold/**'])], { schema_version: 'console-capability-registry-v2', fanout_epoch: { current_epoch: 2, normalized_lane_ids: [] } });
-  const result = buildFanoutPlan(v2, { anchorSha: SHA, maxWriters: 1, qualityBias: .6, generatedFaces: faces });
-  assert.equal(result.selected.length, 0);
-  assert.match(result.held[0].reasons.join(','), /legacy_lane_not_normalized_for_epoch/);
+test('v2 truth ledger cannot bypass validated admission', () => {
+  const v2 = reg([cap('V2-HOLD', ['backend/crates/v2-hold/**'])], { schema_version: 'console-capability-registry-v2' });
+  assert.throws(() => buildFanoutPlan(v2, { anchorSha: SHA, maxWriters: 1, qualityBias: .6, generatedFaces: faces }), /validated truth-ledger/);
 });

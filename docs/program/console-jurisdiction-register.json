@@ -207,12 +207,6 @@
           "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
           "status": "HOLD",
           "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
-        },
-        {
-          "capability_id": "CAP-ASSET-MASTER-ACTION",
-          "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-          "status": "HOLD",
-          "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
         }
       ],
       "candidate_evidence": {
@@ -379,12 +373,6 @@
         },
         {
           "capability_id": "CAP-DIRECTORY-CONSOLE",
-          "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-          "status": "HOLD",
-          "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
-        },
-        {
-          "capability_id": "CAP-ASSET-MASTER-ACTION",
           "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
           "status": "HOLD",
           "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
@@ -569,12 +557,6 @@
           "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
           "status": "HOLD",
           "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
-        },
-        {
-          "capability_id": "CAP-ASSET-MASTER-ACTION",
-          "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-          "status": "HOLD",
-          "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
         }
       ],
       "candidate_evidence": {
@@ -741,12 +723,6 @@
         },
         {
           "capability_id": "CAP-DIRECTORY-CONSOLE",
-          "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-          "status": "HOLD",
-          "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
-        },
-        {
-          "capability_id": "CAP-ASSET-MASTER-ACTION",
           "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
           "status": "HOLD",
           "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
@@ -931,12 +907,6 @@
           "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
           "status": "HOLD",
           "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
-        },
-        {
-          "capability_id": "CAP-ASSET-MASTER-ACTION",
-          "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-          "status": "HOLD",
-          "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
         }
       ],
       "candidate_evidence": {
@@ -1103,12 +1073,6 @@
         },
         {
           "capability_id": "CAP-DIRECTORY-CONSOLE",
-          "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-          "status": "HOLD",
-          "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."
-        },
-        {
-          "capability_id": "CAP-ASSET-MASTER-ACTION",
           "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
           "status": "HOLD",
           "test_or_evidence": "No exact candidate-bound control test/evidence receipt admitted."

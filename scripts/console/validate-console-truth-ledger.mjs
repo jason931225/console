@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseImmutableJson } from './immutable-json.mjs';
@@ -11,6 +11,7 @@ const SHA = /^[0-9a-f]{40}$/;
 const STATES = new Set(['DECLARED', 'PLANNED', 'IMPLEMENTED', 'VERIFIED', 'EXPOSED', 'HOLD']);
 const VERDICTS = new Set(['MEET', 'EXCEED', 'HOLD']);
 const EDGE_TYPES = new Set(['requires', 'blocks', 'integrates_with', 'validates']);
+const validatedRegistries = new WeakSet();
 const RESOURCE_KEYS = ['writer', 'postgres', 'browser', 'ios', 'graph', 'cas'];
 
 function fail(message) { throw new Error(message); }
@@ -20,7 +21,7 @@ function nonempty(value, label) { if (typeof value !== 'string' || value.trim() 
 function sha(value, label) { if (!SHA.test(value ?? '')) fail(`${label} must be a full lowercase Git SHA`); return value; }
 function uniqueStrings(values, label) { const seen = new Set(); for (const value of values) { nonempty(value, label); if (seen.has(value)) fail(`duplicate ${label}: ${value}`); seen.add(value); } return seen; }
 
-export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true, resolveBuckTarget = () => true, expectedCandidateSha, routeFacts } = {}) {
+export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true, resolveBuckTarget = () => true, resolveSource = () => true, expectedCandidateSha, routeFacts } = {}) {
   object(registry, 'registry'); object(jurisdiction, 'jurisdiction register');
   if (registry.schema_version !== 'console-capability-registry-v2') fail('unsupported console capability registry schema');
   if (jurisdiction.schema_version !== 'console-jurisdiction-register-v2') fail('unsupported console jurisdiction register schema');
@@ -61,7 +62,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     for (const key of ['category', 'non_goals', 'evidence_binding']) nonempty(benchmark[key], `${cap.id} benchmark ${key}`);
     const sources = array(benchmark.comparator_sources);
     if (!sources.length) fail(`${cap.id} per-module benchmark has no comparator sources`);
-    for (const source of sources) { object(source, `${cap.id} comparator source`); nonempty(source.source, `${cap.id} comparator source path`); nonempty(source.observation_as_of, `${cap.id} comparator observation date`); nonempty(source.observation, `${cap.id} comparator observation`); }
+    for (const source of sources) { object(source, `${cap.id} comparator source`); nonempty(source.source, `${cap.id} comparator source path`); nonempty(source.observation_as_of, `${cap.id} comparator observation date`); if (!/^\d{4}-\d{2}-\d{2}$/.test(source.observation_as_of) || Number.isNaN(Date.parse(`${source.observation_as_of}T00:00:00Z`))) fail(`${cap.id} comparator observation date must be ISO`); if (!resolveSource(source.source)) fail(`${cap.id} comparator source is not repository-resolvable`); nonempty(source.observation, `${cap.id} comparator observation`); }
     if (array(benchmark.native_outcomes).length < 3 || array(benchmark.native_outcomes).length > 7) fail(`${cap.id} benchmark requires 3-7 measurable native outcomes`);
     if (array(benchmark.omni_outcomes).length < 1 || array(benchmark.omni_outcomes).length > 3) fail(`${cap.id} benchmark requires 1-3 additive omni outcomes`);
     const outcomeIds = new Set(); const outcomeShapes = new Set();
@@ -69,7 +70,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     if (!['SOURCE_BOUNDED_STARTING_DOSSIER','HOLD_INSUFFICIENT_CATEGORY_DOSSIER'].includes(benchmark.dossier_status)) fail(`${cap.id} benchmark dossier status is invalid`);
     if (benchmark.dossier_status === 'HOLD_INSUFFICIENT_CATEGORY_DOSSIER') nonempty(benchmark.missing_dossier_reason, `${cap.id} missing dossier reason`);
     if (!VERDICTS.has(benchmark.verdict)) fail(`${cap.id} benchmark verdict is invalid`);
-    nonempty(benchmark.independent_outcome_review?.status, `${cap.id} independent outcome review status`);
+    nonempty(benchmark.independent_outcome_review?.status, `${cap.id} independent outcome review status`); if (benchmark.independent_outcome_review.status !== 'HOLD') { const review=benchmark.independent_outcome_review; if (review.candidate_sha !== candidate.sha || !nonempty(review.receipt_path, `${cap.id} review receipt path`) || !nonempty(review.reviewer_id, `${cap.id} independent reviewer`) || review.reviewer_id === cap.owner) fail(`${cap.id} non-HOLD outcome review is not independent candidate-bound receipt-backed evidence`); }
     if (benchmark.verdict !== 'HOLD' && evidence.status !== 'VERIFIED') fail(`${cap.id} non-HOLD benchmark requires verified candidate evidence`);
     const delivery = object(cap.delivery_unit, `${cap.id} delivery unit`);
     nonempty(delivery.id, `${cap.id} delivery unit id`);
@@ -104,29 +105,33 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     const [aId, a] = privateRoots[i], [bId, b] = privateRoots[j];
     if (aId !== bId && (a === b || a.startsWith(`${b.replace(/\/\*\*$/, '')}/`) || b.startsWith(`${a.replace(/\/\*\*$/, '')}/`))) fail(`overlapping private roots: ${aId}:${a} and ${bId}:${b}`);
   }
-  if (!array(jurisdiction.jurisdictions).every((entry) => entry?.country_code === 'KR')) fail('non-KR jurisdiction is outside the target register');
+  if (array(jurisdiction.target_jurisdiction_set).length !== 1 || jurisdiction.target_jurisdiction_set[0] !== 'KR' || !array(jurisdiction.jurisdictions).every((entry) => entry?.country_code === 'KR' && entry.id === 'JUR-KR-001')) fail('jurisdiction target must be exactly KR / JUR-KR-001');
   const controls = new Map(); for (const control of array(jurisdiction.controls)) { if (controls.has(control.id)) fail(`duplicate control id: ${control.id}`); controls.set(control.id, control); }
   if (!controls.size) fail('jurisdiction register has no controls');
   for (const control of controls.values()) {
     if (control.release_disposition !== 'HOLD') fail(`jurisdiction control ${control.id} must remain HOLD without qualified authority`);
     nonempty(control.freshness?.status, `${control.id} freshness status`);
     nonempty(control.unhold_authority, `${control.id} explicit unhold authority`);
-    if (!array(control.capability_traceability).length) fail(`${control.id} missing capability traceability`);
+    if (!array(control.capability_traceability).length) fail(`${control.id} missing capability traceability`); const traceTuples = new Set(); for (const trace of control.capability_traceability) { const tuple=`${trace.capability_id}|${trace.candidate_sha}`; if (traceTuples.has(tuple)) fail(`${control.id} duplicate trace tuple`); traceTuples.add(tuple); if (trace.candidate_sha !== candidate.sha) fail(`${control.id} trace is not candidate-bound`); } if (control.candidate_evidence?.candidate_sha !== candidate.sha) fail(`${control.id} control evidence is not candidate-bound`);
   }
   for (const cap of registry.capabilities) for (const binding of cap.jurisdiction_bindings) {
     if (binding.jurisdiction_id !== 'JUR-KR-001' || !controls.has(binding.control_id)) fail(`${cap.id} has missing jurisdiction control ${binding.control_id}`);
     if (binding.candidate_sha !== candidate.sha) fail(`${cap.id} jurisdiction binding is not candidate-bound`);
     if (!array(controls.get(binding.control_id).capability_traceability).some((trace) => trace.capability_id === cap.id && trace.candidate_sha === candidate.sha)) fail(`${cap.id} jurisdiction trace is not bidirectional`);
   }
+  validatedRegistries.add(registry);
   return { capability_count: registry.capabilities.length, candidate_sha: candidate.sha, verdict: 'STRUCTURALLY_VALID_HOLD_PRESERVED' };
 }
+export function isValidatedConsoleTruthLedger(registry) { return validatedRegistries.has(registry); }
 
 function main() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const registry = parseImmutableJson(readFileSync(path.join(root, 'docs/program/console-capability-registry.json'), 'utf8'), 'console capability registry').value;
   const jurisdiction = parseImmutableJson(readFileSync(path.join(root, 'docs/program/console-jurisdiction-register.json'), 'utf8'), 'console jurisdiction register').value;
+  const resolveSource = (value) => typeof value === 'string' && !value.includes('..') && existsSync(path.join(root, value));
+  const resolveBuckTarget = (target) => { try { execFileSync(path.join(root, 'tools/buck2'), ['targets', target], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
   const resolveSha = (value) => { try { execFileSync('git', ['cat-file', '-e', `${value}^{commit}`], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
   const expectedCandidateSha = process.env.CONSOLE_EXPECTED_CANDIDATE_SHA ?? 'ebdf4c81d22502fac7a46192dd0b237fc0748241';
-  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha, expectedCandidateSha, routeFacts: extractConsoleRouteFacts(root) }), null, 2));
+  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha, resolveSource, resolveBuckTarget, expectedCandidateSha, routeFacts: extractConsoleRouteFacts(root) }), null, 2));
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

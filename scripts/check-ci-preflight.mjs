@@ -12,6 +12,7 @@ const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
+  "npm run check:console-truth-ledger",
   "node --test scripts/check-ci-preflight.test.mjs",
   "npm run check:ci-preflight",
   "npm run check:root-workspaces",

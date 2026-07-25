@@ -126,6 +126,9 @@ jobs:
       - name: Foundation gate contract
         run: npm run check:foundation-gates
 
+      - name: Console truth-ledger admission
+        run: npm run check:console-truth-ledger
+
       - name: CI preflight contract tests
         run: node --test scripts/check-ci-preflight.test.mjs
 

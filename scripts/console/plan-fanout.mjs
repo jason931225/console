@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
+import { isValidatedConsoleTruthLedger, validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
 import { extractConsoleRouteFactsFromTexts } from './route-inventory.mjs';
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
@@ -294,6 +294,7 @@ export function groupValidatedVerificationEntries(entries) {
 }
 
 export function buildFanoutPlan(registry, options) {
+  if (registry?.schema_version === 'console-capability-registry-v2' && !isValidatedConsoleTruthLedger(registry)) throw new Error('v2 fanout requires a validated truth-ledger attestation');
   validateInputs(registry, options);
   options = { ...options, registry };
   const budgets = resourceBudgets(registry);
