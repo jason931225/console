@@ -299,6 +299,33 @@ describe("ConsoleShell chrome", () => {
     });
   });
 
+  it("opens a server-linked mail row in MailScreen's canonical URL-backed detail route", async () => {
+    server.use(
+      http.get("*/api/v1/mail/threads", () =>
+        HttpResponse.json([
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            subject: "메일 연속성 확인",
+            last_message_at: "2026-07-03T08:50:00Z",
+            message_count: 1,
+            unread_count: 1,
+            has_attachments: false,
+            is_flagged: false,
+          },
+        ]),
+      ),
+    );
+    renderConsole(ADMIN, ["/console/audit"]);
+
+    await userEvent.click(await screen.findByText("메일 연속성 확인"));
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-router-location]")).toHaveTextContent(
+        "/console/mail?mail_thread=77777777-7777-4777-8777-777777777777&mail_view=detail",
+      );
+    });
+  });
+
   it("closes the mobile comms drawer before promoting a rail row into the main route", async () => {
     stubViewport(390);
     server.use(

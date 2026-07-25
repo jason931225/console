@@ -19,6 +19,8 @@ export interface CommsRailPanelProps {
   api?: CommsRailApi;
   /** Opens only a real API-issued messenger thread route supplied by ConsoleShell. */
   onOpenMessengerThread?: (threadId: string) => void;
+  /** Opens only a real API-issued mail thread route supplied by ConsoleShell. */
+  onOpenMailThread?: (threadId: string) => void;
 }
 
 function shellCommsRailCopy(): CommsRailCopy {
@@ -59,15 +61,21 @@ function shellCommsRailCopy(): CommsRailCopy {
 }
 
 /**
- * Production mount for the shell rail. Only messenger currently has a real
- * shell-owned drill command; every other target remains an honest static row.
+ * Production mount for the shell rail. Messenger and mail routes are shell-owned;
+ * every other target remains an honest static row.
  */
-export function CommsRailPanel({ onOpenMessengerThread }: CommsRailPanelProps) {
+export function CommsRailPanel({ onOpenMessengerThread, onOpenMailThread }: CommsRailPanelProps) {
   return (
     <CommsRailContainer
       copy={shellCommsRailCopy()}
       embedded
       onOpenMessengerThread={onOpenMessengerThread}
+      {...(onOpenMailThread ? {
+        onOpenMailThread: (_item, target) => {
+          const threadId = target.id.trim();
+          if (target.source === "mail" && threadId) onOpenMailThread(threadId);
+        },
+      } : {})}
     />
   );
 }

@@ -571,6 +571,16 @@ export function ConsoleShell({
                     search: `?thread=${encodeURIComponent(threadId)}`,
                   });
                 }}
+                onOpenMailThread={(threadId) => {
+                  if (activeDrawer) {
+                    focusMainAfterDrawerCloseRef.current = true;
+                    closeDrawer(false);
+                  }
+                  void navigate({
+                    pathname: consoleScreenPath("mail"),
+                    search: `?mail_thread=${encodeURIComponent(threadId)}&mail_view=detail`,
+                  });
+                }}
               />
             </ErrorBoundary>
           </>
