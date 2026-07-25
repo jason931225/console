@@ -387,6 +387,21 @@ pub struct SupportCase {
     history: Vec<CaseHistoryEntry>,
 }
 
+/// Persisted state used to reconstruct a [`SupportCase`] without a long,
+/// position-sensitive argument list at adapter boundaries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SupportCaseRehydration {
+    pub id: SupportTicketId,
+    pub scope: CaseScope,
+    pub priority: TicketPriority,
+    pub status: TicketStatus,
+    pub due_at: Timestamp,
+    pub version: u64,
+    pub dispatch_handoff: Option<DispatchHandoff>,
+    pub evidence_bindings: Vec<CaseEvidenceBinding>,
+    pub history: Vec<CaseHistoryEntry>,
+}
+
 impl SupportCase {
     pub fn open(
         id: SupportTicketId,
@@ -408,17 +423,18 @@ impl SupportCase {
         })
     }
 
-    pub fn rehydrate(
-        id: SupportTicketId,
-        scope: CaseScope,
-        priority: TicketPriority,
-        status: TicketStatus,
-        due_at: Timestamp,
-        version: u64,
-        dispatch_handoff: Option<DispatchHandoff>,
-        evidence_bindings: Vec<CaseEvidenceBinding>,
-        history: Vec<CaseHistoryEntry>,
-    ) -> Result<Self, KernelError> {
+    pub fn rehydrate(snapshot: SupportCaseRehydration) -> Result<Self, KernelError> {
+        let SupportCaseRehydration {
+            id,
+            scope,
+            priority,
+            status,
+            due_at,
+            version,
+            dispatch_handoff,
+            evidence_bindings,
+            history,
+        } = snapshot;
         if history.len()
             != usize::try_from(version)
                 .map_err(|_| KernelError::validation("support case version is too large"))?
@@ -931,17 +947,17 @@ mod tests {
     #[test]
     fn rehydration_rejects_non_contiguous_history() {
         let now = datetime!(2026-07-24 09:00 UTC);
-        let result = SupportCase::rehydrate(
-            SupportTicketId::new(),
-            CaseScope::new(OrgId::new(), BranchId::new()),
-            TicketPriority::Medium,
-            TicketStatus::Open,
-            now,
-            1,
-            None,
-            Vec::new(),
-            Vec::new(),
-        );
+        let result = SupportCase::rehydrate(SupportCaseRehydration {
+            id: SupportTicketId::new(),
+            scope: CaseScope::new(OrgId::new(), BranchId::new()),
+            priority: TicketPriority::Medium,
+            status: TicketStatus::Open,
+            due_at: now,
+            version: 1,
+            dispatch_handoff: None,
+            evidence_bindings: Vec::new(),
+            history: Vec::new(),
+        });
         assert!(result.is_err());
     }
 
@@ -971,17 +987,17 @@ mod tests {
         opened
             .transition(3, actor, TicketStatus::InProgress, now)
             .unwrap();
-        let rehydrated = SupportCase::rehydrate(
-            opened.id(),
-            opened.scope(),
-            opened.priority(),
-            opened.status(),
-            opened.due_at(),
-            opened.version(),
-            opened.dispatch_handoff().cloned(),
-            opened.evidence_bindings().to_vec(),
-            opened.history().to_vec(),
-        )
+        let rehydrated = SupportCase::rehydrate(SupportCaseRehydration {
+            id: opened.id(),
+            scope: opened.scope(),
+            priority: opened.priority(),
+            status: opened.status(),
+            due_at: opened.due_at(),
+            version: opened.version(),
+            dispatch_handoff: opened.dispatch_handoff().cloned(),
+            evidence_bindings: opened.evidence_bindings().to_vec(),
+            history: opened.history().to_vec(),
+        })
         .unwrap();
         assert_eq!(rehydrated.id(), opened.id());
         assert_eq!(rehydrated.status(), TicketStatus::InProgress);
@@ -998,16 +1014,16 @@ mod tests {
     #[test]
     fn rehydration_rejects_status_projection_that_disagrees_with_history() {
         let now = datetime!(2026-07-24 09:00 UTC);
-        let result = SupportCase::rehydrate(
-            SupportTicketId::new(),
-            CaseScope::new(OrgId::new(), BranchId::new()),
-            TicketPriority::Medium,
-            TicketStatus::Open,
-            now,
-            1,
-            None,
-            Vec::new(),
-            vec![CaseHistoryEntry {
+        let result = SupportCase::rehydrate(SupportCaseRehydration {
+            id: SupportTicketId::new(),
+            scope: CaseScope::new(OrgId::new(), BranchId::new()),
+            priority: TicketPriority::Medium,
+            status: TicketStatus::Open,
+            due_at: now,
+            version: 1,
+            dispatch_handoff: None,
+            evidence_bindings: Vec::new(),
+            history: vec![CaseHistoryEntry {
                 version: 1,
                 event: CaseEvent::StatusTransition {
                     from: TicketStatus::Open,
@@ -1016,7 +1032,7 @@ mod tests {
                 actor: UserId::new(),
                 occurred_at: now,
             }],
-        );
+        });
         assert!(result.is_err());
     }
 
@@ -1025,16 +1041,16 @@ mod tests {
         let now = datetime!(2026-07-24 09:00 UTC);
         let scope = CaseScope::new(OrgId::new(), BranchId::new());
         let actor = UserId::new();
-        let missing_handoff = SupportCase::rehydrate(
-            SupportTicketId::new(),
+        let missing_handoff = SupportCase::rehydrate(SupportCaseRehydration {
+            id: SupportTicketId::new(),
             scope,
-            TicketPriority::Medium,
-            TicketStatus::Open,
-            now,
-            1,
-            None,
-            Vec::new(),
-            vec![CaseHistoryEntry {
+            priority: TicketPriority::Medium,
+            status: TicketStatus::Open,
+            due_at: now,
+            version: 1,
+            dispatch_handoff: None,
+            evidence_bindings: Vec::new(),
+            history: vec![CaseHistoryEntry {
                 version: 1,
                 event: CaseEvent::DispatchHandoffResolved {
                     work_order_id: WorkOrderId::new(),
@@ -1043,20 +1059,20 @@ mod tests {
                 actor,
                 occurred_at: now,
             }],
-        );
+        });
         assert!(missing_handoff.is_err());
 
         let evidence = EvidenceObjectId::new();
-        let missing_evidence_projection = SupportCase::rehydrate(
-            SupportTicketId::new(),
+        let missing_evidence_projection = SupportCase::rehydrate(SupportCaseRehydration {
+            id: SupportTicketId::new(),
             scope,
-            TicketPriority::Medium,
-            TicketStatus::Open,
-            now,
-            1,
-            None,
-            Vec::new(),
-            vec![CaseHistoryEntry {
+            priority: TicketPriority::Medium,
+            status: TicketStatus::Open,
+            due_at: now,
+            version: 1,
+            dispatch_handoff: None,
+            evidence_bindings: Vec::new(),
+            history: vec![CaseHistoryEntry {
                 version: 1,
                 event: CaseEvent::EvidenceBound {
                     evidence_object_id: evidence,
@@ -1064,7 +1080,7 @@ mod tests {
                 actor,
                 occurred_at: now,
             }],
-        );
+        });
         assert!(missing_evidence_projection.is_err());
     }
 }
