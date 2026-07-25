@@ -36,7 +36,10 @@ protected `S^` before it invokes any repository script. It verifies that the
 one-parent squash commit `S` is bound to the signed `C`/`T` authority train: its only
 parent is the trusted pre-merge base and its tree is exactly `T`'s tree. It emits the non-release
 `console-squash-binding-v1` receipt with `TREE_BOUND_HOLD_PRESERVED` and release
-disposition `HOLD`; it never checks out or executes `T`, `M`, or `S`.
+disposition `HOLD`; it never checks out or executes `T`, `M`, or `S`. Before binding,
+the protected `S^` process fetches `refs/pull/<number>/head` into a private namespace
+and requires its SHA to equal the closed-event authority-tip SHA, so a deleted PR head
+branch cannot make the signed `T` object unavailable.
 
 For user-facing features, PR/review evidence must prove the shipped workflow, not
 just the transport seam. API endpoint tests, handler tests, or generated-client

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AUTHORITY_PATHS, POLICY_PATH, TRUSTED_ALLOWED_SIGNER, TRUSTED_FINGERPRINT, TRUSTED_PRINCIPAL, candidateCheckPlan, squashBindingReceipt, validatePinnedPolicy, verifyBootstrapGraph, verifyPinnedSshCommit, verifySquashBinding } from './verify-console-pr-authority-bootstrap.mjs';
+import { AUTHORITY_PATHS, POLICY_PATH, TRUSTED_ALLOWED_SIGNER, TRUSTED_FINGERPRINT, TRUSTED_PRINCIPAL, candidateCheckPlan, fetchExactAuthorityTip, squashBindingReceipt, validatePinnedPolicy, verifyBootstrapGraph, verifyPinnedSshCommit, verifySquashBinding } from './verify-console-pr-authority-bootstrap.mjs';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -113,6 +113,39 @@ test('workflow separates open PR authentication from closed merged squash bindin
   assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}/);
   assert.doesNotMatch(workflow, /ref: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}\^/);
   assert.match(workflow, /test "\$\(git -c core\.hooksPath=\/dev\/null rev-parse HEAD\)" = "\$SQUASH_SHA"\n\s+git -c core\.hooksPath=\/dev\/null checkout --detach "\$SQUASH_SHA\^"\n\s+node scripts\/console\/verify-console-pr-authority-bootstrap\.mjs squash-binding/);
+  assert.match(workflow, /PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}/);
+  assert.match(workflow, /--pr-number "\$PR_NUMBER"/);
+  const verifier = readFileSync(new URL('./verify-console-pr-authority-bootstrap.mjs', import.meta.url), 'utf8');
+  const squashMain = verifier.slice(verifier.indexOf('function squashBindingMain()'));
+  assert.ok(squashMain.indexOf('fetchExactAuthorityTip') < squashMain.indexOf('verifySquashBinding'));
+});
+test('fetches a deleted, non-reachable PR authority tip exactly and rejects mismatch', () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'console-authority-fetch-'));
+  const remote = path.join(directory, 'remote.git'), source = path.join(directory, 'source'), checkout = path.join(directory, 'checkout');
+  const run = (cwd, args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+  try {
+    assert.equal(spawnSync('git', ['init', '--bare', remote], { encoding: 'utf8' }).status, 0);
+    assert.equal(spawnSync('git', ['init', source], { encoding: 'utf8' }).status, 0);
+    assert.equal(run(source, ['config', 'user.name', 'Bootstrap Test']).status, 0);
+    assert.equal(run(source, ['config', 'user.email', 'bootstrap@example.invalid']).status, 0);
+    writeFileSync(path.join(source, 'base.txt'), 'base\n');
+    assert.equal(run(source, ['add', 'base.txt']).status, 0);
+    assert.equal(run(source, ['commit', '-m', 'base']).status, 0);
+    const base = run(source, ['rev-parse', 'HEAD']).stdout.trim();
+    assert.equal(run(source, ['remote', 'add', 'origin', remote]).status, 0);
+    assert.equal(run(source, ['push', 'origin', `HEAD:refs/heads/main`]).status, 0);
+    assert.equal(spawnSync('git', ['clone', '--branch', 'main', remote, checkout], { encoding: 'utf8' }).status, 0);
+    writeFileSync(path.join(source, 'authority.txt'), 'tip\n');
+    assert.equal(run(source, ['add', 'authority.txt']).status, 0);
+    assert.equal(run(source, ['commit', '-m', 'authority tip']).status, 0);
+    const tip = run(source, ['rev-parse', 'HEAD']).stdout.trim();
+    assert.equal(run(source, ['push', 'origin', `HEAD:refs/pull/42/head`]).status, 0);
+    assert.equal(run(source, ['reset', '--hard', base]).status, 0);
+    assert.notEqual(run(checkout, ['cat-file', '-e', `${tip}^{commit}`]).status, 0);
+    assert.equal(fetchExactAuthorityTip(checkout, 42, tip), tip);
+    assert.equal(run(checkout, ['rev-parse', 'refs/console-squash-binding/42/head']).stdout.trim(), tip);
+    assert.throws(() => fetchExactAuthorityTip(checkout, 42, base), /head ref does not match event SHA/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 test('candidate compatibility fixture executes the actual planner CLI flag contract', () => {
   const candidate = spawnSync('git', ['rev-parse', '28642975^{commit}'], { encoding: 'utf8' }).stdout.trim();

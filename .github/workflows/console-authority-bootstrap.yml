@@ -59,6 +59,7 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/hostile-home
           AUTHORITY_TIP_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           SQUASH_SHA: ${{ github.event.pull_request.merge_commit_sha }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           RECEIPT_PATH: ${{ runner.temp }}/console-squash-binding.json
@@ -71,6 +72,7 @@ jobs:
           test "$(git -c core.hooksPath=/dev/null rev-parse HEAD)" = "$SQUASH_SHA"
           git -c core.hooksPath=/dev/null checkout --detach "$SQUASH_SHA^"
           node scripts/console/verify-console-pr-authority-bootstrap.mjs squash-binding \
+          --pr-number "$PR_NUMBER" \
           --head "$AUTHORITY_TIP_SHA" \
           --squash "$SQUASH_SHA" \
           --base "$PR_BASE_REF" > "$RECEIPT_PATH"

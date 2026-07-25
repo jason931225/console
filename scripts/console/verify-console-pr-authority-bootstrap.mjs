@@ -141,6 +141,15 @@ function fetchExactPullObjects(repo, number, expectedHead, expectedMerge) {
   git(repo, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/pull/${number}/head:${namespace}/head`, `+refs/pull/${number}/merge:${namespace}/merge`]);
   if (git(repo, ['rev-parse', `${namespace}/head`]).trim() !== expectedHead || git(repo, ['rev-parse', `${namespace}/merge`]).trim() !== expectedMerge) fail('GitHub pull refs do not match event SHAs');
 }
+export function fetchExactAuthorityTip(repo, number, expectedHead) {
+  const parsedNumber = String(number);
+  if (!/^\d+$/.test(parsedNumber)) fail('PR number is invalid');
+  const T = exactSha(expectedHead, 'PR head');
+  const ref = `refs/console-squash-binding/${parsedNumber}/head`;
+  git(repo, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/pull/${parsedNumber}/head:${ref}`]);
+  if (git(repo, ['rev-parse', ref]).trim() !== T) fail('GitHub pull head ref does not match event SHA');
+  return T;
+}
 export function candidateCheckPlan(C, T, M) {
   return Object.freeze({
     environment: Object.freeze({ CONSOLE_CANDIDATE_SHA: C, CONSOLE_AUTHORITY_TIP_SHA: T, CONSOLE_SYNTHETIC_MERGE_SHA: M }),
@@ -163,14 +172,15 @@ function runAuthenticatedCandidateChecks(repo, C, T, M) {
   } finally { try { git(repo, ['worktree', 'remove', '--force', candidate]); } catch { rmSync(candidate, { recursive: true, force: true }); } }
 }
 function parseSquashBindingArgs(argv) {
-  const result = {}; for (let index = 0; index < argv.length; index += 2) { const key = argv[index]; const value = argv[index + 1]; if (!['--head', '--squash', '--base'].includes(key) || value === undefined) fail('usage: squash-binding --head SHA --squash SHA --base main'); result[key.slice(2)] = value; }
-  exactSha(result.head, 'PR head'); exactSha(result.squash, 'squash commit'); if (!safeBaseBranch(result.base)) fail('PR base is outside the protected main trust scope'); return result;
+  const result = {}; for (let index = 0; index < argv.length; index += 2) { const key = argv[index]; const value = argv[index + 1]; if (!['--pr-number', '--head', '--squash', '--base'].includes(key) || value === undefined) fail('usage: squash-binding --pr-number N --head SHA --squash SHA --base main'); result[key.slice(2)] = value; }
+  if (!/^\d+$/.test(result['pr-number'] ?? '')) fail('PR number is invalid'); exactSha(result.head, 'PR head'); exactSha(result.squash, 'squash commit'); if (!safeBaseBranch(result.base)) fail('PR base is outside the protected main trust scope'); return result;
 }
 function main() { const args = parseArgs(process.argv.slice(2)); const repo = process.cwd(); fetchExactPullObjects(repo, args['pr-number'], args.head, args.merge); const graph = verifyBootstrapGraph(gitOps(repo), { headSha: args.head, mergeSha: args.merge }); runAuthenticatedCandidateChecks(repo, graph.candidateSha, graph.integrationTipSha, graph.mergeSha); process.stdout.write(`${JSON.stringify({ verdict: 'PASS', ...graph }, null, 2)}\n`); }
 function squashBindingMain() {
   const args = parseSquashBindingArgs(process.argv.slice(3)); const repo = process.cwd();
   const preMergeBaseSha = git(repo, ['rev-parse', 'HEAD']).trim();
-  const binding = verifySquashBinding(gitOps(repo), { authorityTipSha: args.head, squashSha: args.squash, preMergeBaseSha });
+  const authorityTipSha = fetchExactAuthorityTip(repo, args['pr-number'], args.head);
+  const binding = verifySquashBinding(gitOps(repo), { authorityTipSha, squashSha: args.squash, preMergeBaseSha });
   process.stdout.write(`${JSON.stringify(squashBindingReceipt(binding), null, 2)}\n`);
 }
 if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
