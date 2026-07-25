@@ -2,6 +2,12 @@
 
 **Lane** `hf-leave-promotion` · **Worktree** `hf-leave-promotion-20260725` · **Date** 2026-07-25
 
+**Status: COMPLETE.** Statutory logic implemented and red-proofed (§4.2); the runtime-role
+test runs as `mnt_rt` and is green (§4.1); `fmt` and `clippy -D warnings` clean. 58 of 59
+lane tests green — the single red is pre-existing on the base branch and belongs to
+migration `0183` (§4.3). Wire/migration/web collision roots are specified as manifests, not
+edited (§5).
+
 The business-logic depth audit found exactly one *wrongly-fabricated* rule in the whole
 codebase, as opposed to a shallow or missing one, and it is here. This is the record of
 what was fabricated, what the statute actually says (verified live), and what was done.
@@ -84,7 +90,23 @@ unused_days: f64,
 §61①1 requires the employer to state the worker's own 미사용 휴가 일수. The figure was an
 unvalidated caller-supplied float defaulting to `0` when absent, rendered straight into
 the notice as "귀하의 미사용 연차 0일에 대하여…". The authoritative figure
-(`employees.leave_remaining NUMERIC(10,2)`) was one query away and unused.
+(`employees.leave_remaining`) was one query away and unused.
+
+### 1.4 The presentation scale — found by the runtime-role test, not by review
+
+The server-side read replacing the client float was written as `leave_remaining::text`.
+`employees.leave_remaining` is **`NUMERIC(16,6)`** — widened from `NUMERIC(10,2)` by
+migration `0166_leave_exact_charge_and_home_branch.sql:30` — so the notice served to a
+worker read **`미사용 연차 유급휴가는 13.000000일입니다`**. Not false, but not a figure a
+statutory notice may print. Every hand-written unit test passed, because each fed
+`notice_body` a literal `"13.00"` fixture; only the database-backed test saw the column's
+real scale. Fixed with `trim_scale(leave_remaining)::text` (PG13+, drops trailing zeros
+without changing the value) → `13일`, `13.5일`. The test fixture now seeds a half-day
+remainder so a future `round()` cannot pass in its place.
+
+Deliberately **not** applied to the import/ledger reads in
+`leave_migration_expand_contract.rs` — there the stored scale *is* the audited contract.
+Trimming is for the human-facing notice only.
 
 ---
 
@@ -239,13 +261,18 @@ never written, is now written.
 
 ## 4. Tests
 
-35 tests, **all green**, no database required:
+**58 of 59 green. The one red is pre-existing on the base branch and is not this lane's
+(§4.3).** The database-backed suites run against the shared dev Postgres; `DATABASE_URL`
+is supplied from the environment and appears in no committed file.
 
-| Suite | Count | Command |
+| Suite | Count | Result |
 |---|---|---|
-| `mnt-leave-domain` (13 new §61 boundary tests + 7 pre-existing) | 20 | `cargo test -p mnt-leave-domain` |
-| `mnt-leave-adapter-postgres` unit (5 new notice-content tests + 2 pre-existing) | 7 | `cargo test -p mnt-leave-adapter-postgres --lib` |
-| `mnt-leave-rest` unit | 8 | `cargo test -p mnt-leave-rest --lib` |
+| `mnt-leave-domain` (13 new §61 boundary tests + 7 pre-existing) | 20 | green |
+| `mnt-leave-adapter-postgres` unit (5 new notice-content tests + 2 pre-existing) | 7 | green |
+| `mnt-leave-rest` unit | 8 | green |
+| `mnt-leave-rest` `leave_http_personas` (DB) | 2 | green |
+| `mnt-leave-adapter-postgres` `leave_migration_expand_contract` (DB) | 9 | green |
+| `mnt-leave-adapter-postgres` `leave_rls_surfaces_as_runtime_role` (DB, as `mnt_rt`) | 13 | 12 green, 1 pre-existing red |
 
 Boundary coverage — each is a distinct off-by-one the old code accepted:
 
@@ -260,32 +287,92 @@ Boundary coverage — each is a distinct off-by-one the old code accepted:
 - month-end clamping across 28/29/31-day months and a year boundary
 - the refusal notice never says `소멸함`; the round-1 notice states the exact roster figure
 
-`cargo fmt` and `cargo clippy --all-targets` clean on all four leave crates.
+`cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` clean on all four leave
+crates.
 
-### 4.1 The one thing NOT executed — named, not buried
+### 4.1 The runtime-role test — executed, green
 
-`statutory_push_enforces_the_section_61_windows_as_runtime_role` in
-`backend/crates/leave/adapter-postgres/tests/leave_rls_surfaces_as_runtime_role.rs` is
-**written and compiles but has not run**. It drives the whole procedure as the genuine
-`mnt_rt` runtime role across simulated §61 dates and asserts every window, the ordering
-gates, the notice payloads, the cross-period fail-closed 409, and the missing-roster-figure
-409.
+`statutory_push_enforces_the_section_61_windows_as_runtime_role` and
+`statutory_push_target_binding_is_enforced_as_runtime_role` in
+`backend/crates/leave/adapter-postgres/tests/leave_rls_surfaces_as_runtime_role.rs`
+**both pass.** They drive the whole procedure through `PgLeaveStore` as the genuine
+`mnt_rt` runtime role — `NOBYPASSRLS`, `FORCE RLS`, `app.current_org` armed — across
+simulated §61 dates, asserting every window, the ordering gates, the notice payloads, the
+cross-period fail-closed 409 and the missing-roster-figure 409. The `#[sqlx::test]`
+superuser is the harness bootstrapper only; it seeds and it backdates, it never asserts.
 
-It cannot execute because **the shared dev Postgres is down**: the Docker VM volume backing
-`mnt-dev-postgres-1` is 100% full (197 GB, 0 free) and the container is in a crash-restart
-loop — `FATAL: could not write lock file "postmaster.pid": No space left on device`. The
-database is not the consumer (PGDATA is 588 MB + 1.1 GB wal-archive); 707 Docker local
-volumes hold 187.7 GB, of which 84.9 GB is reclaimable from 676 **anonymous dangling**
-volumes accumulated by fanout-wave container churn.
+The first execution failed, and usefully: it caught the `13.000000` scale defect (§1.4)
+that every hand-written fixture had hidden, then a second failure exposed a fixture of my
+own reaching around `trg_employees_leave_command_only` with a bare `UPDATE`. The fixture
+now drops to `mnt_leave_definer` — the sole role the trigger exempts — the same way
+`seed_employee` does, so the guard is honoured rather than bypassed.
 
-The reclaim is blocked for this agent by the permission classifier (`docker volume rm` and
-`docker volume prune` both denied; no workaround attempted). The candidate list with
-per-volume sizes, and the 8 named dangling volumes explicitly excluded, is captured at
+### 4.2 Red-proof — the tests fail when the fix is removed
+
+Given this lane replaced a *fabricated* statute, a test that passes either way is worth
+nothing. Three mutations were applied to `promotion.rs` in turn, each run against both the
+domain suite and the database-backed runtime-role test, each restored from a `cp` backup
+(never `git checkout`). Reproduce with
+`DATABASE_URL=… bash docs/evidence/console/hotfix/leave-promotion/redproof.sh`.
+
+| Mutation | domain (20) | runtime-role statutory (2) |
+|---|---|---|
+| *baseline, fix in place* | 20 pass | 2 pass |
+| **M1** `validate_promotion` accepts any round 1\|2 with no window and no ordering — literally the deleted `validate_round` | **5 FAIL** | **1 FAIL** |
+| **M2** `TEN_DAY_SPAN` 10 → 11 (window closes one day late) | **4 FAIL** | **1 FAIL** |
+| **M3** `REPLY_WINDOW_DAYS` 10 → 0 (round 2 may follow the 촉구 at once) | **1 FAIL** | **1 FAIL** |
+
+All three mutants killed, in both the pure-logic suite and the real-database path. M2
+matters most: it proves the assertions pin the boundary *day*, not merely the existence of
+a window. `promotion.rs` verified byte-identical to the committed fix afterwards.
+
+### 4.3 The pre-existing red, and a pre-existing flake — neither is this lane's
+
+**Red — `leave_command_preprovision_and_privilege_matrix_are_fail_closed`.** Fails
+identically with this lane's changes stashed, i.e. on the unmodified base branch. The
+assertion is a deny-by-default allowlist — *"command role receives exactly six public
+entrypoints and no helpers"* — and it now sees eight:
+
+```
++ leave_api.create_employee
++ leave_api.assert_employee_directory_manager
+```
+
+Both arrive from `crates/platform/db/migrations/0183_leave_api_create_employee.sql`, which
+landed without updating the matrix. `create_employee` is a deliberate new entrypoint,
+correctly `REVOKE ALL … FROM PUBLIC, mnt_rt` then granted to `mnt_leave_cmd` (line 229).
+`assert_employee_directory_manager` (line 61) is **not** an entrypoint — it is the internal
+authorization assertion `create_employee` calls via `PERFORM` — and it is
+`SECURITY DEFINER` with **no `REVOKE` at all**, so it keeps PostgreSQL's default
+`EXECUTE TO PUBLIC`, unlike every sibling function in the same file.
+
+Severity is **low, not nil**: only `mnt_leave_cmd` holds `USAGE ON SCHEMA leave_api`
+(granted in 0166), and that role may already call `create_employee`, so there is no
+privilege gain and no reach from `mnt_rt`. What is real is that a `SECURITY DEFINER` authz
+predicate over `users` / `user_role_assignments` / `policy_roles` is directly callable with
+an arbitrary `p_org_id`, and the deny-by-default tripwire designed to catch exactly that is
+currently red on the spine. Correct resolution is the missing
+`REVOKE ALL ON FUNCTION leave_api.assert_employee_directory_manager(UUID, UUID) FROM PUBLIC, mnt_rt;`
+in a new numbered migration — restoring the invariant without widening the allowlist.
+**Not fixed here:** it is another lane's migration, `0183` is already applied so it cannot
+be edited in place, and migration numbers collide across concurrent lanes. Owner of the
+employee-directory lane should take it.
+
+**Flake — `leave_migration_expand_contract.rs`.** Green single-threaded (9/9), and under
+`cargo test`'s default parallelism fails non-deterministically — a different subset each
+run — with `XX000 tuple concurrently updated` from `heapam.c:simple_heap_update`. Present
+identically on the stashed baseline. Its migration-rehearsal tests contend on shared
+catalog rows. Run this file with `--test-threads=1` until it is fixed; a red here is not
+evidence of a code defect.
+
+### 4.4 Infrastructure — resolved
+
+The disk exhaustion that parked this test (`mnt-dev-postgres-1` crash-looping on
+`FATAL: could not write lock file "postmaster.pid": No space left on device`, 707 Docker
+volumes / 187.7 GB, 84.9 GB reclaimable from 676 anonymous dangling volumes) was reclaimed
+by the coordinator: **707 → 35 volumes, 187.7 GB → 135 GB**, container healthy. The
+candidate list this lane produced is retained at
 `docs/evidence/console/hotfix/leave-promotion/docker-volume-reclaim-candidates.txt`.
-
-**This lane is therefore `partial`.** The statutory logic and the notice content are proven
-by 35 green tests; the persistence-and-ordering path is proven only by compilation until
-the disk is reclaimed.
 
 **Program note, recurring hazard:** not a one-off. Repeated worktree and
 throwaway-container churn from fanout waves leaves anonymous volumes behind at a rate that
