@@ -21,6 +21,7 @@ import {
   type EvaluationCycleDetail,
   type EvaluationCycleStage,
   type EvaluationCycleSummary,
+  type EvaluationCycleTransition,
   type EvaluationEvidenceKind,
   type EvaluationEvidenceLinkInput,
   type EvaluationGoalInput,
@@ -162,6 +163,21 @@ const STAGES: EvaluationCycleStage[] = [
   "FINALIZED",
   "ARCHIVED",
 ];
+
+function transitionTarget(
+  transition: EvaluationCycleTransition,
+): Exclude<EvaluationCycleStage, "DRAFT"> {
+  switch (transition) {
+    case "open":
+      return "OPEN";
+    case "start_calibration":
+      return "CALIBRATION";
+    case "finalize":
+      return "FINALIZED";
+    case "archive":
+      return "ARCHIVED";
+  }
+}
 
 const GRADES: EvaluationGrade[] = ["S", "A", "B", "C", "D"];
 
@@ -1067,10 +1083,8 @@ function CycleDetailZone({
   const nextTransition = capabilities.canManage
     ? (preflightReport?.next_transition ?? null)
     : null;
-  const transitionLabel =
-    nextTransition && nextTransition !== "DRAFT"
-      ? text.transition[nextTransition]
-      : undefined;
+  const transitionStage = nextTransition ? transitionTarget(nextTransition) : undefined;
+  const transitionLabel = transitionStage ? text.transition[transitionStage] : undefined;
   return (
     <section className="evaluation__card" aria-label={data.name}>
       <div className="evaluation__zone-head">
@@ -1110,8 +1124,8 @@ function CycleDetailZone({
               ? Math.round((unit.manager_submitted / unit.total) * 100)
               : 0;
             return (
-              <li key={unit.org_unit}>
-                <span className="evaluation__team-name">{unit.org_unit}</span>
+              <li key={unit.org_unit ?? "unassigned"}>
+                <span className="evaluation__team-name">{unit.org_unit ?? "—"}</span>
                 <span className="evaluation__bar">
                   <span
                     className={BAR_CLASS[progressTone(pct)]}
@@ -1126,14 +1140,14 @@ function CycleDetailZone({
       ) : (
         <p role="status">{text.teamProgressEmpty}</p>
       )}
-      {nextTransition && transitionLabel && preflightReport && (
+      {nextTransition && transitionStage && transitionLabel && preflightReport && (
         <div className="evaluation__preflight">
           <button
             type="button"
             className="evaluation__solid"
             disabled={busy || preflightReport.blockers.length > 0}
             onClick={() => {
-              onTransition(nextTransition);
+              onTransition(transitionStage);
             }}
           >
             {transitionLabel}
@@ -1141,8 +1155,8 @@ function CycleDetailZone({
           {preflightReport.blockers.length > 0 && (
             <ul className="evaluation__gate-list" aria-label={text.blockers}>
               {preflightReport.blockers.map((blocker) => (
-                <li key={blocker}>
-                  <span className={CHIP_CLASS.danger}>{blocker}</span>
+                <li key={`${blocker.code}:${blocker.subject_id ?? "cycle"}`}>
+                  <span className={CHIP_CLASS.danger}>{blocker.message}</span>
                 </li>
               ))}
             </ul>
@@ -1150,8 +1164,8 @@ function CycleDetailZone({
           {preflightReport.advisories.length > 0 && (
             <ul className="evaluation__gate-list" aria-label={text.advisories}>
               {preflightReport.advisories.map((advisory) => (
-                <li key={advisory}>
-                  <span className={CHIP_CLASS.warn}>{advisory}</span>
+                <li key={`${advisory.code}:${advisory.subject_id ?? "cycle"}`}>
+                  <span className={CHIP_CLASS.warn}>{advisory.message}</span>
                 </li>
               ))}
             </ul>
@@ -1828,7 +1842,7 @@ function ScorecardForm({
   const existing = detail.reviews.find((review) => review.kind === kind);
   const [grade, setGrade] = useState<EvaluationGrade | undefined>(existing?.grade ?? undefined);
   const [note, setNote] = useState(existing?.note ?? "");
-  const [evidence, setEvidence] = useState<Omit<EvaluationEvidenceLinkInput, "sort_order">[]>(
+  const [evidence, setEvidence] = useState<EvaluationEvidenceLinkInput[]>(
     () =>
       [...(existing?.evidence_links ?? [])]
         .sort((a, b) => a.sort_order - b.sort_order)
@@ -1842,9 +1856,9 @@ function ScorecardForm({
   const [draftRef, setDraftRef] = useState("");
   const [draftLabel, setDraftLabel] = useState("");
   const fields = (): SaveEvaluationReviewRequest => ({
-    grade: grade ?? null,
+    ...(grade === undefined ? {} : { grade }),
     note: note.trim() ? note.trim() : null,
-    evidence_links: evidence.map((link, index) => ({ ...link, sort_order: index + 1 })),
+    evidence_links: evidence,
   });
   const submitDisabled =
     busy || !grade || (kind === "MANAGER" && evidence.length === 0);

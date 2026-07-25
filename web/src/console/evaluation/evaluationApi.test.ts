@@ -34,20 +34,20 @@ describe("createEvaluationApi", () => {
     expect(request.headers.get("X-Auth-Transport")).toBe("cookie");
   });
 
-  it("forwards path params, lowercased review kind, and bodies through the client", async () => {
+  it("forwards generated path params, lowercased review kind, and contract bodies", async () => {
     const { impl, api } = client();
     impl.PUT.mockResolvedValue(ok({ id: "review-1" }));
     await createEvaluationApi(api).saveReview("subject/1", "MANAGER", {
       grade: "A",
       note: "확인",
       evidence_links: [
-        { object_kind: "KPI", object_ref: "KPI-SLA", label: "고객 응답", sort_order: 1 },
+        { object_kind: "KPI", object_ref: "KPI-SLA", label: "고객 응답" },
       ],
     });
     expect(impl.PUT).toHaveBeenCalledWith(
-      "/api/v1/evaluation/subjects/{subjectId}/reviews/{kind}",
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}",
       expect.objectContaining({
-        params: { path: { subjectId: "subject/1", kind: "manager" } },
+        params: { path: { subject_id: "subject/1", kind: "manager" } },
         body: expect.objectContaining({ grade: "A", note: "확인" }),
       }),
     );
@@ -58,8 +58,8 @@ describe("createEvaluationApi", () => {
     impl.GET.mockResolvedValue(ok({ items: [] }));
     await createEvaluationApi(api).employeeReviews("employee-1");
     expect(impl.GET).toHaveBeenCalledWith(
-      "/api/v1/evaluation/employees/{employeeId}/reviews",
-      expect.objectContaining({ params: { path: { employeeId: "employee-1" } } }),
+      "/api/v1/evaluation/employees/{employee_id}/reviews",
+      expect.objectContaining({ params: { path: { employee_id: "employee-1" } } }),
     );
   });
 

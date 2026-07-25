@@ -63,6 +63,10 @@ const cycle = (stage: EvaluationCycleSummary["stage"] = "OPEN"): EvaluationCycle
 
 const detail = (stage: EvaluationCycleSummary["stage"] = "OPEN"): EvaluationCycleDetail => ({
   ...cycle(stage),
+  opened_at: null,
+  calibration_started_at: null,
+  finalized_at: null,
+  archived_at: null,
   created_by: "user-admin",
   progress_by_unit: [{ org_unit: "정비사업팀", total: 4, manager_submitted: 2 }],
   subjects: [
@@ -81,7 +85,7 @@ const detail = (stage: EvaluationCycleSummary["stage"] = "OPEN"): EvaluationCycl
 });
 
 const preflight = (): EvaluationPreflightReport => ({
-  next_transition: "CALIBRATION",
+  next_transition: "start_calibration",
   blockers: [],
   advisories: [],
 });
@@ -90,11 +94,11 @@ const task = (): EvaluationTaskSummary => ({
   subject_id: "subject-1",
   cycle_id: "cycle-1",
   cycle_name: "2026 상반기 정기평가",
-  period_label: "2026 H1",
   due_date: "2099-07-18",
   kind: "MANAGER",
   employee_id: "emp-1",
   employee_name: "조이슨",
+  review_status: null,
 });
 
 const subjectDetail = (): EvaluationSubjectDetail => ({
@@ -119,6 +123,10 @@ const subjectDetail = (): EvaluationSubjectDetail => ({
   ],
   reviews: [],
   calibrated_grade: null,
+  calibration_reason: null,
+  calibrated_by: null,
+  calibrated_at: null,
+  finalized_at: null,
 });
 
 function ok<T>(data: T) {
@@ -141,11 +149,11 @@ function client(routes: RouteMap = {}) {
 }
 
 const defaultRoutes = (): RouteMap => ({
-  "/api/v1/evaluation/cycles": () => ok({ items: [cycle()], limit: 50, offset: 0, total: 1 }),
-  "/api/v1/evaluation/my-tasks": () => ok({ items: [task()], limit: 50, offset: 0, total: 1 }),
-  "/api/v1/evaluation/cycles/{cycleId}": () => ok(detail()),
-  "/api/v1/evaluation/cycles/{cycleId}/preflight": () => ok(preflight()),
-  "/api/v1/evaluation/subjects/{subjectId}": () => ok(subjectDetail()),
+  "/api/v1/evaluation/cycles": () => ok({ items: [cycle()], total: 1 }),
+  "/api/v1/evaluation/my-tasks": () => ok({ items: [task()] }),
+  "/api/v1/evaluation/cycles/{cycle_id}": () => ok(detail()),
+  "/api/v1/evaluation/cycles/{cycle_id}/preflight": () => ok(preflight()),
+  "/api/v1/evaluation/subjects/{subject_id}": () => ok(subjectDetail()),
   "/api/v1/users": () =>
     ok({ items: [{ id: "user-mgr", display_name: "김성아", is_active: true }], limit: 100, offset: 0, total: 1 }),
   "/api/v1/employees": () =>
@@ -193,7 +201,7 @@ describe("EvaluationScreen", () => {
   it("retries an initial cycle-list error and renders the backend list", async () => {
     const { impl, api } = client();
     impl.GET.mockResolvedValueOnce(reject(500, "boom")).mockResolvedValueOnce(
-      ok({ items: [cycle()], limit: 50, offset: 0, total: 1 }),
+      ok({ items: [cycle()], total: 1 }),
     );
     renderScreen(readOnly, api);
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
@@ -206,8 +214,8 @@ describe("EvaluationScreen", () => {
 
   it("shows empty states with a next action instead of fabricated rows", async () => {
     const { api } = client({
-      "/api/v1/evaluation/cycles": () => ok({ items: [], limit: 50, offset: 0, total: 0 }),
-      "/api/v1/evaluation/my-tasks": () => ok({ items: [], limit: 50, offset: 0, total: 0 }),
+      "/api/v1/evaluation/cycles": () => ok({ items: [], total: 0 }),
+      "/api/v1/evaluation/my-tasks": () => ok({ items: [] }),
     });
     renderScreen(submitter, api);
     expect(await screen.findByText(text.cycleEmptyReadOnly)).toBeVisible();
@@ -228,7 +236,7 @@ describe("EvaluationScreen", () => {
 
   it("renders a denied cycle detail as a status, not a retryable error", async () => {
     const routes = defaultRoutes();
-    routes["/api/v1/evaluation/cycles/{cycleId}"] = () => reject(403, "forbidden");
+    routes["/api/v1/evaluation/cycles/{cycle_id}"] = () => reject(403, "forbidden");
     const { api } = client(routes);
     renderScreen(readOnly, api);
     await userEvent.click(
@@ -248,8 +256,8 @@ describe("EvaluationScreen", () => {
     });
     await userEvent.click(transition);
     expect(impl.POST).toHaveBeenCalledWith(
-      "/api/v1/evaluation/cycles/{cycleId}/start-calibration",
-      expect.objectContaining({ params: { path: { cycleId: "cycle-1" } } }),
+      "/api/v1/evaluation/cycles/{cycle_id}/start-calibration",
+      expect.objectContaining({ params: { path: { cycle_id: "cycle-1" } } }),
     );
     await waitFor(() => {
       expect(within(list).getByText(text.stage.CALIBRATION)).toBeVisible();
@@ -305,8 +313,8 @@ describe("EvaluationScreen", () => {
     routes["/api/v1/evaluation/my-tasks"] = () => {
       taskCalls += 1;
       return taskCalls === 1
-        ? ok({ items: [task()], limit: 50, offset: 0, total: 1 })
-        : ok({ items: [], limit: 50, offset: 0, total: 0 });
+        ? ok({ items: [task()] })
+        : ok({ items: [] });
     };
     const { impl, api } = client(routes);
     impl.PUT.mockResolvedValue(ok({ id: "review-1", subject_id: "subject-1", kind: "MANAGER", status: "DRAFT", evaluator_user_id: "user-mgr", evidence_links: [], updated_at: "2026-07-24T00:00:00Z" }));
@@ -324,19 +332,19 @@ describe("EvaluationScreen", () => {
     expect(submit).toBeEnabled();
     await userEvent.click(submit);
     expect(impl.PUT).toHaveBeenCalledWith(
-      "/api/v1/evaluation/subjects/{subjectId}/reviews/{kind}",
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}",
       expect.objectContaining({
-        params: { path: { subjectId: "subject-1", kind: "manager" } },
+        params: { path: { subject_id: "subject-1", kind: "manager" } },
         body: expect.objectContaining({
           grade: "A",
           evidence_links: [
-            expect.objectContaining({ object_ref: "KPI-SLA", sort_order: 1 }),
+            expect.objectContaining({ object_ref: "KPI-SLA" }),
           ],
         }),
       }),
     );
     expect(impl.POST).toHaveBeenCalledWith(
-      "/api/v1/evaluation/subjects/{subjectId}/reviews/{kind}/submit",
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit",
       expect.anything(),
     );
     await waitFor(() => {
@@ -361,7 +369,7 @@ describe("EvaluationScreen", () => {
 
   it("opens the audited person ledger from a task and drills back into the RV- object", async () => {
     const routes = defaultRoutes();
-    routes["/api/v1/evaluation/employees/{employeeId}/reviews"] = () =>
+    routes["/api/v1/evaluation/employees/{employee_id}/reviews"] = () =>
       ok({
         items: [
           {
@@ -375,7 +383,7 @@ describe("EvaluationScreen", () => {
           },
         ],
       });
-    routes["/api/v1/evaluation/subjects/{subjectId}"] = () =>
+    routes["/api/v1/evaluation/subjects/{subject_id}"] = () =>
       ok({ ...subjectDetail(), id: "subject-0", state: "FINALIZED", rv_code: "RV-2501", final_grade: "A" });
     const { impl, api } = client(routes);
     renderScreen(submitter, api);
@@ -385,8 +393,8 @@ describe("EvaluationScreen", () => {
     expect(await screen.findByText(text.auditChip)).toBeVisible();
     expect(await screen.findByText("RV-2501")).toBeVisible();
     expect(impl.GET).toHaveBeenCalledWith(
-      "/api/v1/evaluation/employees/{employeeId}/reviews",
-      expect.objectContaining({ params: { path: { employeeId: "emp-1" } } }),
+      "/api/v1/evaluation/employees/{employee_id}/reviews",
+      expect.objectContaining({ params: { path: { employee_id: "emp-1" } } }),
     );
     await userEvent.click(screen.getByRole("button", { name: /RV-2501/ }));
     const zone = await screen.findByRole("region", { name: "조이슨" });
@@ -395,7 +403,7 @@ describe("EvaluationScreen", () => {
 
   it("renders a denied-by-omission ledger 404 as a status, not a retryable error", async () => {
     const routes = defaultRoutes();
-    routes["/api/v1/evaluation/employees/{employeeId}/reviews"] = () =>
+    routes["/api/v1/evaluation/employees/{employee_id}/reviews"] = () =>
       reject(404, "not found");
     const { api } = client(routes);
     renderScreen(submitter, api);
@@ -429,7 +437,7 @@ describe("EvaluationScreen", () => {
     const { api } = client({
       ...defaultRoutes(),
       "/api/v1/evaluation/cycles": () =>
-        ok({ items: [cycle("CALIBRATION")], limit: 50, offset: 0, total: 1 }),
+        ok({ items: [cycle("CALIBRATION")], total: 1 }),
     });
     const view = render(
       <MemoryRouter initialEntries={["/console/evaluation"]}>
@@ -459,7 +467,7 @@ describe("EvaluationScreen", () => {
     expect(
       await screen.findByRole("button", { name: /2026 상반기 정기평가/ }),
     ).toHaveTextContent(text.stage.CALIBRATION);
-    resolveFirst(ok({ items: [cycle("DRAFT")], limit: 50, offset: 0, total: 1 }));
+    resolveFirst(ok({ items: [cycle("DRAFT")], total: 1 }));
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: /2026 상반기 정기평가/ }),
