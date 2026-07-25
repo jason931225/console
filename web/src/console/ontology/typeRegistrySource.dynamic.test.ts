@@ -2,6 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ConsoleApiClient } from "../../api/client";
 import {
+  canOpenTypeCard,
+  getObjectType,
+  rowCardDescriptor,
+  typeCardDescriptor,
+} from "../modules/typeRegistry";
+import type { ModuleRow } from "../modules/types";
+import {
   canonicalObjectType,
   loadCanonicalObjectType,
   resetObjectTypeRegistry,
@@ -166,5 +173,54 @@ describe("canonical dynamic object-type source", () => {
     await expect(older).rejects.toThrow("older request failed");
 
     expect(canonicalObjectType("widget", "tenant-a:session-1")?.definition.schemaVersion).toBe(8);
+  });
+
+  it("threads canonical schema version and draft/archived lifecycle values into type and instance cards", async () => {
+    const detail = {
+      ...DETAIL,
+      object_type: { ...DETAIL.object_type, lifecycle_state: "draft" as const, schema_version: 9 },
+    };
+    const instance = {
+      ...INSTANCE,
+      instance: { ...INSTANCE.instance, lifecycle_state: "archived" as const },
+    };
+    const api = {
+      GET: vi.fn()
+        .mockResolvedValueOnce({ data: detail, response: new Response() })
+        .mockResolvedValueOnce({ data: [instance], response: new Response() }),
+    } as unknown as ConsoleApiClient;
+
+    await loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
+    const type = getObjectType("widget", "tenant-a:session-1");
+    const row: ModuleRow = {
+      id: instance.instance.id,
+      code: "W-703",
+      title: instance.instance.title,
+      cells: { label: "Real label" },
+      sourceRecord: instance,
+    };
+
+    expect(typeCardDescriptor(type!)).toMatchObject({
+      objectType: { id: detail.object_type.id },
+      lifecycleState: "draft",
+      schemaVersion: 9,
+    });
+    expect(rowCardDescriptor(type, row)).toMatchObject({
+      lifecycleState: "archived",
+      schemaVersion: 9,
+    });
+  });
+
+  it("omits a type-card representation when canonical schema lifecycle is not an instance lifecycle", async () => {
+    const api = {
+      GET: vi.fn()
+        .mockResolvedValueOnce({ data: DETAIL, response: new Response() })
+        .mockResolvedValueOnce({ data: [INSTANCE], response: new Response() }),
+    } as unknown as ConsoleApiClient;
+
+    await loadCanonicalObjectType(api, "widget", "tenant-a:session-1");
+    const type = getObjectType("widget", "tenant-a:session-1");
+    expect(canOpenTypeCard(type!)).toBe(false);
+    expect(() => typeCardDescriptor(type!)).toThrow("no instance-card representation");
   });
 });

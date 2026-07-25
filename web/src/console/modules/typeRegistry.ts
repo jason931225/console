@@ -5,7 +5,7 @@
 // wire-pending: Phase C → GET /api/v1/ontology/object-types (arch §2 REST);
 // this constant becomes the fetch result, the shapes already line up.
 import { ko } from "../../i18n/ko";
-import type { ObjectCardDescriptor, ObjectCardProperty } from "../objectcard";
+import type { ObjectCardDescriptor, ObjectCardProperty, ObjectLifecycleState } from "../objectcard";
 import {
   canonicalObjectType,
 } from "../ontology/typeRegistrySource";
@@ -108,6 +108,12 @@ export interface OntObjectType {
   linkTypes: OntLinkType[];
   actions: OntActionType[];
   analytics: OntAnalytic[];
+  /** Present only after an authority-scoped canonical detail read. */
+  canonical?: {
+    id: string;
+    schemaVersion: number;
+    schemaLifecycle: "draft" | "review_pending" | "published" | "superseded" | "retired";
+  };
 }
 
 const F = "console.modules.finance";
@@ -376,6 +382,11 @@ function canonicalOntologyObjectType(
       formula: analytic.formula,
       resultType: "text",
     })),
+    canonical: {
+      id: definition.id,
+      schemaVersion: definition.schemaVersion,
+      schemaLifecycle: definition.lifecycleState,
+    },
   };
 }
 
@@ -435,8 +446,16 @@ export function detailVariantFor(prop: OntProperty | undefined): ModuleDetailFie
   }
 }
 
+/** A type card can only reuse the instance-card lifecycle UI for a real draft. */
+export function canOpenTypeCard(type: OntObjectType): boolean {
+  return !type.canonical || type.canonical.schemaLifecycle === "draft";
+}
+
 /** The object TYPE itself as an ObjectCard — the surface↔type round-trip. */
 export function typeCardDescriptor(type: OntObjectType): ObjectCardDescriptor {
+  if (!canOpenTypeCard(type)) {
+    throw new Error("canonical schema lifecycle has no instance-card representation");
+  }
   const schemaProps: ObjectCardProperty[] = type.propSchema.map((prop) => ({
     key: prop.id,
     title: resolveText(prop.nameKey),
@@ -458,10 +477,13 @@ export function typeCardDescriptor(type: OntObjectType): ObjectCardDescriptor {
     id: `object-type:${type.key}`,
     code: type.code,
     title: resolveText(type.nameKey),
-    objectType: { key: "object_type", title: resolveText("console.modules.common.typeObjectName") },
-    // Registry lifecycle is "published" (arch §3a); shown as the active card state.
-    lifecycleState: "active",
-    schemaVersion: 1,
+    objectType: {
+      key: "object_type",
+      title: resolveText("console.modules.common.typeObjectName"),
+      ...(type.canonical ? { id: type.canonical.id } : {}),
+    },
+    lifecycleState: type.canonical ? "draft" : "active",
+    schemaVersion: type.canonical?.schemaVersion ?? 1,
     properties: [...schemaProps, ...analyticProps],
     relations: type.linkTypes.map((link) => ({
       linkId: link.rel,
@@ -483,6 +505,16 @@ export function typeCardDescriptor(type: OntObjectType): ObjectCardDescriptor {
 
 function scalar(value: unknown): string | undefined {
   return typeof value === "string" || typeof value === "number" ? String(value) : undefined;
+}
+
+function lifecycleFromSourceRecord(sourceRecord: unknown): ObjectLifecycleState | undefined {
+  if (!sourceRecord || typeof sourceRecord !== "object") return undefined;
+  const instance = (sourceRecord as { instance?: unknown }).instance;
+  if (!instance || typeof instance !== "object") return undefined;
+  const lifecycle = (instance as { lifecycle_state?: unknown }).lifecycle_state;
+  return lifecycle === "draft" || lifecycle === "active" || lifecycle === "locked" || lifecycle === "archived" || lifecycle === "disposed"
+    ? lifecycle
+    : undefined;
 }
 
 /**
@@ -518,7 +550,8 @@ export function rowCardDescriptor(type: OntObjectType | undefined, row: ModuleRo
       key: type?.key ?? "object",
       title: resolveText(type?.nameKey ?? "console.modules.common.typeObjectName"),
     },
-    lifecycleState: "active",
+    lifecycleState: lifecycleFromSourceRecord(row.sourceRecord) ?? "active",
+    ...(type?.canonical ? { schemaVersion: type.canonical.schemaVersion } : {}),
     properties,
     relations: (row.linkChips ?? []).map((chip) => ({
       linkId: chip.key,
