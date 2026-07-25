@@ -58,6 +58,24 @@ test("dev/codegen audit rejects a new or path-mismatched high finding", () => {
   changed.vulnerabilities.postcss = { name: "postcss", severity: "high", nodes: ["node_modules/postcss"], via: [{ url: "https://github.com/advisories/GHSA-r28c-9q8g-f849" }] };
   assert.throws(run("dev-codegen", registry, changed), /unmatched high finding/);
 });
+test("dev/codegen audit rejects string-only transitive high findings", () => {
+  const transitive = {
+    auditReportVersion: 2,
+    metadata: { vulnerabilities: { high: 1, critical: 0 } },
+    vulnerabilities: {
+      "@openapitools/openapi-generator-cli": {
+        name: "@openapitools/openapi-generator-cli",
+        severity: "high",
+        nodes: ["node_modules/@openapitools/openapi-generator-cli"],
+        via: ["@nestjs/core"],
+      },
+    },
+  };
+  assert.throws(
+    run("dev-codegen", canonical, transitive),
+    /unmatchable high vulnerability/,
+  );
+});
 test("dev/codegen audit rejects expired and stale exceptions", () => {
   const expired = structuredClone(registry);
   expired.entries[0].expires_on = "2000-01-01";
