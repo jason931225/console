@@ -80,3 +80,27 @@ sh_test(
     deps = ["//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_schema_contract"],
     labels = ["test.integration", "resource.postgres", "needs-postgres"],
 )
+
+sh_test(
+    name = "dispatch-p1-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch)"],
+    deps = ["//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "attendance-cancel-substitution-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution)"],
+    deps = ["//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "attendance-concurrency-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency)"],
+    deps = ["//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)

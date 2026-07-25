@@ -19,10 +19,18 @@ const consoleIntegrationTipEnv = "CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}
 const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
-  "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \\",
-  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \\",
-  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
+  "//tools/buck:dispatch-p1-postgres \\",
+  "//tools/buck:attendance-cancel-substitution-postgres \\",
+  "//tools/buck:attendance-concurrency-postgres",
 ];
+const postgresWrapperContracts = [
+  ["dispatch-p1-postgres", "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch"],
+  ["attendance-cancel-substitution-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution"],
+  ["attendance-concurrency-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
+];
+const postgresWrapperLoader = "run_test_with_postgres_env.sh";
+const postgresWrapperLabels = '["test.integration", "resource.postgres", "needs-postgres"]';
+const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", import.meta.url), "utf8");
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
@@ -109,6 +117,24 @@ function requireUnconditionalRun(steps, command, job, failures) {
     failures.push(`${job} must run ${command}`);
   } else if (matchingSteps.some((step) => !isUnconditional(step))) {
     failures.push(`${job} must run ${command} unconditionally without if or continue-on-error`);
+  }
+}
+
+function requirePostgresWrapperContracts(buildFile, failures) {
+  for (const [name, binary] of postgresWrapperContracts) {
+    const block = buildFile.match(new RegExp(`sh_test\\(\\n    name = "${name}",[\\s\\S]*?\\n\\)`, "m"))?.[0];
+    if (!block) {
+      failures.push(`tools/buck/BUCK must define PostgreSQL wrapper ${name}`);
+      continue;
+    }
+    const expectedArgs = `args = ["$(location ${binary})"]`;
+    const expectedDeps = `deps = ["${binary}"]`;
+    if (!block.includes(`test = "${postgresWrapperLoader}"`)
+      || !block.includes(expectedArgs)
+      || !block.includes(expectedDeps)
+      || !block.includes(`labels = ${postgresWrapperLabels}`)) {
+      failures.push(`tools/buck/BUCK must bind PostgreSQL wrapper ${name} to the loader and exact Rust binary`);
+    }
   }
 }
 
@@ -295,7 +321,7 @@ function requireEffectiveDotSlashBootstrap(block, job, failures) {
   }
 }
 
-export function evaluateCiPreflight(workflow) {
+export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBuildFile) {
   const failures = [];
   for (const trigger of ["push", "pull_request"]) {
     if (!triggerPathEntries(workflow, trigger).includes("toolchains/**")) {
@@ -341,6 +367,8 @@ export function evaluateCiPreflight(workflow) {
     requireUnconditionalRun(steps, supportDomainUnitCommand, "support-domain-unit", failures);
     requireOnlyLockedRuns(steps, [dotSlashBootstrap, supportDomainUnitCommand], "support-domain-unit", failures);
   }
+
+  requirePostgresWrapperContracts(buckBuildFile, failures);
 
   const postgresDomainReachability = jobBlock(workflow, "postgres-domain-reachability");
   if (postgresDomainReachability) {

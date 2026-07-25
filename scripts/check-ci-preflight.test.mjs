@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { evaluateCiPreflight } from "./check-ci-preflight.mjs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", import.meta.url), "utf8");
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
 const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
 const reachabilityPreflightCommands = [
@@ -24,8 +25,8 @@ const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Ca
 
 `;
 
-function expectFailure(source, message) {
-  const { failures } = evaluateCiPreflight(source);
+function expectFailure(source, message, buckBuildFile = postgresWrapperBuildFile) {
+  const { failures } = evaluateCiPreflight(source, buckBuildFile);
   assert.ok(failures.some((failure) => failure.includes(message)), failures.join("\n"));
 }
 
@@ -520,10 +521,26 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
     expectFailure(
       workflow.replace(
+        "//tools/buck:attendance-concurrency-postgres",
         "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
-        "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution",
       ),
       "postgres-domain-reachability must run the locked PostgreSQL reachability targets",
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper dispatch-p1-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "dispatch-p1-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "dispatch-p1-postgres",\n    test = "unexpected_loader.sh",',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper attendance-concurrency-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency)"]',
+        'args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution)"]',
+      ),
     );
     expectFailure(
       workflow.replace(
