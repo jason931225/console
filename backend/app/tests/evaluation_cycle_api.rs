@@ -195,7 +195,8 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "re-open: {replay}");
 
-    // The manager's task list carries both pending review kinds for s1.
+    // Review work is relationship-scoped by kind: the assigned manager sees
+    // only MANAGER work and the linked employee sees only SELF work.
     let (status, tasks) = send(
         &router,
         "GET",
@@ -205,7 +206,19 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(tasks["items"].as_array().unwrap().len(), 2, "{tasks}");
+    assert_eq!(tasks["items"].as_array().unwrap().len(), 1, "{tasks}");
+    assert_eq!(tasks["items"][0]["kind"], "MANAGER", "{tasks}");
+    let (status, tasks) = send(
+        &router,
+        "GET",
+        "/api/v1/evaluation/my-tasks",
+        Some(&f.subject),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(tasks["items"].as_array().unwrap().len(), 1, "{tasks}");
+    assert_eq!(tasks["items"][0]["kind"], "SELF", "{tasks}");
 
     // Server-persisted draft: a refresh (fresh GET) still sees it.
     let review_path = format!("{SUBJECTS}/{s1}/reviews/manager");
@@ -290,13 +303,13 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
         "draft upsert after submit: {mutate}"
     );
 
-    // SELF review for s1 (recorded by the assigned manager — see contract note).
+    // The subject, not their manager, owns the SELF review.
     let self_path = format!("{SUBJECTS}/{s1}/reviews/self");
     let (status, _) = send(
         &router,
         "PUT",
         &self_path,
-        Some(&f.manager),
+        Some(&f.subject),
         Some(json!({"grade": "B", "evidence_links": []})),
     )
     .await;
@@ -305,7 +318,7 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
         &router,
         "POST",
         &format!("{self_path}/submit"),
-        Some(&f.manager),
+        Some(&f.subject),
         None,
     )
     .await;
@@ -391,7 +404,7 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
         &router,
         "PUT",
         &self_path,
-        Some(&f.manager),
+        Some(&f.subject),
         Some(json!({"grade": "A", "evidence_links": []})),
     )
     .await;
@@ -811,6 +824,120 @@ async fn authorization_conceals_and_isolates_without_leakage(pool: PgPool) {
     assert_eq!(unarmed, 0, "unarmed GUC must read nothing under FORCE RLS");
 }
 
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn review_identity_relationships_fail_closed_by_kind(pool: PgPool) {
+    let f = Fixture::new(&pool).await;
+    let router = f.router(&pool).await;
+
+    let (_, cycle) = send(
+        &router,
+        "POST",
+        CYCLES,
+        Some(&f.admin),
+        Some(json!({"name": "관계 검증", "kind": "REGULAR", "period_label": "2026-Q4", "due_date": "2026-12-31"})),
+    )
+    .await;
+    let cycle_id = cycle["id"].as_str().unwrap();
+    let (_, subject) = send(
+        &router,
+        "POST",
+        SUBJECTS,
+        Some(&f.admin),
+        Some(json!({"cycle_id": cycle_id, "employee_id": f.employee_a, "manager_user_id": f.manager_id})),
+    )
+    .await;
+    let subject_id = subject["id"].as_str().unwrap();
+    let (_, _) = send(
+        &router,
+        "PUT",
+        &format!("{SUBJECTS}/{subject_id}/goals"),
+        Some(&f.manager),
+        Some(json!({"goals": [{"title": "관계 검증", "metric_kind": "KPI", "target_label": "완료", "weight_pct": 100}]})),
+    )
+    .await;
+    let (status, _) = send(
+        &router,
+        "POST",
+        &format!("{CYCLES}/{cycle_id}/open"),
+        Some(&f.admin),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let self_path = format!("{SUBJECTS}/{subject_id}/reviews/self");
+    let manager_path = format!("{SUBJECTS}/{subject_id}/reviews/manager");
+    let draft = json!({"grade": "A", "evidence_links": []});
+
+    let (status, detail) = send(
+        &router,
+        "GET",
+        &format!("{SUBJECTS}/{subject_id}"),
+        Some(&f.subject),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "linked subject detail: {detail}");
+    let (status, _) = send(
+        &router,
+        "GET",
+        &format!("{SUBJECTS}/{subject_id}"),
+        Some(&f.unlinked),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // The assigned manager is linked, but cannot impersonate the subject.
+    let (status, _) = send(
+        &router,
+        "PUT",
+        &self_path,
+        Some(&f.manager),
+        Some(draft.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // The linked subject cannot impersonate their manager.
+    let (status, _) = send(
+        &router,
+        "PUT",
+        &manager_path,
+        Some(&f.subject),
+        Some(draft.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // A capability holder without users.employee_id fails closed for either kind.
+    let (status, _) = send(&router, "PUT", &self_path, Some(&f.unlinked), Some(draft)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, saved) = send(
+        &router,
+        "PUT",
+        &self_path,
+        Some(&f.subject),
+        Some(json!({"grade": "A", "evidence_links": []})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "linked subject self review: {saved}"
+    );
+    assert_eq!(saved["kind"], "SELF");
+    let (status, saved) = send(
+        &router,
+        "PUT",
+        &manager_path,
+        Some(&f.manager),
+        Some(json!({"grade": "A", "evidence_links": [{"object_kind": "KPI", "object_ref": "KPI-identity", "label": "identity proof"}]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "linked manager review: {saved}");
+    assert_eq!(saved["kind"], "MANAGER");
+}
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
@@ -819,6 +946,8 @@ struct Fixture {
     admin: String,
     admin2: String,
     manager: String,
+    subject: String,
+    unlinked: String,
     outsider: String,
     foreign_admin: String,
     admin_id: UserId,
@@ -841,14 +970,22 @@ impl Fixture {
         let branch = seed_branch(pool, org, "평가-본점").await;
         let foreign_branch = seed_branch(pool, OrgId::from_uuid(ORG_B), "격리-지점").await;
 
+        let employee_a = seed_employee(pool, org, "김평가", "품질팀", 1).await;
+        let employee_b = seed_employee(pool, org, "이성과", "생산팀", 2).await;
+        let manager_employee = seed_employee(pool, org, "평가관리자", "품질팀", 3).await;
+
         let admin_id = UserId::new();
         let admin2_id = UserId::new();
         let manager_id = UserId::new();
+        let subject_user_id = UserId::new();
+        let unlinked_id = UserId::new();
         let outsider_id = UserId::new();
         let foreign_admin_id = UserId::new();
         seed_user(pool, org, admin_id, branch, "ADMIN").await;
         seed_user(pool, org, admin2_id, branch, "ADMIN").await;
         seed_user(pool, org, manager_id, branch, "MEMBER").await;
+        seed_user(pool, org, subject_user_id, branch, "MEMBER").await;
+        seed_user(pool, org, unlinked_id, branch, "MEMBER").await;
         seed_user(pool, org, outsider_id, branch, "MEMBER").await;
         seed_user(
             pool,
@@ -859,9 +996,11 @@ impl Fixture {
         )
         .await;
         grant_feature(pool, org, manager_id, "evaluation_submit").await;
-
-        let employee_a = seed_employee(pool, org, "김평가", "품질팀", 1).await;
-        let employee_b = seed_employee(pool, org, "이성과", "생산팀", 2).await;
+        grant_feature(pool, org, subject_user_id, "evaluation_submit").await;
+        grant_feature(pool, org, unlinked_id, "evaluation_submit").await;
+        link_user_employee(pool, org, admin_id, employee_b).await;
+        link_user_employee(pool, org, manager_id, manager_employee).await;
+        link_user_employee(pool, org, subject_user_id, employee_a).await;
 
         let issuer = JwtIssuer::from_es256_pem(
             jwt_settings(),
@@ -892,6 +1031,8 @@ impl Fixture {
             admin: token(admin_id, org, vec!["ADMIN"], Vec::new()),
             admin2: token(admin2_id, org, vec!["ADMIN"], Vec::new()),
             manager: token(manager_id, org, vec!["MEMBER"], vec![branch]),
+            subject: token(subject_user_id, org, vec!["MEMBER"], vec![branch]),
+            unlinked: token(unlinked_id, org, vec!["MEMBER"], vec![branch]),
             outsider: token(outsider_id, org, vec!["MEMBER"], vec![branch]),
             foreign_admin: token(
                 foreign_admin_id,
@@ -1046,6 +1187,16 @@ async fn seed_employee(pool: &PgPool, org: OrgId, name: &str, org_unit: &str, ro
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+async fn link_user_employee(pool: &PgPool, org: OrgId, user: UserId, employee: Uuid) {
+    sqlx::query("UPDATE users SET employee_id = $1 WHERE id = $2 AND org_id = $3")
+        .bind(employee)
+        .bind(*user.as_uuid())
+        .bind(*org.as_uuid())
+        .execute(pool)
+        .await
+        .unwrap();
 }
 
 /// Grant one evaluation feature to a user through the declarative policy-role

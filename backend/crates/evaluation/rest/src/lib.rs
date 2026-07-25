@@ -391,16 +391,24 @@ async fn get_subject(
             "evaluation access requires a granted capability",
         )));
     }
+    // A Submit-only actor can inspect only a subject for which the adapter
+    // resolves a canonical employee or manager relationship. The subsequent
+    // write transaction repeats this check after locking the subject.
+    if !can_read
+        && !state
+            .store
+            .can_review_subject(principal.user_id, subject_id)
+            .await
+            .map_err(RestError::from_store)?
+    {
+        return Err(not_found_subject());
+    }
     let detail = state
         .store
         .get_subject(subject_id)
         .await
         .map_err(RestError::from_store)?
         .ok_or_else(not_found_subject)?;
-    // Deny-by-omission: a Submit-only caller sees only subjects they manage.
-    if !can_read && detail.manager_user_id != *principal.user_id.as_uuid() {
-        return Err(not_found_subject());
-    }
     Ok(Json(detail))
 }
 
@@ -598,22 +606,15 @@ fn holds_feature(principal: &Principal, feature: Feature) -> bool {
     require_feature(principal, feature).is_ok()
 }
 
-/// Per-subject review authority: the caller must hold `EvaluationSubmit` and
-/// be the subject's assigned manager, or hold `EvaluationManage`. Non-visible
-/// or non-assigned subjects answer 404 (deny-by-omission, no existence leak).
+/// Review commands require the server-issued submit capability. The adapter
+/// then resolves the actor's canonical employee identity and enforces the
+/// kind-specific relationship in the same transaction as the write.
 async fn require_review_access(
-    state: &EvaluationRestState,
+    _state: &EvaluationRestState,
     principal: &Principal,
-    subject_id: Uuid,
+    _subject_id: Uuid,
 ) -> Result<(), RestError> {
-    require_feature(principal, Feature::EvaluationSubmit)?;
-    let gate = subject_gate(state, subject_id).await?;
-    if gate.manager_user_id != principal.user_id
-        && !holds_feature(principal, Feature::EvaluationManage)
-    {
-        return Err(not_found_subject());
-    }
-    Ok(())
+    require_feature(principal, Feature::EvaluationSubmit)
 }
 
 async fn subject_gate(

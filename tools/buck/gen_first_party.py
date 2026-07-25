@@ -273,6 +273,9 @@ TEST_RESOURCE_REQUIREMENTS = {
     'mnt-evaluation-application': {
         'unit': 'none',
     },
+    'mnt-evaluation-adapter-postgres': {
+        'unit': 'none',
+    },
     'mnt-evaluation-domain': {
         'unit': 'none',
     },
