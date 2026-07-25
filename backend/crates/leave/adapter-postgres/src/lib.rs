@@ -1823,7 +1823,7 @@ fn notice_body(
                 "target": command.target_name,
                 "unused_days": unused_days,
                 "leave_period_end": period_end.to_string(),
-                "legal_basis": format!("{statute} 제1호"),
+                "legal_basis": format!("{statute}제1호"),
                 "paragraphs": [
                     format!(
                         "{}. 기준일 현재 귀하의 미사용 연차 유급휴가는 {unused_days}일입니다.",
@@ -1834,7 +1834,7 @@ fn notice_body(
                          (근로기준법 제60조제7항)."
                     ),
                     format!(
-                        "{statute} 제1호에 따라, 본 촉구를 받은 날부터 10일 이내에 \
+                        "{statute}제1호에 따라, 본 촉구를 받은 날부터 10일 이내에 \
                          미사용 휴가의 사용 시기를 정하여 서면으로 회신하여 주시기 바랍니다."
                     ),
                     "회신이 없으면 사용자가 사용 시기를 지정하여 다시 서면으로 통보합니다."
@@ -1851,12 +1851,16 @@ fn notice_body(
                 "unused_days": unused_days,
                 "leave_period_end": period_end.to_string(),
                 "designated_dates": iso_dates(designated_dates),
-                "legal_basis": format!("{statute} 제2호"),
+                "legal_basis": format!("{statute}제2호"),
                 "paragraphs": [
+                    // The notice designates the days it lists — no more. Saying
+                    // it designates "미사용 연차 {unused_days}일의 사용 시기"
+                    // while listing two dates would be a claim the payload
+                    // itself contradicts.
                     format!(
-                        "{}. 1차 촉구에 대한 회신이 없어, {statute} 제2호에 따라 사용자가 \
-                         미사용 연차 {unused_days}일의 사용 시기를 아래와 같이 지정하여 \
-                         통보합니다.",
+                        "{}. 1차 촉구에 대한 회신이 없어, {statute}제2호에 따라 사용자가 \
+                         미사용 연차 {unused_days}일 중 아래 날짜에 대하여 사용 시기를 \
+                         지정하여 통보합니다.",
                         command.target_name
                     ),
                     format!("지정 사용 시기: {}", iso_dates(designated_dates).join(", ")),
@@ -2018,12 +2022,18 @@ mod statutory_notice_tests {
             &designated,
         );
         assert_eq!(title, "연차 사용 촉진 통지 (2차 사용 시기 지정)");
-        assert!(
-            body["paragraphs"]
-                .to_string()
-                .contains("2026-12-23, 2026-12-24")
-        );
+        let text = body["paragraphs"].to_string();
+        assert!(text.contains("2026-12-23, 2026-12-24"), "{text}");
         assert_eq!(body["unused_days"], serde_json::json!("13.5"));
+        // Two designated dates against a 13.5-day balance: the notice must say
+        // it designated part of the balance, not all of it. The payload would
+        // otherwise contradict its own prose.
+        assert!(text.contains("13.5일 중"), "{text}");
+        assert!(!text.contains("13.5일의 사용 시기"), "{text}");
+        assert_eq!(
+            body["legal_basis"],
+            serde_json::json!("근로기준법 제61조제1항제2호")
+        );
     }
 
     #[test]
