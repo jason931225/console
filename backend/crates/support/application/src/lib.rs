@@ -11,6 +11,7 @@ use mnt_support_domain::{
     TicketOrigin, TicketPriority, TicketStatus,
 };
 use serde::{Deserialize, Serialize};
+use std::{future::Future, pin::Pin};
 
 // ---------------------------------------------------------------------------
 // Commands
@@ -107,19 +108,10 @@ pub struct SupportCaseCommandMetadata {
 }
 
 impl SupportCaseCommandMetadata {
-    pub fn validate(
-        &self,
-        context: &SupportCaseActorContext,
-        branch_id: BranchId,
-    ) -> Result<(), KernelError> {
+    pub fn validate_preflight(&self, context: &SupportCaseActorContext) -> Result<(), KernelError> {
         if self.actor != context.user_id {
             return Err(KernelError::forbidden(
                 "support case command actor must match authenticated principal",
-            ));
-        }
-        if !context.branch_scope.allows(branch_id) {
-            return Err(KernelError::forbidden(
-                "support case branch is outside authenticated scope",
             ));
         }
         if !(16..=200).contains(&self.idempotency_key.trim().len()) {
@@ -130,6 +122,20 @@ impl SupportCaseCommandMetadata {
         if self.fingerprint.trim().is_empty() || self.fingerprint.len() > 128 {
             return Err(KernelError::validation(
                 "support case fingerprint is required and bounded",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn validate(
+        &self,
+        context: &SupportCaseActorContext,
+        branch_id: BranchId,
+    ) -> Result<(), KernelError> {
+        self.validate_preflight(context)?;
+        if !context.branch_scope.allows(branch_id) {
+            return Err(KernelError::forbidden(
+                "support case branch is outside authenticated scope",
             ));
         }
         Ok(())
@@ -208,26 +214,37 @@ impl SupportCaseOutboxIntent {
     }
 }
 
+/// Boxed asynchronous result used by Support persistence ports. The application
+/// layer remains runtime-agnostic: adapters select the executor and database client.
+pub type SupportCaseFuture<'a, T> =
+    Pin<Box<dyn Future<Output = Result<T, KernelError>> + Send + 'a>>;
+
 /// The external bounded contexts answer only existence and same-tenant/branch
 /// visibility. They do not mutate Work Order or Evidence state from Support.
 pub trait SupportCaseLinkVerifier {
-    fn verify_work_order(
-        &mut self,
+    fn verify_work_order<'a>(
+        &'a mut self,
         scope: CaseScope,
         work_order_id: WorkOrderId,
-    ) -> Result<(), KernelError>;
-    fn verify_evidence_object(
-        &mut self,
+    ) -> SupportCaseFuture<'a, ()>;
+    fn verify_evidence_object<'a>(
+        &'a mut self,
         scope: CaseScope,
         evidence_object_id: EvidenceObjectId,
-    ) -> Result<(), KernelError>;
+    ) -> SupportCaseFuture<'a, ()>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SupportCaseCommit {
+    /// Compare-and-swap token captured from the authenticated command. The
+    /// adapter must reject a projection whose persisted version differs.
+    pub expected_version: u64,
     pub case: SupportCase,
     pub history: CaseHistoryEntry,
     pub outbox: SupportCaseOutboxIntent,
+    /// Append-only audit intent persisted in the same transaction as all other
+    /// case effects. Its trace is the command trace, never adapter-generated.
+    pub audit: AuditEvent,
     pub action: &'static str,
     pub idempotency_key: String,
     pub fingerprint: String,
@@ -243,29 +260,34 @@ pub struct SupportCaseIdempotencyReceipt {
 }
 
 /// Adapter transaction contract. `commit` must atomically write the case
-/// projection, append-only history, outbox intent, and idempotency receipt.
+/// projection, append-only history, outbox intent, audit event, and idempotency
+/// receipt using `expected_version` as its compare-and-swap token.
 pub trait SupportCaseUnitOfWork: SupportCaseLinkVerifier {
-    fn idempotency_receipt(
-        &mut self,
+    fn idempotency_receipt<'a>(
+        &'a mut self,
         scope: CaseScope,
         case_id: SupportTicketId,
         actor: UserId,
-        action: &str,
-        key: &str,
-    ) -> Result<Option<SupportCaseIdempotencyReceipt>, KernelError>;
-    fn load_case_for_update(
-        &mut self,
+        action: &'a str,
+        key: &'a str,
+    ) -> SupportCaseFuture<'a, Option<SupportCaseIdempotencyReceipt>>;
+    fn load_case_for_update<'a>(
+        &'a mut self,
         case_id: SupportTicketId,
-    ) -> Result<SupportCase, KernelError>;
-    fn commit(&mut self, commit: SupportCaseCommit) -> Result<(), KernelError>;
+    ) -> SupportCaseFuture<'a, SupportCase>;
+    fn commit<'a>(&'a mut self, commit: SupportCaseCommit) -> SupportCaseFuture<'a, ()>;
 }
 
+/// Repository transaction boundary. The higher-ranked callback ties every
+/// transaction operation to the borrow supplied by the adapter, preventing a
+/// case transaction from escaping or mixing identities across async awaits.
 pub trait SupportCaseRepository {
-    type Transaction: SupportCaseUnitOfWork;
-    fn transaction<T>(
-        &mut self,
-        operation: impl FnOnce(&mut Self::Transaction) -> Result<T, KernelError>,
-    ) -> Result<T, KernelError>;
+    type Transaction: SupportCaseUnitOfWork + Send;
+
+    fn transaction<'a, T, F>(&'a mut self, operation: F) -> SupportCaseFuture<'a, T>
+    where
+        T: Send + 'a,
+        F: for<'tx> FnOnce(&'tx mut Self::Transaction) -> SupportCaseFuture<'tx, T> + Send + 'a;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -275,92 +297,115 @@ pub struct SupportCaseMutationResult {
     pub replayed: bool,
 }
 
-pub fn request_dispatch_handoff<R: SupportCaseRepository>(
+pub async fn request_dispatch_handoff<R: SupportCaseRepository>(
     repository: &mut R,
     context: &SupportCaseActorContext,
     command: RequestDispatchHandoffCommand,
 ) -> Result<SupportCaseMutationResult, KernelError> {
-    repository.transaction(|tx| {
-        const ACTION: &str = "support.case.dispatch_handoff.request";
-        let mut case = tx.load_case_for_update(command.case_id)?;
-        validate_case_context(context, &command.metadata, &case)?;
-        if let Some(result) =
-            replayed_case_result(tx, &case, context.user_id, ACTION, &command.metadata)?
-        {
-            return Ok(result);
-        }
-        tx.verify_work_order(case.scope(), command.work_order_id)?;
-        let changed = case.request_dispatch_handoff(
-            command.metadata.expected_version,
-            command.metadata.actor,
-            command.work_order_id,
-            command.occurred_at,
-        )?;
-        if !changed {
-            return Ok(SupportCaseMutationResult {
-                case_id: case.id(),
-                version: case.version(),
-                replayed: true,
-            });
-        }
-        commit_case_change(tx, case, ACTION, command.metadata)
-    })
+    command.metadata.validate_preflight(context)?;
+    let context = context.clone();
+    repository
+        .transaction(|tx| {
+            Box::pin(async move {
+                const ACTION: &str = "support.case.dispatch_handoff.request";
+                let mut case = tx.load_case_for_update(command.case_id).await?;
+                validate_case_context(&context, &command.metadata, &case)?;
+                if let Some(result) =
+                    replayed_case_result(tx, &case, context.user_id, ACTION, &command.metadata)
+                        .await?
+                {
+                    return Ok(result);
+                }
+                tx.verify_work_order(case.scope(), command.work_order_id)
+                    .await?;
+                let changed = case.request_dispatch_handoff(
+                    command.metadata.expected_version,
+                    command.metadata.actor,
+                    command.work_order_id,
+                    command.occurred_at,
+                )?;
+                if !changed {
+                    return Ok(SupportCaseMutationResult {
+                        case_id: case.id(),
+                        version: case.version(),
+                        replayed: true,
+                    });
+                }
+                commit_case_change(tx, case, ACTION, command.metadata).await
+            })
+        })
+        .await
 }
 
-pub fn bind_case_evidence<R: SupportCaseRepository>(
+pub async fn bind_case_evidence<R: SupportCaseRepository>(
     repository: &mut R,
     context: &SupportCaseActorContext,
     command: BindCaseEvidenceCommand,
 ) -> Result<SupportCaseMutationResult, KernelError> {
-    repository.transaction(|tx| {
-        const ACTION: &str = "support.case.evidence.bind";
-        let mut case = tx.load_case_for_update(command.case_id)?;
-        validate_case_context(context, &command.metadata, &case)?;
-        if let Some(result) =
-            replayed_case_result(tx, &case, context.user_id, ACTION, &command.metadata)?
-        {
-            return Ok(result);
-        }
-        tx.verify_evidence_object(case.scope(), command.evidence_object_id)?;
-        let changed = case.bind_evidence(
-            command.metadata.expected_version,
-            command.metadata.actor,
-            command.evidence_object_id,
-            command.occurred_at,
-        )?;
-        if !changed {
-            return Ok(SupportCaseMutationResult {
-                case_id: case.id(),
-                version: case.version(),
-                replayed: true,
-            });
-        }
-        commit_case_change(tx, case, ACTION, command.metadata)
-    })
+    command.metadata.validate_preflight(context)?;
+    let context = context.clone();
+    repository
+        .transaction(|tx| {
+            Box::pin(async move {
+                const ACTION: &str = "support.case.evidence.bind";
+                let mut case = tx.load_case_for_update(command.case_id).await?;
+                validate_case_context(&context, &command.metadata, &case)?;
+                if let Some(result) =
+                    replayed_case_result(tx, &case, context.user_id, ACTION, &command.metadata)
+                        .await?
+                {
+                    return Ok(result);
+                }
+                tx.verify_evidence_object(case.scope(), command.evidence_object_id)
+                    .await?;
+                let changed = case.bind_evidence(
+                    command.metadata.expected_version,
+                    command.metadata.actor,
+                    command.evidence_object_id,
+                    command.occurred_at,
+                )?;
+                if !changed {
+                    return Ok(SupportCaseMutationResult {
+                        case_id: case.id(),
+                        version: case.version(),
+                        replayed: true,
+                    });
+                }
+                commit_case_change(tx, case, ACTION, command.metadata).await
+            })
+        })
+        .await
 }
 
-pub fn resolve_dispatch_handoff<R: SupportCaseRepository>(
+pub async fn resolve_dispatch_handoff<R: SupportCaseRepository>(
     repository: &mut R,
     context: &SupportCaseActorContext,
     command: ResolveDispatchHandoffCommand,
 ) -> Result<SupportCaseMutationResult, KernelError> {
-    repository.transaction(|tx| {
-        const ACTION: &str = "support.case.dispatch_handoff.resolve";
-        let mut case = tx.load_case_for_update(command.case_id)?;
-        validate_case_context(context, &command.metadata, &case)?;
-        if let Some(result) =
-            replayed_case_result(tx, &case, context.user_id, ACTION, &command.metadata)?
-        {
-            return Ok(result);
-        }
-        case.resolve_dispatch_handoff(
-            command.metadata.expected_version,
-            command.metadata.actor,
-            command.status,
-            command.occurred_at,
-        )?;
-        commit_case_change(tx, case, ACTION, command.metadata)
-    })
+    command.metadata.validate_preflight(context)?;
+    let context = context.clone();
+    repository
+        .transaction(|tx| {
+            Box::pin(async move {
+                const ACTION: &str = "support.case.dispatch_handoff.resolve";
+                let mut case = tx.load_case_for_update(command.case_id).await?;
+                validate_case_context(&context, &command.metadata, &case)?;
+                if let Some(result) =
+                    replayed_case_result(tx, &case, context.user_id, ACTION, &command.metadata)
+                        .await?
+                {
+                    return Ok(result);
+                }
+                case.resolve_dispatch_handoff(
+                    command.metadata.expected_version,
+                    command.metadata.actor,
+                    command.status,
+                    command.occurred_at,
+                )?;
+                commit_case_change(tx, case, ACTION, command.metadata).await
+            })
+        })
+        .await
 }
 
 fn validate_case_context(
@@ -376,20 +421,22 @@ fn validate_case_context(
     metadata.validate(context, case.scope().branch_id)
 }
 
-fn replayed_case_result<T: SupportCaseUnitOfWork>(
+async fn replayed_case_result<T: SupportCaseUnitOfWork>(
     tx: &mut T,
     case: &SupportCase,
     actor: UserId,
     action: &str,
     metadata: &SupportCaseCommandMetadata,
 ) -> Result<Option<SupportCaseMutationResult>, KernelError> {
-    let Some(receipt) = tx.idempotency_receipt(
-        case.scope(),
-        case.id(),
-        actor,
-        action,
-        &metadata.idempotency_key,
-    )?
+    let Some(receipt) = tx
+        .idempotency_receipt(
+            case.scope(),
+            case.id(),
+            actor,
+            action,
+            &metadata.idempotency_key,
+        )
+        .await?
     else {
         return Ok(None);
     };
@@ -400,7 +447,7 @@ fn replayed_case_result<T: SupportCaseUnitOfWork>(
     }))
 }
 
-fn commit_case_change<T: SupportCaseUnitOfWork>(
+async fn commit_case_change<T: SupportCaseUnitOfWork>(
     tx: &mut T,
     case: SupportCase,
     action: &'static str,
@@ -415,15 +462,28 @@ fn commit_case_change<T: SupportCaseUnitOfWork>(
         version: case.version(),
         replayed: false,
     };
+    let audit = support_audit_event(
+        action,
+        Some(metadata.actor),
+        Some(case.scope().branch_id),
+        "support_case",
+        case.id(),
+        metadata.trace.clone(),
+        history.occurred_at,
+    )?
+    .with_org(case.scope().org_id);
     tx.commit(SupportCaseCommit {
+        expected_version: metadata.expected_version,
         case,
         history,
         outbox,
+        audit,
         action,
         idempotency_key: metadata.idempotency_key,
         fingerprint: metadata.fingerprint,
         result: result.clone(),
-    })?;
+    })
+    .await?;
     Ok(result)
 }
 
@@ -647,56 +707,71 @@ mod tests {
     }
 
     impl SupportCaseLinkVerifier for RecordingTransaction {
-        fn verify_work_order(
-            &mut self,
+        fn verify_work_order<'a>(
+            &'a mut self,
             _scope: CaseScope,
             _work_order_id: WorkOrderId,
-        ) -> Result<(), KernelError> {
-            self.calls.push("verify_work_order");
-            Ok(())
+        ) -> SupportCaseFuture<'a, ()> {
+            Box::pin(async move {
+                self.calls.push("verify_work_order");
+                Ok(())
+            })
         }
 
-        fn verify_evidence_object(
-            &mut self,
+        fn verify_evidence_object<'a>(
+            &'a mut self,
             _scope: CaseScope,
             _evidence_object_id: EvidenceObjectId,
-        ) -> Result<(), KernelError> {
-            self.calls.push("verify_evidence_object");
-            Ok(())
+        ) -> SupportCaseFuture<'a, ()> {
+            Box::pin(async move {
+                self.calls.push("verify_evidence_object");
+                Ok(())
+            })
         }
     }
 
     impl SupportCaseUnitOfWork for RecordingTransaction {
-        fn idempotency_receipt(
-            &mut self,
+        fn idempotency_receipt<'a>(
+            &'a mut self,
             scope: CaseScope,
             case_id: SupportTicketId,
             actor: UserId,
-            action: &str,
-            key: &str,
-        ) -> Result<Option<SupportCaseIdempotencyReceipt>, KernelError> {
-            self.calls.push("receipt");
-            self.receipt_inputs
-                .push((scope, case_id, actor, action.to_owned(), key.to_owned()));
-            Ok(self.receipt.clone())
+            action: &'a str,
+            key: &'a str,
+        ) -> SupportCaseFuture<'a, Option<SupportCaseIdempotencyReceipt>> {
+            Box::pin(async move {
+                self.calls.push("receipt");
+                self.receipt_inputs.push((
+                    scope,
+                    case_id,
+                    actor,
+                    action.to_owned(),
+                    key.to_owned(),
+                ));
+                Ok(self.receipt.clone())
+            })
         }
 
-        fn load_case_for_update(
-            &mut self,
+        fn load_case_for_update<'a>(
+            &'a mut self,
             case_id: SupportTicketId,
-        ) -> Result<SupportCase, KernelError> {
-            self.calls.push("load");
-            if case_id != self.case.id() {
-                return Err(KernelError::not_found("support case was not found"));
-            }
-            Ok(self.case.clone())
+        ) -> SupportCaseFuture<'a, SupportCase> {
+            Box::pin(async move {
+                self.calls.push("load");
+                if case_id != self.case.id() {
+                    return Err(KernelError::not_found("support case was not found"));
+                }
+                Ok(self.case.clone())
+            })
         }
 
-        fn commit(&mut self, commit: SupportCaseCommit) -> Result<(), KernelError> {
-            self.calls.push("commit");
-            self.case = commit.case.clone();
-            self.commits.push(commit);
-            Ok(())
+        fn commit<'a>(&'a mut self, commit: SupportCaseCommit) -> SupportCaseFuture<'a, ()> {
+            Box::pin(async move {
+                self.calls.push("commit");
+                self.case = commit.case.clone();
+                self.commits.push(commit);
+                Ok(())
+            })
         }
     }
 
@@ -707,11 +782,22 @@ mod tests {
     impl SupportCaseRepository for RecordingRepository {
         type Transaction = RecordingTransaction;
 
-        fn transaction<T>(
-            &mut self,
-            operation: impl FnOnce(&mut Self::Transaction) -> Result<T, KernelError>,
-        ) -> Result<T, KernelError> {
-            operation(&mut self.tx)
+        fn transaction<'a, T, F>(&'a mut self, operation: F) -> SupportCaseFuture<'a, T>
+        where
+            T: Send + 'a,
+            F: for<'tx> FnOnce(&'tx mut Self::Transaction) -> SupportCaseFuture<'tx, T> + Send + 'a,
+        {
+            Box::pin(async move { operation(&mut self.tx).await })
+        }
+    }
+
+    fn run_ready<T>(future: impl Future<Output = T>) -> T {
+        let waker = std::task::Waker::noop();
+        let mut context = std::task::Context::from_waker(waker);
+        let mut future = std::pin::pin!(future);
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(value) => value,
+            std::task::Poll::Pending => panic!("recording test future must complete immediately"),
         }
     }
 
@@ -865,7 +951,7 @@ mod tests {
                 replayed: false,
             },
         });
-        let result = request_dispatch_handoff(
+        let result = run_ready(request_dispatch_handoff(
             &mut repository,
             &context,
             RequestDispatchHandoffCommand {
@@ -874,7 +960,7 @@ mod tests {
                 metadata: metadata.clone(),
                 occurred_at: now,
             },
-        )
+        ))
         .unwrap();
         assert!(result.replayed);
         assert_eq!(repository.tx.calls, ["load", "receipt"]);
@@ -884,14 +970,19 @@ mod tests {
         );
         assert_eq!(repository.tx.receipt_inputs[0].1, case_id);
         assert_eq!(repository.tx.receipt_inputs[0].2, context.user_id);
+        assert_eq!(
+            repository.tx.receipt_inputs[0].3,
+            "support.case.dispatch_handoff.request"
+        );
+        assert_eq!(repository.tx.receipt_inputs[0].4, metadata.idempotency_key);
     }
 
     #[test]
-    fn wrong_actor_cannot_replay_before_authorization() {
+    fn malformed_actor_is_rejected_before_opening_a_transaction() {
         let (mut repository, context, mut metadata, now) = fixture();
         metadata.actor = UserId::new();
         let case_id = repository.tx.case.id();
-        let result = request_dispatch_handoff(
+        let result = run_ready(request_dispatch_handoff(
             &mut repository,
             &context,
             RequestDispatchHandoffCommand {
@@ -900,15 +991,15 @@ mod tests {
                 metadata,
                 occurred_at: now,
             },
-        );
+        ));
         assert!(result.is_err());
-        assert_eq!(repository.tx.calls, ["load"]);
+        assert!(repository.tx.calls.is_empty());
     }
 
     #[test]
     fn wrong_case_cannot_replay_before_authorization() {
         let (mut repository, context, metadata, now) = fixture();
-        let result = request_dispatch_handoff(
+        let result = run_ready(request_dispatch_handoff(
             &mut repository,
             &context,
             RequestDispatchHandoffCommand {
@@ -917,17 +1008,25 @@ mod tests {
                 metadata,
                 occurred_at: now,
             },
-        );
+        ));
         assert!(result.is_err());
         assert_eq!(repository.tx.calls, ["load"]);
     }
 
     #[test]
-    fn wrong_branch_cannot_replay_before_authorization() {
-        let (mut repository, mut context, metadata, now) = fixture();
-        context.branch_scope = BranchScope::single(BranchId::new());
+    fn mismatched_receipt_fingerprint_conflicts_without_verification_or_persistence() {
+        let (mut repository, context, metadata, now) = fixture();
         let case_id = repository.tx.case.id();
-        let result = request_dispatch_handoff(
+        repository.tx.receipt = Some(SupportCaseIdempotencyReceipt {
+            fingerprint: "other-command-payload".to_owned(),
+            result: SupportCaseMutationResult {
+                case_id,
+                version: 0,
+                replayed: false,
+            },
+        });
+
+        let result = run_ready(request_dispatch_handoff(
             &mut repository,
             &context,
             RequestDispatchHandoffCommand {
@@ -936,7 +1035,53 @@ mod tests {
                 metadata,
                 occurred_at: now,
             },
+        ));
+
+        assert!(result.is_err());
+        assert_eq!(repository.tx.calls, ["load", "receipt"]);
+        assert!(repository.tx.commits.is_empty());
+    }
+
+    #[test]
+    fn stale_expected_version_is_rejected_without_persistence() {
+        let (mut repository, context, mut metadata, now) = fixture();
+        let case_id = repository.tx.case.id();
+        metadata.expected_version = 1;
+
+        let result = run_ready(request_dispatch_handoff(
+            &mut repository,
+            &context,
+            RequestDispatchHandoffCommand {
+                case_id,
+                work_order_id: WorkOrderId::new(),
+                metadata,
+                occurred_at: now,
+            },
+        ));
+
+        assert!(result.is_err());
+        assert_eq!(
+            repository.tx.calls,
+            ["load", "receipt", "verify_work_order"]
         );
+        assert!(repository.tx.commits.is_empty());
+    }
+
+    #[test]
+    fn wrong_branch_cannot_replay_before_authorization() {
+        let (mut repository, mut context, metadata, now) = fixture();
+        context.branch_scope = BranchScope::single(BranchId::new());
+        let case_id = repository.tx.case.id();
+        let result = run_ready(request_dispatch_handoff(
+            &mut repository,
+            &context,
+            RequestDispatchHandoffCommand {
+                case_id,
+                work_order_id: WorkOrderId::new(),
+                metadata,
+                occurred_at: now,
+            },
+        ));
         assert!(result.is_err());
         assert_eq!(repository.tx.calls, ["load"]);
     }
@@ -946,7 +1091,7 @@ mod tests {
         let (mut repository, context, metadata, now) = fixture();
         let case_id = repository.tx.case.id();
         let work_order_id = WorkOrderId::new();
-        request_dispatch_handoff(
+        run_ready(request_dispatch_handoff(
             &mut repository,
             &context,
             RequestDispatchHandoffCommand {
@@ -955,7 +1100,7 @@ mod tests {
                 metadata: metadata.clone(),
                 occurred_at: now,
             },
-        )
+        ))
         .unwrap();
         let commit = &repository.tx.commits[0];
         assert_eq!(
@@ -967,6 +1112,14 @@ mod tests {
         assert_eq!(commit.outbox.version, commit.history.version);
         assert_eq!(commit.idempotency_key, metadata.idempotency_key);
         assert_eq!(commit.result.case_id, case_id);
+        assert_eq!(commit.expected_version, metadata.expected_version);
+        assert_eq!(commit.audit.actor, Some(context.user_id));
+        assert_eq!(commit.audit.org_id, Some(context.org_id));
+        assert_eq!(
+            commit.audit.branch_id,
+            Some(repository.tx.case.scope().branch_id)
+        );
+        assert_eq!(commit.audit.trace, metadata.trace);
     }
 
     #[test]
@@ -974,7 +1127,7 @@ mod tests {
         let (mut repository, context, metadata, now) = fixture();
         let case_id = repository.tx.case.id();
         let evidence_object_id = EvidenceObjectId::new();
-        bind_case_evidence(
+        run_ready(bind_case_evidence(
             &mut repository,
             &context,
             BindCaseEvidenceCommand {
@@ -983,7 +1136,7 @@ mod tests {
                 metadata: metadata.clone(),
                 occurred_at: now,
             },
-        )
+        ))
         .unwrap();
         let commit = &repository.tx.commits[0];
         assert_eq!(
@@ -1009,7 +1162,7 @@ mod tests {
             .unwrap();
         metadata.expected_version = repository.tx.case.version();
         let case_id = repository.tx.case.id();
-        resolve_dispatch_handoff(
+        run_ready(resolve_dispatch_handoff(
             &mut repository,
             &context,
             ResolveDispatchHandoffCommand {
@@ -1018,7 +1171,7 @@ mod tests {
                 metadata: metadata.clone(),
                 occurred_at: now,
             },
-        )
+        ))
         .unwrap();
         let commit = &repository.tx.commits[0];
         assert_eq!(repository.tx.calls, ["load", "receipt", "commit"]);
