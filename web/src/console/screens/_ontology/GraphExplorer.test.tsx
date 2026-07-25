@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ko } from "../../../i18n/ko";
+import type { ConsoleApiClient } from "../../../api/client";
 import type { ObjectExplorerModel, ObjectExplorerNode } from "../../explore";
 import type { ObjectCardDescriptor } from "../../objectcard";
 import type { ObjectRuntimePort } from "../../runtime/objectRuntime";
@@ -19,6 +20,8 @@ vi.mock("../../policy", () => {
 });
 
 const G = ko.console.explore.graph;
+type RuntimeResolve = ObjectRuntimePort["resolve"];
+type RuntimeReference = Parameters<RuntimeResolve>[0];
 
 const model: ObjectExplorerModel = {
   nodes: [
@@ -50,9 +53,21 @@ function runtimeFor(
   return { authority: "ontology", resolve };
 }
 
+function inspectorApi(): ConsoleApiClient {
+  return {
+    GET: vi.fn(() =>
+      Promise.resolve({
+        data: [],
+        error: undefined,
+        response: { status: 200 },
+      }),
+    ),
+  } as unknown as ConsoleApiClient;
+}
+
 function governedProps(runtime: ObjectRuntimePort) {
   return {
-    api: {} as never,
+    api: inspectorApi(),
     runtime,
     tenantScopeKey: "tenant-a",
     authorityKey: "authority-a",
@@ -98,7 +113,7 @@ describe("GraphExplorer", () => {
   });
 
   it("resolves the focus-node inspector card on mount, before any click", async () => {
-    const resolve = vi.fn((reference) => {
+    const resolve = vi.fn((reference: RuntimeReference) => {
       const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
       return Promise.resolve(resolvedDescriptor(node));
     });
@@ -112,7 +127,7 @@ describe("GraphExplorer", () => {
   });
 
   it("resolves a second node's card when it is activated", async () => {
-    const resolve = vi.fn((reference) => {
+    const resolve = vi.fn((reference: RuntimeReference) => {
       const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
       return Promise.resolve(resolvedDescriptor(node));
     });
@@ -127,7 +142,7 @@ describe("GraphExplorer", () => {
   });
 
   it("focuses and resolves an exact host-requested instance once it is in the graph", async () => {
-    const resolve = vi.fn((reference) => {
+    const resolve = vi.fn((reference: RuntimeReference) => {
       const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
       return Promise.resolve(resolvedDescriptor(node));
     });
@@ -163,13 +178,13 @@ describe("GraphExplorer", () => {
   });
 
   it("ignores authority cancellation and permits the current resolver to retry", async () => {
-    const cancelled = vi.fn().mockResolvedValue(undefined);
+    const cancelled = vi.fn<RuntimeResolve>().mockResolvedValue(undefined);
     const view = render(<GraphExplorer model={model} {...governedProps(runtimeFor(cancelled))} />);
     await waitFor(() => {
       expect(cancelled.mock.calls.some(([reference]) => reference.id === "n1")).toBe(true);
     });
 
-    const current = vi.fn((reference) => {
+    const current = vi.fn((reference: RuntimeReference) => {
       const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
       return Promise.resolve(resolvedDescriptor(node));
     });
@@ -181,7 +196,7 @@ describe("GraphExplorer", () => {
   });
 
   it("shows the honest 조회 전용 state for a projected node and never resolves it", () => {
-    const resolve = vi.fn((reference) => {
+    const resolve = vi.fn((reference: RuntimeReference) => {
       const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
       return Promise.resolve(resolvedDescriptor(node));
     });
@@ -233,7 +248,7 @@ describe("GraphExplorer runtime authority fencing", () => {
     view.rerender(
       <GraphExplorer
         model={model}
-        api={{} as never}
+        api={inspectorApi()}
         runtime={runtimeB}
         tenantScopeKey="tenant-b"
         authorityKey="authority-b"

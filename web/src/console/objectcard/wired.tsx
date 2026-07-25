@@ -246,10 +246,23 @@ export interface GovernedObjectCardProps {
 }
 
 type RuntimeCardState =
-  | { status: "loading" }
-  | { status: "resolved"; descriptor: ObjectCardDescriptor }
-  | { status: "absent" }
-  | { status: "error" };
+  | { requestKey: string; status: "loading" }
+  | { requestKey: string; status: "resolved"; descriptor: ObjectCardDescriptor }
+  | { requestKey: string; status: "absent" }
+  | { requestKey: string; status: "error" };
+
+const identityIds = new WeakMap<object, number>();
+let nextIdentityId = 1;
+
+function identityId(value: object | null | undefined): number {
+  if (!value) return 0;
+  const known = identityIds.get(value);
+  if (known) return known;
+  const id = nextIdentityId;
+  nextIdentityId += 1;
+  identityIds.set(value, id);
+  return id;
+}
 
 /**
  * The only production ObjectCard entrypoint. It resolves a scope-bound entity
@@ -264,7 +277,6 @@ export function GovernedObjectCard({
   onInstanceChange,
   refreshEpoch,
 }: GovernedObjectCardProps) {
-  const [state, setState] = useState<RuntimeCardState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const referenceKey = [
     reference.authority,
@@ -273,31 +285,57 @@ export function GovernedObjectCard({
     reference.objectTypeId,
     reference.id,
   ].join("|");
+  const requestKey = [
+    referenceKey,
+    identityId(runtime),
+    identityId(api),
+    attempt,
+  ].join("|");
+  const [state, setState] = useState<RuntimeCardState>({
+    requestKey: "",
+    status: "loading",
+  });
+  const visibleState: RuntimeCardState =
+    state.requestKey === requestKey
+      ? state
+      : { requestKey, status: "loading" };
 
   useEffect(() => {
     const controller = new AbortController();
-    setState({ status: "loading" });
     void runtime.resolve(reference, { signal: controller.signal })
       .then((descriptor) => {
         if (controller.signal.aborted) return;
-        setState(descriptor ? { status: "resolved", descriptor } : { status: "absent" });
+        setState(
+          descriptor
+            ? { requestKey, status: "resolved", descriptor }
+            : { requestKey, status: "absent" },
+        );
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setState({ status: "error" });
+        setState({ requestKey, status: "error" });
       });
-    return () => controller.abort();
-  }, [attempt, referenceKey, reference, runtime]);
+    return () => {
+      controller.abort();
+    };
+  }, [reference, requestKey, runtime]);
 
-  if (state.status === "loading") {
+  if (visibleState.status === "loading") {
     return <section aria-busy="true" aria-label="Loading object" style={panelStyle} />;
   }
-  if (state.status === "absent") return null;
-  if (state.status === "error") {
+  if (visibleState.status === "absent") return null;
+  if (visibleState.status === "error") {
     return (
       <section role="alert" aria-label="Object unavailable" style={panelStyle}>
         <p style={reasonTextStyle}>Object details could not be loaded.</p>
-        <button type="button" data-window-control="true" onClick={() => setAttempt((value) => value + 1)} style={buttonStyle}>
+        <button
+          type="button"
+          data-window-control="true"
+          onClick={() => {
+            setAttempt((value) => value + 1);
+          }}
+          style={buttonStyle}
+        >
           Retry
         </button>
       </section>
@@ -306,7 +344,7 @@ export function GovernedObjectCard({
   return (
     <GovernedObjectCardResolved
       api={api}
-      descriptor={state.descriptor}
+      descriptor={visibleState.descriptor}
       buildActionRequest={buildActionRequest}
       onInstanceChange={onInstanceChange}
       refreshEpoch={refreshEpoch}
@@ -330,19 +368,6 @@ export interface GovernedObjectCardResolvedProps {
   }) => void;
   /** Causes a fresh acting read without replacing the card that owns a receipt. */
   refreshEpoch?: number;
-}
-
-const identityIds = new WeakMap<object, number>();
-let nextIdentityId = 1;
-
-function identityId(value: object | null | undefined): number {
-  if (!value) return 0;
-  const known = identityIds.get(value);
-  if (known) return known;
-  const id = nextIdentityId;
-  nextIdentityId += 1;
-  identityIds.set(value, id);
-  return id;
 }
 
 export function GovernedObjectCardResolved({

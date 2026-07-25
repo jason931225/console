@@ -17,28 +17,6 @@ export interface ObjectRuntimePort {
   ): Promise<ObjectCardDescriptor | undefined>;
 }
 
-function abortError(): DOMException {
-  return new DOMException("Object resolution was superseded", "AbortError");
-}
-
-async function abortable<T>(value: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) throw abortError();
-  return await new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(abortError());
-    signal.addEventListener("abort", onAbort, { once: true });
-    void value.then(
-      (result) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(result);
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
-}
-
 /**
  * Ontology adapter: all three detail reads are scoped by the authenticated API
  * client. A reference from another authority is omitted before any read, so it
@@ -57,32 +35,28 @@ export function createOntologyObjectRuntime(input: {
     authority: "ontology",
     async resolve(ref, { signal }) {
       if (
-        ref.authority !== "ontology" ||
         ref.authorityKey !== authorityKey ||
         ref.tenantScopeKey !== tenantScopeKey ||
         signal.aborted
       ) {
         return undefined;
       }
-      const [state, history, neighbors] = await abortable(
-        Promise.all([
-          getInstance(input.api, ref.id),
-          getInstanceHistory(input.api, ref.id),
-          traverseInstance(input.api, ref.id, { depth: 1 }),
-        ]),
-        signal,
-      );
-      if (
-        signal.aborted ||
-        state.instance.object_type_id !== ref.objectTypeId
-      ) {
+      const detail = input.detailForObjectType(ref.objectTypeId);
+      if (detail === undefined) return undefined;
+
+      const [state, history, neighbors] = await Promise.all([
+        getInstance(input.api, ref.id, { signal }),
+        getInstanceHistory(input.api, ref.id, { signal }),
+        traverseInstance(input.api, ref.id, { depth: 1, signal }),
+      ]);
+      if (state.instance.object_type_id !== ref.objectTypeId) {
         return undefined;
       }
       return objectCardDescriptorFrom({
         state,
         history,
         neighbors,
-        detail: input.detailForObjectType(ref.objectTypeId),
+        detail,
         linkTitleById: input.linkTitleById,
       });
     },

@@ -153,8 +153,8 @@ export type OntologyWorkspaceBodyProps = OntologyWorkspaceBodyBaseProps &
  *
  * The inspector is the pinned ObjectCard: clicking a graph node opens it as the
  * docked right panel via WindowManagerProvider. Projected instances that can't
- * be resolved (S23) degrade to their graph fields inside the card — no
- * fabricated properties.
+ * be resolved (S23) remain explicit read-only graph nodes; they do not create
+ * a degraded inspector or fabricate protected properties.
  */
 export function OntologyWorkspaceBody({
   api,
@@ -375,19 +375,31 @@ export function OntologyWorkspaceBody({
                     </ul>
                   </section>
                 ) : null}
-                <GraphExplorer
-                  api={api}
-                  model={ws.explorerModel}
-                  onFocusChange={(instanceId) => {
-                    setFocusRequest(undefined);
-                    ws.onGraphFocusChange(instanceId);
-                  }}
-                  runtime={ws.objectRuntime}
-                  tenantScopeKey={authorityPartition}
-                  authorityKey={authorityPartition}
-                  projectedTypeIds={ws.projectedTypeIds}
-                  requestedFocusId={visibleFocusRequest?.instanceId}
-                />
+                {ws.objectRuntime && authorityPartition ? (
+                  <GraphExplorer
+                    api={api}
+                    model={ws.explorerModel}
+                    onFocusChange={(instanceId) => {
+                      setFocusRequest(undefined);
+                      ws.onGraphFocusChange(instanceId);
+                    }}
+                    runtime={ws.objectRuntime}
+                    tenantScopeKey={authorityPartition}
+                    authorityKey={authorityPartition}
+                    projectedTypeIds={ws.projectedTypeIds}
+                    requestedFocusId={visibleFocusRequest?.instanceId}
+                  />
+                ) : (
+                  <GraphExplorer
+                    model={ws.explorerModel}
+                    onFocusChange={(instanceId) => {
+                      setFocusRequest(undefined);
+                      ws.onGraphFocusChange(instanceId);
+                    }}
+                    projectedTypeIds={ws.projectedTypeIds}
+                    requestedFocusId={visibleFocusRequest?.instanceId}
+                  />
+                )}
               </div>
             )}
           </WindowManagerProvider>

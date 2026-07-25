@@ -266,23 +266,37 @@ interface LegendEntry {
   count: number;
 }
 
-export interface GraphExplorerProps {
-  /** Enables the governed preflight → execute card for real workspace reads. */
-  api?: ConsoleApiClient;
+interface GraphExplorerBaseProps {
   model: ObjectExplorerModel;
   /** Parent hook loads the search-around neighbourhood for the new center. */
   onFocusChange?: (id: string) => void;
   /** Host-selected exact instance to focus after its governed graph is present. */
   requestedFocusId?: string;
-  /** Scope-bound port for the docked inspector. Omitted authority means no inspector read. */
-  runtime?: ObjectRuntimePort;
-  /** Opaque tenant partition used only for EntityRef fencing. */
-  tenantScopeKey?: string;
-  /** Opaque effective-session authority used only for EntityRef fencing. */
-  authorityKey?: string;
   /** Object-type *version* ids whose backing_kind is projected (honest 조회 전용). */
   projectedTypeIds?: ReadonlySet<string>;
 }
+
+interface GovernedGraphExplorerProps extends GraphExplorerBaseProps {
+  /** Real authenticated API used by the governed card's dynamic/action reads. */
+  api: ConsoleApiClient;
+  /** Scope-bound port for the docked inspector. */
+  runtime: ObjectRuntimePort;
+  /** Opaque tenant partition used only for EntityRef fencing. */
+  tenantScopeKey: string;
+  /** Opaque effective-session authority used only for EntityRef fencing. */
+  authorityKey: string;
+}
+
+interface ReadOnlyGraphExplorerProps extends GraphExplorerBaseProps {
+  api?: never;
+  runtime?: undefined;
+  tenantScopeKey?: never;
+  authorityKey?: never;
+}
+
+export type GraphExplorerProps =
+  | GovernedGraphExplorerProps
+  | ReadOnlyGraphExplorerProps;
 
 /**
  * The object-graph explorer: a typed node graph (code chips, type-coloured dots,
@@ -292,16 +306,14 @@ export interface GraphExplorerProps {
  * projected instances remain explicitly read-only. Pure model layer (buildObjectExplorerView +
  * layoutObjectExplorerNodes) is reused; only the rendering is new.
  */
-export function GraphExplorer({
-  api,
-  model,
-  onFocusChange,
-  requestedFocusId,
-  runtime,
-  tenantScopeKey,
-  authorityKey,
-  projectedTypeIds,
-}: GraphExplorerProps) {
+export function GraphExplorer(props: GraphExplorerProps) {
+  const {
+    model,
+    onFocusChange,
+    requestedFocusId,
+    projectedTypeIds,
+  } = props;
+  const governed = props.runtime === undefined ? undefined : props;
   const [focusId, setFocusId] = useState<string | undefined>(model.nodes[0]?.id);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [cardRefreshEpoch, setCardRefreshEpoch] = useState(0);
@@ -391,10 +403,10 @@ export function GraphExplorer({
     view.nodes.find((node) => node.id === effectiveSelectedId) ?? view.focus;
   const showProjected = isProjected(selectedNode);
   const reference =
-    runtime && tenantScopeKey && authorityKey && selectedNode.type_id
+    governed && selectedNode.type_id
       ? ontologyEntityRef({
-          tenantScopeKey,
-          authorityKey,
+          tenantScopeKey: governed.tenantScopeKey,
+          authorityKey: governed.authorityKey,
           objectTypeId: selectedNode.type_id,
           id: selectedNode.id,
           codeHint: selectedNode.code,
@@ -564,11 +576,11 @@ export function GraphExplorer({
             {G.projectedNotice}
           </div>
         ) : null}
-        {!showProjected && reference && runtime ? (
+        {!showProjected && reference && governed ? (
           <GovernedObjectCard
-            api={api as ConsoleApiClient}
+            api={governed.api}
             reference={reference}
-            runtime={runtime}
+            runtime={governed.runtime}
             onInstanceChange={refreshSelectedCard}
             refreshEpoch={cardRefreshEpoch}
           />
