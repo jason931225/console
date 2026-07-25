@@ -9,7 +9,14 @@ import { evaluateCiPreflight } from "./check-ci-preflight.mjs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
-const consolePreflightTests = "node --test scripts/check-ci-preflight.test.mjs scripts/console/route-inventory.test.mjs";
+const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
+const reachabilityPreflightCommands = [
+  "node --test scripts/console/route-inventory.test.mjs",
+  "node --test scripts/console/validate-console-truth-ledger.test.mjs",
+  "node --test scripts/console/plan-fanout.test.mjs",
+  "tools/buck/run_test_with_postgres_env.test.sh",
+  "tools/buck/test_needs_postgres.test.sh",
+];
 const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Cargo.lock consistency
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
@@ -351,21 +358,48 @@ describe("CI preflight contract", () => {
   it("requires the pinned Rust toolchain before Cargo-dependent preflight tests", () => {
     expectFailure(
       workflow.replace(preflightRustToolchainSetup, "").replace(
-        `      - name: CI preflight contract tests\n        run: ${consolePreflightTests}`,
+        `      - name: CI preflight contract tests\n        run: ${ciPreflightTests}`,
         `      - name: CI preflight contract tests
-        run: ${consolePreflightTests}
+        run: ${ciPreflightTests}
 
 ${preflightRustToolchainSetup.trimEnd()}`,
       ),
-      `preflight must install the pinned Rust toolchain before ${consolePreflightTests}`,
+      `preflight must install the pinned Rust toolchain before ${ciPreflightTests}`,
     );
   });
 
-  it("rejects a preflight that omits the route inventory regression", () => {
+  it("requires a full-history checkout for merge-tip console validation", () => {
     expectFailure(
-      workflow.replace(consolePreflightTests, "node --test scripts/check-ci-preflight.test.mjs"),
-      consolePreflightTests,
+      workflow.replace("          fetch-depth: 0\n", ""),
+      "preflight checkout must fetch full history with fetch-depth: 0",
     );
+  });
+
+  it("passes the exact integration tip to console validator and planner surfaces", () => {
+    expectFailure(
+      workflow.replace("          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}\n", ""),
+      "preflight must pass CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}",
+    );
+  });
+
+  it("rejects omission and comment-only reachability regressions", () => {
+    for (const command of reachabilityPreflightCommands) {
+      expectFailure(workflow.replace(`        run: ${command}\n`, ""), command);
+      expectFailure(workflow.replace(`        run: ${command}\n`, `        # ${command}\n`), command);
+    }
+  });
+
+  it("rejects conditional and continue-on-error reachability regressions", () => {
+    for (const command of reachabilityPreflightCommands) {
+      expectFailure(
+        workflow.replace(`        run: ${command}\n`, `        if: \${{ false }}\n        run: ${command}\n`),
+        "unconditionally",
+      );
+      expectFailure(
+        workflow.replace(`        run: ${command}\n`, `        continue-on-error: true\n        run: ${command}\n`),
+        "unconditionally",
+      );
+    }
   });
 
   it("rejects a preflight that does not run npm and Cargo lock consistency gates", () => {
@@ -447,5 +481,29 @@ ${preflightRustToolchainSetup.trimEnd()}`,
   it("rejects failure-insensitive job-level conditions on protected jobs", () => {
     expectFailure(workflow.replace("  backend:\n", "  backend:\n    if: always()\n"), "backend must not define job-level if");
     expectFailure(workflow.replace("  browser-e2e:\n", "  browser-e2e:\n    if: ${{ !cancelled() }}\n"), "browser-e2e must not define job-level if");
+  });
+
+  it("locks post-preflight Buck2 reachability targets and disallows added run surfaces", () => {
+    expectFailure(
+      workflow.replace(
+        "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit",
+        "cargo test -p mnt-support-domain",
+      ),
+      "support-domain-unit must run tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit",
+    );
+    expectFailure(
+      workflow.replace(
+        "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
+        "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution",
+      ),
+      "postgres-domain-reachability must run the locked PostgreSQL reachability targets",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Support domain unit target\n",
+        "      - name: Unexpected Cargo test\n        run: cargo test -p mnt-support-domain\n\n      - name: Support domain unit target\n",
+      ),
+      "support-domain-unit must contain only the locked ordered Buck2 run steps",
+    );
   });
 });

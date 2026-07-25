@@ -104,6 +104,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Install pinned DotSlash runtime
         run: tools/buck/install_dotslash.sh
@@ -129,10 +130,31 @@ jobs:
         run: npm run check:foundation-gates
 
       - name: Console truth-ledger admission
+        env:
+          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}
         run: npm run check:console-truth-ledger
 
       - name: CI preflight contract tests
-        run: node --test scripts/check-ci-preflight.test.mjs scripts/console/route-inventory.test.mjs
+        run: node --test scripts/check-ci-preflight.test.mjs
+
+      - name: Console route inventory regression
+        run: node --test scripts/console/route-inventory.test.mjs
+
+      - name: Console truth-ledger validator regression
+        env:
+          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}
+        run: node --test scripts/console/validate-console-truth-ledger.test.mjs
+
+      - name: Console fanout planner regression
+        env:
+          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}
+        run: node --test scripts/console/plan-fanout.test.mjs
+
+      - name: Buck PostgreSQL environment wrapper regression
+        run: tools/buck/run_test_with_postgres_env.test.sh
+
+      - name: Buck disposable PostgreSQL harness regression
+        run: tools/buck/test_needs_postgres.test.sh
 
       - name: CI preflight contract
         run: npm run check:ci-preflight
@@ -148,6 +170,72 @@ jobs:
 
       - name: Cargo.lock consistency
         run: cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null
+
+  support-domain-unit:
+    name: Support domain — Buck2 unit reachability
+    runs-on: ubuntu-latest
+    needs: preflight
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install pinned DotSlash runtime
+        run: tools/buck/install_dotslash.sh
+
+      - name: Free runner disk for support Buck2 unit
+        uses: ./.github/actions/free-runner-disk
+
+      - name: Install Rust toolchain (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.96.0"
+
+      - name: Cache Rust dependencies + build artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: backend
+
+      - name: Support domain unit target
+        run: tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit
+
+  postgres-domain-reachability:
+    name: Dispatch and attendance — disposable PostgreSQL reachability
+    runs-on: ubuntu-latest
+    needs: preflight
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install pinned DotSlash runtime
+        run: tools/buck/install_dotslash.sh
+
+      - name: Free runner disk for PostgreSQL Buck2 tests
+        uses: ./.github/actions/free-runner-disk
+
+      - name: Install Rust toolchain (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.96.0"
+
+      - name: Cache Rust dependencies + build artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: backend
+
+      - name: Serialized disposable PostgreSQL integration targets
+        run: |
+          tools/buck/test_needs_postgres.sh \
+            //backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \
+            //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \
+            //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency
 
   generated-face-authority:
     # This status is the complete generated-face closure required by policy.

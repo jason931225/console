@@ -9,12 +9,30 @@ const reindeerToolchainSource = `source ${reindeerToolchainLock}`;
 const reindeerToolchainInstall = 'rustup toolchain install "$REINDEER_TOOLCHAIN" --profile minimal';
 const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
-const consolePreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs scripts/console/route-inventory.test.mjs";
+const ciPreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs";
+const consoleRouteInventoryTestCommand = "node --test scripts/console/route-inventory.test.mjs";
+const consoleTruthLedgerTestCommand = "node --test scripts/console/validate-console-truth-ledger.test.mjs";
+const consoleFanoutPlannerTestCommand = "node --test scripts/console/plan-fanout.test.mjs";
+const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
+const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
+const consoleIntegrationTipEnv = "CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}";
+const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
+const postgresDomainReachabilityCommands = [
+  "tools/buck/test_needs_postgres.sh \\",
+  "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \\",
+  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \\",
+  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
+];
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
   "npm run check:console-truth-ledger",
-  consolePreflightTestCommand,
+  ciPreflightTestCommand,
+  consoleRouteInventoryTestCommand,
+  consoleTruthLedgerTestCommand,
+  consoleFanoutPlannerTestCommand,
+  buckPostgresEnvironmentTestCommand,
+  buckPostgresHarnessTestCommand,
   "npm run check:ci-preflight",
   "npm run check:root-workspaces",
   "npm run test:root-workspaces",
@@ -35,6 +53,8 @@ const protectedJobs = [
   "ios-app",
   "browser-e2e",
   "generated-face-authority",
+  "support-domain-unit",
+  "postgres-domain-reachability",
 ];
 
 function triggerPathEntries(workflow, trigger) {
@@ -77,6 +97,40 @@ function multilineRunCommands(step) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function hasEnvironment(step, entry) {
+  return step.includes(`        env:\n          ${entry}\n`);
+}
+
+function requireUnconditionalRun(steps, command, job, failures) {
+  const matchingSteps = steps.filter((step) => runScalar(step) === command);
+  if (matchingSteps.length === 0) {
+    failures.push(`${job} must run ${command}`);
+  } else if (matchingSteps.some((step) => !isUnconditional(step))) {
+    failures.push(`${job} must run ${command} unconditionally without if or continue-on-error`);
+  }
+}
+
+function requireUnconditionalMultilineRun(steps, commands, job, failures) {
+  const matchingSteps = steps.filter((step) => multilineRunCommands(step).join("\n") === commands.join("\n"));
+  if (matchingSteps.length === 0) {
+    failures.push(`${job} must run the locked PostgreSQL reachability targets`);
+  } else if (matchingSteps.some((step) => !isUnconditional(step))) {
+    failures.push(`${job} must run the locked PostgreSQL reachability targets unconditionally without if or continue-on-error`);
+  }
+}
+
+function runCommand(step) {
+  const scalar = runScalar(step);
+  return scalar && scalar !== "|" ? scalar : (multilineRunCommands(step).join("\n") || null);
+}
+
+function requireOnlyLockedRuns(steps, commands, job, failures) {
+  const actual = steps.map(runCommand).filter(Boolean);
+  if (actual.length !== commands.length || actual.some((command, index) => command !== commands[index])) {
+    failures.push(`${job} must contain only the locked ordered Buck2 run steps`);
+  }
 }
 
 const apiContractCaptureName = "Capture Buck2-built app for contract test";
@@ -162,7 +216,7 @@ function requirePreflightRustToolchainBefore(steps, failures) {
     return;
   }
   for (const command of [
-    consolePreflightTestCommand,
+    ciPreflightTestCommand,
     "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null",
   ]) {
     const commandIndex = steps.findIndex((step) => runScalar(step) === command);
@@ -226,15 +280,44 @@ export function evaluateCiPreflight(workflow) {
   }
 
   const preflightSteps = stepBlocks(preflight);
+  const checkout = preflightSteps.find((step) => step.startsWith("name: Checkout\n"));
+  if (!checkout || !/^        with:\n(?:          [^\n]+\n)*          fetch-depth: 0$/m.test(checkout)) {
+    failures.push("preflight checkout must fetch full history with fetch-depth: 0");
+  }
   requireDotSlashBefore(preflightSteps, "tools/buck/preflight.sh", "preflight", failures);
   requirePreflightRustToolchainBefore(preflightSteps, failures);
   for (const command of requiredPreflightCommands) {
-    const matchingSteps = preflightSteps.filter((step) => runScalar(step) === command);
-    if (matchingSteps.length === 0) {
-      failures.push(`preflight must run ${command}`);
-    } else if (matchingSteps.some((step) => !isUnconditional(step))) {
-      failures.push(`preflight must run ${command} unconditionally without if or continue-on-error`);
+    requireUnconditionalRun(preflightSteps, command, "preflight", failures);
+  }
+  for (const command of ["npm run check:console-truth-ledger", consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
+    const step = preflightSteps.find((candidate) => runScalar(candidate) === command);
+    if (!step || !hasEnvironment(step, consoleIntegrationTipEnv)) {
+      failures.push(`preflight must pass ${consoleIntegrationTipEnv} to ${command}`);
     }
+  }
+
+  const supportDomainUnit = jobBlock(workflow, "support-domain-unit");
+  if (supportDomainUnit) {
+    const steps = stepBlocks(supportDomainUnit);
+    requireUnconditionalRun(steps, supportDomainUnitCommand, "support-domain-unit", failures);
+    requireOnlyLockedRuns(steps, [dotSlashBootstrap, supportDomainUnitCommand], "support-domain-unit", failures);
+  }
+
+  const postgresDomainReachability = jobBlock(workflow, "postgres-domain-reachability");
+  if (postgresDomainReachability) {
+    const steps = stepBlocks(postgresDomainReachability);
+    requireUnconditionalMultilineRun(
+      steps,
+      postgresDomainReachabilityCommands,
+      "postgres-domain-reachability",
+      failures,
+    );
+    requireOnlyLockedRuns(
+      steps,
+      [dotSlashBootstrap, postgresDomainReachabilityCommands.join("\n")],
+      "postgres-domain-reachability",
+      failures,
+    );
   }
 
   const fullGeneratedFaces = jobBlock(workflow, "generated-face-authority");
