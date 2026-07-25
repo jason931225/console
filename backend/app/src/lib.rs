@@ -3,6 +3,7 @@
 //! This crate owns the process boundary: 12-factor configuration, health and
 //! readiness endpoints, telemetry, database dependency wiring, and graceful
 //! shutdown. Domain behavior lands in narrower crates and is composed here.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use std::collections::{BTreeSet, HashMap};
 use std::env;

@@ -20,7 +20,7 @@ use mnt_platform_auth::JwtVerifier;
 use mnt_platform_authz::Principal;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use time::{Duration, OffsetDateTime, Time, UtcOffset};
+use time::{Duration, OffsetDateTime, Time, macros::offset};
 use uuid::Uuid;
 
 pub const ME_WORKBENCH_PATH: &str = "/api/v1/me/workbench";
@@ -635,8 +635,7 @@ fn parse_instant(value: &str) -> Result<OffsetDateTime, WorkbenchError> {
 }
 
 fn default_kst_day(now: OffsetDateTime) -> WorkbenchRange {
-    let kst = UtcOffset::from_hms(9, 0, 0).expect("KST offset is valid");
-    let local_start = now.to_offset(kst).replace_time(Time::MIDNIGHT);
+    let local_start = now.to_offset(offset!(+9)).replace_time(Time::MIDNIGHT);
     WorkbenchRange {
         from: local_start,
         to: local_start + Duration::days(1),
