@@ -182,13 +182,42 @@ diff here first, or the lane owns the openapi + clients edit in its own branch.
 Migration `0184` being on the spine does not change this; the migration is not
 the wire contract.
 
+### Proposed new gate: request bodies are unguarded
+
+`openapi_drift` compares **path inventories** — every route the census
+declares must appear as a path key in the spec. Nothing compares **request or
+response body schemas** against the handler's serde types.
+
+That hole is not theoretical; this integration walked into it twice:
+
+- The equipment-3r handover body advertised `evidenceReference` as an
+  `^evidence://` string long after migration 0184 deleted the column and the
+  crate moved to `evidenceObjectId: Uuid`. Every gate stayed green while the
+  documented body was one the server rejects outright under
+  `deny_unknown_fields`.
+- `PayrollRunStatus` omitted seven statuses the FSM writes, inlined in two
+  schemas. Also green.
+
+Both were found by a human reading code, not by CI. A path-inventory gate can
+never catch either, because the path was always present and correctly spelled.
+
+Proposed: assert body schemas against handler serde types. The cheap version
+that would have caught both — for each documented operation, resolve its
+requestBody schema's `required` + property names and diff them against the
+`#[derive(Deserialize)]` struct the handler binds, failing on any name present
+on one side only. `deny_unknown_fields` makes the request direction strictly
+decidable: an undocumented field is a guaranteed 422, not a maybe. Enum
+variants are the natural second step, since that is the shape the payroll bug
+took.
+
 ### Reported, not fixed
 
-- The two `web/src/console/shell/nav.test.ts` failures in the full web suite
-  (2792/2794) predate this work: the `payroll` screen is visible to a grant the
-  test asserts must not see it. Nothing in this branch touches `nav.ts`,
-  `authz.ts`, `registry.ts` or that test — `git diff a5bccdc1 HEAD --
-  web/src/console/{shell,screens}` is empty.
+- **RESOLVED.** The two `nav.test.ts` failures were real and are now fixed:
+  the payroll nav item gated on `employee_directory_read` with a role list, so
+  a built-in branch-scoped ADMIN saw a screen `authorize_org_wide` then denied.
+  Now grant-only on `payroll_run_read`. The test was correct throughout and is
+  unchanged. I had reported these as pre-existing and not mine; the first half
+  was true, the second was not — nobody else was going to fix them.
 - `orgchange` is the only REST surface on the platform that serialises
   camelCase. The console was corrected to match the server, but the server is
   the outlier.
