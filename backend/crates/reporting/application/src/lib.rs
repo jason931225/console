@@ -7,11 +7,11 @@ use mnt_kernel_core::{BranchScope, KernelError, Timestamp, TraceContext, UserId}
 pub use mnt_reporting_domain::{
     AnalyticsDefinitionVersion, AnalyticsEvidence, AnalyticsFactQueryIdentity, AnalyticsMetric,
     AnalyticsPeriod, AnalyticsSourceDomain, DailyStatusReport, DailyStatusRow, DashboardAnalytics,
-    DashboardAnalyticsScope, ExportSourceNote, KpiMetric, KpiReport, KpiRollup, KpiRollupScope,
-    KpiScope, LaborCostAnalytics, LaborCostAnalyticsScope, MetricAvailability, MetricUnavailable,
-    OpsEquipmentStatus, OpsFunnel, OpsMechanicLoad, OpsSummary, Period, PeriodicInspectionRow,
-    RatioEvidence, SumEvidence, TrendSlot, UnavailableMetric, WorkDiaryActionEntry, WorkDiaryBody,
-    WorkDiaryDraft, WorkDiaryStatus,
+    DashboardAnalyticsScope, DurationEvidence, ExportSourceNote, KpiMetric, KpiReport, KpiRollup,
+    KpiRollupScope, KpiScope, LaborCostAnalytics, LaborCostAnalyticsScope, MetricAvailability,
+    MetricUnavailable, OpsEquipmentStatus, OpsFunnel, OpsMechanicLoad, OpsSummary, Period,
+    PeriodicInspectionRow, RatioEvidence, SumEvidence, TrendSlot, UnavailableMetric,
+    WorkDiaryActionEntry, WorkDiaryBody, WorkDiaryDraft, WorkDiaryStatus,
 };
 use time::Date;
 
@@ -52,6 +52,51 @@ pub trait KpiQueryPort {
     ) -> impl Future<Output = Result<KpiReport, KpiQueryError>> + Send + '_;
 }
 
+/// Authenticated request context supplied by the application boundary.
+///
+/// This type deliberately has no wire deserialization: identity, trace, and
+/// time are trusted only after authentication middleware has established them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnalyticsReadContext {
+    actor: UserId,
+    trace: TraceContext,
+    occurred_at: Timestamp,
+}
+
+impl AnalyticsReadContext {
+    pub fn new(
+        actor: UserId,
+        trace: TraceContext,
+        occurred_at: Timestamp,
+    ) -> Result<Self, KernelError> {
+        if occurred_at.offset() != time::UtcOffset::UTC {
+            return Err(KernelError::validation(
+                "analytics read context occurred_at must be UTC",
+            ));
+        }
+        Ok(Self {
+            actor,
+            trace,
+            occurred_at,
+        })
+    }
+
+    #[must_use]
+    pub fn actor(&self) -> UserId {
+        self.actor
+    }
+
+    #[must_use]
+    pub fn trace(&self) -> &TraceContext {
+        &self.trace
+    }
+
+    #[must_use]
+    pub fn occurred_at(&self) -> Timestamp {
+        self.occurred_at
+    }
+}
+
 /// The analytics vertical a fact capability was issued for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalyticsVertical {
@@ -71,6 +116,7 @@ pub enum AnalyticsResolvedScope {
 /// tenant-level, not branch-level.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnalyticsFactBinding {
+    actor: UserId,
     vertical: AnalyticsVertical,
     resolved_scope: AnalyticsResolvedScope,
     authorized_branch_scope: BranchScope,
@@ -79,6 +125,7 @@ pub struct AnalyticsFactBinding {
 
 impl AnalyticsFactBinding {
     pub fn new(
+        actor: UserId,
         vertical: AnalyticsVertical,
         resolved_scope: AnalyticsResolvedScope,
         authorized_branch_scope: BranchScope,
@@ -112,11 +159,17 @@ impl AnalyticsFactBinding {
         // resolve a region to its branches and verify that membership before
         // issuing a region capability. Integration tests must cover that check.
         Ok(Self {
+            actor,
             vertical,
             resolved_scope,
             authorized_branch_scope,
             fact_query_identity,
         })
+    }
+
+    #[must_use]
+    pub fn actor(&self) -> UserId {
+        self.actor
     }
 
     #[must_use]
@@ -168,6 +221,7 @@ impl AnalyticsFactCapability {
 /// accepted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnalyticsFactPageQuery {
+    context: AnalyticsReadContext,
     capability: AnalyticsFactCapability,
     binding: AnalyticsFactBinding,
     after: Option<AnalyticsFactCursor>,
@@ -176,22 +230,34 @@ pub struct AnalyticsFactPageQuery {
 
 impl AnalyticsFactPageQuery {
     pub fn new(
+        context: AnalyticsReadContext,
         capability: AnalyticsFactCapability,
         binding: AnalyticsFactBinding,
         after: Option<AnalyticsFactCursor>,
         limit: u16,
     ) -> Result<Self, KernelError> {
+        if context.actor() != binding.actor() {
+            return Err(KernelError::forbidden(
+                "analytics fact page actor does not match the issued binding",
+            ));
+        }
         if limit == 0 || limit > 100 {
             return Err(KernelError::validation(
                 "analytics fact page limit must be between 1 and 100",
             ));
         }
         Ok(Self {
+            context,
             capability,
             binding,
             after,
             limit,
         })
+    }
+
+    #[must_use]
+    pub fn context(&self) -> &AnalyticsReadContext {
+        &self.context
     }
 
     #[must_use]
@@ -276,7 +342,26 @@ pub struct AnalyticsFact {
     id: AnalyticsFactId,
     occurred_at: Timestamp,
     source_domain: AnalyticsSourceDomain,
+    kind: AnalyticsFactKind,
+    contribution: AnalyticsFactContribution,
     evidence_href: String,
+}
+
+/// The metric contribution represented by a fact. Payroll has no fact kind
+/// because gross payroll remains structurally unavailable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnalyticsFactKind {
+    CompletedWorkOrder,
+    WorkedDuration,
+    Readiness,
+}
+
+/// A fact's explicit, typed contribution to its metric.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnalyticsFactContribution {
+    Count(u64),
+    Duration(DurationEvidence),
+    Ratio(RatioEvidence),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -302,8 +387,46 @@ impl AnalyticsFact {
         id: AnalyticsFactId,
         occurred_at: Timestamp,
         source_domain: AnalyticsSourceDomain,
+        kind: AnalyticsFactKind,
+        contribution: AnalyticsFactContribution,
         evidence_href: impl Into<String>,
     ) -> Result<Self, KernelError> {
+        let source_matches_kind = matches!(
+            (source_domain, kind),
+            (
+                AnalyticsSourceDomain::WorkOrders,
+                AnalyticsFactKind::CompletedWorkOrder
+            ) | (
+                AnalyticsSourceDomain::Attendance,
+                AnalyticsFactKind::WorkedDuration
+            ) | (
+                AnalyticsSourceDomain::Readiness,
+                AnalyticsFactKind::Readiness
+            )
+        );
+        if !source_matches_kind {
+            return Err(KernelError::validation(
+                "analytics fact source domain does not match its kind",
+            ));
+        }
+        let contribution_matches_kind = matches!(
+            (kind, contribution),
+            (
+                AnalyticsFactKind::CompletedWorkOrder,
+                AnalyticsFactContribution::Count(_)
+            ) | (
+                AnalyticsFactKind::WorkedDuration,
+                AnalyticsFactContribution::Duration(_)
+            ) | (
+                AnalyticsFactKind::Readiness,
+                AnalyticsFactContribution::Ratio(_)
+            )
+        );
+        if !contribution_matches_kind {
+            return Err(KernelError::validation(
+                "analytics fact contribution does not match its kind",
+            ));
+        }
         let evidence_href = evidence_href.into();
         if evidence_href.trim().is_empty() {
             return Err(KernelError::validation(
@@ -314,6 +437,8 @@ impl AnalyticsFact {
             id,
             occurred_at,
             source_domain,
+            kind,
+            contribution,
             evidence_href,
         })
     }
@@ -329,6 +454,14 @@ impl AnalyticsFact {
     #[must_use]
     pub fn source_domain(&self) -> AnalyticsSourceDomain {
         self.source_domain
+    }
+    #[must_use]
+    pub fn kind(&self) -> AnalyticsFactKind {
+        self.kind
+    }
+    #[must_use]
+    pub fn contribution(&self) -> AnalyticsFactContribution {
+        self.contribution
     }
     #[must_use]
     pub fn evidence_href(&self) -> &str {
@@ -380,10 +513,12 @@ impl IssuedDashboardAnalytics {
 
     pub fn fact_page(
         &self,
+        context: AnalyticsReadContext,
         after: Option<AnalyticsFactCursor>,
         limit: u16,
     ) -> Result<DashboardAnalyticsFactPageQuery, KernelError> {
         DashboardAnalyticsFactPageQuery::new(AnalyticsFactPageQuery::new(
+            context,
             self.capability.clone(),
             self.binding.clone(),
             after,
@@ -429,10 +564,12 @@ impl IssuedLaborCostAnalytics {
 
     pub fn fact_page(
         &self,
+        context: AnalyticsReadContext,
         after: Option<AnalyticsFactCursor>,
         limit: u16,
     ) -> Result<LaborCostAnalyticsFactPageQuery, KernelError> {
         LaborCostAnalyticsFactPageQuery::new(AnalyticsFactPageQuery::new(
+            context,
             self.capability.clone(),
             self.binding.clone(),
             after,
@@ -478,24 +615,84 @@ pub enum AnalyticsQueryError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DashboardAnalyticsQuery {
-    pub period: AnalyticsPeriod,
-    pub requested_scope: DashboardAnalyticsScope,
-    pub branch_scope: BranchScope,
+    context: AnalyticsReadContext,
+    period: AnalyticsPeriod,
+    requested_scope: DashboardAnalyticsScope,
+    branch_scope: BranchScope,
+}
+
+impl DashboardAnalyticsQuery {
+    pub fn new(
+        context: AnalyticsReadContext,
+        period: AnalyticsPeriod,
+        requested_scope: DashboardAnalyticsScope,
+        branch_scope: BranchScope,
+    ) -> Result<Self, KernelError> {
+        if let DashboardAnalyticsScope::Branch(branch_id) = requested_scope {
+            if !branch_scope.allows(branch_id) {
+                return Err(KernelError::forbidden(
+                    "dashboard branch is outside the authorized scope",
+                ));
+            }
+        }
+        Ok(Self {
+            context,
+            period,
+            requested_scope,
+            branch_scope,
+        })
+    }
+
+    #[must_use]
+    pub fn context(&self) -> &AnalyticsReadContext {
+        &self.context
+    }
+    #[must_use]
+    pub fn period(&self) -> AnalyticsPeriod {
+        self.period
+    }
+    #[must_use]
+    pub fn requested_scope(&self) -> DashboardAnalyticsScope {
+        self.requested_scope
+    }
+    #[must_use]
+    pub fn branch_scope(&self) -> &BranchScope {
+        &self.branch_scope
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaborCostAnalyticsQuery {
-    pub period: AnalyticsPeriod,
-    pub branch_scope: BranchScope,
+    context: AnalyticsReadContext,
+    period: AnalyticsPeriod,
+    branch_scope: BranchScope,
 }
 
 impl LaborCostAnalyticsQuery {
-    pub fn new(period: AnalyticsPeriod, branch_scope: BranchScope) -> Result<Self, KernelError> {
+    pub fn new(
+        context: AnalyticsReadContext,
+        period: AnalyticsPeriod,
+        branch_scope: BranchScope,
+    ) -> Result<Self, KernelError> {
         AnalyticsPeriod::monthly(period.start(), period.end())?;
         Ok(Self {
+            context,
             period,
             branch_scope,
         })
+    }
+
+    #[must_use]
+    pub fn context(&self) -> &AnalyticsReadContext {
+        &self.context
+    }
+    #[must_use]
+    pub fn period(&self) -> AnalyticsPeriod {
+        self.period
+    }
+    #[must_use]
+    pub fn branch_scope(&self) -> &BranchScope {
+        &self.branch_scope
     }
 }
 
@@ -653,10 +850,21 @@ mod analytics_contract_tests {
     use super::*;
     use time::macros::datetime;
 
+    fn context(actor: UserId) -> AnalyticsReadContext {
+        AnalyticsReadContext::new(
+            actor,
+            TraceContext::generate(),
+            datetime!(2026-07-01 00:00 UTC),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn fact_page_requires_a_bounded_issued_capability_contract() {
+        let actor = UserId::new();
         let identity = AnalyticsFactQueryIdentity::new("dashboard-july-company").unwrap();
         let binding = AnalyticsFactBinding::new(
+            actor,
             AnalyticsVertical::Dashboard,
             AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Company),
             BranchScope::All,
@@ -666,11 +874,28 @@ mod analytics_contract_tests {
         assert!(AnalyticsFactCapability::from_adapter_issued(" ").is_err());
         let capability =
             AnalyticsFactCapability::from_adapter_issued("adapter-issued-capability").unwrap();
-        assert!(AnalyticsFactPageQuery::new(capability.clone(), binding.clone(), None, 0).is_err());
         assert!(
-            AnalyticsFactPageQuery::new(capability.clone(), binding.clone(), None, 101).is_err()
+            AnalyticsFactPageQuery::new(
+                context(actor),
+                capability.clone(),
+                binding.clone(),
+                None,
+                0
+            )
+            .is_err()
+        );
+        assert!(
+            AnalyticsFactPageQuery::new(
+                context(actor),
+                capability.clone(),
+                binding.clone(),
+                None,
+                101
+            )
+            .is_err()
         );
         let query = AnalyticsFactPageQuery::new(
+            context(actor),
             capability,
             binding,
             Some(AnalyticsFactCursor::new("opaque-next-page").unwrap()),
@@ -685,6 +910,7 @@ mod analytics_contract_tests {
         let identity = AnalyticsFactQueryIdentity::new("labor-cost-july").unwrap();
         assert!(
             AnalyticsFactBinding::new(
+                UserId::new(),
                 AnalyticsVertical::LaborCost,
                 AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Company),
                 BranchScope::All,
@@ -696,7 +922,9 @@ mod analytics_contract_tests {
 
     #[test]
     fn dashboard_fact_port_rejects_labor_cost_capability() {
+        let actor = UserId::new();
         let binding = AnalyticsFactBinding::new(
+            actor,
             AnalyticsVertical::LaborCost,
             AnalyticsResolvedScope::LaborCost(LaborCostAnalyticsScope::Company),
             BranchScope::All,
@@ -704,6 +932,7 @@ mod analytics_contract_tests {
         )
         .unwrap();
         let query = AnalyticsFactPageQuery::new(
+            context(actor),
             AnalyticsFactCapability::from_adapter_issued("labor-capability").unwrap(),
             binding,
             None,
@@ -715,10 +944,12 @@ mod analytics_contract_tests {
 
     #[test]
     fn fact_binding_keeps_cross_scope_authorization_distinct() {
+        let actor = UserId::new();
         let branch_a = mnt_kernel_core::BranchId::new();
         let branch_b = mnt_kernel_core::BranchId::new();
         let identity = AnalyticsFactQueryIdentity::new("dashboard-july-branch").unwrap();
         let issued_for_a = AnalyticsFactBinding::new(
+            actor,
             AnalyticsVertical::Dashboard,
             AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Branch(branch_a)),
             BranchScope::single(branch_a),
@@ -726,6 +957,7 @@ mod analytics_contract_tests {
         )
         .unwrap();
         let attempted_for_b = AnalyticsFactBinding::new(
+            actor,
             AnalyticsVertical::Dashboard,
             AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Branch(branch_b)),
             BranchScope::single(branch_b),
@@ -742,6 +974,7 @@ mod analytics_contract_tests {
         let branch_b = mnt_kernel_core::BranchId::new();
         assert!(
             AnalyticsFactBinding::new(
+                UserId::new(),
                 AnalyticsVertical::Dashboard,
                 AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Branch(branch_a)),
                 BranchScope::single(branch_b),
@@ -753,17 +986,159 @@ mod analytics_contract_tests {
 
     #[test]
     fn labor_cost_query_accepts_only_whole_utc_months() {
+        let actor = UserId::new();
         let month = AnalyticsPeriod::monthly(
             datetime!(2026-07-01 00:00 UTC),
             datetime!(2026-08-01 00:00 UTC),
         )
         .unwrap();
-        assert!(LaborCostAnalyticsQuery::new(month, BranchScope::All).is_ok());
+        assert!(LaborCostAnalyticsQuery::new(context(actor), month, BranchScope::All).is_ok());
         let partial = AnalyticsPeriod::new(
             datetime!(2026-07-02 00:00 UTC),
             datetime!(2026-08-01 00:00 UTC),
         )
         .unwrap();
-        assert!(LaborCostAnalyticsQuery::new(partial, BranchScope::All).is_err());
+        assert!(LaborCostAnalyticsQuery::new(context(actor), partial, BranchScope::All).is_err());
+    }
+
+    #[test]
+    fn fact_page_rejects_a_different_authenticated_actor() {
+        let actor = UserId::new();
+        let binding = AnalyticsFactBinding::new(
+            actor,
+            AnalyticsVertical::Dashboard,
+            AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Company),
+            BranchScope::All,
+            AnalyticsFactQueryIdentity::new("dashboard-july-company").unwrap(),
+        )
+        .unwrap();
+        assert!(
+            AnalyticsFactPageQuery::new(
+                context(UserId::new()),
+                AnalyticsFactCapability::from_adapter_issued("dashboard-capability").unwrap(),
+                binding,
+                None,
+                10,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn facts_require_an_explicit_kind_matched_contribution() {
+        let fact = AnalyticsFact::new(
+            AnalyticsFactId::new("attendance-1").unwrap(),
+            datetime!(2026-07-01 09:00 UTC),
+            AnalyticsSourceDomain::Attendance,
+            AnalyticsFactKind::WorkedDuration,
+            AnalyticsFactContribution::Duration(DurationEvidence::new(3_601, 1).unwrap()),
+            "/attendance/1",
+        )
+        .unwrap();
+        assert_eq!(fact.kind(), AnalyticsFactKind::WorkedDuration);
+        assert_eq!(
+            fact.contribution(),
+            AnalyticsFactContribution::Duration(DurationEvidence::new(3_601, 1).unwrap())
+        );
+        assert!(
+            AnalyticsFact::new(
+                AnalyticsFactId::new("attendance-2").unwrap(),
+                datetime!(2026-07-01 10:00 UTC),
+                AnalyticsSourceDomain::Attendance,
+                AnalyticsFactKind::WorkedDuration,
+                AnalyticsFactContribution::Count(1),
+                "/attendance/2",
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn facts_reject_payroll_and_source_kind_mismatches() {
+        let duration = AnalyticsFactContribution::Duration(DurationEvidence::new(1, 1).unwrap());
+        assert!(
+            AnalyticsFact::new(
+                AnalyticsFactId::new("work-order-valid").unwrap(),
+                datetime!(2026-07-01 09:00 UTC),
+                AnalyticsSourceDomain::WorkOrders,
+                AnalyticsFactKind::CompletedWorkOrder,
+                AnalyticsFactContribution::Count(1),
+                "/work-orders/valid",
+            )
+            .is_ok()
+        );
+        assert!(
+            AnalyticsFact::new(
+                AnalyticsFactId::new("readiness-valid").unwrap(),
+                datetime!(2026-07-01 09:00 UTC),
+                AnalyticsSourceDomain::Readiness,
+                AnalyticsFactKind::Readiness,
+                AnalyticsFactContribution::Ratio(RatioEvidence::new(1, 1).unwrap()),
+                "/readiness/valid",
+            )
+            .is_ok()
+        );
+        assert!(
+            AnalyticsFact::new(
+                AnalyticsFactId::new("payroll-1").unwrap(),
+                datetime!(2026-07-01 09:00 UTC),
+                AnalyticsSourceDomain::Payroll,
+                AnalyticsFactKind::WorkedDuration,
+                duration,
+                "/payroll/1",
+            )
+            .is_err()
+        );
+        assert!(
+            AnalyticsFact::new(
+                AnalyticsFactId::new("work-order-1").unwrap(),
+                datetime!(2026-07-01 09:00 UTC),
+                AnalyticsSourceDomain::WorkOrders,
+                AnalyticsFactKind::WorkedDuration,
+                duration,
+                "/work-orders/1",
+            )
+            .is_err()
+        );
+        assert!(
+            AnalyticsFact::new(
+                AnalyticsFactId::new("readiness-1").unwrap(),
+                datetime!(2026-07-01 09:00 UTC),
+                AnalyticsSourceDomain::Readiness,
+                AnalyticsFactKind::CompletedWorkOrder,
+                AnalyticsFactContribution::Count(1),
+                "/readiness/1",
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn dashboard_query_carries_context_and_rejects_unauthorized_branches() {
+        let actor = UserId::new();
+        let allowed = mnt_kernel_core::BranchId::new();
+        let denied = mnt_kernel_core::BranchId::new();
+        let period = AnalyticsPeriod::new(
+            datetime!(2026-07-01 00:00 UTC),
+            datetime!(2026-08-01 00:00 UTC),
+        )
+        .unwrap();
+        let query = DashboardAnalyticsQuery::new(
+            context(actor),
+            period,
+            DashboardAnalyticsScope::Branch(allowed),
+            BranchScope::single(allowed),
+        )
+        .unwrap();
+        assert_eq!(query.context().actor(), actor);
+        assert!(
+            DashboardAnalyticsQuery::new(
+                context(actor),
+                period,
+                DashboardAnalyticsScope::Branch(denied),
+                BranchScope::single(allowed),
+            )
+            .is_err()
+        );
     }
 }

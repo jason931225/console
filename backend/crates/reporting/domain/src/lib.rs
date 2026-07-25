@@ -203,6 +203,55 @@ pub struct SumEvidence {
     sum: i64,
     sample_count: u64,
 }
+
+/// Exact worked-duration evidence. Values are seconds, never rounded hours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurationEvidence {
+    total_seconds: u64,
+    pair_count: u64,
+}
+
+impl DurationEvidence {
+    /// Creates duration evidence for one or more matched attendance pairs.
+    pub fn new(total_seconds: u64, pair_count: u64) -> Result<Self, mnt_kernel_core::KernelError> {
+        if pair_count == 0 {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "duration evidence requires at least one attendance pair",
+            ));
+        }
+        Ok(Self {
+            total_seconds,
+            pair_count,
+        })
+    }
+
+    /// Combines disjoint duration evidence without losing seconds or pairs.
+    pub fn checked_add(self, other: Self) -> Result<Self, mnt_kernel_core::KernelError> {
+        let total_seconds = self
+            .total_seconds
+            .checked_add(other.total_seconds)
+            .ok_or_else(|| {
+                mnt_kernel_core::KernelError::validation("duration evidence seconds overflow")
+            })?;
+        let pair_count = self
+            .pair_count
+            .checked_add(other.pair_count)
+            .ok_or_else(|| {
+                mnt_kernel_core::KernelError::validation("duration evidence pair count overflow")
+            })?;
+        Self::new(total_seconds, pair_count)
+    }
+
+    #[must_use]
+    pub const fn total_seconds(self) -> u64 {
+        self.total_seconds
+    }
+
+    #[must_use]
+    pub const fn pair_count(self) -> u64 {
+        self.pair_count
+    }
+}
 impl SumEvidence {
     #[must_use]
     pub const fn new(sum: i64, sample_count: u64) -> Self {
@@ -388,10 +437,10 @@ pub struct LaborCostAnalytics {
     resolved_scope: LaborCostAnalyticsScope,
     period: AnalyticsPeriod,
     coverage: RatioEvidence,
-    worked_hours: AnalyticsMetric<SumEvidence>,
+    worked_duration: AnalyticsMetric<DurationEvidence>,
     readiness_rate: AnalyticsMetric<RatioEvidence>,
-    gross_payroll: AnalyticsMetric<SumEvidence>,
-    trend: Vec<TrendSlot<SumEvidence>>,
+    gross_payroll: MetricUnavailable,
+    trend: Vec<TrendSlot<DurationEvidence>>,
     observed_at: Timestamp,
 }
 
@@ -406,10 +455,10 @@ impl LaborCostAnalytics {
     pub fn new(
         period: AnalyticsPeriod,
         coverage: RatioEvidence,
-        worked_hours: AnalyticsMetric<SumEvidence>,
+        worked_duration: AnalyticsMetric<DurationEvidence>,
         readiness_rate: AnalyticsMetric<RatioEvidence>,
-        gross_payroll: AnalyticsMetric<SumEvidence>,
-        trend: Vec<TrendSlot<SumEvidence>>,
+        gross_payroll: MetricUnavailable,
+        trend: Vec<TrendSlot<DurationEvidence>>,
         observed_at: Timestamp,
     ) -> Result<Self, mnt_kernel_core::KernelError> {
         AnalyticsPeriod::monthly(period.start(), period.end())?;
@@ -418,19 +467,11 @@ impl LaborCostAnalytics {
                 "analytics observed_at must be UTC",
             ));
         }
-        if !matches!(
-            gross_payroll.availability(),
-            MetricAvailability::Unavailable(_)
-        ) {
-            return Err(mnt_kernel_core::KernelError::validation(
-                "gross payroll is unavailable until payable calculations are complete",
-            ));
-        }
         Ok(Self {
             resolved_scope: LaborCostAnalyticsScope::Company,
             period,
             coverage,
-            worked_hours,
+            worked_duration,
             readiness_rate,
             gross_payroll,
             trend,
@@ -450,19 +491,19 @@ impl LaborCostAnalytics {
         self.coverage
     }
     #[must_use]
-    pub fn worked_hours(&self) -> &AnalyticsMetric<SumEvidence> {
-        &self.worked_hours
+    pub fn worked_duration(&self) -> &AnalyticsMetric<DurationEvidence> {
+        &self.worked_duration
     }
     #[must_use]
     pub fn readiness_rate(&self) -> &AnalyticsMetric<RatioEvidence> {
         &self.readiness_rate
     }
     #[must_use]
-    pub fn gross_payroll(&self) -> &AnalyticsMetric<SumEvidence> {
+    pub fn gross_payroll(&self) -> &MetricUnavailable {
         &self.gross_payroll
     }
     #[must_use]
-    pub fn trend(&self) -> &[TrendSlot<SumEvidence>] {
+    pub fn trend(&self) -> &[TrendSlot<DurationEvidence>] {
         &self.trend
     }
     #[must_use]
@@ -1244,9 +1285,9 @@ mod tests {
         )
         .unwrap();
         let definition = AnalyticsDefinitionVersion::new("labor-cost.v1").unwrap();
-        let hours = AnalyticsMetric::new(
+        let duration = AnalyticsMetric::new(
             definition.clone(),
-            MetricAvailability::Available(SumEvidence::new(160, 4)),
+            MetricAvailability::Available(DurationEvidence::new(576_000, 4).unwrap()),
             analytics_evidence(),
         );
         let readiness = AnalyticsMetric::new(
@@ -1254,51 +1295,60 @@ mod tests {
             MetricAvailability::Available(RatioEvidence::new(3, 4).unwrap()),
             analytics_evidence(),
         );
-        let payroll = AnalyticsMetric::new(
-            definition,
-            MetricAvailability::Unavailable(
-                MetricUnavailable::new(
-                    "payable calculation is not implemented",
-                    AnalyticsSourceDomain::Payroll,
-                )
-                .unwrap(),
-            ),
-            AnalyticsEvidence::new(
-                "/reporting/facts?predicate=payroll-july",
-                AnalyticsFactQueryIdentity::new("payroll-july").unwrap(),
-                AnalyticsSourceDomain::Payroll,
-            )
-            .unwrap(),
-        );
+        let payroll = MetricUnavailable::new(
+            "payable calculation is not implemented",
+            AnalyticsSourceDomain::Payroll,
+        )
+        .unwrap();
         assert!(
             LaborCostAnalytics::new(
                 period,
                 RatioEvidence::new(4, 4).unwrap(),
-                hours.clone(),
+                duration.clone(),
                 readiness.clone(),
-                payroll,
+                payroll.clone(),
                 vec![],
                 datetime!(2026-08-01 01:00 UTC),
             )
             .is_ok()
         );
 
-        let inferred_payroll = AnalyticsMetric::new(
-            AnalyticsDefinitionVersion::new("labor-cost.v1").unwrap(),
-            MetricAvailability::Available(SumEvidence::new(1, 1)),
-            analytics_evidence(),
-        );
-        assert!(
+        assert_eq!(
             LaborCostAnalytics::new(
                 period,
                 RatioEvidence::new(4, 4).unwrap(),
-                hours,
+                duration,
                 readiness,
-                inferred_payroll,
+                payroll,
                 vec![],
                 datetime!(2026-08-01 01:00 UTC),
             )
-            .is_err()
+            .unwrap()
+            .gross_payroll()
+            .source_domain(),
+            AnalyticsSourceDomain::Payroll
+        );
+    }
+
+    #[test]
+    fn duration_evidence_keeps_seconds_exact_and_rejects_invalid_shapes_or_overflow() {
+        let first = DurationEvidence::new(3_599, 1).unwrap();
+        let second = DurationEvidence::new(2, 1).unwrap();
+        let total = first.checked_add(second).unwrap();
+        assert_eq!(total.total_seconds(), 3_601);
+        assert_eq!(total.pair_count(), 2);
+        assert!(DurationEvidence::new(0, 0).is_err());
+        assert!(
+            DurationEvidence::new(u64::MAX, 1)
+                .unwrap()
+                .checked_add(DurationEvidence::new(1, 1).unwrap())
+                .is_err()
+        );
+        assert!(
+            DurationEvidence::new(1, u64::MAX)
+                .unwrap()
+                .checked_add(DurationEvidence::new(1, 1).unwrap())
+                .is_err()
         );
     }
 }
