@@ -454,6 +454,101 @@ describe("EvaluationScreen", () => {
     });
   });
 
+  it("keeps the selected cycle gate bound to that cycle when a task from another cycle is submitted", async () => {
+    const cycleA = { ...cycle("DRAFT"), id: "cycle-a" };
+    const cycleB = {
+      ...cycle("CALIBRATION"),
+      id: "cycle-b",
+      name: "2026 하반기 정기평가",
+      period_label: "2026 H2",
+    };
+    const detailA = { ...detail("DRAFT"), ...cycleA };
+    const detailB = { ...detail("CALIBRATION"), ...cycleB, subjects: [] };
+    const taskB: EvaluationTaskSummary = {
+      ...task(),
+      subject_id: "subject-b",
+      cycle_id: cycleB.id,
+      cycle_name: cycleB.name,
+      employee_id: "emp-b",
+      employee_name: "한지민",
+    };
+    const subjectB = {
+      ...subjectDetail(),
+      id: taskB.subject_id,
+      cycle_id: cycleB.id,
+      employee_id: taskB.employee_id,
+      employee_name: taskB.employee_name,
+    };
+    const routes = defaultRoutes();
+    routes["/api/v1/evaluation/cycles"] = () => ok({ items: [cycleA, cycleB], total: 2 });
+    routes["/api/v1/evaluation/my-tasks"] = () => ok({ items: [taskB] });
+    const { impl, api } = client(routes);
+    impl.GET.mockImplementation(
+      (path: string, request?: { params?: { path?: Record<string, string> } }) => {
+        const cycleId = request?.params?.path?.cycle_id;
+        if (path === "/api/v1/evaluation/cycles/{cycle_id}") {
+          return Promise.resolve(ok(cycleId === cycleB.id ? detailB : detailA));
+        }
+        if (path === "/api/v1/evaluation/cycles/{cycle_id}/preflight") {
+          return Promise.resolve(
+            ok(cycleId === cycleB.id ? preflight() : { ...preflight(), next_transition: "open" }),
+          );
+        }
+        if (path === "/api/v1/evaluation/subjects/{subject_id}") {
+          return Promise.resolve(ok(subjectB));
+        }
+        const handler = routes[path];
+        return Promise.resolve(handler ? handler() : reject(404, `unmocked GET ${path}`));
+      },
+    );
+    impl.PUT.mockResolvedValue(
+      ok({
+        id: "review-b",
+        subject_id: taskB.subject_id,
+        kind: "MANAGER",
+        status: "DRAFT",
+        evaluator_user_id: "user-mgr",
+        evidence_links: [],
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    impl.POST.mockResolvedValue(
+      ok({
+        id: "review-b",
+        subject_id: taskB.subject_id,
+        kind: "MANAGER",
+        status: "SUBMITTED",
+        grade: "A",
+        evaluator_user_id: "user-mgr",
+        evidence_links: [],
+        submitted_at: "2026-07-25T00:00:00Z",
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+
+    renderScreen(manage, api);
+    await openCycleRow();
+    const cyclePanel = await screen.findByRole("region", { name: cycleA.name });
+    expect(within(cyclePanel).getByRole("button", { name: text.transition.OPEN })).toBeEnabled();
+
+    await userEvent.click(await screen.findByRole("button", { name: text.write }));
+    await screen.findByRole("dialog", { name: text.scorecard });
+    await userEvent.click(screen.getByRole("button", { name: "A" }));
+    await userEvent.type(screen.getByLabelText(text.evidenceRef), "KPI-H2");
+    await userEvent.type(screen.getByLabelText(text.evidenceLabel), "하반기 KPI");
+    await userEvent.click(screen.getByRole("button", { name: text.addEvidence }));
+    await userEvent.click(screen.getByRole("button", { name: text.submit }));
+
+    await waitFor(() => {
+      expect(impl.GET).toHaveBeenCalledWith(
+        "/api/v1/evaluation/cycles/{cycle_id}/preflight",
+        expect.objectContaining({ params: { path: { cycle_id: cycleB.id } } }),
+      );
+    });
+    expect(within(cyclePanel).getByRole("button", { name: text.transition.OPEN })).toBeEnabled();
+    expect(within(cyclePanel).queryByRole("button", { name: text.transition.FINALIZED })).toBeNull();
+  });
+
   it("closes the scorecard with Escape without submitting", async () => {
     const { impl, api } = client(defaultRoutes());
     renderScreen(submitter, api);

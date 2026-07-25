@@ -129,6 +129,53 @@ function useFenced<T>() {
   return { data, loading, error, run, reset, reconcile };
 }
 
+/** Fenced async resources keyed by backend identity; stale results stay per-key. */
+function useKeyedFenced<T>() {
+  const [data, setData] = useState<Readonly<Record<string, T>>>({});
+  const generations = useRef(new Map<string, number>());
+  const operations = useRef(new Map<string, AbortController>());
+  const run = useCallback(async (key: string, work: (signal: AbortSignal) => Promise<T>) => {
+    operations.current.get(key)?.abort();
+    const controller = new AbortController();
+    operations.current.set(key, controller);
+    const token = (generations.current.get(key) ?? 0) + 1;
+    generations.current.set(key, token);
+    try {
+      const next = await work(controller.signal);
+      if (generations.current.get(key) === token) {
+        setData((current) => ({ ...current, [key]: next }));
+      }
+    } catch {
+      // Detail gates remain fail-closed when the authoritative report cannot load.
+    }
+  }, []);
+  const reset = useCallback((key?: string) => {
+    if (key) {
+      generations.current.set(key, (generations.current.get(key) ?? 0) + 1);
+      operations.current.get(key)?.abort();
+      operations.current.delete(key);
+      setData((current) => {
+        const { [key]: _removed, ...remaining } = current;
+        return remaining;
+      });
+      return;
+    }
+    for (const operation of operations.current.values()) operation.abort();
+    operations.current.clear();
+    generations.current.clear();
+    setData({});
+  }, []);
+  useEffect(
+    () => () => {
+      for (const operation of operations.current.values()) operation.abort();
+      operations.current.clear();
+      generations.current.clear();
+    },
+    [],
+  );
+  return { data, run, reset };
+}
+
 type Tone = "ok" | "warn" | "danger" | "info" | "purple" | "muted" | "teal";
 
 const CHIP_CLASS: Record<Tone, string> = {
@@ -341,7 +388,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
   const cycles = useFenced<EvaluationCycleSummary[]>();
   const tasks = useFenced<EvaluationTaskSummary[]>();
   const detail = useFenced<EvaluationCycleDetail>();
-  const preflight = useFenced<EvaluationPreflightReport>();
+  const preflight = useKeyedFenced<EvaluationPreflightReport>();
   const subject = useFenced<EvaluationSubjectDetail>();
   const ledger = useFenced<EvaluationLedgerEntry[]>();
   const card = useFenced<EvaluationSubjectDetail>();
@@ -421,7 +468,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     (cycleId: string) => {
       void runDetail((signal) => evaluationApi.getCycle(cycleId, signal));
       if (capabilities.canManage) {
-        void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+        void runPreflight(cycleId, (signal) => evaluationApi.getPreflight(cycleId, signal));
       }
     },
     [runDetail, runPreflight, evaluationApi, capabilities.canManage],
@@ -475,11 +522,11 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
 
   const reconcilePreflightFromServer = useCallback(
     (cycleId: string) => {
-      // A committed mutation invalidates every local blocker/ready decision.
-      // Keep the gate hidden until the server returns a fresh preflight report.
-      resetPreflight();
+      // A committed mutation invalidates this cycle's local blocker/ready decision.
+      // Keep its gate hidden until the server returns a fresh preflight report.
+      resetPreflight(cycleId);
       if (!capabilities.canManage) return;
-      void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+      void runPreflight(cycleId, (signal) => evaluationApi.getPreflight(cycleId, signal));
     },
     [capabilities.canManage, evaluationApi, resetPreflight, runPreflight],
   );
@@ -822,7 +869,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                 data={detail.data}
                 loading={detail.loading}
                 error={detail.error}
-                preflightReport={preflight.data}
+                preflightReport={selectedCycleId ? preflight.data[selectedCycleId] : undefined}
                 onRetry={() => {
                   if (selectedCycleId) loadDetail(selectedCycleId);
                 }}
