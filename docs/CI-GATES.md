@@ -36,7 +36,10 @@ protected `S^` before it invokes any repository script. It verifies that the
 one-parent squash commit `S` is bound to the signed `C`/`T` authority train: its only
 parent is the trusted pre-merge base and its tree is exactly `T`'s tree. It emits the non-release
 `console-squash-binding-v1` receipt with `TREE_BOUND_HOLD_PRESERVED` and release
-disposition `HOLD`; it never checks out or executes `T`, `M`, or `S`. Before binding,
+disposition `HOLD`; it never checks out or executes `T` or `M`. `S` is checked out
+only as an object/tree source, `HEAD` is verified as `S`, and the job then
+hook-disabled detaches to `S^` before any repository code executes, so no repository
+code from `S` runs. Before binding,
 the protected `S^` process fetches `refs/pull/<number>/head` into a private namespace
 and requires its SHA to equal the closed-event authority-tip SHA, so a deleted PR head
 branch cannot make the signed `T` object unavailable.
