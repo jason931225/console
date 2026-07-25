@@ -52,11 +52,11 @@ Roles:
   sign-off, production access, live-account proof, or product decisions that no
   agent may infer.
 
-If only the `default` Hermes profile is available, independence still requires a
-separate Review/fix card/session and a review prompt that cites the current diff,
-head SHA, evidence, and review lenses. It is weaker than a separate human/profile
-review, so high-risk or protected-branch changes should block for human review if
-repo policy or risk demands it.
+When only one automated reviewer capability is available, independence still requires a
+separate Review/fix card or session and a review prompt that cites the current diff,
+head SHA, evidence, and review lenses. It is weaker than a separate human or
+independently provisioned reviewer, so high-risk or protected-branch changes should
+block for human review if repo policy or risk demands it.
 
 ## 2. Review/fix child card contract
 

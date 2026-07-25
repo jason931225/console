@@ -199,7 +199,6 @@ requireIncludes("docs/specs/foundation-gates.md", "Domain goals G003-G009 must n
 requireIncludes("docs/specs/foundation-gates.md", "## Gate B — workflow/approval/action lifecycle baseline", "workflow/action lifecycle gate recorded");
 requireIncludes("docs/specs/foundation-gates.md", "## Gate C — ontology/import/export/object-lineage baseline", "ontology/import/export gate recorded");
 requireIncludes("docs/specs/foundation-gates.md", "## Gate E — UI shell/design/i18n/a11y/no-text-wall baseline", "UI no-text-wall gate recorded");
-requireIncludes("docs/specs/foundation-gates.md", "omx team 6:executor", "supported team launch path recorded");
 
 for (const staleGoal of ["G011", "G012", "G013", "G014", "G015", "G016", "G017", "G018", "G019", "G020", "G021", "G022", "G023", "G024", "G025", "G026", "G027", "G028", "G029", "G030", "W1A-W1H"]) {
   requireNotIncludes("docs/specs/foundation-gates.md", staleGoal, `foundation gate has no stale ${staleGoal} plan reference`);
@@ -290,18 +289,33 @@ requireIncludes("web/src/components/shell/Sidebar.tsx", "ko.shell.mainNav", "aut
 requireIncludes("docs/benchmarks/enterprise-parity-matrix.md", "SAP Fiori", "enterprise UX benchmark matrix");
 requireIncludes("docs/benchmarks/enterprise-parity-matrix.md", "Palantir", "ontology/operations benchmark matrix");
 
-// Team launch path is verified without starting a tmux team during this gate.
-// CI runners do not have the developer-local OMX context or ~/.codex role files,
-// so this gate must rely on repo-owned evidence rather than local home state.
+// Concurrent execution authority is repository-owned: CI must not rely on a
+// developer-local profile, home-state metadata, or external orchestration runtime.
 const foundationGateText = read("docs/specs/foundation-gates.md");
-if (
-  foundationGateText.includes("omx team 6:executor")
-  && foundationGateText.includes("omx team [N:agent-type]")
-  && foundationGateText.includes("~/.codex/agents/executor.toml")
-) {
-  passes.push("omx team 6:executor launch syntax and executor role metadata recorded in repo-owned gate contract");
+for (const [path, needle, label] of [
+  ["docs/specs/foundation-gates.md", "docs/program/console-fanout-epoch-contract.md", "fan-out epoch contract recorded"],
+  ["docs/specs/foundation-gates.md", "docs/program/console-buck2-scale-playbook.md", "Buck2 scale playbook recorded"],
+  ["docs/program/console-fanout-epoch-contract.md", "Buck2 remains the only", "Buck2-only fan-out authority"],
+  ["docs/program/console-fanout-epoch-contract.md", "exact-SHA", "exact-SHA fan-out evidence"],
+  ["docs/program/console-buck2-scale-playbook.md", "bounded", "bounded fan-out evidence"],
+  ["docs/program/console-buck2-scale-playbook.md", "multi-cell", "multi-cell ownership evidence"],
+  ["docs/program/console-buck2-scale-playbook.md", "Candidate CI", "candidate CI evidence"],
+  ["docs/program/console-buck2-scale-playbook.md", "full release matrices", "release matrix evidence"],
+]) {
+  requireIncludes(path, needle, label);
+}
+for (const retiredLiteral of ["omx", "OMX", "Hermes", "hermes", "~/.codex"]) {
+  requireNotIncludes("docs/specs/foundation-gates.md", retiredLiteral, "foundation contract excludes retired local authority");
+}
+requireNotIncludes(
+  "docs/specs/review-fix-merge-governance.md",
+  "Hermes",
+  "review governance excludes retired profile authority",
+);
+if (foundationGateText.includes("Concurrent-delivery authority")) {
+  passes.push("repository-owned concurrent execution authority recorded in foundation contract");
 } else {
-  failures.push("omx team launch path evidence missing from docs/specs/foundation-gates.md");
+  failures.push("repository-owned concurrent execution authority missing from docs/specs/foundation-gates.md");
 }
 
 if (failures.length) {
