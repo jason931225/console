@@ -9,7 +9,6 @@ import {
 } from "../../ontology/analytics";
 import { GraphExplorer } from "./GraphExplorer";
 import { BulkPolicyGateProvider } from "../../policy";
-import { WindowManagerProvider } from "../../window";
 import "../../tokens.css";
 import {
   FeedbackBanner,
@@ -152,7 +151,8 @@ export type OntologyWorkspaceBodyProps = OntologyWorkspaceBodyBaseProps &
  * explorer omits it and shows the graph alone.
  *
  * The inspector is the pinned ObjectCard: clicking a graph node opens it as the
- * docked right panel via WindowManagerProvider. Projected instances that can't
+ * docked right panel through the console shell's single window host (this body
+ * mounts no provider of its own). Projected instances that can't
  * be resolved (S23) degrade to their graph fields inside the card — no
  * fabricated properties.
  */
@@ -295,12 +295,15 @@ export function OntologyWorkspaceBody({
       ) : ws.isEmpty ? (
         <WorkspaceEmpty />
       ) : (
-        <BulkPolicyGateProvider actions={ONTOLOGY_GATE_ACTIONS}>
-          <WindowManagerProvider
-            key={authorityPartition}
-            authorityPartition={authorityPartition}
-            retentionEnabled={authorityPartition !== undefined}
-          >
+        /* The window host is the console shell's, mounted once above every
+           screen body and partitioned by the same authority key. A provider
+           here forks the arrangement: two trays, two layout partitions,
+           neither of them complete. The authority `key` stays, so an
+           authority change still remounts this subtree. */
+        <BulkPolicyGateProvider
+          key={`workspace-${authorityPartition ?? "authority-unavailable"}`}
+          actions={ONTOLOGY_GATE_ACTIONS}
+        >
             {showManagerTab ? (
               <OntologyManagerScreen
                 registry={ws.registry}
@@ -388,7 +391,6 @@ export function OntologyWorkspaceBody({
                 />
               </div>
             )}
-          </WindowManagerProvider>
         </BulkPolicyGateProvider>
       )}
       <OntologyAnalyticsWorkbench

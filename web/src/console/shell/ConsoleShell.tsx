@@ -24,9 +24,29 @@ import { Topbar } from "./Topbar";
 import { isCommunicationScreen, resolveShellLayout } from "./shellLayout";
 import { markConsoleRoute } from "../rum/rum";
 import { SCREEN_REGISTRY } from "../screens/registry";
+// The window authority key is the same non-secret session/incarnation identity
+// the ontology workspace already partitioned its nested provider by, reused
+// verbatim so lifting that provider to the shell keeps one saved layout per
+// exact incarnation instead of minting a second partitioning scheme.
+import { ontologyWorkspaceAuthorityKey as sessionWindowAuthorityKey } from "../ontology/useOntologyRevisionCommitQueue";
+import { WindowManagerProvider } from "../window";
 import type { ThemeMode } from "./theme";
 
 const S = ko.console.shell;
+
+/**
+ * The window host wraps the whole console, so it has to carry the flex
+ * participation `[data-cshell-root]` would otherwise get straight from
+ * `ConsoleApp`'s column. Without this the shell collapses to content height and
+ * every inner scroll region grows the page instead.
+ */
+const WINDOW_HOST_STYLE = {
+  display: "flex",
+  flexDirection: "column",
+  flex: "1 1 auto",
+  minHeight: 0,
+  minWidth: 0,
+} as const;
 
 const loadLocalDevRoleSwitchLabel = import.meta.env.DEV
   ? () =>
@@ -64,7 +84,7 @@ export function ConsoleShell({
   onCycleTheme: () => void;
   screenKeys?: readonly MountedScreenKey[];
 }) {
-  const { session, logout } = useAuth();
+  const { session, logout, viewAs } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { grants, source: authzSource, ready: authzReady } = useConsoleAuthz();
@@ -309,12 +329,25 @@ export function ConsoleShell({
   // (navBadges.ts). Fails soft to an empty map, so the shell never depends on it.
   const badges = useNavBadges(session?.access_token);
 
+  // §4.7 window model. One host for the whole console, above every screen body,
+  // so a pinned object card and the 작업 트레이 survive screen navigation.
+  // Persistence is bound to the exact incarnation; a session without an owned
+  // one still gets the complete in-memory model (the rendered tray keeps
+  // interaction enabled) and simply never touches storage.
+  // ponytail: layout retention is browser-local; the server-persisted
+  // per-user workspace layout is the upgrade path when that contract exists.
+  const windowAuthority = useMemo(
+    () => sessionWindowAuthorityKey(session, viewAs),
+    [session, viewAs],
+  );
+  const sidebarWidth = mobile ? 0 : collapsed ? 62 : 236;
+
   // A live capability-only grant may be the sole reason this console is
   // visible. Do not redirect before its authoritative projection settles.
   if (!authzReady) return null;
   if (!activeScreen || !ScreenBody) return <Navigate to="/overview" replace />;
 
-  return (
+  const shell = (
     <div
       data-cshell-root
       data-cshell-mobile={mobile || undefined}
@@ -664,6 +697,18 @@ export function ConsoleShell({
         </div>
       )}
     </div>
+  );
+
+  return (
+    <WindowManagerProvider
+      key={windowAuthority ?? "unowned-incarnation"}
+      authorityPartition={windowAuthority}
+      retentionEnabled={windowAuthority !== undefined}
+      hostStyle={WINDOW_HOST_STYLE}
+      trayStyle={{ left: `calc(${String(sidebarWidth)}px + var(--sp-5))` }}
+    >
+      {shell}
+    </WindowManagerProvider>
   );
 }
 

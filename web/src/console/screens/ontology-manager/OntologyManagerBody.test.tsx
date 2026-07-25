@@ -18,8 +18,23 @@ import {
   instanceFixture,
   summaryFixture,
 } from "../../../test/ontologyFixtures";
+import { renderWithWindowManager } from "../../testing";
+import { WindowManagerProvider } from "../../window";
 import { useOntologyWorkspace } from "../_ontology/useOntologyWorkspace";
 import { OntologyManagerBody } from "./OntologyManagerBody";
+
+/**
+ * The window host lives in the console shell, above every screen body, keyed
+ * and partitioned by the session authority. Surfaces that open a docked object
+ * card are asserted through that composition, not through a body-local host.
+ */
+function hosted(client: ConsoleApiClient, authorityKey: string) {
+  return (
+    <WindowManagerProvider key={authorityKey} authorityPartition={authorityKey}>
+      <OntologyManagerBody api={client} authorityKey={authorityKey} />
+    </WindowManagerProvider>
+  );
+}
 
 vi.mock("../../../api/ontology");
 // Only BulkPolicyGateProvider + PolicyGated are exercised here; stub both as
@@ -333,9 +348,7 @@ describe("OntologyManagerBody", () => {
     mocked.getInstance.mockResolvedValue(instanceFixture);
     mocked.getInstanceHistory.mockResolvedValue([instanceFixture.revision]);
 
-    const view = render(
-      <OntologyManagerBody api={apiA} authorityKey="authority-a" />,
-    );
+    const view = render(hosted(apiA, "authority-a"));
     const panel = await screen.findByRole("article", { name: "계약" });
     fireEvent.click(
       within(panel).getByRole("tab", {
@@ -349,9 +362,7 @@ describe("OntologyManagerBody", () => {
       await screen.findByRole("region", { name: "NK보안 경비용역" }),
     ).toBeVisible();
 
-    view.rerender(
-      <OntologyManagerBody api={apiB} authorityKey="authority-b" />,
-    );
+    view.rerender(hosted(apiB, "authority-b"));
     expect(
       screen.queryByRole("region", { name: "NK보안 경비용역" }),
     ).not.toBeInTheDocument();
@@ -407,11 +418,18 @@ describe("OntologyManagerBody", () => {
         );
         mocked.getInstanceHistory.mockResolvedValue([instanceFixture.revision]);
 
-        const view = render(
-          <StrictMode>
-            <OntologyManagerBody api={apiA} authorityKey="authority-a" />
-          </StrictMode>,
-        );
+        // Only the manager-instance surface opens a docked object card, so only
+        // it needs the shell's window host; the graph surface resolves node
+        // descriptors through the workspace hook and stays unhosted (an
+        // authority-keyed host would remount the body and reset the tab).
+        const mount = (client: ConsoleApiClient, authorityKey: string) =>
+          surface === "manager instance" ? (
+            hosted(client, authorityKey)
+          ) : (
+            <OntologyManagerBody api={client} authorityKey={authorityKey} />
+          );
+
+        const view = render(<StrictMode>{mount(apiA, "authority-a")}</StrictMode>);
         const aPanel = await screen.findByRole("article", { name: "A 계약" });
         if (surface === "manager instance") {
           fireEvent.click(
@@ -434,11 +452,7 @@ describe("OntologyManagerBody", () => {
           );
         });
 
-        view.rerender(
-          <StrictMode>
-            <OntologyManagerBody api={apiB} authorityKey="authority-b" />
-          </StrictMode>,
-        );
+        view.rerender(<StrictMode>{mount(apiB, "authority-b")}</StrictMode>);
         if (surface === "manager instance") {
           expect(
             await screen.findByRole("article", { name: "B 계약" }),
@@ -862,14 +876,19 @@ describe("OntologyManagerBody", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getAllByText("B 계약").length).toBeGreaterThan(0);
   });
-  it("uses the same explicit nested persistence partition across API recreation", async () => {
-    const getItem = vi.spyOn(Storage.prototype, "getItem");
+  // Layout persistence is partitioned by the shell's window host, not by this
+  // body — see console/window/consoleShellWindowHost.test.tsx "partitions the
+  // saved layout by the exact session incarnation". What this body still owes is
+  // that it adds no host of its own, across API recreation and authority change.
+  it("mounts no window host of its own across API recreation or authority change", async () => {
     const apiA1 = { version: "a1" } as unknown as ConsoleApiClient;
     const apiA2 = { version: "a2" } as unknown as ConsoleApiClient;
-    const view = render(
+    const view = renderWithWindowManager(
       <OntologyManagerBody api={apiA1} authorityKey="tenant-a:incarnation-a" />,
+      { authorityPartition: "tenant-a:incarnation-a" },
     );
     await screen.findAllByText(summaryFixture.title);
+    expect(view.container.querySelectorAll("[data-window-host]")).toHaveLength(1);
 
     view.rerender(
       <OntologyManagerBody api={apiA2} authorityKey="tenant-a:incarnation-a" />,
@@ -877,20 +896,12 @@ describe("OntologyManagerBody", () => {
     await waitFor(() => {
       expect(mocked.listObjectTypes).toHaveBeenCalledWith(apiA2);
     });
+    expect(view.container.querySelectorAll("[data-window-host]")).toHaveLength(1);
 
     view.rerender(
       <OntologyManagerBody api={apiA2} authorityKey="tenant-b:incarnation-b" />,
     );
-    await waitFor(() => {
-      const keys = getItem.mock.calls.map(([key]) => key);
-      expect(keys).toContain(
-        "oyatie.console.window.layout.v2.tenant-a%3Aincarnation-a",
-      );
-      expect(keys).toContain(
-        "oyatie.console.window.layout.v2.tenant-b%3Aincarnation-b",
-      );
-      expect(keys).not.toContain("oyatie.console.window.layout");
-    });
-    getItem.mockRestore();
+    await screen.findAllByText(summaryFixture.title);
+    expect(view.container.querySelectorAll("[data-window-host]")).toHaveLength(1);
   });
 });

@@ -12,6 +12,7 @@ import {
   instanceFixture,
   summaryFixture,
 } from "../../../test/ontologyFixtures";
+import { renderWithWindowManager } from "../../testing";
 import { ExploreBody } from "./ExploreBody";
 
 vi.mock("../../../api/ontology");
@@ -253,7 +254,7 @@ describe("ExploreBody", () => {
     fireEvent.click(retry);
     expect((await screen.findAllByText("NK보안 경비용역")).length).toBeGreaterThan(0);
   });
-  it("has no render-time API identity inference and binds nested windows to the exact authority", () => {
+  it("has no render-time API identity inference and mounts no window host of its own", () => {
     const source = readFileSync(
       "src/console/screens/_ontology/OntologyWorkspaceBody.tsx",
       "utf8",
@@ -262,8 +263,10 @@ describe("ExploreBody", () => {
       /readOnlyApiAuthorityIds|nextReadOnlyApiAuthorityId/,
     );
     expect(source).not.toMatch(/new WeakMap|api as object/);
-    expect(source).toContain("authorityPartition={authorityPartition}");
-    expect(source).toContain("key={authorityPartition}");
+    // The window host is the console shell's, mounted once above every screen
+    // body (see console/window/consoleShellWindowHost.test.tsx). A provider here
+    // forked the arrangement into two trays and two layout partitions.
+    expect(source).not.toContain("WindowManagerProvider");
     expect(() =>
       renderToString(
         <ExploreBody api={api} authorityKey="tenant-a:incarnation-a" />,
@@ -271,32 +274,34 @@ describe("ExploreBody", () => {
     ).not.toThrow();
   });
 
-  it("keeps StrictMode roots with the same API isolated by explicit authority partitions", async () => {
-    const getItem = vi.spyOn(Storage.prototype, "getItem");
-    const first = render(
+  it("adds no second window host inside the shell's, in either StrictMode root", async () => {
+    const first = renderWithWindowManager(
       <StrictMode>
         <ExploreBody api={api} authorityKey="tenant-a:incarnation-a" />
       </StrictMode>,
+      { authorityPartition: "tenant-a:incarnation-a" },
     );
-    const second = render(
+    const second = renderWithWindowManager(
       <StrictMode>
         <ExploreBody api={api} authorityKey="tenant-a:incarnation-b" />
       </StrictMode>,
+      { authorityPartition: "tenant-a:incarnation-b" },
     );
 
+    // One host per root — the wrapper's — and nothing nested underneath it.
     await waitFor(() => {
-      const keys = getItem.mock.calls.map(([key]) => key);
-      expect(keys).toContain(
-        "oyatie.console.window.layout.v2.tenant-a%3Aincarnation-a",
-      );
-      expect(keys).toContain(
-        "oyatie.console.window.layout.v2.tenant-a%3Aincarnation-b",
-      );
-      expect(keys).not.toContain("oyatie.console.window.layout");
+      expect(
+        first.container.querySelectorAll("[data-window-host]"),
+      ).toHaveLength(1);
+      expect(
+        second.container.querySelectorAll("[data-window-host]"),
+      ).toHaveLength(1);
     });
+    await screen.findAllByText(instanceFixture.instance.title);
+    expect(first.container.querySelectorAll("[data-window-host]")).toHaveLength(1);
+    expect(second.container.querySelectorAll("[data-window-host]")).toHaveLength(1);
 
     first.unmount();
     second.unmount();
-    getItem.mockRestore();
   });
 });
