@@ -5602,5 +5602,18 @@
    }
   ]
  },
- "source_revision_note": "Refreshed 2026-07-25 (L-P0-EPOCH). The previous pin origin/main@8e42b9a2 was 935 commits behind while last_refreshed claimed 2026-07-25. This SHA is the wave-4 spine tip and the base HEAD of every wave-4 lane worktree. provenance.authority_base_sha and candidate.sha are deliberately NOT moved here: rebinding the candidate is the integrator's act, and the validator requires authority_base_sha to stay distinct from the candidate."
+ "source_revision_note": "Refreshed 2026-07-25 (L-P0-EPOCH). The previous pin origin/main@8e42b9a2 was 935 commits behind while last_refreshed claimed 2026-07-25. This SHA is the wave-4 spine tip and the base HEAD of every wave-4 lane worktree. provenance.authority_base_sha and candidate.sha are deliberately NOT moved here: rebinding the candidate is the integrator's act, and the validator requires authority_base_sha to stay distinct from the candidate.",
+ "hold_rule_amendment": {
+  "as_of": "2026-07-25",
+  "lane": "L-P0-EPOCH",
+  "amends": "hold_rule, the 'missing backend contracts' clause",
+  "rule": "A named missing backend contract satisfies the hold rule — rather than failing the lane closed — when it is carried as a gap-manifest entry that names (a) the anchor in the fidelity or depth register it comes from, and (b) the specific backend surface that is absent. An unnamed or unanchored gap still fails closed.",
+  "why": "Depth-first (D-0) deliberately leaves thirteen modules undeepened, and even the CRM lanes gap-manifest surfaces owned by other branches (object search fabric, ops map, customer registry reads). Without this, every lane that honestly records a missing backend surface is inadmissible, which rewards silence over disclosure — the exact inversion the truth ledger exists to prevent.",
+  "register": "docs/evidence/console/wave4/backend-blocked-index.json",
+  "limits": [
+   "Does not relax any other hold-rule clause: unassigned worktrees, overlapping ownership, empty Buck2 target sets, stale reference digests and missing jurisdiction or independent-review receipts still fail closed.",
+   "Does not permit a gap manifest in place of an implementation the lane's own scope covers. It applies only to surfaces outside the lane's declared roots.",
+   "Does not affect exposure: ADR-0025 evidence requirements are unchanged."
+  ]
+ }
 }
