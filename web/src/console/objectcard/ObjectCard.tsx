@@ -1,12 +1,20 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 
 import { ko } from "../../i18n/ko";
 import { StatusChip } from "../components";
-import { objectCardDynStrings } from "./strings";
+import { objectCardA11yStrings, objectCardDynStrings } from "./strings";
 import { PolicyGated, usePolicyGate } from "../policy";
 import {
   objDrag,
+  objectRefToken,
   parseObjectRefText,
   useObjectDrop,
   type WindowEntry,
@@ -317,6 +325,76 @@ const actingChipButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
+const dragHostButtonStyle: CSSProperties = {
+  ...actingChipButtonStyle,
+  textAlign: "inherit",
+};
+
+/**
+ * §4-20 object-reference drag host. Pointer users drag it; keyboard users
+ * activate it and get the *same* reference token on the clipboard, which
+ * `parseObjectRefText` reads back in any relation-draw input — so the drag
+ * grammar has a real keyboard path instead of a mouse-only one. Previously a
+ * bare `<span {...objDrag(...)}>`: no role, no tab stop, no activation.
+ */
+function ObjectRefDragHost({
+  code,
+  title,
+  style,
+  children,
+}: {
+  code: string;
+  title: string;
+  style: CSSProperties;
+  children: ReactNode;
+}) {
+  const A11Y = objectCardA11yStrings();
+  const [copied, setCopied] = useState<"ok" | "failed" | null>(null);
+
+  async function copyRef(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(objectRefToken(code, title));
+      setCopied("ok");
+    } catch {
+      // No clipboard permission / no secure context — say so rather than
+      // leaving an affordance that silently does nothing.
+      setCopied("failed");
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        {...objDrag(code, title)}
+        aria-label={A11Y.copyRefAria(code, title)}
+        title={ko.console.window.dragRefOf(title)}
+        data-window-control="true"
+        onClick={() => {
+          void copyRef();
+        }}
+        onBlur={() => {
+          // The chip belongs to the interaction, not the card — clear it when
+          // focus moves on rather than leaving a permanent status stuck to the
+          // header. ponytail: no timer, so nothing to leak or flake on.
+          setCopied(null);
+        }}
+        style={{ ...dragHostButtonStyle, ...style }}
+      >
+        {children}
+      </button>
+      {copied ? (
+        <StatusChip
+          tone={copied === "ok" ? "ok" : "danger"}
+          role={copied === "ok" ? "status" : "alert"}
+        >
+          {copied === "ok" ? A11Y.copied : A11Y.copyFailed}
+        </StatusChip>
+      ) : null}
+    </>
+  );
+}
+
 function Section({
   title,
   count,
@@ -392,11 +470,7 @@ function RelationList({
         const farLabel = `${relation.code} ${relation.title}`;
         return (
           <li key={relation.linkId} style={relationRowStyle}>
-            <span
-              {...objDrag(relation.code, relation.title)}
-              title={ko.console.window.dragRefOf(relation.title)}
-              style={chipRowStyle}
-            >
+            <ObjectRefDragHost code={relation.code} title={relation.title} style={chipRowStyle}>
               <StatusChip
                 tone="neutral"
                 ariaLabel={T.relations.directionAria[relation.direction]}
@@ -409,7 +483,7 @@ function RelationList({
               <span style={{ color: "var(--ink)", fontSize: "var(--text-sm)", fontWeight: "var(--fw-strong)" }}>
                 {relation.title}
               </span>
-            </span>
+            </ObjectRefDragHost>
             <PolicyGated
               action={OBJECT_CARD_ACTIONS.linkDelete}
               resource={{ kind: "object_link", id: relation.linkId }}
@@ -479,7 +553,7 @@ function RelationDraw({
   // Reuse window/objDrag drop grammar: dropping an object chip draws the edge.
   const drop = useObjectDrop({ onRef: (ref) => { void commit(ref.code); } });
 
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+  function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
     if (event.key !== "Enter") return;
     event.preventDefault();
     void commit(code);
@@ -776,9 +850,9 @@ export function ObjectCard({ descriptor, handlers }: ObjectCardProps) {
       <header style={headerStyle}>
         <div style={headerTopStyle}>
           <h2 style={titleStyle}>{descriptor.title}</h2>
-          <span {...objDrag(descriptor.code, descriptor.title)} title={ko.console.window.dragRefOf(descriptor.title)} style={monoStyle}>
+          <ObjectRefDragHost code={descriptor.code} title={descriptor.title} style={monoStyle}>
             {descriptor.code}
-          </span>
+          </ObjectRefDragHost>
         </div>
         <div style={chipRowStyle}>
           <StatusChip tone="neutral" ariaLabel={T.typeBadge(descriptor.objectType.title)}>
@@ -859,6 +933,13 @@ export function ObjectCard({ descriptor, handlers }: ObjectCardProps) {
 /**
  * §4.7-3 default open gesture: turn a descriptor into a WindowEntry so a click
  * opens the card as the right pin — `windowManager.open(objectCardWindowEntry(d, h))`.
+ *
+ * FROZEN CONTRACT (wave 4 / L-F2). Module lanes call this exact signature and
+ * import it from `console/objectcard`, never from `console/window`. The
+ * parameter list, the `WindowEntry` return shape, and the verbatim
+ * descriptor id/title/code → entry mapping are pinned by
+ * `ObjectCard.test.tsx > objectCardWindowEntry frozen contract`; changing any
+ * of them breaks every module that adopts the open gesture.
  */
 export function objectCardWindowEntry(
   descriptor: ObjectCardDescriptor,
@@ -891,31 +972,90 @@ const modalPanelStyle: CSSProperties = {
   boxShadow: "var(--shadow-pop)",
 };
 
+// ponytail: same selector/trap shape as console/dispatch/StartP1DispatchDialog.
+// Copied rather than shared because neither file owns a common a11y module;
+// upgrade path = one `console/components/useFocusTrap` when a third dialog needs it.
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
 /** Same surface as a centered modal (Escape / backdrop closes). */
 export function ObjectCardModal({
   descriptor,
   handlers,
   onClose,
 }: ObjectCardProps & { onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // Callers pass an inline arrow, so `onClose` is a new identity every render.
+  // Reading it through a ref keeps the trap effect mounted once — depending on
+  // it directly would re-run initial focus (and the focus return) per render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    const invoker = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      const panel = panelRef.current;
+      if (event.key !== "Tab" || !panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      const escaping = !(active instanceof Node) || !panel.contains(active);
+      if (event.shiftKey ? active === first || escaping : active === last || escaping) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      invoker?.focus();
+    };
+  }, []);
+
   return (
     <div
       className="console"
       role="dialog"
       aria-modal="true"
       aria-label={T.dialog(descriptor.title)}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
-      }}
       onClick={onClose}
       style={modalOverlayStyle}
     >
-      <div style={modalPanelStyle} onClick={(event) => { event.stopPropagation(); }}>
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        style={modalPanelStyle}
+        onClick={(event) => { event.stopPropagation(); }}
+      >
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "var(--sp-3) var(--sp-3) 0" }}>
           <button
             type="button"
+            ref={closeRef}
             data-window-control="true"
             aria-label={ko.console.window.close}
-            autoFocus
             onClick={onClose}
             style={buttonStyle}
           >
