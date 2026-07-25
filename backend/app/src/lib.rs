@@ -44,6 +44,8 @@ use mnt_docs_adapter_postgres::PgDocsStore;
 use mnt_docs_rest::DocsRestState;
 use mnt_equipment_adapter_postgres::PgEquipment3rStore;
 use mnt_equipment_rest::EquipmentRestState;
+use mnt_evaluation_adapter_postgres::PgEvaluationStore;
+use mnt_evaluation_rest::EvaluationRestState;
 use mnt_facilities_rest::FacilitiesRestState;
 use mnt_finance_gl_adapter_postgres::PgVoucherStore;
 use mnt_finance_gl_rest::FinanceGlRestState;
@@ -247,6 +249,10 @@ pub const CONFIGURED_ROUTE_SURFACES: &[ConfiguredRouteSurface] = &[
     ConfiguredRouteSurface {
         name: "financial",
         paths: mnt_financial_rest::FINANCIAL_ROUTE_PATHS,
+    },
+    ConfiguredRouteSurface {
+        name: "evaluation",
+        paths: mnt_evaluation_rest::EVALUATION_ROUTE_PATHS,
     },
     ConfiguredRouteSurface {
         name: "inspection",
@@ -2893,6 +2899,7 @@ pub fn build_router(state: AppState) -> Router {
             let todo_store = PgTodoStore::new(pool.clone());
             let registry_store = PgRegistryStore::new(pool.clone());
             let financial_store = PgFinancialStore::new(pool.clone());
+            let evaluation_store = PgEvaluationStore::new(pool.clone());
             let inspection_store = PgInspectionStore::new(pool.clone());
             let compliance_store = PgComplianceStore::new(pool.clone());
             let integrity_store = PgIntegrityStore::new(pool.clone());
@@ -3020,6 +3027,10 @@ pub fn build_router(state: AppState) -> Router {
                 }))
                 .merge(mnt_recruiting_rest::router(RecruitingRestState::new(
                     PgRecruitingStore::new(pool.clone()),
+                    state.jwt_verifier.clone(),
+                )))
+                .merge(mnt_evaluation_rest::router(EvaluationRestState::new(
+                    evaluation_store,
                     state.jwt_verifier.clone(),
                 )))
                 // The hire handshake stays app-level: it shares one transaction

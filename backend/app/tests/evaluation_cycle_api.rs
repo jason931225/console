@@ -13,6 +13,7 @@
 
 use axum::body::{Body, to_bytes};
 use http::{Request, StatusCode, header};
+use mnt_app::{AppConfig, AppRole, AppState, DatabaseDependency, build_router};
 use mnt_evaluation_adapter_postgres::PgEvaluationStore;
 use mnt_evaluation_rest::EvaluationRestState;
 use mnt_kernel_core::{BranchId, OrgId, UserId};
@@ -32,6 +33,23 @@ const AUDIENCE: &str = "mnt-api";
 const CYCLES: &str = "/api/v1/evaluation/cycles";
 const SUBJECTS: &str = "/api/v1/evaluation/subjects";
 const ORG_B: Uuid = Uuid::from_u128(0xeb00_0000_0000_0000_0000_0000_0000_00b2);
+
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn evaluation_routes_are_mounted_by_the_authenticated_app_router(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let router = build_router(
+        app_state(runtime_role_pool(&pool).await, fixture.public_pem.clone()).unwrap(),
+    );
+
+    let (status, body) = send(&router, "GET", CYCLES, None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "unmounted routes return 404: {body}");
+    assert_eq!(body["error"]["code"], "unauthorized");
+
+    let (status, page) = send(&router, "GET", CYCLES, Some(&fixture.admin), None).await;
+    assert_eq!(status, StatusCode::OK, "authorized evaluation read: {page}");
+    assert_eq!(page["items"], json!([]));
+    assert_eq!(page["total"], 0);
+}
 
 #[sqlx::test(migrations = "../crates/platform/db/migrations")]
 async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool) {
@@ -919,6 +937,17 @@ async fn runtime_role_pool(owner: &PgPool) -> PgPool {
         .connect_with(owner.connect_options().as_ref().clone())
         .await
         .unwrap()
+}
+
+fn app_state(pool: PgPool, public_key_pem: String) -> Result<AppState, mnt_app::AppError> {
+    let config = AppConfig::from_pairs([
+        ("MNT_APP_ROLE", AppRole::Api.to_string()),
+        ("MNT_HTTP_ADDR", "127.0.0.1:0".to_owned()),
+        ("MNT_JWT_ISSUER", ISSUER.to_owned()),
+        ("MNT_JWT_AUDIENCE", AUDIENCE.to_owned()),
+        ("MNT_JWT_PUBLIC_KEY_PEM", public_key_pem),
+    ])?;
+    AppState::new(config, DatabaseDependency::Postgres(pool))
 }
 
 async fn send(
