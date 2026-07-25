@@ -443,7 +443,7 @@ fn openapi_documents_hr_attendance_branch_scope_query() {
 #[test]
 fn openapi_documents_evidence_register_snapshot_and_evidentiary_contract() {
     let endpoint_start = OPENAPI_YAML
-        .find("  /api/v1/evidence/objects:\\n")
+        .find("  /api/v1/evidence/objects:\n")
         .expect("OpenAPI YAML must define the EV object list endpoint");
     let endpoint_end = OPENAPI_YAML[endpoint_start..]
         .find("  /api/v1/evidence/objects/{id}:")
@@ -481,10 +481,10 @@ fn openapi_documents_evidence_register_snapshot_and_evidentiary_contract() {
     );
 
     let page_start = OPENAPI_YAML
-        .find("    EvidenceObjectPage:\\n")
+        .find("    EvidenceObjectPage:\n")
         .expect("OpenAPI YAML must define EvidenceObjectPage");
     let page_end = OPENAPI_YAML[page_start..]
-        .find("    EvidenceCopyView:\\n")
+        .find("    EvidenceCopyView:\n")
         .map(|offset| page_start + offset)
         .expect("EvidenceCopyView must follow EvidenceObjectPage");
     let page = &OPENAPI_YAML[page_start..page_end];
@@ -492,17 +492,21 @@ fn openapi_documents_evidence_register_snapshot_and_evidentiary_contract() {
         page.contains("required: [items, limit, offset, total, as_of, next_cursor]"),
         "EV list response must always return the registered snapshot and nullable continuation token"
     );
-    assert!(page.contains("as_of: { type: integer, format: int64 }"));
+    // No closing brace: the flow map may also carry a description.
+    assert!(
+        page.contains("as_of: { type: integer, format: int64"),
+        "EV page as_of must be the int64 evidence-register sequence"
+    );
     assert!(
         page.contains("next_cursor:\n          type:\n          - string\n          - 'null'"),
         "EV next_cursor must use the OpenAPI 3.1 nullable-string form consumed by every generated client"
     );
 
     let copy_start = OPENAPI_YAML
-        .find("    EvidenceCopyView:\\n")
+        .find("    EvidenceCopyView:\n")
         .expect("OpenAPI YAML must define EvidenceCopyView");
     let copy_end = OPENAPI_YAML[copy_start..]
-        .find("    TimestampAuthorityProofView:\\n")
+        .find("    TimestampAuthorityProofView:\n")
         .map(|offset| copy_start + offset)
         .expect("TimestampAuthorityProofView must follow EvidenceCopyView");
     let copy = &OPENAPI_YAML[copy_start..copy_end];
@@ -518,10 +522,10 @@ fn openapi_documents_evidence_register_snapshot_and_evidentiary_contract() {
     );
 
     let status_start = OPENAPI_YAML
-        .find("    EvidenceCopyEvidentiaryStatus:\\n")
+        .find("    EvidenceCopyEvidentiaryStatus:\n")
         .expect("OpenAPI YAML must define EvidenceCopyEvidentiaryStatus");
     let status_end = OPENAPI_YAML[status_start..]
-        .find("    EvidenceCopyView:\\n")
+        .find("    EvidenceCopyView:\n")
         .map(|offset| status_start + offset)
         .expect("EvidenceCopyView must follow EvidenceCopyEvidentiaryStatus");
     let status = &OPENAPI_YAML[status_start..status_end];
