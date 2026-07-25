@@ -54,3 +54,39 @@ test("evaluation contract preserves backend-only semantics rather than local tra
   assert.ok(inputStart >= 0 && inputEnd > inputStart, "input schema bounds exist");
   assert.doesNotMatch(openapi.slice(inputStart, inputEnd), /sort_order:/);
 });
+
+test("evaluation contract declares adapter not-found outcomes and normalizes cycle pagination", () => {
+  const notFoundRoutes = [
+    "/api/v1/evaluation/cycles/{cycle_id}/open",
+    "/api/v1/evaluation/cycles/{cycle_id}/start-calibration",
+    "/api/v1/evaluation/cycles/{cycle_id}/finalize",
+    "/api/v1/evaluation/cycles/{cycle_id}/archive",
+    "/api/v1/evaluation/subjects",
+    "/api/v1/evaluation/employees/{employee_id}/reviews",
+  ];
+
+  for (const route of notFoundRoutes) {
+    const routeStart = openapi.indexOf(`  ${route}:\n`);
+    const routeEnd = openapi.indexOf("\n  /api/v1/", routeStart + 1);
+    assert.ok(routeStart >= 0, `${route} is declared`);
+    const routeOperation = openapi.slice(routeStart, routeEnd < 0 ? undefined : routeEnd);
+    const hasDirectNotFound = /'404': \{ \$ref: '#\/components\/responses\/NotFound' \}/.test(routeOperation);
+    const usesTransitionResponses = /responses: \*evaluationTransitionResponses/.test(routeOperation);
+    const transitionResponsesStart = openapi.indexOf("responses: &evaluationTransitionResponses");
+    const transitionResponsesEnd = openapi.indexOf("\n  /api/v1/", transitionResponsesStart);
+    const transitionResponses = openapi.slice(transitionResponsesStart, transitionResponsesEnd);
+    const anchorHasNotFound = /'404': \{ \$ref: '#\/components\/responses\/NotFound' \}/.test(transitionResponses);
+
+    assert.ok(
+      hasDirectNotFound || (usesTransitionResponses && anchorHasNotFound),
+      `${route} declares its canonical not-found response`,
+    );
+  }
+
+  const listStart = openapi.indexOf("  /api/v1/evaluation/cycles:\n");
+  const listEnd = openapi.indexOf("\n  /api/v1/evaluation/cycles/{cycle_id}:", listStart);
+  const listOperation = openapi.slice(listStart, listEnd);
+  assert.match(listOperation, /Normalized to the inclusive range 1 through 100; defaults to 50\./);
+  assert.match(listOperation, /Negative values normalize to zero\./);
+  assert.doesNotMatch(listOperation, /minimum: 1|maximum: 100|minimum: 0/);
+});

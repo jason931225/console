@@ -17295,13 +17295,13 @@ paths:
       - name: limit
         in: query
         required: false
-        description: Normalized to 1 through 100; defaults to 50.
-        schema: { type: integer, format: int64, minimum: 1, maximum: 100, default: 50 }
+        description: Normalized to the inclusive range 1 through 100; defaults to 50.
+        schema: { type: integer, format: int64, default: 50 }
       - name: offset
         in: query
         required: false
         description: Negative values normalize to zero.
-        schema: { type: integer, format: int64, minimum: 0, default: 0 }
+        schema: { type: integer, format: int64, default: 0 }
       responses:
         '200': { description: Evaluation cycle page., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationCyclePage' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -17360,6 +17360,7 @@ paths:
         '200': { description: Transitioned cycle., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationCycleDetail' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalServerError' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -17398,6 +17399,7 @@ paths:
         '201': { description: Enrolled evaluation subject., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationSubjectDetail' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalServerError' }
@@ -17512,6 +17514,7 @@ paths:
         '200': { description: Finalized review ledger., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationLedgerPage' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalServerError' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/recruiting/talent-pool:
