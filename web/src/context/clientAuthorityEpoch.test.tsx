@@ -157,9 +157,69 @@ describe("ClientAuthorityEpochProvider", () => {
     expect(secondA.isCurrent(secondA)).toBe(true);
   });
 
+  it("publishes B before a descendant layout effect can observe the A to B commit", () => {
+    let commitReplacement: (() => void) | undefined;
+    let firstSnapshot: ClientAuthorityEpoch | undefined;
+    const descendantObservations: Array<{
+      workspaceKey: string;
+      snapshot: ClientAuthorityEpoch;
+      firstWasCurrent: boolean;
+    }> = [];
+
+    function DescendantProbe({ workspaceKey }: { workspaceKey: string }) {
+      const epoch = useClientAuthorityEpoch();
+      useLayoutEffect(() => {
+        if (!firstSnapshot) {
+          firstSnapshot = epoch;
+          return;
+        }
+        descendantObservations.push({
+          workspaceKey,
+          snapshot: epoch,
+          firstWasCurrent: firstSnapshot.isCurrent(firstSnapshot),
+        });
+      }, [epoch, workspaceKey]);
+      return null;
+    }
+
+    function Harness() {
+      const [workspaceKey, setWorkspaceKey] = useState("workspace-a");
+      commitReplacement = () => {
+        setWorkspaceKey("workspace-b");
+      };
+      return (
+        <AuthContext.Provider value={authValue(session())}>
+          <ClientAuthorityEpochProvider workspaceKey={workspaceKey}>
+            <DescendantProbe workspaceKey={workspaceKey} />
+          </ClientAuthorityEpochProvider>
+        </AuthContext.Provider>
+      );
+    }
+
+    render(<Harness />);
+    const first = firstSnapshot;
+    if (!first) throw new Error("Initial authority epoch did not commit");
+    expect(commitReplacement).toBeTypeOf("function");
+
+    act(() => {
+      commitReplacement?.();
+    });
+
+    const firstBObservation = descendantObservations.find(
+      (observation) => observation.workspaceKey === "workspace-b",
+    );
+    expect(firstBObservation?.snapshot.authorityKey).not.toBe(
+      first.authorityKey,
+    );
+    expect(firstBObservation?.firstWasCurrent).toBe(false);
+    expect(first.isCurrent(first)).toBe(false);
+  });
+
   it("does not retire the committed snapshot for an uncommitted replacement render", () => {
     let beginSuspendedReplacement: (() => void) | undefined;
+    let abandonSuspendedReplacement: (() => void) | undefined;
     let committedSnapshot: ClientAuthorityEpoch | undefined;
+    let attemptedSuspension = false;
     const never = new Promise<never>(() => {});
     const suspendedRender = Object.assign(new Error("suspended render"), {
       then: never.then.bind(never),
@@ -174,7 +234,10 @@ describe("ClientAuthorityEpochProvider", () => {
     }
 
     function SuspendWhen({ suspended }: { suspended: boolean }) {
-      if (suspended) throw suspendedRender;
+      if (suspended) {
+        attemptedSuspension = true;
+        throw suspendedRender;
+      }
       return null;
     }
 
@@ -184,6 +247,9 @@ describe("ClientAuthorityEpochProvider", () => {
         startTransition(() => {
           setReplacement(true);
         });
+      };
+      abandonSuspendedReplacement = () => {
+        setReplacement(false);
       };
       return (
         <AuthContext.Provider
@@ -195,12 +261,12 @@ describe("ClientAuthorityEpochProvider", () => {
             }),
           )}
         >
-          <ClientAuthorityEpochProvider workspaceKey="workspace-1">
-            <CommitProbe />
-            <Suspense fallback={null}>
+          <Suspense fallback={null}>
+            <ClientAuthorityEpochProvider workspaceKey="workspace-1">
+              <CommitProbe />
               <SuspendWhen suspended={replacement} />
-            </Suspense>
-          </ClientAuthorityEpochProvider>
+            </ClientAuthorityEpochProvider>
+          </Suspense>
         </AuthContext.Provider>
       );
     }
@@ -208,9 +274,19 @@ describe("ClientAuthorityEpochProvider", () => {
     render(<Harness />);
     const before = committedSnapshot;
     if (!before) throw new Error("Initial authority epoch did not commit");
+    expect(beginSuspendedReplacement).toBeTypeOf("function");
+    expect(abandonSuspendedReplacement).toBeTypeOf("function");
 
     act(() => {
       beginSuspendedReplacement?.();
+    });
+
+    expect(attemptedSuspension).toBe(true);
+    expect(committedSnapshot).toBe(before);
+    expect(before.isCurrent(before)).toBe(true);
+
+    act(() => {
+      abandonSuspendedReplacement?.();
     });
 
     expect(before.isCurrent(before)).toBe(true);

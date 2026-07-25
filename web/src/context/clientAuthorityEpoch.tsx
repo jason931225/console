@@ -1,9 +1,9 @@
 import {
   createContext,
   useContext,
-  useLayoutEffect,
+  useInsertionEffect,
+  useMemo,
   useState,
-  useSyncExternalStore,
 } from "react";
 
 import { useAuth } from "./auth";
@@ -84,24 +84,21 @@ function authorityScopeKey({
  * advances from a layout effect, never while React is rendering a replacement.
  */
 class ClientAuthorityEpochStore {
-  private current: ClientAuthorityEpoch;
-  private readonly listeners = new Set<() => void>();
+  private current: ClientAuthorityEpoch | undefined;
 
-  constructor(initialAuthorityKey: string) {
-    this.current = this.createSnapshot(1, initialAuthorityKey);
+  createProspective(authorityKey: string): ClientAuthorityEpoch {
+    if (this.current?.authorityKey === authorityKey) return this.current;
+    return this.createSnapshot((this.current?.epoch ?? 0) + 1, authorityKey);
   }
 
-  subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  publish(snapshot: ClientAuthorityEpoch): void {
+    if (this.current === snapshot) return;
+    this.current = snapshot;
+  }
 
-  getSnapshot = (): ClientAuthorityEpoch => this.current;
-
-  publish(authorityKey: string): void {
-    if (this.current.authorityKey === authorityKey) return;
-    this.current = this.createSnapshot(this.current.epoch + 1, authorityKey);
-    for (const listener of this.listeners) listener();
+  retire(snapshot: ClientAuthorityEpoch): void {
+    if (this.current !== snapshot) return;
+    this.current = undefined;
   }
 
   private createSnapshot(
@@ -115,6 +112,31 @@ class ClientAuthorityEpochStore {
       isCurrent: (candidate: ClientAuthorityEpoch) => this.current === candidate,
     });
   }
+}
+
+function CommittedAuthorityScope({
+  children,
+  snapshot,
+  store,
+}: {
+  children: React.ReactNode;
+  snapshot: ClientAuthorityEpoch;
+  store: ClientAuthorityEpochStore;
+}) {
+  // Insertion effects run for committed trees before any layout effects. This
+  // retires the prior scope before descendants can perform layout-time work.
+  useInsertionEffect(() => {
+    store.publish(snapshot);
+    return () => {
+      store.retire(snapshot);
+    };
+  }, [snapshot, store]);
+
+  return (
+    <ClientAuthorityEpochContext.Provider value={snapshot}>
+      {children}
+    </ClientAuthorityEpochContext.Provider>
+  );
 }
 
 export function ClientAuthorityEpochProvider({
@@ -146,24 +168,16 @@ export function ClientAuthorityEpochProvider({
       : undefined,
     workspaceKey,
   });
-  const [store] = useState(() => new ClientAuthorityEpochStore(key));
-
-  // Layout effects run only for committed trees and complete before browser
-  // events, so query/action continuations cannot observe a retired authority.
-  useLayoutEffect(() => {
-    store.publish(key);
-  }, [key, store]);
-
-  const snapshot = useSyncExternalStore(
-    store.subscribe,
-    store.getSnapshot,
-    store.getSnapshot,
+  const [store] = useState(() => new ClientAuthorityEpochStore());
+  const snapshot = useMemo(
+    () => store.createProspective(key),
+    [key, store],
   );
 
   return (
-    <ClientAuthorityEpochContext.Provider value={snapshot}>
+    <CommittedAuthorityScope key={key} snapshot={snapshot} store={store}>
       {children}
-    </ClientAuthorityEpochContext.Provider>
+    </CommittedAuthorityScope>
   );
 }
 
