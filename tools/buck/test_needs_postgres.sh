@@ -20,6 +20,14 @@ if [[ -n "${exact_test}" && ! "${exact_test}" =~ ^[[:alnum:]_:]+$ ]]; then
   echo "buck-postgres: exact Rust test name contains unsupported characters" >&2
   exit 1
 fi
+for arg in "$@"; do
+  case "${arg}" in
+    //backend/*|root//backend/*)
+      echo "buck-postgres: raw backend test targets bypass the credential loader; use a //tools/buck PostgreSQL wrapper" >&2
+      exit 2
+      ;;
+  esac
+done
 
 cleanup() {
   docker rm -f "${container_name}" >/dev/null 2>&1 || true

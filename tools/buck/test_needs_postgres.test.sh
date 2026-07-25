@@ -45,6 +45,10 @@ if [[ "${FAKE_BUCK_SLEEP:-0}" == 1 ]]; then printf "%s\n" "$$" >"${HARNESS_LOG}.
 exit "${FAKE_BUCK_STATUS:-0}"
 BUCK
 chmod +x "${fake_bin}/docker" "${fake_bin}/openssl" "${scratch}/buck"
+raw_target_log="${scratch}/raw-target.log"
+if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${raw_target_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" "${harness}" //backend/app:mnt-app-itest-org_change_api; then exit 1; fi
+! grep -q '^docker' "${raw_target_log}" 2>/dev/null
+! grep -q '^buck' "${raw_target_log}" 2>/dev/null
 PATH="${fake_bin}:${PATH}" HARNESS_LOG="${log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
 calls="$(cat "${log}")"; buck_calls="$(grep '^buck' "${log}")"
 grep -Fxq 'buck-isolation <unset>' "${log}"

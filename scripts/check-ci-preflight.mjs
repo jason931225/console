@@ -44,6 +44,12 @@ const postgresWrapperContracts = [
   ["attendance-concurrency-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
   ["app-inline-postgres", "//backend/app:mnt-app-itest-inline-postgres"],
   ["app-dev-auth-persona-guard-postgres", "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
+  ["ontology-builtin-catalog-additive-upgrade-postgres", "//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-builtin_catalog_additive_upgrade_as_runtime_role"],
+  ["app-org-change-api-postgres", "//backend/app:mnt-app-itest-org_change_api"],
+  ["app-purchase-request-collection-api-postgres", "//backend/app:mnt-app-itest-purchase_request_collection_api"],
+  ["app-workflow-object-context-api-postgres", "//backend/app:mnt-app-itest-workflow_object_context_api"],
+  ["equipment-3r-http-postgres", "//backend/crates/equipment/rest:mnt-equipment-rest-itest-equipment_3r_http"],
+  ["app-equipment-3r-api-postgres", "//backend/app:mnt-app-itest-equipment_3r_api"],
 ];
 const postgresWrapperLoader = "run_test_with_postgres_env.sh";
 const postgresWrapperLabels = '["test.integration", "resource.postgres", "needs-postgres"]';

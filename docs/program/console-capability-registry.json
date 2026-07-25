@@ -2282,13 +2282,13 @@
      "npm --prefix web run lint",
      "npm --prefix web run build",
      "tools/buck2 test --local-only //backend/crates/equipment/domain:mnt-equipment-domain-unit",
-     "tools/buck/test_needs_postgres.sh //backend/crates/equipment/rest:mnt-equipment-rest-itest-equipment_3r_http //backend/app:mnt-app-itest-equipment_3r_api",
+     "tools/buck/test_needs_postgres.sh //tools/buck:equipment-3r-http-postgres //tools/buck:app-equipment-3r-api-postgres",
      "git diff --check"
     ],
     "buck2_targets": [
      "//backend/crates/equipment/domain:mnt-equipment-domain-unit",
-     "//backend/crates/equipment/rest:mnt-equipment-rest-itest-equipment_3r_http",
-     "//backend/app:mnt-app-itest-equipment_3r_api"
+     "//tools/buck:equipment-3r-http-postgres",
+     "//tools/buck:app-equipment-3r-api-postgres"
     ]
    },
    "state": {
