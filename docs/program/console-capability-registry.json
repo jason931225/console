@@ -305,7 +305,12 @@
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
-   ]
+   ],
+   "lane_assignments": {
+    "consolidation": {
+     "phase0_notes": "Wave-4 Phase-0 landed 2026-07-25: WindowManagerProvider mounted in ConsoleShell (it existed only in the legacy AppShell/tests/a nested provider, so every console window-model consumer was green in jsdom and dead in production — the single cause behind the fidelity audit reporting \"window model missing\" across 13 modules); shared ObjectCard a11y; code-grammar converged on objectCodeBodySource; ontology catalog additive upgrade (0211)."
+    }
+   }
   },
   {
    "id": "CAP-OVERVIEW-WORKSPACE",
