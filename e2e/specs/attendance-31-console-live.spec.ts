@@ -668,7 +668,11 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
   // Move to the isolated future month. This avoids unrelated current-month
   // leave data while exercising the same server-derived close preflight.
   await page.getByRole("button", { name: "월간" }).click();
-  await page.getByRole("button", { name: "다음 달" }).click();
+  const monthBoard = page.getByRole("region", { name: "근무 현황" });
+  await expect(monthBoard).toHaveCount(1);
+  const nextMonth = monthBoard.getByRole("button", { name: "다음 달" });
+  await expect(nextMonth).toHaveCount(1);
+  await nextMonth.click();
   await expect(
     page.getByText(`${closeYear}년 ${closeMonthNumber}월`),
   ).toBeVisible();
