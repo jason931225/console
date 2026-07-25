@@ -335,3 +335,6 @@ Candidate advanced to signed merge `008e20dca426dc41c7444a39ccf85edce135b220` wi
 
 ## CANDIDATE REBIND (2026-07-25, Evaluation Buck runtime dependencies)
 Candidate advanced to signed commit `719893cab80fe163ca8af25b74a86cd6ff2bae22`, a direct child of the prior authority tip, to wire the Evaluation application runtime dependencies and declare the credential-loader PostgreSQL wrapper `//tools/buck:app-evaluation-cycle-api-postgres`. The wrapper target is candidate-resolvable, but its credentialed execution receipt is still unadmitted. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, or production-exposure claim.
+
+## CANDIDATE REBIND (2026-07-25, PR491 stabilization train)
+Candidate advanced to signed commit `b4b9d67206ba86fdbb1727d6bf2ab70d3e2e5ad3`, the frozen PR491 product candidate after independently reviewed dev-auth locator, generated-client, Android fixture, Evaluation request-context, Buck receipt, and hosted-iOS shard repairs. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and exposure state remains `HOLD`; no completion, legal qualification, deployment, or production-exposure claim is promoted by this authority-only child.
