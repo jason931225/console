@@ -140,7 +140,11 @@ test('a real SSH-signed canonical Git receipt is the only non-HOLD admission pat
     const authorityTip = run(['rev-parse', 'HEAD']);
     assert.equal(createConsoleCandidateSourceResolver(root, candidateSha, authorityTip).readText('candidate.txt'), 'candidate\n');
     writeFileSync(path.join(root, 'product.txt'), 'forbidden\n'); run(['add', '.']); run(['commit', '--no-gpg-sign', '-m', 'product drift']);
-    assert.throws(() => createConsoleCandidateSourceResolver(root, candidateSha, run(['rev-parse', 'HEAD'])), /changes product path/);
+    const productTip = run(['rev-parse', 'HEAD']);
+    assert.throws(() => createConsoleCandidateSourceResolver(root, candidateSha, productTip), /changes product path/);
+    assert.throws(() => createConsoleCandidateSourceResolver(root, productTip, productTip), /candidate commit signature/);
+    const orphanTip = run(['commit-tree', run(['write-tree']), '-m', 'unrelated authority']);
+    assert.throws(() => createConsoleCandidateSourceResolver(root, candidateSha, orphanTip), /not an ancestor/);
     const promoted = structuredClone(registry); const fixtureJurisdiction = structuredClone(jurisdiction); const cap = promoted.capabilities[0];
     promoted.candidate.sha = candidateSha; promoted.provenance.authority_base_sha = 'a'.repeat(40); promoted.provenance.historical_implementation_freeze_sha = 'b'.repeat(40);
     for (const capability of promoted.capabilities) { capability.candidate_evidence.candidate_sha = candidateSha; for (const binding of capability.jurisdiction_bindings) binding.candidate_sha = candidateSha; }
