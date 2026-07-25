@@ -103,6 +103,27 @@ describe("CI preflight contract", () => {
     );
   });
 
+  it("requires dev-up smoke to install pinned DotSlash before its indirect Buck2 build", () => {
+    const devUp = workflow.indexOf("  dev-up-smoke:\n");
+    const installStep =
+      "      - name: Install pinned DotSlash runtime\n        run: tools/buck/install_dotslash.sh\n\n";
+    const devUpWorkflow = workflow.slice(devUp);
+    const withoutDotSlash = workflow.slice(0, devUp) + devUpWorkflow.replace(installStep, "");
+    expectFailure(
+      withoutDotSlash,
+      "dev-up-smoke must install pinned DotSlash from tools/buck/install_dotslash.sh",
+    );
+
+    const firstBootstrap = "        run: node scripts/dev-up.mjs bootstrap\n";
+    const afterFirstBootstrap = devUpWorkflow
+      .replace(installStep, "")
+      .replace(firstBootstrap, `${firstBootstrap}\n${installStep}`);
+    expectFailure(
+      workflow.slice(0, devUp) + afterFirstBootstrap,
+      "dev-up-smoke must install pinned DotSlash before its first Buck invocation",
+    );
+  });
+
   it("rejects API contract tests that point MNT_APP_BIN at a Cargo target", () => {
     for (const path of [
       "${{ github.workspace }}/backend/target/debug/mnt-app",
