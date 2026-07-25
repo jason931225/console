@@ -87,6 +87,10 @@ mnt-equipment-adapter-postgres = { workspace = true }
 mnt-equipment-rest = { workspace = true }
 mnt-logistics-adapter-postgres = { workspace = true }
 mnt-logistics-rest = { workspace = true }
+mnt-recruiting-adapter-postgres = { workspace = true }
+mnt-recruiting-application = { workspace = true }
+mnt-recruiting-domain = { workspace = true }
+mnt-recruiting-rest = { workspace = true }
 mnt-leave-rest = { workspace = true }
 mnt-todos-adapter-postgres = { workspace = true }
 mnt-todos-rest = { workspace = true }

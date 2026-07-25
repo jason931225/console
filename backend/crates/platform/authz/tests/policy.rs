@@ -23,7 +23,7 @@ const ROLES: [Role; 6] = [
     Role::SuperAdmin,
 ];
 
-fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 90] {
+fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 92] {
     use Feature::{
         AiAssist, ApprovalFinalize, AssigneeManage, AuditLogRead, AuditStreamAccessLogRead,
         AuditStreamRead, BenefitCatalogManage, BenefitCatalogRead, BranchManage, CompletionReview,
@@ -42,9 +42,9 @@ fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 90] {
         MailUse, MasterListImport, NoticeManage, OpsDashboardRead, OrgWideQueueTriage,
         PayrollRunRead, PeriodLockManage, PriorityManage, ProductionSourceIngest, PurchaseExecute,
         PurchaseFinalApprove, PurchaseRequestApprove, PurchaseRequestCreate, PurchaseRequestRead,
-        RegionManage, RentalQuoteManage, RoleManage, SalesManage, SubordinateUserCreate,
-        TargetManage, UserManage, WorkOrderCreate, WorkOrderEditIntake, WorkOrderReadAll,
-        WorkOrderStart, WorkReportSubmit,
+        RecruitingManage, RecruitingRead, RegionManage, RentalQuoteManage, RoleManage, SalesManage,
+        SubordinateUserCreate, TargetManage, UserManage, WorkOrderCreate, WorkOrderEditIntake,
+        WorkOrderReadAll, WorkOrderStart, WorkReportSubmit,
     };
     use PermissionLevel::{Allow as A, Deny as D, Limited as L, RequestOnly as R};
 
@@ -176,6 +176,10 @@ fn expected_matrix() -> [(Feature, [PermissionLevel; 6]); 90] {
         (Equipment3rAssess, [D, D, D, D, D, D]),
         (Equipment3rDisposition, [D, D, D, D, D, D]),
         (Equipment3rObserve, [D, D, D, D, D, D]),
+        // Recruiting mirrors the HR directory pair (HR-owned data, EXECUTIVE
+        // read-only) and is gated org-wide like EmployeeDirectory*.
+        (RecruitingRead, [D, D, D, A, A, A]),
+        (RecruitingManage, [D, D, D, A, D, A]),
     ]
 }
 
@@ -837,7 +841,7 @@ fn cedar_compiled_bundle_cache_key_requires_versioned_identity() {
 #[test]
 fn permission_matrix_is_exhaustive_and_matches_inherited_table() {
     let matrix = expected_matrix();
-    assert_eq!(Feature::ALL.len(), 90);
+    assert_eq!(Feature::ALL.len(), 92);
     assert_eq!(matrix.len(), Feature::ALL.len());
 
     for feature in Feature::ALL {

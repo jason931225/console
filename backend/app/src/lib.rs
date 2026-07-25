@@ -113,6 +113,8 @@ use mnt_platform_storage::{
     StorageError,
 };
 use mnt_production_rest::ProductionRestState;
+use mnt_recruiting_adapter_postgres::PgRecruitingStore;
+use mnt_recruiting_rest::RecruitingRestState;
 use mnt_registry_adapter_postgres::{PgRegistryError, PgRegistryStore};
 use mnt_registry_application::{UpdateEquipmentCommand, UpdateEquipmentFields};
 use mnt_registry_domain::EquipmentStatus;
@@ -154,6 +156,7 @@ pub mod lifecycle;
 mod mail_sync;
 pub mod objects;
 pub mod office;
+mod recruiting_hire;
 mod workbench;
 mod workbench_native;
 mod workflow_drain;
@@ -2987,6 +2990,20 @@ pub fn build_router(state: AppState) -> Router {
                     let hr_state = hr::HrState::new(pool.clone(), state.jwt_verifier.clone());
                     hr_state.with_leave_command_store(leave_store.clone())
                 }))
+                .merge(mnt_recruiting_rest::router(RecruitingRestState::new(
+                    PgRecruitingStore::new(pool.clone()),
+                    state.jwt_verifier.clone(),
+                )))
+                // The hire handshake stays app-level: it shares one transaction
+                // with the HR-owned employee-creation core (see recruiting_hire).
+                .merge(recruiting_hire::router(
+                    recruiting_hire::RecruitingHireState::new(
+                        pool.clone(),
+                        state.jwt_verifier.clone(),
+                        hr::HrState::new(pool.clone(), state.jwt_verifier.clone())
+                            .with_leave_command_store(leave_store.clone()),
+                    ),
+                ))
                 .merge(workflow_studio::router(
                     workflow_studio::WorkflowStudioState::new(
                         pool.clone(),

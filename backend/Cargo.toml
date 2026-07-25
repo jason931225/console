@@ -39,6 +39,7 @@ members = [
   "crates/comms/*",
   "crates/payroll/*",
   "crates/production/*",
+  "crates/recruiting/*",
   "crates/policy/*",
   "crates/erp/*",
   "crates/platform/*",
@@ -228,6 +229,10 @@ mnt-equipment-adapter-postgres = { path = "crates/equipment/adapter-postgres" }
 mnt-equipment-rest = { path = "crates/equipment/rest" }
 mnt-evaluation-domain = { path = "crates/evaluation/domain" }
 mnt-evaluation-application = { path = "crates/evaluation/application" }
+mnt-recruiting-domain = { path = "crates/recruiting/domain" }
+mnt-recruiting-application = { path = "crates/recruiting/application" }
+mnt-recruiting-adapter-postgres = { path = "crates/recruiting/adapter-postgres" }
+mnt-recruiting-rest = { path = "crates/recruiting/rest" }
 mnt-support-domain = { path = "crates/support/domain" }
 mnt-support-application = { path = "crates/support/application" }
 mnt-support-adapter-postgres = { path = "crates/support/adapter-postgres" }
