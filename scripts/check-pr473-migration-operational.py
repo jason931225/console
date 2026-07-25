@@ -206,10 +206,17 @@ def guarded_test_specs(repo_root: Path, manifest: dict[str, Any]) -> tuple[tuple
 
 def assert_exact_rust_test_result(output: str, name: str, target: str) -> None:
     """Require the libtest stream for precisely one selected, passing test."""
+    output = re.sub(
+        r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\] ",
+        "",
+        output,
+        flags=re.MULTILINE,
+    )
     running = re.compile(r"^running 1 test$", re.MULTILINE)
     result = re.compile(rf"^test {re.escape(name)} \.\.\. ok$", re.MULTILINE)
     summary = re.compile(
-        r"^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;$",
+        r"^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; "
+        r"[0-9]+ filtered out; finished in [0-9]+(?:\.[0-9]+)?s$",
         re.MULTILINE,
     )
     counts = (len(running.findall(output)), len(result.findall(output)), len(summary.findall(output)))
@@ -279,7 +286,9 @@ def execute(repo_root: Path) -> int:
             raise GateError(
                 f"Buck2 disposable PostgreSQL target {target} exited {completed.returncode}"
             )
-        assert_exact_rust_test_result(completed.stdout, name, target)
+        assert_exact_rust_test_result(
+            completed.stdout + completed.stderr, name, target
+        )
     print(
         "PR 473 migration operational gate passed: "
         "Buck2 disposable PostgreSQL harness ran the 3 exact Apalis database tests "

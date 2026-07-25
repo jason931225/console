@@ -81,7 +81,8 @@ class ExecutionTests(unittest.TestCase):
             "running 1 test\n"
             f"test {name} ... ok\n"
             "\n"
-            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n"
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; "
+            "0 filtered out; finished in 1.66s\n"
         )
 
     @staticmethod
@@ -167,6 +168,30 @@ class ExecutionTests(unittest.TestCase):
         environment = run_mock.call_args.kwargs["env"]
         for key in inherited:
             self.assertNotIn(key, environment)
+
+    def test_accepts_buck_receipts_emitted_on_stderr_with_event_prefixes(self) -> None:
+        prefix = "[2026-07-25T21:38:32.088+00:00] "
+        completed = [
+            subprocess.CompletedProcess(["buck"], 0, "", "")
+            for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
+        ] + [
+            subprocess.CompletedProcess(
+                ["buck"],
+                0,
+                "",
+                "".join(
+                    prefix + line
+                    for line in self.successful_output(name).splitlines(keepends=True)
+                ),
+            )
+            for _, name in self.specs()
+        ]
+
+        with patch.object(
+            gate, "resolved_target_metadata", return_value=self.metadata()
+        ), patch.object(gate, "run", side_effect=completed):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
 
     def test_fails_when_buck_harness_fails(self) -> None:
         completed = subprocess.CompletedProcess(["buck"], 19, "", "")
