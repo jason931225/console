@@ -824,7 +824,7 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
     page.getByText(`${closeYear}년 ${closeMonthNumber}월`),
   ).toBeVisible();
   const exceptionRow = page
-    .getByRole("button")
+    .locator(".attendance__exrow")
     .filter({ hasText: blockedEmployeeName });
   await expect(exceptionRow).toBeVisible({ timeout: 15_000 });
 
