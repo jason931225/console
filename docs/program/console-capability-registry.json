@@ -166,17 +166,21 @@
    "delivery_unit": {
     "id": "DU-CONSOLE-SHELL",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "NOT_APPLICABLE"
    },
    "dependency_edges": [],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "overview"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -198,32 +202,67 @@
     "category": "enterprise workspace shell and operator navigation",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/overview.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/overview.md"
      }
     ],
+    "required_outcomes": "A real enterprise workspace shell and operator navigation workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one enterprise workspace shell and operator navigation signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-CONSOLE-SHELL-N1",
+      "persona_scenario": "Authorized Responsive left-main-right console shell operator",
+      "action_workflow": "mounted authorized navigation preserves selected work context",
+      "measurable_assertion": "CAP-CONSOLE-SHELL: mounted authorized navigation preserves selected work context",
+      "required_receipts": "docs/evidence/console/CAP-CONSOLE-SHELL/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-CONSOLE-SHELL-N2",
+      "persona_scenario": "Authorized Responsive left-main-right console shell operator",
+      "action_workflow": "scope changes invalidate stale drawer and panel context",
+      "measurable_assertion": "CAP-CONSOLE-SHELL: scope changes invalidate stale drawer and panel context",
+      "required_receipts": "docs/evidence/console/CAP-CONSOLE-SHELL/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-CONSOLE-SHELL-N3",
+      "persona_scenario": "Authorized Responsive left-main-right console shell operator",
+      "action_workflow": "keyboard navigation reaches permitted module without hidden-nav leakage",
+      "measurable_assertion": "CAP-CONSOLE-SHELL: keyboard navigation reaches permitted module without hidden-nav leakage",
+      "required_receipts": "docs/evidence/console/CAP-CONSOLE-SHELL/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-CONSOLE-SHELL-O1",
+      "persona_scenario": "Cross-module Responsive left-main-right console shell operator",
+      "action_workflow": "CAP-CONSOLE-SHELL omni interaction 1",
+      "measurable_assertion": "CAP-CONSOLE-SHELL omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-CONSOLE-SHELL/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-CONSOLE-SHELL-O2",
+      "persona_scenario": "Cross-module Responsive left-main-right console shell operator",
+      "action_workflow": "CAP-CONSOLE-SHELL omni interaction 2",
+      "measurable_assertion": "CAP-CONSOLE-SHELL omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-CONSOLE-SHELL/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -235,14 +274,35 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-WORKFORCE-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -365,10 +425,9 @@
    "delivery_unit": {
     "id": "DU-OVERVIEW-WORKSPACE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -377,10 +436,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "overview"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -402,44 +466,72 @@
     "category": "operational work management and action inbox",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/overview.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/overview.md"
      }
     ],
+    "required_outcomes": "A real operational work management and action inbox workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one operational work management and action inbox signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-OVERVIEW-WORKSPACE-N1",
+      "persona_scenario": "Authorized Overview action queue, agenda, and keyboard workflow operator",
+      "action_workflow": "action-inbox source count reconciles visible queue and summary",
+      "measurable_assertion": "CAP-OVERVIEW-WORKSPACE: action-inbox source count reconciles visible queue and summary",
+      "required_receipts": "docs/evidence/console/CAP-OVERVIEW-WORKSPACE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-OVERVIEW-WORKSPACE-N2",
+      "persona_scenario": "Authorized Overview action queue, agenda, and keyboard workflow operator",
+      "action_workflow": "terminal action returns durable receipt and updates queue state",
+      "measurable_assertion": "CAP-OVERVIEW-WORKSPACE: terminal action returns durable receipt and updates queue state",
+      "required_receipts": "docs/evidence/console/CAP-OVERVIEW-WORKSPACE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-OVERVIEW-WORKSPACE-N3",
+      "persona_scenario": "Authorized Overview action queue, agenda, and keyboard workflow operator",
+      "action_workflow": "agenda navigation retains authorized selected work",
+      "measurable_assertion": "CAP-OVERVIEW-WORKSPACE: agenda navigation retains authorized selected work",
+      "required_receipts": "docs/evidence/console/CAP-OVERVIEW-WORKSPACE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-OVERVIEW-WORKSPACE-O1",
+      "persona_scenario": "Cross-module Overview action queue, agenda, and keyboard workflow operator",
+      "action_workflow": "CAP-OVERVIEW-WORKSPACE omni interaction 1",
+      "measurable_assertion": "CAP-OVERVIEW-WORKSPACE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-OVERVIEW-WORKSPACE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-OVERVIEW-WORKSPACE-O2",
+      "persona_scenario": "Cross-module Overview action queue, agenda, and keyboard workflow operator",
+      "action_workflow": "CAP-OVERVIEW-WORKSPACE omni interaction 2",
+      "measurable_assertion": "CAP-OVERVIEW-WORKSPACE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-OVERVIEW-WORKSPACE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-     "status": "HOLD",
-     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
-    },
-    {
-     "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -453,7 +545,28 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -592,10 +705,9 @@
    "delivery_unit": {
     "id": "DU-BENEFITS-CATALOG",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -604,10 +716,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "benefit"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -629,44 +746,72 @@
     "category": "benefits administration",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real benefits administration workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one benefits administration signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-BENEFITS-CATALOG-N1",
+      "persona_scenario": "Authorized Benefits catalog and lifecycle operator",
+      "action_workflow": "versioned eligibility evaluates enrollment at effective date",
+      "measurable_assertion": "CAP-BENEFITS-CATALOG: versioned eligibility evaluates enrollment at effective date",
+      "required_receipts": "docs/evidence/console/CAP-BENEFITS-CATALOG/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BENEFITS-CATALOG-N2",
+      "persona_scenario": "Authorized Benefits catalog and lifecycle operator",
+      "action_workflow": "enrollment handoff emits payroll-consumable benefit state",
+      "measurable_assertion": "CAP-BENEFITS-CATALOG: enrollment handoff emits payroll-consumable benefit state",
+      "required_receipts": "docs/evidence/console/CAP-BENEFITS-CATALOG/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BENEFITS-CATALOG-N3",
+      "persona_scenario": "Authorized Benefits catalog and lifecycle operator",
+      "action_workflow": "benefit change produces governed receipt",
+      "measurable_assertion": "CAP-BENEFITS-CATALOG: benefit change produces governed receipt",
+      "required_receipts": "docs/evidence/console/CAP-BENEFITS-CATALOG/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-BENEFITS-CATALOG-O1",
+      "persona_scenario": "Cross-module Benefits catalog and lifecycle operator",
+      "action_workflow": "CAP-BENEFITS-CATALOG omni interaction 1",
+      "measurable_assertion": "CAP-BENEFITS-CATALOG omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-BENEFITS-CATALOG/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BENEFITS-CATALOG-O2",
+      "persona_scenario": "Cross-module Benefits catalog and lifecycle operator",
+      "action_workflow": "CAP-BENEFITS-CATALOG omni interaction 2",
+      "measurable_assertion": "CAP-BENEFITS-CATALOG omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-BENEFITS-CATALOG/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Benefits catalog and lifecycle; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-     "status": "HOLD",
-     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
-    },
-    {
-     "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -680,7 +825,28 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -874,10 +1040,9 @@
    "delivery_unit": {
     "id": "DU-COMPLIANCE-CATALOG",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -886,10 +1051,16 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "policy",
+     "audit"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -911,37 +1082,100 @@
     "category": "governance, risk, and compliance",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/compliance.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/compliance.md"
      }
     ],
+    "required_outcomes": "A real governance, risk, and compliance workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one governance, risk, and compliance signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-COMPLIANCE-CATALOG-N1",
+      "persona_scenario": "Authorized Compliance obligation, regulation, framework, control, and evidence catalog operator",
+      "action_workflow": "control maps to executable test and evidence record",
+      "measurable_assertion": "CAP-COMPLIANCE-CATALOG: control maps to executable test and evidence record",
+      "required_receipts": "docs/evidence/console/CAP-COMPLIANCE-CATALOG/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-COMPLIANCE-CATALOG-N2",
+      "persona_scenario": "Authorized Compliance obligation, regulation, framework, control, and evidence catalog operator",
+      "action_workflow": "failed control enters retest workflow with owner",
+      "measurable_assertion": "CAP-COMPLIANCE-CATALOG: failed control enters retest workflow with owner",
+      "required_receipts": "docs/evidence/console/CAP-COMPLIANCE-CATALOG/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-COMPLIANCE-CATALOG-N3",
+      "persona_scenario": "Authorized Compliance obligation, regulation, framework, control, and evidence catalog operator",
+      "action_workflow": "control disposition preserves immutable evidence lineage",
+      "measurable_assertion": "CAP-COMPLIANCE-CATALOG: control disposition preserves immutable evidence lineage",
+      "required_receipts": "docs/evidence/console/CAP-COMPLIANCE-CATALOG/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-COMPLIANCE-CATALOG-O1",
+      "persona_scenario": "Cross-module Compliance obligation, regulation, framework, control, and evidence catalog operator",
+      "action_workflow": "CAP-COMPLIANCE-CATALOG omni interaction 1",
+      "measurable_assertion": "CAP-COMPLIANCE-CATALOG omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-COMPLIANCE-CATALOG/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-COMPLIANCE-CATALOG-O2",
+      "persona_scenario": "Cross-module Compliance obligation, regulation, framework, control, and evidence catalog operator",
+      "action_workflow": "CAP-COMPLIANCE-CATALOG omni interaction 2",
+      "measurable_assertion": "CAP-COMPLIANCE-CATALOG omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-COMPLIANCE-CATALOG/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1075,17 +1309,24 @@
    "delivery_unit": {
     "id": "DU-SHARED-ONTOLOGY-WORKFLOW",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "objectExplorer",
+     "ontologyManager",
+     "workflow",
+     "scheduled"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -1107,37 +1348,100 @@
     "category": "ontology, actions, and workflow runtime",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/object-platform.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/object-platform.md"
      }
     ],
+    "required_outcomes": "A real ontology, actions, and workflow runtime workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one ontology, actions, and workflow runtime signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-SHARED-ONTOLOGY-WORKFLOW-N1",
+      "persona_scenario": "Authorized Shared governed ontology, action, workflow, history, and audit substrate operator",
+      "action_workflow": "typed schema resolves object relation constraints",
+      "measurable_assertion": "CAP-SHARED-ONTOLOGY-WORKFLOW: typed schema resolves object relation constraints",
+      "required_receipts": "docs/evidence/console/CAP-SHARED-ONTOLOGY-WORKFLOW/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-SHARED-ONTOLOGY-WORKFLOW-N2",
+      "persona_scenario": "Authorized Shared governed ontology, action, workflow, history, and audit substrate operator",
+      "action_workflow": "sanctioned action requires policy decision and durable receipt",
+      "measurable_assertion": "CAP-SHARED-ONTOLOGY-WORKFLOW: sanctioned action requires policy decision and durable receipt",
+      "required_receipts": "docs/evidence/console/CAP-SHARED-ONTOLOGY-WORKFLOW/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-SHARED-ONTOLOGY-WORKFLOW-N3",
+      "persona_scenario": "Authorized Shared governed ontology, action, workflow, history, and audit substrate operator",
+      "action_workflow": "automation run records trigger inputs and resulting lineage",
+      "measurable_assertion": "CAP-SHARED-ONTOLOGY-WORKFLOW: automation run records trigger inputs and resulting lineage",
+      "required_receipts": "docs/evidence/console/CAP-SHARED-ONTOLOGY-WORKFLOW/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-SHARED-ONTOLOGY-WORKFLOW-O1",
+      "persona_scenario": "Cross-module Shared governed ontology, action, workflow, history, and audit substrate operator",
+      "action_workflow": "CAP-SHARED-ONTOLOGY-WORKFLOW omni interaction 1",
+      "measurable_assertion": "CAP-SHARED-ONTOLOGY-WORKFLOW omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-SHARED-ONTOLOGY-WORKFLOW/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-SHARED-ONTOLOGY-WORKFLOW-O2",
+      "persona_scenario": "Cross-module Shared governed ontology, action, workflow, history, and audit substrate operator",
+      "action_workflow": "CAP-SHARED-ONTOLOGY-WORKFLOW omni interaction 2",
+      "measurable_assertion": "CAP-SHARED-ONTOLOGY-WORKFLOW omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-SHARED-ONTOLOGY-WORKFLOW/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1250,10 +1554,9 @@
    "delivery_unit": {
     "id": "DU-PRODUCTION-PILOT",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -1262,10 +1565,13 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": false,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -1287,32 +1593,67 @@
     "category": "manufacturing execution",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real manufacturing execution workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one manufacturing execution signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-PRODUCTION-PILOT-N1",
+      "persona_scenario": "Authorized Production subcontracting signature workflow operator",
+      "action_workflow": "production order readiness blocks missing prerequisites",
+      "measurable_assertion": "CAP-PRODUCTION-PILOT: production order readiness blocks missing prerequisites",
+      "required_receipts": "docs/evidence/console/CAP-PRODUCTION-PILOT/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PRODUCTION-PILOT-N2",
+      "persona_scenario": "Authorized Production subcontracting signature workflow operator",
+      "action_workflow": "execution records quality disposition and yield",
+      "measurable_assertion": "CAP-PRODUCTION-PILOT: execution records quality disposition and yield",
+      "required_receipts": "docs/evidence/console/CAP-PRODUCTION-PILOT/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PRODUCTION-PILOT-N3",
+      "persona_scenario": "Authorized Production subcontracting signature workflow operator",
+      "action_workflow": "yield reconciliation produces auditable variance",
+      "measurable_assertion": "CAP-PRODUCTION-PILOT: yield reconciliation produces auditable variance",
+      "required_receipts": "docs/evidence/console/CAP-PRODUCTION-PILOT/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-PRODUCTION-PILOT-O1",
+      "persona_scenario": "Cross-module Production subcontracting signature workflow operator",
+      "action_workflow": "CAP-PRODUCTION-PILOT omni interaction 1",
+      "measurable_assertion": "CAP-PRODUCTION-PILOT omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-PRODUCTION-PILOT/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PRODUCTION-PILOT-O2",
+      "persona_scenario": "Cross-module Production subcontracting signature workflow operator",
+      "action_workflow": "CAP-PRODUCTION-PILOT omni interaction 2",
+      "measurable_assertion": "CAP-PRODUCTION-PILOT omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-PRODUCTION-PILOT/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Production subcontracting signature workflow; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -1324,7 +1665,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1332,6 +1673,27 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1464,10 +1826,9 @@
    "delivery_unit": {
     "id": "DU-LOGISTICS-PILOT",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -1476,10 +1837,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "logistics"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -1501,32 +1867,67 @@
     "category": "logistics execution",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real logistics execution workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one logistics execution signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-LOGISTICS-PILOT-N1",
+      "persona_scenario": "Authorized Logistics subcontracting signature workflow operator",
+      "action_workflow": "shipment milestones preserve ordered custody events",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT: shipment milestones preserve ordered custody events",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-LOGISTICS-PILOT-N2",
+      "persona_scenario": "Authorized Logistics subcontracting signature workflow operator",
+      "action_workflow": "proof of delivery binds recipient evidence",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT: proof of delivery binds recipient evidence",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-LOGISTICS-PILOT-N3",
+      "persona_scenario": "Authorized Logistics subcontracting signature workflow operator",
+      "action_workflow": "settlement reconciles completed movement",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT: settlement reconciles completed movement",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-LOGISTICS-PILOT-O1",
+      "persona_scenario": "Cross-module Logistics subcontracting signature workflow operator",
+      "action_workflow": "CAP-LOGISTICS-PILOT omni interaction 1",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-LOGISTICS-PILOT-O2",
+      "persona_scenario": "Cross-module Logistics subcontracting signature workflow operator",
+      "action_workflow": "CAP-LOGISTICS-PILOT omni interaction 2",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Logistics subcontracting signature workflow; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -1538,7 +1939,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1552,7 +1953,21 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1658,10 +2073,9 @@
    "delivery_unit": {
     "id": "DU-IFM-PILOT",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -1670,10 +2084,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "support"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -1695,32 +2114,67 @@
     "category": "integrated facilities management",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real integrated facilities management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one integrated facilities management signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-IFM-PILOT-N1",
+      "persona_scenario": "Authorized Integrated facility management signature workflow operator",
+      "action_workflow": "service request starts SLA clock",
+      "measurable_assertion": "CAP-IFM-PILOT: service request starts SLA clock",
+      "required_receipts": "docs/evidence/console/CAP-IFM-PILOT/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-IFM-PILOT-N2",
+      "persona_scenario": "Authorized Integrated facility management signature workflow operator",
+      "action_workflow": "vendor acceptance records scoped completion",
+      "measurable_assertion": "CAP-IFM-PILOT: vendor acceptance records scoped completion",
+      "required_receipts": "docs/evidence/console/CAP-IFM-PILOT/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-IFM-PILOT-N3",
+      "persona_scenario": "Authorized Integrated facility management signature workflow operator",
+      "action_workflow": "SLA breach creates governed escalation",
+      "measurable_assertion": "CAP-IFM-PILOT: SLA breach creates governed escalation",
+      "required_receipts": "docs/evidence/console/CAP-IFM-PILOT/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-IFM-PILOT-O1",
+      "persona_scenario": "Cross-module Integrated facility management signature workflow operator",
+      "action_workflow": "CAP-IFM-PILOT omni interaction 1",
+      "measurable_assertion": "CAP-IFM-PILOT omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-IFM-PILOT/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-IFM-PILOT-O2",
+      "persona_scenario": "Cross-module Integrated facility management signature workflow operator",
+      "action_workflow": "CAP-IFM-PILOT omni interaction 2",
+      "measurable_assertion": "CAP-IFM-PILOT omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-IFM-PILOT/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Integrated facility management signature workflow; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -1732,7 +2186,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1746,7 +2200,21 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1880,10 +2348,13 @@
    "delivery_unit": {
     "id": "DU-EQUIPMENT-3R-PILOT",
     "kind": "module_capability",
-    "rust_required": false,
-    "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "buck2_targets": [
+     "//backend/crates/equipment/domain:mnt-equipment-domain-unit",
+     "//backend/crates/equipment/rest:mnt-equipment-rest",
+     "//backend/app:mnt-app-itest-equipment_3r_api"
+    ],
+    "reason": "Exact Buck2 target labels were queried at the current candidate worktree; completion evidence remains HOLD.",
+    "rust_status": "REQUIRED"
    },
    "dependency_edges": [
     {
@@ -1892,10 +2363,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "equipment"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -1917,32 +2393,67 @@
     "category": "equipment rental, repair, and resale",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real equipment rental, repair, and resale workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one equipment rental, repair, and resale signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-EQUIPMENT-3R-PILOT-N1",
+      "persona_scenario": "Authorized Equipment rental, repair, refurbishment, and resale signature workflow operator",
+      "action_workflow": "serial custody tracks rental handoff",
+      "measurable_assertion": "CAP-EQUIPMENT-3R-PILOT: serial custody tracks rental handoff",
+      "required_receipts": "docs/evidence/console/CAP-EQUIPMENT-3R-PILOT/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EQUIPMENT-3R-PILOT-N2",
+      "persona_scenario": "Authorized Equipment rental, repair, refurbishment, and resale signature workflow operator",
+      "action_workflow": "repair and refurbishment preserve condition history",
+      "measurable_assertion": "CAP-EQUIPMENT-3R-PILOT: repair and refurbishment preserve condition history",
+      "required_receipts": "docs/evidence/console/CAP-EQUIPMENT-3R-PILOT/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EQUIPMENT-3R-PILOT-N3",
+      "persona_scenario": "Authorized Equipment rental, repair, refurbishment, and resale signature workflow operator",
+      "action_workflow": "resale requires reconciled asset disposition",
+      "measurable_assertion": "CAP-EQUIPMENT-3R-PILOT: resale requires reconciled asset disposition",
+      "required_receipts": "docs/evidence/console/CAP-EQUIPMENT-3R-PILOT/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-EQUIPMENT-3R-PILOT-O1",
+      "persona_scenario": "Cross-module Equipment rental, repair, refurbishment, and resale signature workflow operator",
+      "action_workflow": "CAP-EQUIPMENT-3R-PILOT omni interaction 1",
+      "measurable_assertion": "CAP-EQUIPMENT-3R-PILOT omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-EQUIPMENT-3R-PILOT/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EQUIPMENT-3R-PILOT-O2",
+      "persona_scenario": "Cross-module Equipment rental, repair, refurbishment, and resale signature workflow operator",
+      "action_workflow": "CAP-EQUIPMENT-3R-PILOT omni interaction 2",
+      "measurable_assertion": "CAP-EQUIPMENT-3R-PILOT omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-EQUIPMENT-3R-PILOT/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Equipment rental, repair, refurbishment, and resale signature workflow; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -1954,7 +2465,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -1976,6 +2487,13 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2081,10 +2599,9 @@
    "delivery_unit": {
     "id": "DU-CONSULTING-PILOT",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -2093,10 +2610,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "consulting"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": false,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -2118,32 +2640,67 @@
     "category": "professional services delivery",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real professional services delivery workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one professional services delivery signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-CONSULTING-PILOT-N1",
+      "persona_scenario": "Authorized Consulting engagement and realized-benefit signature workflow operator",
+      "action_workflow": "SOW governs change request scope",
+      "measurable_assertion": "CAP-CONSULTING-PILOT: SOW governs change request scope",
+      "required_receipts": "docs/evidence/console/CAP-CONSULTING-PILOT/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-CONSULTING-PILOT-N2",
+      "persona_scenario": "Authorized Consulting engagement and realized-benefit signature workflow operator",
+      "action_workflow": "staffing and time feed billing",
+      "measurable_assertion": "CAP-CONSULTING-PILOT: staffing and time feed billing",
+      "required_receipts": "docs/evidence/console/CAP-CONSULTING-PILOT/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-CONSULTING-PILOT-N3",
+      "persona_scenario": "Authorized Consulting engagement and realized-benefit signature workflow operator",
+      "action_workflow": "realized benefit ties to approved baseline",
+      "measurable_assertion": "CAP-CONSULTING-PILOT: realized benefit ties to approved baseline",
+      "required_receipts": "docs/evidence/console/CAP-CONSULTING-PILOT/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-CONSULTING-PILOT-O1",
+      "persona_scenario": "Cross-module Consulting engagement and realized-benefit signature workflow operator",
+      "action_workflow": "CAP-CONSULTING-PILOT omni interaction 1",
+      "measurable_assertion": "CAP-CONSULTING-PILOT omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-CONSULTING-PILOT/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-CONSULTING-PILOT-O2",
+      "persona_scenario": "Cross-module Consulting engagement and realized-benefit signature workflow operator",
+      "action_workflow": "CAP-CONSULTING-PILOT omni interaction 2",
+      "measurable_assertion": "CAP-CONSULTING-PILOT omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-CONSULTING-PILOT/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Consulting engagement and realized-benefit signature workflow; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -2155,7 +2712,14 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2163,6 +2727,20 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2267,10 +2845,9 @@
    "delivery_unit": {
     "id": "DU-OWNED-PLANTS-PILOT",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -2279,10 +2856,13 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": false,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -2304,32 +2884,67 @@
     "category": "owned-plant production operations",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real owned-plant production operations workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one owned-plant production operations signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-OWNED-PLANTS-PILOT-N1",
+      "persona_scenario": "Authorized Owned-plant production configuration operator",
+      "action_workflow": "plant configuration is effective dated",
+      "measurable_assertion": "CAP-OWNED-PLANTS-PILOT: plant configuration is effective dated",
+      "required_receipts": "docs/evidence/console/CAP-OWNED-PLANTS-PILOT/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-OWNED-PLANTS-PILOT-N2",
+      "persona_scenario": "Authorized Owned-plant production configuration operator",
+      "action_workflow": "execution reconciles order and material state",
+      "measurable_assertion": "CAP-OWNED-PLANTS-PILOT: execution reconciles order and material state",
+      "required_receipts": "docs/evidence/console/CAP-OWNED-PLANTS-PILOT/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-OWNED-PLANTS-PILOT-N3",
+      "persona_scenario": "Authorized Owned-plant production configuration operator",
+      "action_workflow": "production reconciliation emits audit evidence",
+      "measurable_assertion": "CAP-OWNED-PLANTS-PILOT: production reconciliation emits audit evidence",
+      "required_receipts": "docs/evidence/console/CAP-OWNED-PLANTS-PILOT/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-OWNED-PLANTS-PILOT-O1",
+      "persona_scenario": "Cross-module Owned-plant production configuration operator",
+      "action_workflow": "CAP-OWNED-PLANTS-PILOT omni interaction 1",
+      "measurable_assertion": "CAP-OWNED-PLANTS-PILOT omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-OWNED-PLANTS-PILOT/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-OWNED-PLANTS-PILOT-O2",
+      "persona_scenario": "Cross-module Owned-plant production configuration operator",
+      "action_workflow": "CAP-OWNED-PLANTS-PILOT omni interaction 2",
+      "measurable_assertion": "CAP-OWNED-PLANTS-PILOT omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-OWNED-PLANTS-PILOT/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Owned-plant production configuration; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -2341,7 +2956,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2349,6 +2964,27 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2495,10 +3131,9 @@
    "delivery_unit": {
     "id": "DU-PAYROLL-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -2507,10 +3142,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "payroll"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -2532,44 +3172,72 @@
     "category": "enterprise payroll",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/finance.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/finance.md"
      }
     ],
+    "required_outcomes": "A real enterprise payroll workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one enterprise payroll signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-PAYROLL-CONSOLE-N1",
+      "persona_scenario": "Authorized Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "payroll close blocks unresolved exceptions",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE: payroll close blocks unresolved exceptions",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PAYROLL-CONSOLE-N2",
+      "persona_scenario": "Authorized Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "calculation approval precedes disbursement",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE: calculation approval precedes disbursement",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PAYROLL-CONSOLE-N3",
+      "persona_scenario": "Authorized Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "payslip is traceable to approved calculation",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE: payslip is traceable to approved calculation",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-PAYROLL-CONSOLE-O1",
+      "persona_scenario": "Cross-module Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "CAP-PAYROLL-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PAYROLL-CONSOLE-O2",
+      "persona_scenario": "Cross-module Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "CAP-PAYROLL-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
-     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-     "status": "HOLD",
-     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
-    },
-    {
-     "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2583,7 +3251,28 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2726,10 +3415,12 @@
    "delivery_unit": {
     "id": "DU-ATTENDANCE-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
-    "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "buck2_targets": [
+     "//backend/crates/attendance/domain:mnt-attendance-domain-unit",
+     "//backend/crates/attendance/rest:mnt-attendance-rest-unit"
+    ],
+    "reason": "Exact Buck2 target labels were queried at the current candidate worktree; completion evidence remains HOLD.",
+    "rust_status": "REQUIRED"
    },
    "dependency_edges": [
     {
@@ -2738,10 +3429,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "attendance"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -2763,32 +3459,67 @@
     "category": "workforce time and attendance",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/people.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/people.md"
      }
     ],
+    "required_outcomes": "A real workforce time and attendance workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one workforce time and attendance signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-ATTENDANCE-CONSOLE-N1",
+      "persona_scenario": "Authorized Attendance plan-vs-actual, exceptions, substitute coverage, 52h monitor, gated close operator",
+      "action_workflow": "plan versus actual identifies correction need",
+      "measurable_assertion": "CAP-ATTENDANCE-CONSOLE: plan versus actual identifies correction need",
+      "required_receipts": "docs/evidence/console/CAP-ATTENDANCE-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ATTENDANCE-CONSOLE-N2",
+      "persona_scenario": "Authorized Attendance plan-vs-actual, exceptions, substitute coverage, 52h monitor, gated close operator",
+      "action_workflow": "substitution coverage preserves authorization",
+      "measurable_assertion": "CAP-ATTENDANCE-CONSOLE: substitution coverage preserves authorization",
+      "required_receipts": "docs/evidence/console/CAP-ATTENDANCE-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ATTENDANCE-CONSOLE-N3",
+      "persona_scenario": "Authorized Attendance plan-vs-actual, exceptions, substitute coverage, 52h monitor, gated close operator",
+      "action_workflow": "52-hour and close gates prevent invalid finalization",
+      "measurable_assertion": "CAP-ATTENDANCE-CONSOLE: 52-hour and close gates prevent invalid finalization",
+      "required_receipts": "docs/evidence/console/CAP-ATTENDANCE-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-ATTENDANCE-CONSOLE-O1",
+      "persona_scenario": "Cross-module Attendance plan-vs-actual, exceptions, substitute coverage, 52h monitor, gated close operator",
+      "action_workflow": "CAP-ATTENDANCE-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-ATTENDANCE-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-ATTENDANCE-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ATTENDANCE-CONSOLE-O2",
+      "persona_scenario": "Cross-module Attendance plan-vs-actual, exceptions, substitute coverage, 52h monitor, gated close operator",
+      "action_workflow": "CAP-ATTENDANCE-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-ATTENDANCE-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-ATTENDANCE-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -2800,14 +3531,35 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-WORKFORCE-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -2954,10 +3706,9 @@
    "delivery_unit": {
     "id": "DU-RECRUITING",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -2966,10 +3717,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "recruit"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -2991,32 +3747,67 @@
     "category": "talent acquisition",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/people.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/people.md"
      }
     ],
+    "required_outcomes": "A real talent acquisition workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one talent acquisition signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-RECRUITING-N1",
+      "persona_scenario": "Authorized Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "candidate and application remain distinct records",
+      "measurable_assertion": "CAP-RECRUITING: candidate and application remain distinct records",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-RECRUITING-N2",
+      "persona_scenario": "Authorized Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "stage rubric records evaluator decision",
+      "measurable_assertion": "CAP-RECRUITING: stage rubric records evaluator decision",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-RECRUITING-N3",
+      "persona_scenario": "Authorized Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "offer acceptance transitions to hire",
+      "measurable_assertion": "CAP-RECRUITING: offer acceptance transitions to hire",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-RECRUITING-O1",
+      "persona_scenario": "Cross-module Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "CAP-RECRUITING omni interaction 1",
+      "measurable_assertion": "CAP-RECRUITING omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-RECRUITING-O2",
+      "persona_scenario": "Cross-module Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "CAP-RECRUITING omni interaction 2",
+      "measurable_assertion": "CAP-RECRUITING omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -3028,14 +3819,35 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-WORKFORCE-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -3178,10 +3990,9 @@
    "delivery_unit": {
     "id": "DU-ORG-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -3190,10 +4001,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "orgchart"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -3215,32 +4031,67 @@
     "category": "organization management",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/people.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/people.md"
      }
     ],
+    "required_outcomes": "A real organization management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one organization management signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-ORG-CONSOLE-N1",
+      "persona_scenario": "Authorized Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "position change is effective dated",
+      "measurable_assertion": "CAP-ORG-CONSOLE: position change is effective dated",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ORG-CONSOLE-N2",
+      "persona_scenario": "Authorized Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "organization change is reviewed before activation",
+      "measurable_assertion": "CAP-ORG-CONSOLE: organization change is reviewed before activation",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ORG-CONSOLE-N3",
+      "persona_scenario": "Authorized Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "as-of view reconstructs prior structure",
+      "measurable_assertion": "CAP-ORG-CONSOLE: as-of view reconstructs prior structure",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-ORG-CONSOLE-O1",
+      "persona_scenario": "Cross-module Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "CAP-ORG-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-ORG-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ORG-CONSOLE-O2",
+      "persona_scenario": "Cross-module Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "CAP-ORG-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-ORG-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -3252,14 +4103,35 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-WORKFORCE-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -3402,10 +4274,9 @@
    "delivery_unit": {
     "id": "DU-EVALUATION-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -3414,10 +4285,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "evaluation"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -3439,32 +4315,67 @@
     "category": "performance management",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/people.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/people.md"
      }
     ],
+    "required_outcomes": "A real performance management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one performance management signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-EVALUATION-CONSOLE-N1",
+      "persona_scenario": "Authorized Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "self review precedes manager review",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE: self review precedes manager review",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EVALUATION-CONSOLE-N2",
+      "persona_scenario": "Authorized Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "calibration records ordered adjustment",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE: calibration records ordered adjustment",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EVALUATION-CONSOLE-N3",
+      "persona_scenario": "Authorized Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "finalization locks evidenced result",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE: finalization locks evidenced result",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-EVALUATION-CONSOLE-O1",
+      "persona_scenario": "Cross-module Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "CAP-EVALUATION-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EVALUATION-CONSOLE-O2",
+      "persona_scenario": "Cross-module Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "CAP-EVALUATION-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -3476,14 +4387,35 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-WORKFORCE-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -3626,10 +4558,9 @@
    "delivery_unit": {
     "id": "DU-INVENTORY-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -3638,10 +4569,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "inventory"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -3663,32 +4599,67 @@
     "category": "inventory management",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/finance.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/finance.md"
      }
     ],
+    "required_outcomes": "A real inventory management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one inventory management signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-INVENTORY-CONSOLE-N1",
+      "persona_scenario": "Authorized Movement-derived stock, cycle counts, variance reconciliation operator",
+      "action_workflow": "movement records quantity and custody",
+      "measurable_assertion": "CAP-INVENTORY-CONSOLE: movement records quantity and custody",
+      "required_receipts": "docs/evidence/console/CAP-INVENTORY-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-INVENTORY-CONSOLE-N2",
+      "persona_scenario": "Authorized Movement-derived stock, cycle counts, variance reconciliation operator",
+      "action_workflow": "cycle count variance requires disposition",
+      "measurable_assertion": "CAP-INVENTORY-CONSOLE: cycle count variance requires disposition",
+      "required_receipts": "docs/evidence/console/CAP-INVENTORY-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-INVENTORY-CONSOLE-N3",
+      "persona_scenario": "Authorized Movement-derived stock, cycle counts, variance reconciliation operator",
+      "action_workflow": "finance reconciliation receives approved variance",
+      "measurable_assertion": "CAP-INVENTORY-CONSOLE: finance reconciliation receives approved variance",
+      "required_receipts": "docs/evidence/console/CAP-INVENTORY-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-INVENTORY-CONSOLE-O1",
+      "persona_scenario": "Cross-module Movement-derived stock, cycle counts, variance reconciliation operator",
+      "action_workflow": "CAP-INVENTORY-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-INVENTORY-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-INVENTORY-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-INVENTORY-CONSOLE-O2",
+      "persona_scenario": "Cross-module Movement-derived stock, cycle counts, variance reconciliation operator",
+      "action_workflow": "CAP-INVENTORY-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-INVENTORY-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-INVENTORY-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -3700,7 +4671,14 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -3708,6 +4686,20 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -3850,10 +4842,9 @@
    "delivery_unit": {
     "id": "DU-DISPATCH-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -3862,10 +4853,13 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": false,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -3887,32 +4881,67 @@
     "category": "field dispatch",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/field.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/field.md"
      }
     ],
+    "required_outcomes": "A real field dispatch workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one field dispatch signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-DISPATCH-CONSOLE-N1",
+      "persona_scenario": "Authorized Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "constraint assignment detects conflict",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE: constraint assignment detects conflict",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DISPATCH-CONSOLE-N2",
+      "persona_scenario": "Authorized Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "replan preserves superseded assignment lineage",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE: replan preserves superseded assignment lineage",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DISPATCH-CONSOLE-N3",
+      "persona_scenario": "Authorized Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "assignee acknowledgement returns durable receipt",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE: assignee acknowledgement returns durable receipt",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-DISPATCH-CONSOLE-O1",
+      "persona_scenario": "Cross-module Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "CAP-DISPATCH-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DISPATCH-CONSOLE-O2",
+      "persona_scenario": "Cross-module Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "CAP-DISPATCH-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -3924,7 +4953,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -3946,6 +4975,13 @@
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -4088,10 +5124,9 @@
    "delivery_unit": {
     "id": "DU-MAINTENANCE-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -4100,10 +5135,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "support"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -4125,32 +5165,67 @@
     "category": "maintenance management",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/field.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/field.md"
      }
     ],
+    "required_outcomes": "A real maintenance management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one maintenance management signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-N1",
+      "persona_scenario": "Authorized Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "request creates governed work order",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE: request creates governed work order",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-N2",
+      "persona_scenario": "Authorized Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "status and cost gates control completion",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE: status and cost gates control completion",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-N3",
+      "persona_scenario": "Authorized Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "evidence updates asset history",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE: evidence updates asset history",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-O1",
+      "persona_scenario": "Cross-module Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "CAP-MAINTENANCE-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-O2",
+      "persona_scenario": "Cross-module Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "CAP-MAINTENANCE-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -4162,7 +5237,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -4176,7 +5251,21 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -4319,10 +5408,9 @@
    "delivery_unit": {
     "id": "DU-FIELD-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -4331,10 +5419,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "support"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -4356,32 +5449,67 @@
     "category": "field service",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/field.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/field.md"
      }
     ],
+    "required_outcomes": "A real field service workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one field service signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-FIELD-CONSOLE-N1",
+      "persona_scenario": "Authorized Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "field check-in captures scoped presence",
+      "measurable_assertion": "CAP-FIELD-CONSOLE: field check-in captures scoped presence",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-FIELD-CONSOLE-N2",
+      "persona_scenario": "Authorized Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "work log requires acceptance",
+      "measurable_assertion": "CAP-FIELD-CONSOLE: work log requires acceptance",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-FIELD-CONSOLE-N3",
+      "persona_scenario": "Authorized Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "offline conflict resolves with audit trail",
+      "measurable_assertion": "CAP-FIELD-CONSOLE: offline conflict resolves with audit trail",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-FIELD-CONSOLE-O1",
+      "persona_scenario": "Cross-module Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "CAP-FIELD-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-FIELD-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-FIELD-CONSOLE-O2",
+      "persona_scenario": "Cross-module Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "CAP-FIELD-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-FIELD-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
@@ -4393,7 +5521,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -4407,7 +5535,21 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -4551,10 +5693,9 @@
    "delivery_unit": {
     "id": "DU-DOCS-EVIDENCE-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -4563,10 +5704,16 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "inbox",
+     "mail"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -4588,37 +5735,100 @@
     "category": "document and evidence management",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/evidence.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/evidence.md"
      }
     ],
+    "required_outcomes": "A real document and evidence management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one document and evidence management signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-N1",
+      "persona_scenario": "Authorized Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "classification applies retention policy",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE: classification applies retention policy",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-N2",
+      "persona_scenario": "Authorized Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "legal hold blocks disposition",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE: legal hold blocks disposition",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-N3",
+      "persona_scenario": "Authorized Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "fixity and custody evidence survive lifecycle",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE: fixity and custody evidence survive lifecycle",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-O1",
+      "persona_scenario": "Cross-module Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "CAP-DOCS-EVIDENCE-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-O2",
+      "persona_scenario": "Cross-module Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "CAP-DOCS-EVIDENCE-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -4769,10 +5979,9 @@
    "delivery_unit": {
     "id": "DU-NOTIF-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -4781,10 +5990,17 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "inbox",
+     "messenger",
+     "mail"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -4806,37 +6022,100 @@
     "category": "enterprise notifications",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/comms.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/comms.md"
      }
     ],
+    "required_outcomes": "A real enterprise notifications workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one enterprise notifications signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-NOTIF-CONSOLE-N1",
+      "persona_scenario": "Authorized Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "source aggregation deduplicates notification",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE: source aggregation deduplicates notification",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-NOTIF-CONSOLE-N2",
+      "persona_scenario": "Authorized Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "persistent acknowledgement changes unread state",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE: persistent acknowledgement changes unread state",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-NOTIF-CONSOLE-N3",
+      "persona_scenario": "Authorized Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "deep link opens authorized source context",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE: deep link opens authorized source context",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-NOTIF-CONSOLE-O1",
+      "persona_scenario": "Cross-module Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "CAP-NOTIF-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-NOTIF-CONSOLE-O2",
+      "persona_scenario": "Cross-module Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "CAP-NOTIF-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -4986,10 +6265,9 @@
    "delivery_unit": {
     "id": "DU-BOARD-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -4998,10 +6276,13 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": false,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -5023,37 +6304,100 @@
     "category": "enterprise communications",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real enterprise communications workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one enterprise communications signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-BOARD-CONSOLE-N1",
+      "persona_scenario": "Authorized Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "scoped publication uses versioned content",
+      "measurable_assertion": "CAP-BOARD-CONSOLE: scoped publication uses versioned content",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BOARD-CONSOLE-N2",
+      "persona_scenario": "Authorized Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "acknowledgement is attributable",
+      "measurable_assertion": "CAP-BOARD-CONSOLE: acknowledgement is attributable",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BOARD-CONSOLE-N3",
+      "persona_scenario": "Authorized Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "amendment retains prior version lineage",
+      "measurable_assertion": "CAP-BOARD-CONSOLE: amendment retains prior version lineage",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-BOARD-CONSOLE-O1",
+      "persona_scenario": "Cross-module Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "CAP-BOARD-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-BOARD-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BOARD-CONSOLE-O2",
+      "persona_scenario": "Cross-module Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "CAP-BOARD-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-BOARD-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Scoped notice publishing with acknowledgment tracking; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
      "jurisdiction_id": "JUR-KR-001",
      "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -5181,10 +6525,9 @@
    "delivery_unit": {
     "id": "DU-DIRECTORY-CONSOLE",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "NOT_APPLICABLE"
    },
    "dependency_edges": [
     {
@@ -5193,10 +6536,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "people"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -5218,32 +6566,67 @@
     "category": "people and organization directory",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real people and organization directory workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one people and organization directory signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-N1",
+      "persona_scenario": "Authorized People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "PBAC search excludes restricted people",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE: PBAC search excludes restricted people",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-N2",
+      "persona_scenario": "Authorized People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "organization placement resolves as-of",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE: organization placement resolves as-of",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-N3",
+      "persona_scenario": "Authorized People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "restricted fields are omitted and audited",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE: restricted fields are omitted and audited",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-O1",
+      "persona_scenario": "Cross-module People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "CAP-DIRECTORY-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-O2",
+      "persona_scenario": "Cross-module People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "CAP-DIRECTORY-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for People/team directory: live org placement, contact channels, object links, PBAC-scoped search; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -5255,14 +6638,35 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-WORKFORCE-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -5369,10 +6773,9 @@
    "delivery_unit": {
     "id": "DU-ASSET-MASTER-ACTION",
     "kind": "module_capability",
-    "rust_required": false,
     "buck2_targets": [],
-    "buck_target_status": "HOLD_UNRESOLVED_EXACT_TARGETS",
-    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target."
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
    },
    "dependency_edges": [
     {
@@ -5381,10 +6784,15 @@
     }
    ],
    "route_presentation": {
-    "mounted": false,
-    "exposed": false,
-    "nav": true,
-    "source": "candidate ebdf4c81d22502fac7a46192dd0b237fc0748241: registry route declaration reconciled conservatively; source-level mount/exposure receipt is not yet approved"
+    "route_keys": [
+     "asset"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
    },
    "candidate_evidence": {
     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
@@ -5406,32 +6814,67 @@
     "category": "enterprise asset master and governed actions",
     "comparator_sources": [
      {
-      "source": "docs/program/benchmark-brief.md",
-      "observation_as_of": "2026-07-23",
-      "observation": "Repository-bounded category benchmark reference; exact candidate comparison remains unverified."
-     },
-     {
-      "source": "docs/design/oyatie-console/BENCHMARK.md",
+      "source": "docs/program/benchmark-matrix/INDEX.md",
       "observation_as_of": "2026-07-24",
-      "observation": "Claude Design is interaction intent only and cannot establish product parity."
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
      }
     ],
+    "required_outcomes": "A real enterprise asset master and governed actions workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
     "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
     "verdict": "HOLD",
     "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; no exact module comparison or user-story evidence admitted",
     "native_outcomes": [
-     "Authorized operator completes one enterprise asset master and governed actions signature workflow against a real backend contract.",
-     "The workflow persists a durable state transition and returns a user-visible receipt without mock-only success.",
-     "The module renders authorized data at its declared route with accessible keyboard and responsive behavior."
+     {
+      "id": "CAP-ASSET-MASTER-ACTION-N1",
+      "persona_scenario": "Authorized Asset master record and governed operational action operator",
+      "action_workflow": "serial identity resolves canonical asset",
+      "measurable_assertion": "CAP-ASSET-MASTER-ACTION: serial identity resolves canonical asset",
+      "required_receipts": "docs/evidence/console/CAP-ASSET-MASTER-ACTION/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ASSET-MASTER-ACTION-N2",
+      "persona_scenario": "Authorized Asset master record and governed operational action operator",
+      "action_workflow": "effective master update enforces optimistic concurrency",
+      "measurable_assertion": "CAP-ASSET-MASTER-ACTION: effective master update enforces optimistic concurrency",
+      "required_receipts": "docs/evidence/console/CAP-ASSET-MASTER-ACTION/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ASSET-MASTER-ACTION-N3",
+      "persona_scenario": "Authorized Asset master record and governed operational action operator",
+      "action_workflow": "receipt preserves custody and typed links",
+      "measurable_assertion": "CAP-ASSET-MASTER-ACTION: receipt preserves custody and typed links",
+      "required_receipts": "docs/evidence/console/CAP-ASSET-MASTER-ACTION/native-3.json",
+      "status": "HOLD"
+     }
     ],
     "omni_outcomes": [
-     "The module supplies typed object/action/workflow linkage without bypassing server scope.",
-     "The module emits auditable lineage for its real workflow."
+     {
+      "id": "CAP-ASSET-MASTER-ACTION-O1",
+      "persona_scenario": "Cross-module Asset master record and governed operational action operator",
+      "action_workflow": "CAP-ASSET-MASTER-ACTION omni interaction 1",
+      "measurable_assertion": "CAP-ASSET-MASTER-ACTION omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-ASSET-MASTER-ACTION/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ASSET-MASTER-ACTION-O2",
+      "persona_scenario": "Cross-module Asset master record and governed operational action operator",
+      "action_workflow": "CAP-ASSET-MASTER-ACTION omni interaction 2",
+      "measurable_assertion": "CAP-ASSET-MASTER-ACTION omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-ASSET-MASTER-ACTION/omni-2.json",
+      "status": "HOLD"
+     }
     ],
     "independent_outcome_review": {
      "status": "HOLD",
-     "reason": "No independent candidate-bound outcome review is admitted."
-    }
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Asset master record and governed operational action; seed references are not comparator evidence."
    },
    "jurisdiction_bindings": [
     {
@@ -5443,7 +6886,7 @@
     },
     {
      "jurisdiction_id": "JUR-KR-001",
-     "control_id": "CTRL-KR-RECORDS-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
@@ -5468,6 +6911,13 @@
      "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
      "status": "HOLD",
      "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
     }
    ]
   }
@@ -5484,12 +6934,12 @@
   "authority_base_sha": "8e42b9a2ea42c4d79ed498044a9f50f623299f7f",
   "historical_implementation_freeze_sha": "78cb5197927a031ead30c6dc0426c23455d3cb16",
   "exact_current_candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
-  "candidate_evidence_status": "HOLD: P1D confirms a healthy dev-auth stack but backend provenance is not exact-candidate provable."
+  "candidate_evidence_status": "HOLD: P0 structure is current; no module completion claim is admitted."
  },
  "candidate": {
   "sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
   "branch": "codex/operational-object-runtime-progress",
-  "evidence_status": "HOLD: P1D confirms a healthy dev-auth stack but backend provenance is not exact-candidate provable."
+  "evidence_status": "HOLD"
  },
  "design_reference": {
   "source_project": "claude.ai/design/p/9c7c313a-2187-4cf1-bb35-7c07ad0a4d9d",
@@ -5513,5 +6963,118 @@
    "interoperability": "Modules exchange stable domain contracts through explicit adapters, never shared UI state or undocumented database coupling."
   },
   "evidence_binding": "candidate:ebdf4c81d22502fac7a46192dd0b237fc0748241; cross-module proof wave not yet admitted"
+ },
+ "source_inventory": {
+  "candidate_sha": "ebdf4c81d22502fac7a46192dd0b237fc0748241",
+  "unmodeled_nav_keys": [
+   {
+    "key": "mywork",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "sales",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "leave",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "finance",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "purchase",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "dispatch",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "maintenance",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "field",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "appr",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "docs",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "compliance",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "dashboard",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "laborcost",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "forecast",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "notif",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "board",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "directory",
+    "status": "HOLD_UNMAPPED"
+   }
+  ],
+  "unmodeled_mounted_keys": [
+   {
+    "key": "mywork",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "leave",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "sales",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "finance",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "appr",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "dashboard",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "laborcost",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "forecast",
+    "status": "HOLD_UNMAPPED"
+   }
+  ],
+  "unmodeled_exposed_keys": [
+   {
+    "key": "sales",
+    "status": "HOLD_UNMAPPED"
+   }
+  ]
  }
 }

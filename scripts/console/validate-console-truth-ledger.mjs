@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseImmutableJson } from './immutable-json.mjs';
+import { extractConsoleRouteFacts } from './route-inventory.mjs';
 
 const SHA = /^[0-9a-f]{40}$/;
 const STATES = new Set(['DECLARED', 'PLANNED', 'IMPLEMENTED', 'VERIFIED', 'EXPOSED', 'HOLD']);
@@ -18,12 +20,13 @@ function nonempty(value, label) { if (typeof value !== 'string' || value.trim() 
 function sha(value, label) { if (!SHA.test(value ?? '')) fail(`${label} must be a full lowercase Git SHA`); return value; }
 function uniqueStrings(values, label) { const seen = new Set(); for (const value of values) { nonempty(value, label); if (seen.has(value)) fail(`duplicate ${label}: ${value}`); seen.add(value); } return seen; }
 
-export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true } = {}) {
+export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true, resolveBuckTarget = () => true, expectedCandidateSha, routeFacts } = {}) {
   object(registry, 'registry'); object(jurisdiction, 'jurisdiction register');
   if (registry.schema_version !== 'console-capability-registry-v2') fail('unsupported console capability registry schema');
   if (jurisdiction.schema_version !== 'console-jurisdiction-register-v2') fail('unsupported console jurisdiction register schema');
   const candidate = object(registry.candidate, 'candidate');
   sha(candidate.sha, 'candidate sha');
+  if (!SHA.test(expectedCandidateSha ?? '') || candidate.sha !== expectedCandidateSha) fail('ledger candidate does not match externally supplied expected candidate SHA');
   if (!resolveSha(candidate.sha)) fail('candidate SHA is unresolvable');
   for (const key of ['authority_base_sha', 'historical_implementation_freeze_sha']) {
     sha(registry.provenance?.[key], key);
@@ -37,6 +40,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
   for (const area of ['identity_scope', 'object_action_workflow', 'search', 'audit_lineage', 'interoperability']) nonempty(omni.required_outcomes?.[area], `shared omni-platform gate ${area}`);
   if (!Array.isArray(registry.capabilities) || registry.capabilities.length === 0) fail('registry capabilities must be a non-empty array');
   const ids = new Set();
+  const globalOutcomeAssertions = new Set();
   const privateRoots = [];
   const sharedRoots = new Set(array(registry.shared_collision_roots?.paths));
   for (const cap of registry.capabilities) {
@@ -60,24 +64,33 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     for (const source of sources) { object(source, `${cap.id} comparator source`); nonempty(source.source, `${cap.id} comparator source path`); nonempty(source.observation_as_of, `${cap.id} comparator observation date`); nonempty(source.observation, `${cap.id} comparator observation`); }
     if (array(benchmark.native_outcomes).length < 3 || array(benchmark.native_outcomes).length > 7) fail(`${cap.id} benchmark requires 3-7 measurable native outcomes`);
     if (array(benchmark.omni_outcomes).length < 1 || array(benchmark.omni_outcomes).length > 3) fail(`${cap.id} benchmark requires 1-3 additive omni outcomes`);
-    for (const outcome of [...benchmark.native_outcomes, ...benchmark.omni_outcomes]) nonempty(outcome, `${cap.id} benchmark outcome`);
+    const outcomeIds = new Set(); const outcomeShapes = new Set();
+    for (const outcome of [...benchmark.native_outcomes, ...benchmark.omni_outcomes]) { object(outcome, `${cap.id} benchmark outcome`); for (const key of ['id','persona_scenario','action_workflow','measurable_assertion','required_receipts','status']) nonempty(outcome[key], `${cap.id} benchmark outcome ${key}`); if (outcome.status !== 'HOLD') fail(`${cap.id} benchmark outcome must remain HOLD`); if (outcomeIds.has(outcome.id)) fail(`${cap.id} duplicate benchmark outcome id`); outcomeIds.add(outcome.id); const shape=outcome.measurable_assertion; if (outcomeShapes.has(shape) || globalOutcomeAssertions.has(shape)) fail(`${cap.id} duplicate benchmark outcome assertion`); outcomeShapes.add(shape); globalOutcomeAssertions.add(shape); }
+    if (!['SOURCE_BOUNDED_STARTING_DOSSIER','HOLD_INSUFFICIENT_CATEGORY_DOSSIER'].includes(benchmark.dossier_status)) fail(`${cap.id} benchmark dossier status is invalid`);
+    if (benchmark.dossier_status === 'HOLD_INSUFFICIENT_CATEGORY_DOSSIER') nonempty(benchmark.missing_dossier_reason, `${cap.id} missing dossier reason`);
     if (!VERDICTS.has(benchmark.verdict)) fail(`${cap.id} benchmark verdict is invalid`);
     nonempty(benchmark.independent_outcome_review?.status, `${cap.id} independent outcome review status`);
     if (benchmark.verdict !== 'HOLD' && evidence.status !== 'VERIFIED') fail(`${cap.id} non-HOLD benchmark requires verified candidate evidence`);
     const delivery = object(cap.delivery_unit, `${cap.id} delivery unit`);
     nonempty(delivery.id, `${cap.id} delivery unit id`);
-    if (delivery.rust_required === true && array(delivery.buck2_targets).length === 0) fail(`${cap.id} Rust-required delivery unit has empty Buck targets`);
+    if (!['NOT_APPLICABLE','REQUIRED','REQUIRED_UNRESOLVED'].includes(delivery.rust_status)) fail(`${cap.id} delivery unit has invalid Rust status`);
+    const buckTargets = array(delivery.buck2_targets);
+    if (delivery.rust_status === 'REQUIRED' && !buckTargets.length) fail(`${cap.id} Rust-required delivery unit has empty Buck targets`);
+    if (delivery.rust_status === 'REQUIRED_UNRESOLVED' && (truth.implementation !== 'HOLD' || evidence.status !== 'HOLD')) fail(`${cap.id} unresolved Rust delivery must remain HOLD`);
+    for (const target of buckTargets) { if (typeof target !== 'string' || !/^\/\/[A-Za-z0-9_./-]+:[A-Za-z0-9_.-]+$/.test(target) || !resolveBuckTarget(target)) fail(`${cap.id} has invalid/nonexistent Buck target`); }
     const dependencies = array(cap.dependency_edges);
     for (const edge of dependencies) {
       object(edge, `${cap.id} dependency edge`); nonempty(edge.target, `${cap.id} dependency target`);
       if (edge.target === cap.id || !EDGE_TYPES.has(edge.type)) fail(`${cap.id} has dangling/invalid dependency`);
     }
     const route = object(cap.route_presentation, `${cap.id} route/presentation state`);
-    for (const key of ['mounted', 'exposed', 'nav']) if (typeof route[key] !== 'boolean') fail(`${cap.id} route/presentation ${key} must be boolean`);
-    nonempty(route.source, `${cap.id} route/presentation source`);
-    if (route.exposed && !route.mounted) fail(`${cap.id} exposed route must be mounted`);
-    if (truth.exposure === 'EXPOSED' && !route.exposed) fail(`${cap.id} exposed truth contradicts route presentation`);
-    if (route.exposed && truth.exposure !== 'EXPOSED') fail(`${cap.id} route exposure contradicts truth state`);
+    if (!Array.isArray(route.route_keys)) fail(`${cap.id} route keys must be an array`);
+    for (const key of ['source_mounted', 'production_exposed', 'registry_body_present', 'nav_declared']) if (typeof route[key] !== 'boolean') fail(`${cap.id} route/presentation ${key} must be boolean`);
+    nonempty(route.evidence_receipt_status, `${cap.id} route evidence receipt status`); nonempty(route.source, `${cap.id} route/presentation source`);
+    if (route.production_exposed && !route.source_mounted) fail(`${cap.id} exposed route must be mounted`);
+    if (truth.exposure === 'EXPOSED' && !route.production_exposed) fail(`${cap.id} exposed truth contradicts route presentation`);
+    if (route.production_exposed && truth.exposure !== 'EXPOSED') fail(`${cap.id} route exposure contradicts truth state`);
+    if (routeFacts) for (const key of route.route_keys) { const fact=routeFacts.facts?.[key]; if (!fact || ['source_mounted','production_exposed','registry_body_present','nav_declared'].some((field)=>fact[field]!==route[field])) fail(`${cap.id} route source fact mismatch for ${key}`); }
     const ownership = object(cap.ownership, `${cap.id} ownership`);
     for (const key of ['frontend_roots', 'backend_roots', 'api_schema_roots']) for (const root of array(ownership[key])) nonempty(root, `${cap.id} ownership root`);
     for (const root of array(ownership.private_roots)) { nonempty(root, `${cap.id} private ownership root`); if (sharedRoots.has(root)) fail(`${cap.id} private root is declared shared`); privateRoots.push([cap.id, root]); }
@@ -91,7 +104,8 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     const [aId, a] = privateRoots[i], [bId, b] = privateRoots[j];
     if (aId !== bId && (a === b || a.startsWith(`${b.replace(/\/\*\*$/, '')}/`) || b.startsWith(`${a.replace(/\/\*\*$/, '')}/`))) fail(`overlapping private roots: ${aId}:${a} and ${bId}:${b}`);
   }
-  const controls = new Map(array(jurisdiction.controls).map((control) => [control.id, control]));
+  if (!array(jurisdiction.jurisdictions).every((entry) => entry?.country_code === 'KR')) fail('non-KR jurisdiction is outside the target register');
+  const controls = new Map(); for (const control of array(jurisdiction.controls)) { if (controls.has(control.id)) fail(`duplicate control id: ${control.id}`); controls.set(control.id, control); }
   if (!controls.size) fail('jurisdiction register has no controls');
   for (const control of controls.values()) {
     if (control.release_disposition !== 'HOLD') fail(`jurisdiction control ${control.id} must remain HOLD without qualified authority`);
@@ -100,17 +114,19 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     if (!array(control.capability_traceability).length) fail(`${control.id} missing capability traceability`);
   }
   for (const cap of registry.capabilities) for (const binding of cap.jurisdiction_bindings) {
-    if (!controls.has(binding.control_id)) fail(`${cap.id} has missing jurisdiction control ${binding.control_id}`);
+    if (binding.jurisdiction_id !== 'JUR-KR-001' || !controls.has(binding.control_id)) fail(`${cap.id} has missing jurisdiction control ${binding.control_id}`);
     if (binding.candidate_sha !== candidate.sha) fail(`${cap.id} jurisdiction binding is not candidate-bound`);
+    if (!array(controls.get(binding.control_id).capability_traceability).some((trace) => trace.capability_id === cap.id && trace.candidate_sha === candidate.sha)) fail(`${cap.id} jurisdiction trace is not bidirectional`);
   }
   return { capability_count: registry.capabilities.length, candidate_sha: candidate.sha, verdict: 'STRUCTURALLY_VALID_HOLD_PRESERVED' };
 }
 
 function main() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const registry = JSON.parse(readFileSync(path.join(root, 'docs/program/console-capability-registry.json')));
-  const jurisdiction = JSON.parse(readFileSync(path.join(root, 'docs/program/console-jurisdiction-register.json')));
+  const registry = parseImmutableJson(readFileSync(path.join(root, 'docs/program/console-capability-registry.json'), 'utf8'), 'console capability registry').value;
+  const jurisdiction = parseImmutableJson(readFileSync(path.join(root, 'docs/program/console-jurisdiction-register.json'), 'utf8'), 'console jurisdiction register').value;
   const resolveSha = (value) => { try { execFileSync('git', ['cat-file', '-e', `${value}^{commit}`], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
-  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha }), null, 2));
+  const expectedCandidateSha = process.env.CONSOLE_EXPECTED_CANDIDATE_SHA ?? 'ebdf4c81d22502fac7a46192dd0b237fc0748241';
+  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha, expectedCandidateSha, routeFacts: extractConsoleRouteFacts(root) }), null, 2));
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
