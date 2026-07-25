@@ -1,4 +1,4 @@
-import { useAuth } from "../../context/auth";
+import { useActiveBranchId, useAuth } from "../../context/auth";
 import { MaintenanceScreen } from "./MaintenanceScreen";
 import { deriveMaintenanceCapabilities } from "./maintenanceCapabilities";
 import { useMaintenanceConsoleAuthz } from "./useMaintenanceConsoleAuthz";
@@ -25,4 +25,14 @@ export function MaintenanceConsoleBody({ branchId }: { branchId: string }) {
       sessionKey={session?.client_session_incarnation ?? session?.access_token}
     />
   );
+}
+
+/**
+ * Zero-prop body for the shared screen registry (`SCREEN_REGISTRY.maintenance`).
+ * Resolves the active branch itself; with no branch membership the capability
+ * projection fails closed and the screen renders its denied state.
+ */
+export function MaintenanceScreenBody() {
+  const branchId = useActiveBranchId();
+  return <MaintenanceConsoleBody branchId={branchId ?? ""} />;
 }

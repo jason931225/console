@@ -110,6 +110,15 @@ export const MOUNTED_SCREEN_KEYS = [
   "mail",
   "logistics",
   "equipment",
+  "payroll",
+  "recruit",
+  "orgchart",
+  "evaluation",
+  "maintenance",
+  "field",
+  "notif",
+  "board",
+  "directory",
 ] as const;
 
 export type MountedScreenKey = (typeof MOUNTED_SCREEN_KEYS)[number];

@@ -30,6 +30,15 @@ import { ConsultingEngagementBody } from "../consulting/ConsultingEngagementBody
 import { LogisticsScreenBody } from "../logistics";
 import { EquipmentScreenBody } from "../equipment";
 import { InventoryScreenBody } from "../inventory/InventoryScreenBody";
+import { PayrollScreenBody } from "../payroll";
+import { RecruitingScreenBody } from "../recruiting";
+import { OrgChartScreenBody } from "../org";
+import { EvaluationScreenBody } from "../evaluation";
+import { MaintenanceScreenBody } from "../maintenance";
+import { FieldScreenBody } from "../field";
+import { NotifScreenBody } from "../notif";
+import { BoardScreenBody } from "../board";
+import { DirectoryScreenBody } from "../directory";
 
 export const SCREEN_REGISTRY: Readonly<Record<MountedScreenKey, ComponentType>> = {
   overview: OverviewScreen,
@@ -63,4 +72,13 @@ export const SCREEN_REGISTRY: Readonly<Record<MountedScreenKey, ComponentType>> 
   support: SupportBody,
   messenger: MessengerScreenBody,
   mail: MailScreenBody,
+  payroll: PayrollScreenBody,
+  recruit: RecruitingScreenBody,
+  orgchart: OrgChartScreenBody,
+  evaluation: EvaluationScreenBody,
+  maintenance: MaintenanceScreenBody,
+  field: FieldScreenBody,
+  notif: NotifScreenBody,
+  board: BoardScreenBody,
+  directory: DirectoryScreenBody,
 };
