@@ -40,6 +40,22 @@ function verifySignedCommit(repoRoot, sha, label) {
   const verified = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', sha], { encoding: 'utf8' });
   if (verified.status !== 0) fail(`${label} commit signature is not valid`);
 }
+function assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha) {
+  const fields = git(repoRoot, ['diff', '--raw', '-z', '--abbrev=40', '--find-renames', '--find-copies-harder', `${candidateSha}..${integrationTipSha}`]).split('\0');
+  for (let index = 0; index < fields.length - 1;) {
+    const header = fields[index++];
+    const match = header.match(/^:([0-7]{6}) ([0-7]{6}) [0-9a-f]{40} [0-9a-f]{40} ([A-Z])(?:\d+)?$/);
+    if (!match) fail('integration tip diff entry is malformed');
+    const [, oldMode, newMode, status] = match;
+    const paths = status === 'R' || status === 'C' ? [fields[index++], fields[index++]] : [fields[index++]];
+    if (paths.some((entry) => !isAuthorityControlPath(entry))) fail(`integration tip changes product path after candidate: ${paths.find((entry) => !isAuthorityControlPath(entry))}`);
+    if (oldMode !== '000000' && oldMode !== '100644' && oldMode !== '100755') fail('integration tip changes a non-regular file');
+    if (newMode !== '000000' && newMode !== '100644' && newMode !== '100755') fail('integration tip changes a non-regular file');
+    if (status === 'R' || status === 'C') fail(`integration tip contains forbidden ${status === 'R' ? 'rename' : 'copy'}`);
+    if (!['A', 'D', 'M'].includes(status)) fail(`integration tip contains unsupported diff status: ${status}`);
+    if (status === 'M' && oldMode !== newMode) fail('integration tip changes file mode or type');
+  }
+}
 
 /**
  * Attests an immutable product candidate C and a later authority tip T.
@@ -51,9 +67,7 @@ export function createConsoleCandidateSourceResolver(repoRoot, candidateSha, int
   verifySignedCommit(repoRoot, candidateSha, 'candidate');
   if (!gitSucceeds(repoRoot, ['cat-file', '-e', `${integrationTipSha}^{commit}`])) fail('integration tip SHA is unresolvable');
   if (!gitSucceeds(repoRoot, ['merge-base', '--is-ancestor', candidateSha, integrationTipSha])) fail('candidate SHA is not an ancestor of integration tip');
-  const changed = git(repoRoot, ['diff', '--name-only', `${candidateSha}..${integrationTipSha}`]).trim().split('\n').filter(Boolean);
-  const forbidden = changed.find((entry) => !isAuthorityControlPath(entry));
-  if (forbidden) fail(`integration tip changes product path after candidate: ${forbidden}`);
+  assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha);
   const readText = (relativePath) => {
     if (!repositoryPath(relativePath)) fail('candidate source path is not repository-relative');
     try { return git(repoRoot, ['show', `${candidateSha}:${relativePath}`]); } catch { fail(`candidate source is missing: ${relativePath}`); }

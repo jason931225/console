@@ -3,11 +3,9 @@
 import { createHash } from 'node:crypto';
 
 import path from 'node:path';
-import { lstatSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { createConsoleCandidateSourceResolver, extractConsoleRouteFactsFromCandidate, isValidatedConsoleTruthLedger, validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
-import { extractConsoleRouteFactsFromTexts } from './route-inventory.mjs';
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const QUALITY_BIAS_DEFAULT = 0.6;

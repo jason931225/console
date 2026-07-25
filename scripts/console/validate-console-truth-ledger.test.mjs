@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -134,11 +134,18 @@ test('a real SSH-signed canonical Git receipt is the only non-HOLD admission pat
     run(['config', 'gpg.format', 'ssh']); run(['config', 'user.signingkey', signingKey]);
     const allowed = path.join(root, 'allowed_signers'); writeFileSync(allowed, 'jason19931225@gmail.com ' + readFileSync(`${signingKey}.pub`, 'utf8'));
     run(['config', 'gpg.ssh.allowedSignersFile', allowed]);
-    writeFileSync(path.join(root, 'candidate.txt'), 'candidate\n'); run(['add', '.']); run(['commit', '-S', '-m', 'candidate']);
+    mkdirSync(path.join(root, 'scripts/console'), { recursive: true }); writeFileSync(path.join(root, 'scripts/console/control.mjs'), 'export const control = true;\n'); writeFileSync(path.join(root, 'candidate.txt'), 'candidate\n'); run(['add', '.']); run(['commit', '-S', '-m', 'candidate']);
     const candidateSha = run(['rev-parse', 'HEAD']);
-    mkdirSync(path.join(root, 'scripts/console'), { recursive: true }); writeFileSync(path.join(root, 'scripts/console/control.mjs'), 'export const control = true;\n'); run(['add', '.']); run(['commit', '--no-gpg-sign', '-m', 'authority control']);
+    writeFileSync(path.join(root, 'scripts/console/authority.mjs'), 'export const authority = true;\n'); run(['add', '.']); run(['commit', '--no-gpg-sign', '-m', 'authority control']);
     const authorityTip = run(['rev-parse', 'HEAD']);
     assert.equal(createConsoleCandidateSourceResolver(root, candidateSha, authorityTip).readText('candidate.txt'), 'candidate\n');
+    run(['checkout', '-b', 'renamed-authority', authorityTip]);
+    run(['mv', 'scripts/console/control.mjs', 'scripts/console/renamed-control.mjs']); run(['commit', '--no-gpg-sign', '-m', 'rename authority control']);
+    assert.throws(() => createConsoleCandidateSourceResolver(root, candidateSha, run(['rev-parse', 'HEAD'])), /forbidden rename/);
+    run(['checkout', '-B', 'symlink-authority', authorityTip]);
+    rmSync(path.join(root, 'scripts/console/control.mjs')); symlinkSync('target.mjs', path.join(root, 'scripts/console/control.mjs')); run(['add', '-A']); run(['commit', '--no-gpg-sign', '-m', 'symlink authority control']);
+    assert.throws(() => createConsoleCandidateSourceResolver(root, candidateSha, run(['rev-parse', 'HEAD'])), /non-regular file/);
+    run(['checkout', '-B', 'product-drift', authorityTip]);
     writeFileSync(path.join(root, 'product.txt'), 'forbidden\n'); run(['add', '.']); run(['commit', '--no-gpg-sign', '-m', 'product drift']);
     const productTip = run(['rev-parse', 'HEAD']);
     assert.throws(() => createConsoleCandidateSourceResolver(root, candidateSha, productTip), /changes product path/);
