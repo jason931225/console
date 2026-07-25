@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import { useEffect, type ReactNode } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import type { ConsoleAuthz, ScopeOption } from "./authz";
@@ -16,6 +17,7 @@ import { Sidebar } from "./Sidebar";
 import type { ThemeMode } from "./theme";
 
 const markConsoleRoute = vi.fn<(screen: string) => void>();
+const routerLocations: string[] = [];
 const server = setupServer(
   http.get("*/api/v1/ontology/object-types", () => HttpResponse.json([])),
   http.get("*/api/v1/workflow-studio/definitions", () => HttpResponse.json({ items: [] })),
@@ -66,9 +68,13 @@ vi.mock("./authz", () => {
 function RouterProbe() {
   const location = useLocation();
   const navigate = useNavigate();
+  const renderedLocation = `${location.pathname}${location.search}${location.hash}`;
+  useEffect(() => {
+    routerLocations.push(renderedLocation);
+  }, [renderedLocation]);
   return (
     <>
-      <output data-router-location>{`${location.pathname}${location.search}${location.hash}`}</output>
+      <output data-router-location>{renderedLocation}</output>
       <button type="button" onClick={() => void navigate(-1)}>
         history back
       </button>
@@ -120,6 +126,7 @@ function stubViewport(width: number) {
 describe("ConsoleShell chrome", () => {
   beforeEach(() => {
     markConsoleRoute.mockClear();
+    routerLocations.length = 0;
   });
 
   afterEach(() => {
@@ -401,11 +408,11 @@ describe("ConsoleShell chrome", () => {
       expect(document.querySelector("[data-router-location]")?.textContent).toBe(
         "/console/scheduled?keep=1#anchor",
       );
-      expect(screen.getByRole("tab", { name: "예약" })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
+      expect(screen.getByRole("heading", { name: "예약 작업" })).toBeVisible();
     });
+    expect(routerLocations).not.toContain(
+      "/console/scheduled?keep=1&tab=monitors#anchor",
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "워크플로 스튜디오" }));
     await waitFor(() => {
