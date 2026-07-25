@@ -172,7 +172,7 @@ function shellCommandTokens(script) {
       command = "";
     }
   }
-  if (command) commands.push(command);
+  if (command) commands.push(command + "\\");
 
   return commands.map((surface) => {
     const tokens = [];
@@ -260,7 +260,11 @@ function cargoTestAnalysis(tokens, depth = 0) {
         index += 1;
         break;
       }
-      if (option === "-v" || option === "-V" || option === "-p") return emptyCargoAnalysis();
+      if (option === "-v" || option === "-V") return emptyCargoAnalysis();
+      if (option === "-p") {
+        index += 1;
+        continue;
+      }
       return emptyCargoAnalysis(true);
     }
     return index < tokens.length

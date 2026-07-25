@@ -661,6 +661,8 @@ ${preflightRustToolchainSetup.trimEnd()}`,
           for (const prefix of [
             "command env SQLX_OFFLINE=true ",
             "command -- env -- ",
+            "command -p env SQLX_OFFLINE=true ",
+            "command -p -- env -- ",
             "env -i command -- ",
           ]) {
             expectFailure(
@@ -670,6 +672,14 @@ ${preflightRustToolchainSetup.trimEnd()}`,
           }
           expectFailure(
             insertBackendRun("env -S 'command env " + runner + " " + packageArgument + "'"),
+            "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+          );
+          expectFailure(
+            insertBackendRun("env -S 'command -p env " + runner + " " + packageArgument + "'"),
+            "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+          );
+          expectFailure(
+            insertBackendRun("env -S 'command -p -- env -- " + runner + " " + packageArgument + "'"),
             "backend must not run direct Cargo PostgreSQL tests for " + packageName,
           );
         }
@@ -705,6 +715,12 @@ ${preflightRustToolchainSetup.trimEnd()}`,
         "backend must not contain a malformed executable shell surface",
       );
     }
+    expectFailure(
+      insertBackendRun(
+        "command -p " + cargo + " " + test + " -p mnt-platform-auth-rest \\",
+      ),
+      "backend must not contain a malformed executable shell surface",
+    );
     expectFailure(
       workflow,
       "tools/buck/BUCK must bind PostgreSQL wrapper app-inline-postgres to the loader and exact Rust binary",
