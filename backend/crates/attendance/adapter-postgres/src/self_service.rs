@@ -24,7 +24,7 @@ use crate::{
 const LIST_OWN_EXCEPTIONS_SQL: &str = "\
     SELECT e.id,e.code,e.kind,e.status,e.work_date,e.occurred_at,e.detail,e.evidence,e.created_at,\
            r.action AS resolution_action,r.reason AS resolution_reason,\
-           r.ot_hours,r.resolved_at \
+           r.ot_hours::text AS ot_hours,r.resolved_at \
     FROM attendance_exceptions e \
     LEFT JOIN attendance_exception_resolutions r \
            ON r.exception_id=e.id AND r.org_id=e.org_id \
