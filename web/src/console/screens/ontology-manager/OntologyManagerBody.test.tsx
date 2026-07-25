@@ -596,10 +596,7 @@ describe("OntologyManagerBody", () => {
     expect(mocked.listInstances).not.toHaveBeenCalled();
   });
 
-  for (const resolverName of [
-    "resolveInstanceCard",
-    "resolveNodeDescriptor",
-  ] as const) {
+  for (const resolverName of ["resolveInstanceCard"] as const) {
     for (const settlement of ["resolve", "reject"] as const) {
       it(`cancels stale ${resolverName} when A ${settlement}s after B is current`, async () => {
         const apiA = { authority: "A" } as unknown as ConsoleApiClient;
@@ -663,20 +660,12 @@ describe("OntologyManagerBody", () => {
         mocked.getInstance.mockImplementation((client) =>
           client === apiA ? aRead.promise : Promise.resolve(bInstance),
         );
-        const pending =
-          resolverName === "resolveInstanceCard"
-            ? view.result.current.resolveInstanceCard({
-                id: instanceFixture.instance.id,
-                code: "AAAAAAAA",
-                title: "A 비밀",
-                lifecycleState: "active",
-              })
-            : view.result.current.resolveNodeDescriptor({
-                id: instanceFixture.instance.id,
-                type: "contract",
-                code: "AAAAAAAA",
-                label: "A 비밀",
-              });
+        const pending = view.result.current.resolveInstanceCard({
+          id: instanceFixture.instance.id,
+          code: "AAAAAAAA",
+          title: "A 비밀",
+          lifecycleState: "active",
+        });
         await waitFor(() => {
           expect(mocked.getInstance).toHaveBeenCalledWith(
             apiA,

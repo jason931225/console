@@ -2,7 +2,7 @@
 // real action + governance REST (§16 gate chain, §20 override, lifecycle
 // preflight). Composition keeps ObjectCard presentational: the card's action /
 // edit gestures route into the flows below instead of bare host callbacks.
-import { useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 
 import {
   executeOntologyAction,
@@ -30,6 +30,8 @@ import type { ConsoleApiClient } from "../../api/client";
 import { AuthContext } from "../../context/auth";
 import { ko } from "../../i18n/ko";
 import { StatusChip } from "../components";
+import { entityRefKey, type EntityRef } from "../runtime/entityRef";
+import type { ObjectRuntimePort } from "../runtime/objectRuntime";
 import { PolicyGated, usePolicyGate, type PolicyGate } from "../policy";
 import { ObjectCard } from "./ObjectCard";
 import { objectCardGovStrings } from "./strings";
@@ -228,6 +230,143 @@ function toCardRevisions(rows: InstanceRevision[]): ObjectCardRevision[] {
 
 export interface GovernedObjectCardProps {
   api: ConsoleApiClient;
+  reference: EntityRef;
+  runtime: ObjectRuntimePort;
+  /** Extra request fields (typed params, a shared four-eyes ref) per action. */
+  buildActionRequest?: (
+    action: ObjectCardAction,
+  ) => Partial<OntologyActionRequest> | undefined;
+  /** Fired after a committed execute (new revision appended). */
+  onInstanceChange?: (update: {
+    lifecycleState: string;
+    version: number;
+  }) => void;
+  /** Causes a fresh acting read without replacing the card that owns a receipt. */
+  refreshEpoch?: number;
+}
+
+type RuntimeCardState =
+  | { requestKey: string; status: "loading" }
+  | { requestKey: string; status: "resolved"; descriptor: ObjectCardDescriptor }
+  | { requestKey: string; status: "absent" }
+  | { requestKey: string; status: "error" };
+
+const identityIds = new WeakMap<object, number>();
+let nextIdentityId = 1;
+
+function identityId(value: object | null | undefined): number {
+  if (!value) return 0;
+  const known = identityIds.get(value);
+  if (known) return known;
+  const id = nextIdentityId;
+  nextIdentityId += 1;
+  identityIds.set(value, id);
+  return id;
+}
+
+/**
+ * The only production ObjectCard entrypoint. It resolves a scope-bound entity
+ * through its authority adapter; unresolved/denied references render nothing,
+ * never a descriptor assembled from graph hints or a stale authority response.
+ */
+export function GovernedObjectCard({
+  api,
+  reference,
+  runtime,
+  buildActionRequest,
+  onInstanceChange,
+  refreshEpoch,
+}: GovernedObjectCardProps) {
+  const [attempt, setAttempt] = useState(0);
+  // Resolution is keyed only by scoped identity. Display hints are deliberately
+  // excluded, and rebuilding the same reference during pan/zoom cannot restart
+  // authenticated reads.
+  const runtimeReference = useMemo<EntityRef>(
+    () => ({
+      authority: reference.authority,
+      tenantScopeKey: reference.tenantScopeKey,
+      authorityKey: reference.authorityKey,
+      objectTypeId: reference.objectTypeId,
+      id: reference.id,
+    }),
+    [
+      reference.authority,
+      reference.authorityKey,
+      reference.id,
+      reference.objectTypeId,
+      reference.tenantScopeKey,
+    ],
+  );
+  const referenceKey = entityRefKey(runtimeReference);
+  const requestKey = JSON.stringify([
+    referenceKey,
+    identityId(runtime),
+    identityId(api),
+    attempt,
+  ]);
+  const [state, setState] = useState<RuntimeCardState>({
+    requestKey: "",
+    status: "loading",
+  });
+  const visibleState: RuntimeCardState =
+    state.requestKey === requestKey
+      ? state
+      : { requestKey, status: "loading" };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void runtime.resolve(runtimeReference, { signal: controller.signal })
+      .then((descriptor) => {
+        if (controller.signal.aborted) return;
+        setState(
+          descriptor
+            ? { requestKey, status: "resolved", descriptor }
+            : { requestKey, status: "absent" },
+        );
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setState({ requestKey, status: "error" });
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [requestKey, runtime, runtimeReference]);
+
+  if (visibleState.status === "loading") {
+    return <section aria-busy="true" aria-label="Loading object" style={panelStyle} />;
+  }
+  if (visibleState.status === "absent") return null;
+  if (visibleState.status === "error") {
+    return (
+      <section role="alert" aria-label="Object unavailable" style={panelStyle}>
+        <p style={reasonTextStyle}>Object details could not be loaded.</p>
+        <button
+          type="button"
+          data-window-control="true"
+          onClick={() => {
+            setAttempt((value) => value + 1);
+          }}
+          style={buttonStyle}
+        >
+          Retry
+        </button>
+      </section>
+    );
+  }
+  return (
+    <GovernedObjectCardResolved
+      api={api}
+      descriptor={visibleState.descriptor}
+      buildActionRequest={buildActionRequest}
+      onInstanceChange={onInstanceChange}
+      refreshEpoch={refreshEpoch}
+    />
+  );
+}
+
+export interface GovernedObjectCardResolvedProps {
+  api: ConsoleApiClient;
   descriptor: ObjectCardDescriptor;
   /** Host seam for the semantic layer + endpoints that do not exist yet. */
   handlers?: ObjectCardHandlers;
@@ -244,27 +383,14 @@ export interface GovernedObjectCardProps {
   refreshEpoch?: number;
 }
 
-const identityIds = new WeakMap<object, number>();
-let nextIdentityId = 1;
-
-function identityId(value: object | null | undefined): number {
-  if (!value) return 0;
-  const known = identityIds.get(value);
-  if (known) return known;
-  const id = nextIdentityId;
-  nextIdentityId += 1;
-  identityIds.set(value, id);
-  return id;
-}
-
-export function GovernedObjectCard({
+export function GovernedObjectCardResolved({
   api,
   descriptor,
   handlers,
   buildActionRequest,
   onInstanceChange,
   refreshEpoch,
-}: GovernedObjectCardProps) {
+}: GovernedObjectCardResolvedProps) {
   const gate = usePolicyGate();
   const auth = useContext(AuthContext);
   const authorityRef = useRef({ fingerprint: "", epoch: 0 });
@@ -311,7 +437,7 @@ export function GovernedObjectCard({
   /* eslint-enable react-hooks/refs */
 }
 
-interface GovernedObjectCardContentProps extends GovernedObjectCardProps {
+interface GovernedObjectCardContentProps extends GovernedObjectCardResolvedProps {
   gate: PolicyGate;
   authorityRef: RefObject<{ fingerprint: string; epoch: number }>;
   contextEpoch: number;
@@ -627,9 +753,16 @@ function GovernedObjectCardContent({
     onAction: (action) => {
       startAction(action);
     },
-    onEdit: (ctx) => {
-      void onEdit(ctx);
-    },
+    ...(handlers?.onEdit
+      ? {
+          onEdit: (ctx: {
+            mode: "direct" | "override";
+            reason?: string;
+          }) => {
+            void onEdit(ctx);
+          },
+        }
+      : {}),
     onResolveCode: async (code) => {
       try {
         const resolved = await resolveInstanceCode(api, code);
@@ -638,12 +771,6 @@ function GovernedObjectCardContent({
         // fail-closed: a resolve error reads as unresolved, never a fabricated title
         return null;
       }
-    },
-    onActingChipClick: (chip) => {
-      // wire-pending: HANDOFF §acting-navigate — no console page routes the
-      // automation/policy catalog by id yet; the host supplies the real
-      // window-open target (Automate / Policy canvas pin) via this seam.
-      handlers?.onActingChipClick?.(chip);
     },
   };
 
