@@ -1,7 +1,7 @@
 //! Authenticated REST boundary for the Attendance console.  It validates wire
 //! input, derives a tenant/branch scope from the signed principal, and delegates
 //! all business decisions and database work to the private application layers.
-#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use axum::{
     Json, Router,
@@ -68,6 +68,9 @@ const EXCEPTION_MANAGE: Feature = Feature::AttendanceExceptionManage;
 const SUBSTITUTION_MANAGE: Feature = Feature::AttendanceSubstitutionManage;
 const CLOSE: Feature = Feature::PeriodLockManage;
 const ATTENDANCE_REST_READS_TOTAL: &str = "attendance_rest_reads_total";
+// Asserted by `attendance_read_surfaces_are_static_and_complete`; nothing on
+// the serving path reads it, so it does not belong in a non-test build.
+#[cfg(test)]
 const ATTENDANCE_READ_SURFACES: [&str; 8] = [
     "substitutions",
     "substitution_candidates",
@@ -114,7 +117,6 @@ impl AttendanceRestState {
         Self { store, jwt }
     }
 }
-#[must_use]
 pub fn router(state: AttendanceRestState) -> Router {
     let verifier = state.jwt.clone();
     let pool = state.store.pool().clone();

@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use mnt_compliance_adapter_postgres::PgComplianceStore;
 use mnt_compliance_application::{

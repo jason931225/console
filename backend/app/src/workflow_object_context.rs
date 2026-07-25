@@ -54,7 +54,6 @@ impl WorkflowObjectContextState {
 /// Mount the returned router unchanged.  `with_request_context` supplies the
 /// authenticated [`Principal`] extension and arms no database state itself;
 /// every database read below is still wrapped by `with_org_conn`.
-#[must_use]
 pub fn router(state: WorkflowObjectContextState) -> Router {
     let verifier = state.jwt_verifier.clone();
     let pool = state.pool.clone();

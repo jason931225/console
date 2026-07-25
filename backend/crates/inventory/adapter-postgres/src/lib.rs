@@ -1336,8 +1336,8 @@ fn normalize_source_ref(value: Option<String>) -> Result<Option<String>, KernelE
     let Some(value) = normalize_optional_text(value, 44, "source_ref")? else {
         return Ok(None);
     };
-    let valid = value.as_bytes().len() >= 3
-        && value.as_bytes().len() <= 45
+    let valid = value.len() >= 3
+        && value.len() <= 45
         && value
             .bytes()
             .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'-')

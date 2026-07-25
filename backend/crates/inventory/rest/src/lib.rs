@@ -84,7 +84,6 @@ impl InventoryRestState {
     }
 }
 
-#[must_use]
 pub fn router(state: InventoryRestState) -> Router {
     let verifier = state.jwt_verifier.clone();
     let pool = state.store.pool().clone();

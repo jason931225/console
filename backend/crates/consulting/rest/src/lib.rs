@@ -666,6 +666,7 @@ async fn require_reference_kind(
     }
     Ok(())
 }
+#[allow(clippy::too_many_arguments)]
 async fn insert_history(
     tx: &mut sqlx::Transaction<'_, Postgres>,
     org: Uuid,

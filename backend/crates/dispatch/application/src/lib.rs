@@ -263,7 +263,6 @@ struct DispatchQueueCursorPayload {
 pub struct DispatchQueueCursor(DispatchQueueCursorPayload);
 
 impl DispatchQueueCursor {
-    #[must_use]
     pub fn encode(
         as_of: Timestamp,
         target_due_at: Option<Timestamp>,

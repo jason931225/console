@@ -578,6 +578,7 @@ TEST_RESOURCE_REQUIREMENTS = {
     'mnt-ontology-adapter-postgres': {
         'unit': 'none',
         'integration': {
+            'tests/builtin_catalog_additive_upgrade_as_runtime_role.rs': 'postgres',
             'tests/c_chain_as_runtime_role.rs': 'postgres',
             'tests/config_object_types_as_runtime_role.rs': 'postgres',
             'tests/instances_residual_filter_as_runtime_role.rs': 'postgres',

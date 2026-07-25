@@ -276,6 +276,10 @@ pub trait SupportCaseLinkVerifier {
 
 /// Atomic Support persistence intent. Adapters must persist the selected
 /// variant and its receipt in one tenant-scoped transaction.
+// 968 vs 648 bytes. Boxing the larger variant is the clippy-suggested fix, but
+// it is a public type-shape change affecting every constructor and match arm,
+// which is out of scope for a lint pass. Left for the owning lane to decide.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SupportCaseCommit {
     /// A state mutation: projection, append-only history, outbox, audit, and

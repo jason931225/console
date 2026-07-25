@@ -1,5 +1,7 @@
 //! Logistics-pilot finite-state vocabulary.  The pilot has one warehouse leg;
 //! its state machine intentionally has no routing, valuation, or finance edge.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+
 use mnt_kernel_core::KernelError;
 use serde::{Deserialize, Serialize};
 

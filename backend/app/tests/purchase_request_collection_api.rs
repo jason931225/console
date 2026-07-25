@@ -562,6 +562,7 @@ async fn seed_purchase_line(
     .unwrap();
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn seed_purchase_attachment(
     pool: &PgPool,
     org: OrgId,
