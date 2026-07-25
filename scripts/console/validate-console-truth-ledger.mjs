@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseImmutableJson } from './immutable-json.mjs';
 import { extractConsoleRouteFacts, extractConsoleRouteFactsFromTexts } from './route-inventory.mjs';
+import { CONSOLE_CANDIDATE_SIGNING_AUTHORITY, sshSignatureMatchesAuthority, verifyCommitWithCandidateSshPolicy } from './ssh-signature-policy.mjs';
 
 const SHA = /^[0-9a-f]{40}$/;
 const STATES = new Set(['DECLARED', 'PLANNED', 'IMPLEMENTED', 'VERIFIED', 'EXPOSED', 'HOLD']);
@@ -35,10 +36,9 @@ function git(root, args, encoding = 'utf8') { return execFileSync('git', ['-C', 
 function gitSucceeds(root, args) { try { git(root, args); return true; } catch { return false; } }
 function repositoryPath(value) { return typeof value === 'string' && value !== '' && !value.includes('..') && !value.startsWith('/') && !value.includes('\\'); }
 function isAuthorityControlPath(value) { return AUTHORITY_CONTROL_PATHS.has(value) || value.startsWith('scripts/console/'); }
-function verifySignedCommit(repoRoot, sha, label) {
+function verifySignedCommit(repoRoot, candidateSha, sha, label, authority = CONSOLE_CANDIDATE_SIGNING_AUTHORITY) {
   if (!gitSucceeds(repoRoot, ['cat-file', '-e', `${sha}^{commit}`])) fail(`${label} SHA is unresolvable`);
-  const verified = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', sha], { encoding: 'utf8' });
-  if (verified.status !== 0) fail(`${label} commit signature is not valid`);
+  try { verifyCommitWithCandidateSshPolicy(repoRoot, candidateSha, sha, authority); } catch (error) { fail(`${label} commit signature is not valid: ${error instanceof Error ? error.message : String(error)}`); }
 }
 function assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha) {
   const fields = git(repoRoot, ['diff', '--raw', '-z', '--abbrev=40', '--find-renames', '--find-copies-harder', `${candidateSha}..${integrationTipSha}`]).split('\0');
@@ -61,10 +61,10 @@ function assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha) {
  * Attests an immutable product candidate C and a later authority tip T.
  * Product facts must be read through this resolver; authority files remain at T.
  */
-export function createConsoleCandidateSourceResolver(repoRoot, candidateSha, integrationTipSha) {
+export function createConsoleCandidateSourceResolver(repoRoot, candidateSha, integrationTipSha, { candidateSigningAuthority = CONSOLE_CANDIDATE_SIGNING_AUTHORITY } = {}) {
   if (typeof repoRoot !== 'string' || !path.isAbsolute(repoRoot)) fail('candidate attestation requires canonical repository root');
   sha(candidateSha, 'candidate sha'); sha(integrationTipSha, 'integration tip SHA');
-  verifySignedCommit(repoRoot, candidateSha, 'candidate');
+  verifySignedCommit(repoRoot, candidateSha, candidateSha, 'candidate', candidateSigningAuthority);
   if (!gitSucceeds(repoRoot, ['cat-file', '-e', `${integrationTipSha}^{commit}`])) fail('integration tip SHA is unresolvable');
   if (!gitSucceeds(repoRoot, ['merge-base', '--is-ancestor', candidateSha, integrationTipSha])) fail('candidate SHA is not an ancestor of integration tip');
   assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha);
@@ -95,12 +95,6 @@ export function promotionAuthorityDigests(registry, jurisdiction) {
   }
   return Object.freeze({ registry: canonicalJsonDigest(registryAuthority), jurisdiction: canonicalJsonDigest(jurisdiction) });
 }
-function sshSignatureMatches(status, signing) {
-  if (signing?.format !== 'ssh' || typeof signing.principal !== 'string' || typeof signing.fingerprint !== 'string') return false;
-  const lines = String(status).split(/\r?\n/).filter((line) => line.startsWith('Good "git" signature'));
-  const match = lines.length === 1 && lines[0].match(/^Good "git" signature for (.+) with [A-Za-z0-9-]+ key (SHA256:[A-Za-z0-9+/]+={0,2})$/);
-  return Boolean(match && match[1] === signing.principal && match[2] === signing.fingerprint);
-}
 function gpgSignatureMatches(status, signing) {
   if (signing?.format !== 'gpg' || !/^[A-F0-9]{40,64}$/.test(signing.fingerprint ?? '')) return false;
   const lines = String(status).split(/\r?\n/).filter((line) => line.startsWith('[GNUPG:] VALIDSIG '));
@@ -127,9 +121,15 @@ function verifyImmutableReviewReceipt(repoRoot, reviewer, cap, candidate, outcom
   if (parsed.candidate_sha !== candidate.sha || parsed.capability_id !== cap.id || JSON.stringify(receiptOutcomes) !== JSON.stringify(expectedOutcomes) || !expectedOutcomes.every((id) => outcomeIds.has(id)) || parsed.evidence_digest !== review.evidence_digest || parsed.verdict !== review.status || parsed.reviewer_id !== reviewer.id || parsed.registry_canonical_sha256 !== authorityDigests.registry || parsed.jurisdiction_canonical_sha256 !== authorityDigests.jurisdiction || review.registry_canonical_sha256 !== authorityDigests.registry || review.jurisdiction_canonical_sha256 !== authorityDigests.jurisdiction) fail(`${cap.id} receipt payload is not bound to candidate and authority digests`);
   const [authorName, authorEmail, committerName, committerEmail] = git(repoRoot, ['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce', review.review_commit]).trim().split('\0');
   if (authorName !== reviewer.author_name || authorEmail !== reviewer.author_email || committerName !== reviewer.committer_name || committerEmail !== reviewer.committer_email) fail(`${cap.id} review commit identity is not trusted`);
-  const signature = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', review.review_commit], { encoding: 'utf8' });
-  const status = `${signature.stdout ?? ''}${signature.stderr ?? ''}`;
-  if (signature.status !== 0 || !(sshSignatureMatches(status, reviewer.signing) || gpgSignatureMatches(status, reviewer.signing))) fail(`${cap.id} review signature is not trusted`);
+  let status;
+  if (reviewer.signing?.format === 'ssh') {
+    try { status = verifyCommitWithCandidateSshPolicy(repoRoot, candidate.sha, review.review_commit, reviewer.signing); } catch { fail(`${cap.id} review signature is not trusted`); }
+    if (!sshSignatureMatchesAuthority(status, reviewer.signing)) fail(`${cap.id} review signature is not trusted`);
+  } else {
+    const signature = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', review.review_commit], { encoding: 'utf8' });
+    status = `${signature.stdout ?? ''}${signature.stderr ?? ''}`;
+    if (signature.status !== 0 || !gpgSignatureMatches(status, reviewer.signing)) fail(`${cap.id} review signature is not trusted`);
+  }
   const attestation = Object.freeze({}); immutableReceiptAttestations.add(attestation); return attestation;
 }
 

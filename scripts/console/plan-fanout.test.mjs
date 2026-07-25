@@ -153,6 +153,13 @@ test('format-discriminated SSH authority requires the exact verified principal a
   assert.equal(signatureMatchesAuthority(`${raw}Good "git" signature for malformed\n`, authority), false);
 });
 
+test('SSH verification fails closed for absent or non-Git status output', async () => {
+  const { signatureMatchesAuthority } = await import('./plan-fanout.mjs');
+  const authority = { format: 'ssh', principal: 'jason19931225@gmail.com', fingerprint: 'SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8' };
+  assert.equal(signatureMatchesAuthority('', authority), false);
+  assert.equal(signatureMatchesAuthority('Good "file" signature for jason19931225@gmail.com with ED25519 key SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8\n', authority), false);
+});
+
 test('real repository SSH-signed commit passes the exact raw verifier smoke', async () => {
   const { signatureMatchesAuthority } = await import('./plan-fanout.mjs');
   const result = spawnSync('git', ['verify-commit', '--raw', 'HEAD'], { encoding: 'utf8' });
@@ -170,10 +177,8 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
   try {
     git(['init', '-b', 'main']); git(['config', 'user.name', 'Jason Lee']); git(['config', 'user.email', 'jason19931225@gmail.com']);
     git(['config', 'gpg.format', 'ssh']); git(['config', 'user.signingkey', '/Users/jasonlee/.ssh/id_ed25519']);
-    const signerFile = path.join(repo, 'allowed_signers');
-    writeFileSync(signerFile, 'jason19931225@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAgMAp8vHS9V/9UQQVTa5FtmS9Q9fdB8I520DsZMMDTR\n');
-    git(['config', 'gpg.ssh.allowedSignersFile', signerFile]);
-    for (const directory of ['backend/crates/platform/db/migrations', 'backend/openapi', 'tools/buck', 'backend/crates/a', 'backend/crates/b', 'backend/crates/c', 'docs/program', 'docs/evidence/console/fanout-receipts']) mkdirSync(path.join(repo, directory), { recursive: true });
+    for (const directory of ['backend/crates/platform/db/migrations', 'backend/openapi', 'tools/buck', 'backend/crates/a', 'backend/crates/b', 'backend/crates/c', 'docs/program', 'docs/evidence/console/fanout-receipts', '.github/trust']) mkdirSync(path.join(repo, directory), { recursive: true });
+    writeFileSync(path.join(repo, '.github/trust/console.allowed_signers'), 'jason19931225@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAgMAp8vHS9V/9UQQVTa5FtmS9Q9fdB8I520DsZMMDTR\n');
     writeFileSync(path.join(repo, 'backend/crates/platform/db/migrations/.keep'), ''); writeFileSync(path.join(repo, 'backend/openapi/openapi.yaml'), 'openapi: 3.1.0\n'); writeFileSync(path.join(repo, 'tools/buck/generated_face_registry.json'), JSON.stringify(faces));
     for (const id of ['a', 'b', 'c']) writeFileSync(path.join(repo, `backend/crates/${id}/file.txt`), 'base\n');
     git(['add', '.']); git(['commit', '-m', 'base']); const base = git(['rev-parse', 'HEAD']);
@@ -208,7 +213,9 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
     const admission = { schema_version: 'console-fanout-admission-v1', epoch_base_sha: anchor, receipts: receiptRefs };
     writeFileSync(path.join(repo, 'docs/evidence/console/fanout-admission.json'), JSON.stringify(admission)); git(['add', '.']); git(['commit', '-m', 'admission']); const admissionSha = git(['rev-parse', 'HEAD']);
     const runner = path.join(path.dirname(new URL(import.meta.url).pathname), 'plan-fanout.mjs');
-    const result = spawnSync('node', [runner, '--epoch-base', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8' });
+    const isolatedHome = mkdtempSync(path.join(tmpdir(), 'fanout-home-'));
+    const result = spawnSync('node', [runner, '--epoch-base', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8', env: { ...process.env, HOME: isolatedHome } });
+    rmSync(isolatedHome, { recursive: true, force: true });
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout);
     assert.deepEqual(output.selected, []);

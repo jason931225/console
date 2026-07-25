@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { createConsoleCandidateSourceResolver, extractConsoleRouteFactsFromCandidate, isValidatedConsoleTruthLedger, validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
+import { sshSignatureMatchesAuthority, verifyCommitWithCandidateSshPolicy } from './ssh-signature-policy.mjs';
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const QUALITY_BIAS_DEFAULT = 0.6;
@@ -175,10 +176,7 @@ export function signatureMatchesFingerprint(rawStatus, fingerprint) {
 export function signatureMatchesAuthority(rawStatus, authority) {
   if (authority?.format === 'gpg') return signatureMatchesFingerprint(rawStatus, authority.fingerprint);
   if (authority?.format !== 'ssh' || !exactIdentity(authority.principal) || !sshFingerprint(authority.fingerprint) || typeof rawStatus !== 'string') return false;
-  const signatureLines = rawStatus.split(/\r?\n/).filter((line) => line.startsWith('Good "git" signature'));
-  if (signatureLines.length !== 1) return false;
-  const match = signatureLines[0].match(/^Good "git" signature for (.+) with [A-Za-z0-9-]+ key (SHA256:[A-Za-z0-9+/]+={0,2})$/);
-  return match?.[1] === authority.principal && match[2] === authority.fingerprint;
+  return sshSignatureMatchesAuthority(rawStatus, authority);
 }
 export function validateReviewReceiptForAnchor(receipt, anchor, lane, authority, operations) {
   const trusted = trustedReviewer(authority, receipt?.reviewer);
@@ -528,7 +526,8 @@ function admissionReceipts(repoRoot, epochBaseSha, admissionSha) {
   for (const entry of manifest.receipts) result[entry.lane_id] = { ...readAnchorJson(repoRoot, entry.review_commit, entry.receipt_path), review_commit: entry.review_commit };
   return result;
 }
-function verifyGitCommitSignature(repoRoot, sha) {
+function verifyGitCommitSignature(repoRoot, candidateSha, sha, authority) {
+  if (authority?.format === 'ssh') return verifyCommitWithCandidateSshPolicy(repoRoot, candidateSha, sha, authority);
   const result = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', sha], { encoding: 'utf8' });
   if (result.error) throw new Error(`git verify-commit unavailable: ${result.error.message}`);
   if (result.status !== 0 || typeof result.stdout !== 'string' || typeof result.stderr !== 'string') throw new Error('git verify-commit rejected the review commit');
@@ -556,7 +555,7 @@ function runtimeEligibility(repoRoot, registry, anchor, receipts) {
             readJson: (sha, filePath) => readAnchorJson(repoRoot, sha, filePath),
             leafDiff: (base, leaf) => execFileSync('git', ['-C', repoRoot, 'diff', '--no-ext-diff', '--no-renames', '--full-index', '--binary', base, leaf]),
             commitIdentity: (sha) => { const [author_name, author_email, committer_name, committer_email] = git(repoRoot, ['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce', sha]).split('\0'); return { author_name, author_email, committer_name, committer_email }; },
-            verifySignature: (sha) => verifyGitCommitSignature(repoRoot, sha),
+            verifySignature: (sha) => verifyGitCommitSignature(repoRoot, anchor, sha, signingAuthority(trustedReviewer(registry.review_authority, receipt.reviewer))),
           });
           validatedReceipts[lane.laneId] = receipt;
         } catch {

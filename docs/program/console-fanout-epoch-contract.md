@@ -94,9 +94,13 @@ Git verification record with the declared principal and full `SHA256:` key
 fingerprint. In either format it rejects unsigned commits, key/principal/
 fingerprint mismatches, malformed or duplicate status records, and unavailable
 verification tooling; it never treats author text or a fingerprint substring as
-signature proof. The live prerequisite is a usable local Git verifier with the
-trusted reviewer public key and required trust policy (the repository uses SSH
-allowed-signers authority). If signer infrastructure is unavailable, receipts
+signature proof. SSH verification materializes the canonical
+`.github/trust/console.allowed_signers` policy from the immutable product
+candidate Git tree into a mode-0600 temporary file and invokes Git with explicit
+`gpg.format=ssh` and `gpg.ssh.allowedSignersFile` overrides. HOME and global Git
+configuration are not trusted; Git verifies the `git` signature namespace and the
+one policy entry must match the declared principal and full fingerprint. Later authority commits therefore
+cannot change candidate or review trust. If signer infrastructure is unavailable, receipts
 fail closed: source planning can continue, but completion and consolidation
 remain held.
 
