@@ -17,10 +17,10 @@ malicious="${scratch}/malicious.env"
 printf 'DATABASE_URL=$(touch %s)\n' "${scratch}/executed" >"${malicious}"
 printf 'MNT_APALIS_OWNER_DATABASE_URL=x\nMNT_APALIS_RUNTIME_DATABASE_URL=x\nMNT_APALIS_ADMIN_DATABASE_URL=x\n' >>"${malicious}"
 chmod 600 "${malicious}"
-if MNT_BUCK_POSTGRES_ENV_FILE="${malicious}" "${wrapper}" /usr/bin/true >/tmp/wrapper.stdout 2>/tmp/wrapper.stderr; then exit 1; fi
+if MNT_BUCK_POSTGRES_ENV_FILE="${malicious}" "${wrapper}" /usr/bin/true >"${scratch}/wrapper.stdout" 2>"${scratch}/wrapper.stderr"; then exit 1; fi
 [[ ! -e "${scratch}/executed" ]]
-! grep -Fq 'touch ' /tmp/wrapper.stdout
-! grep -Fq 'touch ' /tmp/wrapper.stderr
+! grep -Fq 'touch ' "${scratch}/wrapper.stdout"
+! grep -Fq 'touch ' "${scratch}/wrapper.stderr"
 chmod 644 "${valid}"
 if MNT_BUCK_POSTGRES_ENV_FILE="${valid}" "${wrapper}" /usr/bin/true; then exit 1; fi
 # GNU stat fallback: force BSD form to fail, then delegate -c to system stat.

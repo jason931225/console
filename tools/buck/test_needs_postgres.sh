@@ -17,15 +17,28 @@ fi
 database="mnt_buck_test_$$_contract"
 container_env_file=""
 test_env_file=""
+active_buck_pid=""
 
 cleanup() {
-  local status=$?
   docker rm -f "${container_name}" >/dev/null 2>&1 || true
   [[ -z "${container_env_file}" ]] || rm -f "${container_env_file}"
   [[ -z "${test_env_file}" ]] || rm -f "${test_env_file}"
-  return "${status}"
 }
-trap cleanup EXIT HUP INT TERM
+
+on_signal() {
+  local status="$1"
+  trap - HUP INT TERM
+  if [[ -n "${active_buck_pid}" ]]; then
+    kill -TERM "${active_buck_pid}" >/dev/null 2>&1 || true
+    wait "${active_buck_pid}" >/dev/null 2>&1 || true
+    active_buck_pid=""
+  fi
+  exit "${status}"
+}
+trap cleanup EXIT
+trap 'on_signal 129' HUP
+trap 'on_signal 130' INT
+trap 'on_signal 143' TERM
 
 secret() { openssl rand -hex 32; }
 admin_password="$(secret)"
@@ -85,4 +98,12 @@ chmod 600 "${test_env_file}"
 # Only a mode-0600 path crosses Buck's test-executor argv. The wrapper parses
 # this fixed data file inside the test process without evaluating its contents.
 BUCK_ISOLATION_DIR="${isolation_name}" "${buck_bin}" test --local-only "$@" \
-  -- --env "MNT_BUCK_POSTGRES_ENV_FILE=${test_env_file}" --env RUST_TEST_THREADS=1
+  -- --env "MNT_BUCK_POSTGRES_ENV_FILE=${test_env_file}" --env RUST_TEST_THREADS=1 &
+active_buck_pid="$!"
+if wait "${active_buck_pid}"; then
+  buck_status=0
+else
+  buck_status="$?"
+fi
+active_buck_pid=""
+exit "${buck_status}"

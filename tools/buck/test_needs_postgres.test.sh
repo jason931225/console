@@ -24,7 +24,7 @@ grep -Fq 'MNT_APALIS_OWNER_DATABASE_URL=postgres://mnt_app:' "${env_file}"
 grep -Fq 'MNT_APALIS_RUNTIME_DATABASE_URL=postgres://mnt_rt:' "${env_file}"
 grep -Fq 'MNT_APALIS_ADMIN_DATABASE_URL=postgres://mnt_buck_admin:' "${env_file}"
 printf '%s\n' "${env_file}" >>"${HARNESS_LOG}.envfiles"
-if [[ "${FAKE_BUCK_SLEEP:-0}" == 1 ]]; then sleep 30; fi
+if [[ "${FAKE_BUCK_SLEEP:-0}" == 1 ]]; then printf "%s\n" "$$" >"${HARNESS_LOG}.childpid"; exec sleep 30; fi
 exit "${FAKE_BUCK_STATUS:-0}"
 BUCK
 chmod +x "${fake_bin}/docker" "${fake_bin}/openssl" "${scratch}/buck"
@@ -39,6 +39,20 @@ grep -Fq -- 'MNT_BUCK_POSTGRES_ENV_FILE=' <<<"${buck_calls}"
 while IFS= read -r envfile; do [[ ! -e "${envfile}" ]]; done <"${log}.envfiles"
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_BUCK_STATUS=17 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
 while IFS= read -r envfile; do [[ ! -e "${envfile}" ]]; done <"${log}.envfiles"
-# Signal cleanup is registered before any disposable resource is created.
-grep -Fq 'trap cleanup EXIT HUP INT TERM' "${harness}"
+signal_log="${scratch}/signal.log"
+PATH="${fake_bin}:${PATH}" HARNESS_LOG="${signal_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_BUCK_SLEEP=1 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres &
+harness_pid=$!
+for _ in {1..50}; do [[ -s "${signal_log}.childpid" && -s "${signal_log}.envfiles" ]] && break; sleep 0.1; done
+[[ -s "${signal_log}.childpid" && -s "${signal_log}.envfiles" ]]
+child_pid="$(cat "${signal_log}.childpid")"
+kill -TERM "${harness_pid}"
+set +e
+wait "${harness_pid}"
+signal_status=$?
+set -e
+[[ "${signal_status}" == 143 ]]
+! kill -0 "${child_pid}" 2>/dev/null
+while IFS= read -r envfile; do [[ ! -e "${envfile}" ]]; done <"${signal_log}.envfiles"
+! grep -Fq -- 'secret-' "${signal_log}"
+! grep -Fq -- 'postgres://' "${signal_log}"
 echo 'test_needs_postgres: PASS'
