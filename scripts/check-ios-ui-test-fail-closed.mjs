@@ -1407,8 +1407,8 @@ function hasDurableCriticalPathEvidence(files) {
   const startTap = critical.indexOf("startWork.tap()");
   const scopedStatus = critical.indexOf("AID.detailStatus", startTap);
   const scopedLabel = critical.indexOf("detailStatus.label", scopedStatus);
-  const grant = critical.indexOf("grant.tap()");
-  const withdraw = critical.indexOf("reloadedWithdraw.tap()", grant);
+  const grant = critical.indexOf("detailButton(AID.locationConsentGrantButton).tap()");
+  const withdraw = critical.indexOf("detailButton(AID.locationConsentWithdrawButton).tap()", grant);
   const locationRelaunches = (critical.match(/app\.terminate\(\)/g) ?? []).length;
 
   const send = messenger.indexOf("AID.messengerSendButton");
@@ -1432,6 +1432,38 @@ function hasDurableCriticalPathEvidence(files) {
     && /XCTAssertEqual\([\s\S]{0,160}loginError\.label[\s\S]{0,160}KO\.errorInvalidUserID/.test(login)
     && /static\s+func\s+requiredID[\s\S]{0,260}UUID\(uuidString: value\)/.test(support)
     && !/static\s+func\s+workOrderID\s*\(/.test(support);
+}
+
+function hasFreshLocationConsentQueries(files) {
+  const support = files["ios/UITests/Support/FieldUITestCase.swift"] ?? "";
+  const critical = files["ios/UITests/FieldCriticalPathUITests.swift"] ?? "";
+  const waitForLabel = extractFunctionBody(support, /func\s+waitForLabel\s*\(/);
+  const detailButton = extractFunctionBody(support, /func\s+detailButton\s*\(/);
+  const locationLifecycle = extractFunctionBody(
+    critical,
+    /func\s+testLocationConsentTransitionsPersistThroughTheRealBackend\s*\(\s*\)\s+async\s+throws\s*/,
+  );
+  if (waitForLabel === null || detailButton === null || locationLifecycle === null) return false;
+
+  const freshDetailRoot = /let\s+detail\s*=\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\s*\[\s*AID\.detailView\s*\]/;
+  const freshDetailRoots = waitForLabel.match(new RegExp(freshDetailRoot.source, "g")) ?? [];
+  const freshQuery = /let\s+element\s*=\s*detail\.descendants\s*\(\s*matching:\s*\.any\s*\)\s*\[\s*identifier\s*\]/;
+  const freshQueries = waitForLabel.match(new RegExp(freshQuery.source, "g")) ?? [];
+  const cachedDynamicElement = /\blet\s+(?:grant|suspend|resume|withdraw|stateValue|collectionValue|reloadedStateValue|reloadedCollectionValue|reloadedSuspend|reloadedResume|reloadedWithdraw|terminalStateValue|terminalCollectionValue)\s*=/;
+  const identifierWaits = locationLifecycle.match(/waitForLabel\s*\(\s*AID\.locationConsent(?:State|Collection)Value\s*,/g) ?? [];
+  const detailButtonCalls = locationLifecycle.match(/detailButton\s*\(\s*AID\.locationConsent(?:Grant|Suspend|Resume|Withdraw)Button\s*\)/g) ?? [];
+
+  return /func\s+waitForLabel\s*\(\s*_\s+identifier:\s*String,/.test(support)
+    && !/_\s+element:\s*XCUIElement/.test(waitForLabel)
+    && freshDetailRoots.length === 2
+    && freshQueries.length === 2
+    && /while\s+Date\(\)\s*<\s*deadline/.test(waitForLabel)
+    && /return\s+app\.descendants\s*\(\s*matching:\s*\.any\s*\)\s*\[\s*AID\.detailView\s*\]\.buttons\s*\[\s*identifier\s*\]/.test(detailButton)
+    && identifierWaits.length === 14
+    && detailButtonCalls.length === 21
+    && !/app\.buttons\s*\[\s*AID\.locationConsent(?:Grant|Suspend|Resume|Withdraw)Button\s*\]/.test(locationLifecycle)
+    && !cachedDynamicElement.test(locationLifecycle)
+    && !/waitForLabel\s*\(\s*(?!AID\.)[A-Za-z_][A-Za-z0-9_]*\s*,/.test(locationLifecycle);
 }
 
 
@@ -1489,6 +1521,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasStructuredResultVerification(job, aggregateJob), "iOS UI CI must aggregate exactly one structured summary and tests JSON for all twenty shards from seven uniquely named batch artifacts and fail when any worker, artifact, or shard is missing"]);
   checks.push([hasCameraAuthorizationReactivation(files), "iOS camera capture must refresh authorization when the app becomes active after returning from Settings"]);
   checks.push([hasDurableCriticalPathEvidence(files), "iOS UI tests must prove scoped mutations, backend readback after relaunch, camera dismissal, and UUID fixtures without local-state false greens"]);
+  checks.push([hasFreshLocationConsentQueries(files), "iOS location lifecycle UI tests must reacquire dynamic SwiftUI elements within the work-order detail root after every state replacement"]);
   checks.push([hasArtifactSecretScan(job), "iOS UI CI must upload only scan-clean derived diagnostics, never raw xcresult bundles containing OTP, access, or refresh session material"]);
   checks.push([hasOwnedCleanup(job), "iOS UI CI must upload before final always-cleanup and prove identity-aware backend, PostgreSQL, Simulator, and job-root cleanup"]);
 

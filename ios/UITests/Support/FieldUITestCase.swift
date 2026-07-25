@@ -553,22 +553,33 @@ class FieldUITestCase: XCTestCase {
         )
     }
 
-    /// Waits for one stable accessibility element to expose a rendered value.
-    /// This avoids brittle exact static-text lookups when SwiftUI combines a
-    /// row label and value into one accessibility label.
+    /// Resolves a button inside the currently presented work-order detail.
+    /// The detail root is rebuilt for every action so duplicate consent IDs in
+    /// the Today surface cannot satisfy a detail lifecycle assertion.
+    func detailButton(_ identifier: String) -> XCUIElement {
+        return app.descendants(matching: .any)[AID.detailView].buttons[identifier]
+    }
+
+    /// Waits for one stable accessibility identifier to expose a rendered value.
+    /// SwiftUI replaces accessibility nodes when consent state changes, so every
+    /// poll reacquires both the detail root and element instead of retaining a
+    /// stale or globally scoped XCUIElement query.
     @discardableResult
     func waitForLabel(
-        _ element: XCUIElement,
+        _ identifier: String,
         containing expected: String,
         timeout: TimeInterval = 15
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
-        guard element.waitForExistence(timeout: min(timeout, 2)) else { return false }
         while Date() < deadline {
-            if element.label.contains(expected) { return true }
+            let detail = app.descendants(matching: .any)[AID.detailView]
+            let element = detail.descendants(matching: .any)[identifier]
+            if element.exists, element.label.contains(expected) { return true }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
-        return element.label.contains(expected)
+        let detail = app.descendants(matching: .any)[AID.detailView]
+        let element = detail.descendants(matching: .any)[identifier]
+        return element.exists && element.label.contains(expected)
     }
 
     @discardableResult

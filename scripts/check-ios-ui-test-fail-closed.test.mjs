@@ -891,4 +891,51 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
     }), "scoped mutations");
     expectsFailure(evaluate({ "ios/UITests/LoginValidationUITests.swift": "XCTAssertTrue(loginError.exists)" }), "scoped mutations");
   });
+  it("rejects cached or globally scoped location-consent elements across SwiftUI state replacement", () => {
+    const fieldCase = validFiles["ios/UITests/Support/FieldUITestCase.swift"];
+    const criticalPath = validFiles["ios/UITests/FieldCriticalPathUITests.swift"];
+    const freshQueryGate = "reacquire dynamic SwiftUI elements";
+    expectsFailure(evaluate({
+      "ios/UITests/Support/FieldUITestCase.swift": mutateFile(
+        fieldCase,
+        "while Date() < deadline {\n            let detail = app.descendants(matching: .any)[AID.detailView]",
+        "while Date() < deadline {\n            let detail = app",
+      ),
+    }), freshQueryGate);
+    expectsFailure(evaluate({
+      "ios/UITests/Support/FieldUITestCase.swift": mutateFile(
+        fieldCase,
+        "let element = detail.descendants(matching: .any)[identifier]",
+        "let element = cachedElement",
+      ),
+    }), freshQueryGate);
+    expectsFailure(evaluate({
+      "ios/UITests/Support/FieldUITestCase.swift": mutateFile(
+        fieldCase,
+        "return app.descendants(matching: .any)[AID.detailView].buttons[identifier]",
+        "return app.buttons[identifier]",
+      ),
+    }), freshQueryGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "detailButton(AID.locationConsentGrantButton).tap()",
+        "let grant = detailButton(AID.locationConsentGrantButton)\n        grant.tap()",
+      ),
+    }), freshQueryGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "detailButton(AID.locationConsentGrantButton).tap()",
+        "app.buttons[AID.locationConsentGrantButton].tap()",
+      ),
+    }), freshQueryGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "waitForLabel(AID.locationConsentCollectionValue, containing: KO.yes)",
+        "waitForLabel(cachedCollectionValue, containing: KO.yes)",
+      ),
+    }), freshQueryGate);
+  });
 });
