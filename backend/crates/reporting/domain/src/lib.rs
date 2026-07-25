@@ -14,6 +14,463 @@ pub struct Period {
     pub end: Timestamp,
 }
 
+/// A validated half-open UTC window used by the analytics verticals.
+///
+/// This deliberately does not replace the older KPI `Period`: adapters can
+/// migrate independently without weakening its currently-public wire shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalyticsPeriod {
+    #[serde(with = "time::serde::rfc3339")]
+    start: Timestamp,
+    #[serde(with = "time::serde::rfc3339")]
+    end: Timestamp,
+}
+
+impl AnalyticsPeriod {
+    /// Creates a non-empty `[start, end)` period whose endpoints are UTC.
+    pub fn new(start: Timestamp, end: Timestamp) -> Result<Self, mnt_kernel_core::KernelError> {
+        if start.offset() != time::UtcOffset::UTC || end.offset() != time::UtcOffset::UTC {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics period endpoints must be UTC",
+            ));
+        }
+        if start >= end {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics period must be non-empty and half-open",
+            ));
+        }
+        Ok(Self { start, end })
+    }
+
+    #[must_use]
+    pub fn start(self) -> Timestamp {
+        self.start
+    }
+
+    #[must_use]
+    pub fn end(self) -> Timestamp {
+        self.end
+    }
+
+    #[must_use]
+    pub fn contains(self, value: Timestamp) -> bool {
+        value >= self.start && value < self.end
+    }
+
+    /// Validates a whole UTC calendar month, ending at the next month's start.
+    pub fn monthly(start: Timestamp, end: Timestamp) -> Result<Self, mnt_kernel_core::KernelError> {
+        let period = Self::new(start, end)?;
+        if start.day() != 1 || start.time() != time::Time::MIDNIGHT {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "labor cost period must start at UTC month boundary",
+            ));
+        }
+        let next_month = if start.month() == time::Month::December {
+            time::Date::from_calendar_date(start.year() + 1, time::Month::January, 1)
+        } else {
+            time::Date::from_calendar_date(start.year(), start.month().next(), 1)
+        }
+        .map_err(|_| mnt_kernel_core::KernelError::validation("invalid monthly analytics period"))?
+        .with_time(time::Time::MIDNIGHT)
+        .assume_utc();
+        if end != next_month {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "labor cost period must end at the next UTC month boundary",
+            ));
+        }
+        Ok(period)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AnalyticsDefinitionVersion(String);
+
+impl AnalyticsDefinitionVersion {
+    pub fn new(value: impl Into<String>) -> Result<Self, mnt_kernel_core::KernelError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics definition version cannot be empty",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalyticsSourceDomain {
+    WorkOrders,
+    Attendance,
+    Readiness,
+    Payroll,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AnalyticsFactQueryIdentity(String);
+
+impl AnalyticsFactQueryIdentity {
+    pub fn new(value: impl Into<String>) -> Result<Self, mnt_kernel_core::KernelError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics fact query identity cannot be empty",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalyticsEvidence {
+    href: String,
+    fact_query_identity: AnalyticsFactQueryIdentity,
+    source_domain: AnalyticsSourceDomain,
+}
+
+impl AnalyticsEvidence {
+    pub fn new(
+        href: impl Into<String>,
+        fact_query_identity: AnalyticsFactQueryIdentity,
+        source_domain: AnalyticsSourceDomain,
+    ) -> Result<Self, mnt_kernel_core::KernelError> {
+        let href = href.into();
+        if href.trim().is_empty() {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics evidence href cannot be empty",
+            ));
+        }
+        Ok(Self {
+            href,
+            fact_query_identity,
+            source_domain,
+        })
+    }
+
+    #[must_use]
+    pub fn href(&self) -> &str {
+        &self.href
+    }
+    #[must_use]
+    pub fn fact_query_identity(&self) -> &AnalyticsFactQueryIdentity {
+        &self.fact_query_identity
+    }
+    #[must_use]
+    pub fn source_domain(&self) -> AnalyticsSourceDomain {
+        self.source_domain
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RatioEvidence {
+    numerator: u64,
+    denominator: u64,
+}
+impl RatioEvidence {
+    pub fn new(numerator: u64, denominator: u64) -> Result<Self, mnt_kernel_core::KernelError> {
+        if denominator == 0 {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics denominator must be non-zero",
+            ));
+        }
+        Ok(Self {
+            numerator,
+            denominator,
+        })
+    }
+    #[must_use]
+    pub fn numerator(self) -> u64 {
+        self.numerator
+    }
+    #[must_use]
+    pub fn denominator(self) -> u64 {
+        self.denominator
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SumEvidence {
+    sum: i64,
+    sample_count: u64,
+}
+impl SumEvidence {
+    #[must_use]
+    pub const fn new(sum: i64, sample_count: u64) -> Self {
+        Self { sum, sample_count }
+    }
+    #[must_use]
+    pub const fn sum(self) -> i64 {
+        self.sum
+    }
+    #[must_use]
+    pub const fn sample_count(self) -> u64 {
+        self.sample_count
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MetricUnavailable {
+    reason: String,
+    source_domain: AnalyticsSourceDomain,
+}
+impl MetricUnavailable {
+    pub fn new(
+        reason: impl Into<String>,
+        source_domain: AnalyticsSourceDomain,
+    ) -> Result<Self, mnt_kernel_core::KernelError> {
+        let reason = reason.into();
+        if reason.trim().is_empty() {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics unavailable reason cannot be empty",
+            ));
+        }
+        Ok(Self {
+            reason,
+            source_domain,
+        })
+    }
+    #[must_use]
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+    #[must_use]
+    pub fn source_domain(&self) -> AnalyticsSourceDomain {
+        self.source_domain
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "availability", content = "value")]
+pub enum MetricAvailability<T> {
+    Available(T),
+    Unavailable(MetricUnavailable),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalyticsMetric<T> {
+    definition_version: AnalyticsDefinitionVersion,
+    availability: MetricAvailability<T>,
+    evidence: AnalyticsEvidence,
+}
+impl<T> AnalyticsMetric<T> {
+    #[must_use]
+    pub fn new(
+        definition_version: AnalyticsDefinitionVersion,
+        availability: MetricAvailability<T>,
+        evidence: AnalyticsEvidence,
+    ) -> Self {
+        Self {
+            definition_version,
+            availability,
+            evidence,
+        }
+    }
+    #[must_use]
+    pub fn definition_version(&self) -> &AnalyticsDefinitionVersion {
+        &self.definition_version
+    }
+    #[must_use]
+    pub fn availability(&self) -> &MetricAvailability<T> {
+        &self.availability
+    }
+    #[must_use]
+    pub fn evidence(&self) -> &AnalyticsEvidence {
+        &self.evidence
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrendSlot<T> {
+    period: AnalyticsPeriod,
+    value: MetricAvailability<T>,
+}
+impl<T> TrendSlot<T> {
+    #[must_use]
+    pub fn new(period: AnalyticsPeriod, value: MetricAvailability<T>) -> Self {
+        Self { period, value }
+    }
+    #[must_use]
+    pub fn period(&self) -> AnalyticsPeriod {
+        self.period
+    }
+    #[must_use]
+    pub fn value(&self) -> &MetricAvailability<T> {
+        &self.value
+    }
+}
+
+/// Company/region/branch resolution exactly as evaluated by the analytics read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
+pub enum DashboardAnalyticsScope {
+    Company,
+    Region(RegionId),
+    Branch(BranchId),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DashboardAnalytics {
+    period: AnalyticsPeriod,
+    resolved_scope: DashboardAnalyticsScope,
+    coverage: RatioEvidence,
+    completed_work_orders: AnalyticsMetric<SumEvidence>,
+    completion_rate: AnalyticsMetric<RatioEvidence>,
+    trend: Vec<TrendSlot<SumEvidence>>,
+    observed_at: Timestamp,
+}
+impl DashboardAnalytics {
+    pub fn new(
+        period: AnalyticsPeriod,
+        resolved_scope: DashboardAnalyticsScope,
+        coverage: RatioEvidence,
+        completed_work_orders: AnalyticsMetric<SumEvidence>,
+        completion_rate: AnalyticsMetric<RatioEvidence>,
+        trend: Vec<TrendSlot<SumEvidence>>,
+        observed_at: Timestamp,
+    ) -> Result<Self, mnt_kernel_core::KernelError> {
+        if observed_at.offset() != time::UtcOffset::UTC {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics observed_at must be UTC",
+            ));
+        }
+        Ok(Self {
+            period,
+            resolved_scope,
+            coverage,
+            completed_work_orders,
+            completion_rate,
+            trend,
+            observed_at,
+        })
+    }
+    #[must_use]
+    pub fn period(&self) -> AnalyticsPeriod {
+        self.period
+    }
+    #[must_use]
+    pub fn resolved_scope(&self) -> DashboardAnalyticsScope {
+        self.resolved_scope
+    }
+    #[must_use]
+    pub fn coverage(&self) -> RatioEvidence {
+        self.coverage
+    }
+    #[must_use]
+    pub fn completed_work_orders(&self) -> &AnalyticsMetric<SumEvidence> {
+        &self.completed_work_orders
+    }
+    #[must_use]
+    pub fn completion_rate(&self) -> &AnalyticsMetric<RatioEvidence> {
+        &self.completion_rate
+    }
+    #[must_use]
+    pub fn trend(&self) -> &[TrendSlot<SumEvidence>] {
+        &self.trend
+    }
+    #[must_use]
+    pub fn observed_at(&self) -> Timestamp {
+        self.observed_at
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaborCostAnalytics {
+    resolved_scope: LaborCostAnalyticsScope,
+    period: AnalyticsPeriod,
+    coverage: RatioEvidence,
+    worked_hours: AnalyticsMetric<SumEvidence>,
+    readiness_rate: AnalyticsMetric<RatioEvidence>,
+    gross_payroll: AnalyticsMetric<SumEvidence>,
+    trend: Vec<TrendSlot<SumEvidence>>,
+    observed_at: Timestamp,
+}
+
+/// Labor cost is intentionally not branch- or region-addressable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaborCostAnalyticsScope {
+    Company,
+}
+
+impl LaborCostAnalytics {
+    pub fn new(
+        period: AnalyticsPeriod,
+        coverage: RatioEvidence,
+        worked_hours: AnalyticsMetric<SumEvidence>,
+        readiness_rate: AnalyticsMetric<RatioEvidence>,
+        gross_payroll: AnalyticsMetric<SumEvidence>,
+        trend: Vec<TrendSlot<SumEvidence>>,
+        observed_at: Timestamp,
+    ) -> Result<Self, mnt_kernel_core::KernelError> {
+        AnalyticsPeriod::monthly(period.start(), period.end())?;
+        if observed_at.offset() != time::UtcOffset::UTC {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "analytics observed_at must be UTC",
+            ));
+        }
+        if !matches!(
+            gross_payroll.availability(),
+            MetricAvailability::Unavailable(_)
+        ) {
+            return Err(mnt_kernel_core::KernelError::validation(
+                "gross payroll is unavailable until payable calculations are complete",
+            ));
+        }
+        Ok(Self {
+            resolved_scope: LaborCostAnalyticsScope::Company,
+            period,
+            coverage,
+            worked_hours,
+            readiness_rate,
+            gross_payroll,
+            trend,
+            observed_at,
+        })
+    }
+    #[must_use]
+    pub fn resolved_scope(&self) -> LaborCostAnalyticsScope {
+        self.resolved_scope
+    }
+    #[must_use]
+    pub fn period(&self) -> AnalyticsPeriod {
+        self.period
+    }
+    #[must_use]
+    pub fn coverage(&self) -> RatioEvidence {
+        self.coverage
+    }
+    #[must_use]
+    pub fn worked_hours(&self) -> &AnalyticsMetric<SumEvidence> {
+        &self.worked_hours
+    }
+    #[must_use]
+    pub fn readiness_rate(&self) -> &AnalyticsMetric<RatioEvidence> {
+        &self.readiness_rate
+    }
+    #[must_use]
+    pub fn gross_payroll(&self) -> &AnalyticsMetric<SumEvidence> {
+        &self.gross_payroll
+    }
+    #[must_use]
+    pub fn trend(&self) -> &[TrendSlot<SumEvidence>] {
+        &self.trend
+    }
+    #[must_use]
+    pub fn observed_at(&self) -> Timestamp {
+        self.observed_at
+    }
+}
+
 impl Period {
     #[must_use]
     pub fn contains(self, value: Timestamp) -> bool {
@@ -751,6 +1208,98 @@ mod tests {
         assert_eq!(company.weighted_completed_points, 6);
         assert_eq!(company.revisit_rate_bps, 2_500);
         assert_eq!(company.target_due_compliance_bps, Some(10_000));
+    }
+
+    fn analytics_evidence() -> AnalyticsEvidence {
+        AnalyticsEvidence::new(
+            "/reporting/facts?predicate=work-orders-july",
+            AnalyticsFactQueryIdentity::new("work-orders-july").unwrap(),
+            AnalyticsSourceDomain::WorkOrders,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn analytics_period_is_utc_non_empty_and_half_open() {
+        let start = datetime!(2026-07-01 00:00 UTC);
+        let end = datetime!(2026-08-01 00:00 UTC);
+        let period = AnalyticsPeriod::new(start, end).unwrap();
+        assert!(period.contains(start));
+        assert!(!period.contains(end));
+        assert!(AnalyticsPeriod::new(end, start).is_err());
+        assert!(
+            AnalyticsPeriod::new(
+                datetime!(2026-07-01 00:00 +09:00),
+                datetime!(2026-08-01 00:00 +09:00)
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn labor_cost_requires_a_month_and_refuses_inferred_payroll() {
+        let period = AnalyticsPeriod::monthly(
+            datetime!(2026-07-01 00:00 UTC),
+            datetime!(2026-08-01 00:00 UTC),
+        )
+        .unwrap();
+        let definition = AnalyticsDefinitionVersion::new("labor-cost.v1").unwrap();
+        let hours = AnalyticsMetric::new(
+            definition.clone(),
+            MetricAvailability::Available(SumEvidence::new(160, 4)),
+            analytics_evidence(),
+        );
+        let readiness = AnalyticsMetric::new(
+            definition.clone(),
+            MetricAvailability::Available(RatioEvidence::new(3, 4).unwrap()),
+            analytics_evidence(),
+        );
+        let payroll = AnalyticsMetric::new(
+            definition,
+            MetricAvailability::Unavailable(
+                MetricUnavailable::new(
+                    "payable calculation is not implemented",
+                    AnalyticsSourceDomain::Payroll,
+                )
+                .unwrap(),
+            ),
+            AnalyticsEvidence::new(
+                "/reporting/facts?predicate=payroll-july",
+                AnalyticsFactQueryIdentity::new("payroll-july").unwrap(),
+                AnalyticsSourceDomain::Payroll,
+            )
+            .unwrap(),
+        );
+        assert!(
+            LaborCostAnalytics::new(
+                period,
+                RatioEvidence::new(4, 4).unwrap(),
+                hours.clone(),
+                readiness.clone(),
+                payroll,
+                vec![],
+                datetime!(2026-08-01 01:00 UTC),
+            )
+            .is_ok()
+        );
+
+        let inferred_payroll = AnalyticsMetric::new(
+            AnalyticsDefinitionVersion::new("labor-cost.v1").unwrap(),
+            MetricAvailability::Available(SumEvidence::new(1, 1)),
+            analytics_evidence(),
+        );
+        assert!(
+            LaborCostAnalytics::new(
+                period,
+                RatioEvidence::new(4, 4).unwrap(),
+                hours,
+                readiness,
+                inferred_payroll,
+                vec![],
+                datetime!(2026-08-01 01:00 UTC),
+            )
+            .is_err()
+        );
     }
 }
 
