@@ -347,6 +347,7 @@ async fn get_case_view(pool: &PgPool, p: &Principal, id: Uuid) -> Result<CaseVie
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn transition(
     s: &FacilitiesRestState,
     h: &HeaderMap,

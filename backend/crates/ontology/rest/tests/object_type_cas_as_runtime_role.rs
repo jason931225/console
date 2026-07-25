@@ -743,6 +743,7 @@ async fn migration_0169_stages_existing_live_rows_without_inventing_normalized_p
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn policy_validation_failure_response(
     service: axum::Router,
     owner_pool: &PgPool,
@@ -1111,6 +1112,7 @@ async fn attach_enforced_policy(
     .await;
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn attach_enforced_policy_with_attachment_effect(
     owner_pool: &PgPool,
     org: OrgId,

@@ -296,6 +296,7 @@ fn audit(
     .with_org(org)
     .with_branch(branch)
 }
+#[allow(clippy::too_many_arguments)]
 async fn history(
     tx: &mut Transaction<'_, Postgres>,
     org: OrgId,
