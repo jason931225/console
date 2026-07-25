@@ -204,73 +204,138 @@ function shellCommandTokens(script) {
         token += character;
       }
     }
+    const malformed = quote !== null || escaped;
     if (escaped) token += "\\";
     flush();
-    return tokens;
+    return { tokens, malformed };
   });
 }
 
-function cargoTestPackagesInStep(step) {
+const maxExecutablePrefixDepth = 12;
+const maxExecutableTokens = 512;
+const assignmentToken = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+function mergeCargoAnalysis(left, right) {
+  for (const packageName of right.packages) left.packages.add(packageName);
+  left.malformed ||= right.malformed;
+  return left;
+}
+
+function emptyCargoAnalysis(malformed = false) {
+  return { packages: new Set(), malformed };
+}
+
+function packageArguments(tokens, index) {
   const packages = new Set();
-  for (const tokens of shellCommandTokens(runScript(step))) {
-    let segment = [];
-    const inspectSegment = () => {
-      let index = 0;
-      while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[index] ?? "")) index += 1;
-      if (segment[index] === "env") {
-        index += 1;
-        while (segment[index]) {
-          if (segment[index] === "--") {
-            index += 1;
-            break;
-          }
-          if (["-u", "--unset", "-C", "--chdir"].includes(segment[index])) {
-            index += 2;
-          } else if (segment[index].startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[index])) {
-            index += 1;
-          } else {
-            break;
-          }
-        }
-      }
-      if (segment[index] === "command") {
-        index += 1;
-        while (segment[index]?.startsWith("-")) index += 1;
-      }
-      if (segment[index] !== "cargo") return;
+  for (; index < tokens.length; index += 1) {
+    const argument = tokens[index];
+    let packageName = null;
+    if (argument === "-p" || argument === "--package") {
+      packageName = tokens[index + 1];
       index += 1;
-      if (segment[index] === "test") {
+    } else if (argument.startsWith("-p=")) {
+      packageName = argument.slice(3);
+    } else if (argument.startsWith("--package=")) {
+      packageName = argument.slice("--package=".length);
+    }
+    if (!packageName) continue;
+    packages.add(packageName);
+  }
+  return { packages, malformed: false };
+}
+
+function cargoTestAnalysis(tokens, depth = 0) {
+  if (depth > maxExecutablePrefixDepth || tokens.length > maxExecutableTokens) {
+    return emptyCargoAnalysis(true);
+  }
+  let index = 0;
+  while (assignmentToken.test(tokens[index] ?? "")) index += 1;
+  if (index === tokens.length) return emptyCargoAnalysis();
+
+  if (tokens[index] === "command") {
+    index += 1;
+    while (tokens[index]?.startsWith("-")) {
+      const option = tokens[index];
+      if (option === "--") {
         index += 1;
-      } else if (segment[index] === "nextest" && segment[index + 1] === "run") {
+        break;
+      }
+      if (option === "-v" || option === "-V" || option === "-p") return emptyCargoAnalysis();
+      return emptyCargoAnalysis(true);
+    }
+    return index < tokens.length
+      ? cargoTestAnalysis(tokens.slice(index), depth + 1)
+      : emptyCargoAnalysis(true);
+  }
+
+  if (tokens[index] === "env") {
+    index += 1;
+    while (tokens[index]) {
+      const option = tokens[index];
+      if (option === "--") {
+        index += 1;
+        break;
+      }
+      if (option === "-S" || option === "--split-string") {
+        const payload = tokens[index + 1];
+        if (!payload || index + 2 !== tokens.length) return emptyCargoAnalysis(true);
+        const payloads = shellCommandTokens(payload);
+        if (payloads.length === 0) return emptyCargoAnalysis(true);
+        return payloads.reduce(
+          (analysis, surface) => mergeCargoAnalysis(
+            analysis,
+            surface.malformed
+              ? emptyCargoAnalysis(true)
+              : cargoTestAnalysis(surface.tokens, depth + 1),
+          ),
+          emptyCargoAnalysis(),
+        );
+      }
+      if (["-u", "--unset", "-C", "--chdir"].includes(option)) {
+        if (!tokens[index + 1]) return emptyCargoAnalysis(true);
         index += 2;
+      } else if (["-i", "--ignore-environment", "-v", "--debug"].includes(option)) {
+        index += 1;
+      } else if (assignmentToken.test(option)) {
+        index += 1;
+      } else if (option.startsWith("-")) {
+        return emptyCargoAnalysis(true);
       } else {
-        return;
+        break;
       }
-      for (; index < segment.length; index += 1) {
-        const argument = segment[index];
-        let packageName = null;
-        if (argument === "-p" || argument === "--package") {
-          packageName = segment[index + 1];
-          index += 1;
-        } else if (argument.startsWith("-p=")) {
-          packageName = argument.slice(3);
-        } else if (argument.startsWith("--package=")) {
-          packageName = argument.slice("--package=".length);
-        }
-        if (packageName) packages.add(packageName);
-      }
-    };
-    for (const token of tokens) {
+    }
+    return index < tokens.length
+      ? cargoTestAnalysis(tokens.slice(index), depth + 1)
+      : emptyCargoAnalysis(true);
+  }
+
+  if (tokens[index] !== "cargo") return emptyCargoAnalysis();
+  index += 1;
+  if (tokens[index] === "test") return packageArguments(tokens, index + 1);
+  if (tokens[index] === "nextest" && tokens[index + 1] === "run") {
+    return packageArguments(tokens, index + 2);
+  }
+  return emptyCargoAnalysis();
+}
+
+function cargoTestAnalysisInStep(step) {
+  const analysis = emptyCargoAnalysis();
+  for (const surface of shellCommandTokens(runScript(step))) {
+    if (surface.malformed) {
+      mergeCargoAnalysis(analysis, emptyCargoAnalysis(true));
+      continue;
+    }
+    let segment = [];
+    for (const token of [...surface.tokens, ";"]) {
       if (token === ";" || token === "|" || token === "&") {
-        inspectSegment();
+        mergeCargoAnalysis(analysis, cargoTestAnalysis(segment));
         segment = [];
       } else {
         segment.push(token);
       }
     }
-    inspectSegment();
   }
-  return packages;
+  return analysis;
 }
 
 function requireUnconditionalRun(steps, command, job, failures) {
@@ -628,11 +693,15 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       "backend",
       failures,
     );
-    const directCargoTestPackages = new Set(
-      steps.flatMap((step) => [...cargoTestPackagesInStep(step)]),
+    const directCargoTestAnalysis = steps.reduce(
+      (analysis, step) => mergeCargoAnalysis(analysis, cargoTestAnalysisInStep(step)),
+      emptyCargoAnalysis(),
     );
+    if (directCargoTestAnalysis.malformed) {
+      failures.push("backend must not contain a malformed executable shell surface");
+    }
     for (const packageName of ["mnt-platform-auth-rest", "mnt-platform-provisioning"]) {
-      if (directCargoTestPackages.has(packageName)) {
+      if (directCargoTestAnalysis.packages.has(packageName)) {
         failures.push("backend must not run direct Cargo PostgreSQL tests for " + packageName);
       }
     }

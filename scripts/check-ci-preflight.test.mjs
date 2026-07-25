@@ -658,6 +658,20 @@ ${preflightRustToolchainSetup.trimEnd()}`,
             insertBackendRun(runner + " " + packageArgument),
             "backend must not run direct Cargo PostgreSQL tests for " + packageName,
           );
+          for (const prefix of [
+            "command env SQLX_OFFLINE=true ",
+            "command -- env -- ",
+            "env -i command -- ",
+          ]) {
+            expectFailure(
+              insertBackendRun(prefix + runner + " " + packageArgument),
+              "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+            );
+          }
+          expectFailure(
+            insertBackendRun("env -S 'command env " + runner + " " + packageArgument + "'"),
+            "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+          );
         }
       }
     }
@@ -676,11 +690,19 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       "# " + cargo + " " + test + " -p mnt-platform-auth-rest",
       cargo + " run -p mnt-platform-auth-rest",
       "echo " + cargo + " " + test + " -p mnt-platform-provisioning",
+      "command -v " + cargo + " " + test + " -p mnt-platform-auth-rest",
+      "command -V " + cargo + " " + test + " -p mnt-platform-provisioning",
     ]) {
       const failures = evaluateCiPreflight(insertBackendRun(command)).failures;
       assert.ok(
         !failures.some((failure) => failure.startsWith("backend must not run direct Cargo PostgreSQL tests")),
         failures.join("\n"),
+      );
+    }
+    for (const command of ["command --", "env -S", "env -S 'command --'"]) {
+      expectFailure(
+        insertBackendRun(command),
+        "backend must not contain a malformed executable shell surface",
       );
     }
     expectFailure(
