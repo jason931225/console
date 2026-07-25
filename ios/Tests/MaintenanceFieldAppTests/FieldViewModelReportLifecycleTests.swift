@@ -31,6 +31,31 @@ final class FieldViewModelReportLifecycleTests: XCTestCase {
         XCTAssertFalse(viewModel.isLoading)
     }
 
+    func testLaterPresentationActionWinsWhileSuccessfulRefreshCompletes() async {
+        let refreshedWorkOrder = workOrder.applyingSubmittedReport(
+            ReportDraft(resultType: .completed, diagnosis: "Resolved", actionTaken: "Replaced"),
+            syncState: .synced
+        )
+        let gateway = ControllableWorkOrderGateway(
+            todayWorkOrders: [refreshedWorkOrder],
+            holdsRefresh: true
+        )
+        let viewModel = makeViewModel(gateway: gateway)
+        viewModel.selectedWorkOrder = workOrder
+        viewModel.diagnosis = "Resolved"
+        viewModel.actionTaken = "Replaced"
+
+        let submission = Task { await viewModel.submitReport() }
+        await gateway.waitUntilRefreshStarted()
+
+        viewModel.cameraCaptureFailed()
+        await gateway.releaseRefresh()
+        await submission.value
+
+        XCTAssertEqual(viewModel.messageKey, "operation_failed")
+        XCTAssertFalse(viewModel.isLoading)
+    }
+
     func testConfirmedReportPublishesSuccessBeforeFailedTodayRefresh() async throws {
         let gateway = ControllableWorkOrderGateway(
             listError: URLError(.networkConnectionLost),
@@ -47,10 +72,7 @@ final class FieldViewModelReportLifecycleTests: XCTestCase {
         defer { _ = (messageToken, loadingToken) }
 
         let submission = Task { await viewModel.submitReport() }
-        let deadline = Date().addingTimeInterval(1)
-        while await gateway.refreshStarted() == false && Date() < deadline {
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
+        await gateway.waitUntilRefreshStarted()
         let didStartRefresh = await gateway.refreshStarted()
         XCTAssertTrue(didStartRefresh)
 
@@ -172,22 +194,34 @@ private actor ControllableWorkOrderGateway: WorkOrderGateway {
     let listError: Error?
     let listDelayNanoseconds: UInt64
     let todayWorkOrders: [TechnicianWorkOrder]
+    let holdsRefresh: Bool
     private var didStartRefresh = false
+    private var refreshStartWaiters: [CheckedContinuation<Void, Never>] = []
+    private var refreshReleaseContinuation: CheckedContinuation<Void, Never>?
 
     init(
         reportError: Error? = nil,
         listError: Error? = nil,
         listDelayNanoseconds: UInt64 = 0,
-        todayWorkOrders: [TechnicianWorkOrder] = []
+        todayWorkOrders: [TechnicianWorkOrder] = [],
+        holdsRefresh: Bool = false
     ) {
         self.reportError = reportError
         self.listError = listError
         self.listDelayNanoseconds = listDelayNanoseconds
         self.todayWorkOrders = todayWorkOrders
+        self.holdsRefresh = holdsRefresh
     }
 
     func listTodayWorkOrders() async throws -> [TechnicianWorkOrder] {
         didStartRefresh = true
+        refreshStartWaiters.forEach { $0.resume() }
+        refreshStartWaiters.removeAll()
+        if holdsRefresh {
+            await withCheckedContinuation { continuation in
+                refreshReleaseContinuation = continuation
+            }
+        }
         if listDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: listDelayNanoseconds)
         }
@@ -196,6 +230,18 @@ private actor ControllableWorkOrderGateway: WorkOrderGateway {
     }
 
     func refreshStarted() -> Bool { didStartRefresh }
+
+    func waitUntilRefreshStarted() async {
+        guard didStartRefresh == false else { return }
+        await withCheckedContinuation { continuation in
+            refreshStartWaiters.append(continuation)
+        }
+    }
+
+    func releaseRefresh() {
+        refreshReleaseContinuation?.resume()
+        refreshReleaseContinuation = nil
+    }
 
     func getWorkOrderDetail(id: Components.Schemas.Uuid) async throws -> TechnicianWorkOrder { throw URLError(.unsupportedURL) }
     func startWorkOrder(id: Components.Schemas.Uuid) async throws { throw URLError(.unsupportedURL) }
