@@ -10,6 +10,14 @@ private typealias FacilitiesCase = Components.Schemas.FacilitiesCase
 private typealias ProductionCredential = Components.Schemas.ProductionSourceSystemCredential
 private typealias ProductionReceipt = Components.Schemas.ProductionSourceSystemReceipt
 private typealias ProductionIngressReceipt = Components.Schemas.ProductionSourceIngressReceipt
+private typealias EvaluationUnitProgress = Components.Schemas.EvaluationUnitProgress
+private typealias EvaluationSubjectSummary = Components.Schemas.EvaluationSubjectSummary
+private typealias EvaluationCycleDetail = Components.Schemas.EvaluationCycleDetail
+private typealias EvaluationReview = Components.Schemas.EvaluationReview
+private typealias EvaluationSubjectDetail = Components.Schemas.EvaluationSubjectDetail
+private typealias EvaluationPreflightItem = Components.Schemas.EvaluationPreflightItem
+private typealias EvaluationPreflightReport = Components.Schemas.EvaluationPreflightReport
+private typealias EvaluationTaskItem = Components.Schemas.EvaluationTaskItem
 
 @main
 private enum GeneratedClientContractTests {
@@ -30,6 +38,22 @@ private enum GeneratedClientContractTests {
             ("decodes required null evidence next_cursor", decodesRequiredNullEvidenceNextCursor),
             ("re-encodes null evidence next_cursor as an explicit field", reencodesNullEvidenceNextCursorAsExplicitField),
             ("rejects an evidence page without next_cursor", rejectsEvidencePageWithoutNextCursor),
+            ("preserves required-nullable evaluation unit progress fields", preservesEvaluationUnitProgressNulls),
+            ("rejects missing required-nullable evaluation unit progress fields", rejectsMissingEvaluationUnitProgressNulls),
+            ("preserves required-nullable evaluation subject summary fields", preservesEvaluationSubjectSummaryNulls),
+            ("rejects missing required-nullable evaluation subject summary fields", rejectsMissingEvaluationSubjectSummaryNulls),
+            ("preserves required-nullable evaluation cycle detail fields", preservesEvaluationCycleDetailNulls),
+            ("rejects missing required-nullable evaluation cycle detail fields", rejectsMissingEvaluationCycleDetailNulls),
+            ("preserves required-nullable evaluation review fields", preservesEvaluationReviewNulls),
+            ("rejects missing required-nullable evaluation review fields", rejectsMissingEvaluationReviewNulls),
+            ("preserves required-nullable evaluation subject detail fields", preservesEvaluationSubjectDetailNulls),
+            ("rejects missing required-nullable evaluation subject detail fields", rejectsMissingEvaluationSubjectDetailNulls),
+            ("preserves required-nullable evaluation preflight item fields", preservesEvaluationPreflightItemNulls),
+            ("rejects missing required-nullable evaluation preflight item fields", rejectsMissingEvaluationPreflightItemNulls),
+            ("preserves required-nullable evaluation preflight report fields", preservesEvaluationPreflightReportNulls),
+            ("rejects missing required-nullable evaluation preflight report fields", rejectsMissingEvaluationPreflightReportNulls),
+            ("preserves required-nullable evaluation task fields", preservesEvaluationTaskItemNulls),
+            ("rejects missing required-nullable evaluation task fields", rejectsMissingEvaluationTaskItemNulls),
             ("keeps facilities transition outputs and request bodies typed", keepsFacilitiesTransitionOutputsTyped),
             ("keeps production source receipts typed and serializes every ingress kind", keepsProductionSourceContractsTyped),
         ]
@@ -135,6 +159,152 @@ private enum GeneratedClientContractTests {
         rejectsPayloadWithoutRequiredKey("next_cursor", payload: validEvidencePage, as: EvidenceObjectPage.self)
     }
 
+    private static func preservesEvaluationUnitProgressNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationUnitProgressPayload,
+            as: EvaluationUnitProgress.self,
+            keys: ["org_unit"]
+        )
+    }
+
+    private static func rejectsMissingEvaluationUnitProgressNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            ["org_unit"],
+            payload: evaluationUnitProgressPayload,
+            as: EvaluationUnitProgress.self
+        )
+    }
+
+    private static func preservesEvaluationSubjectSummaryNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationSubjectSummaryPayload,
+            as: EvaluationSubjectSummary.self,
+            keys: ["org_unit", "final_grade", "rv_code"]
+        )
+    }
+
+    private static func rejectsMissingEvaluationSubjectSummaryNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            ["org_unit", "final_grade", "rv_code"],
+            payload: evaluationSubjectSummaryPayload,
+            as: EvaluationSubjectSummary.self
+        )
+    }
+
+    private static func preservesEvaluationCycleDetailNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationCycleDetailPayload,
+            as: EvaluationCycleDetail.self,
+            keys: ["opened_at", "calibration_started_at", "finalized_at", "archived_at"]
+        )
+    }
+
+    private static func rejectsMissingEvaluationCycleDetailNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            ["opened_at", "calibration_started_at", "finalized_at", "archived_at"],
+            payload: evaluationCycleDetailPayload,
+            as: EvaluationCycleDetail.self
+        )
+    }
+
+    private static func preservesEvaluationReviewNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationReviewPayload,
+            as: EvaluationReview.self,
+            keys: ["grade", "note", "submitted_at"]
+        )
+    }
+
+    private static func rejectsMissingEvaluationReviewNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            ["grade", "note", "submitted_at"],
+            payload: evaluationReviewPayload,
+            as: EvaluationReview.self
+        )
+    }
+
+    private static func preservesEvaluationSubjectDetailNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationSubjectDetailPayload,
+            as: EvaluationSubjectDetail.self,
+            keys: [
+                "org_unit",
+                "final_grade",
+                "rv_code",
+                "calibrated_grade",
+                "calibration_reason",
+                "calibrated_by",
+                "calibrated_at",
+                "finalized_at",
+            ]
+        )
+    }
+
+    private static func rejectsMissingEvaluationSubjectDetailNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            [
+                "org_unit",
+                "final_grade",
+                "rv_code",
+                "calibrated_grade",
+                "calibration_reason",
+                "calibrated_by",
+                "calibrated_at",
+                "finalized_at",
+            ],
+            payload: evaluationSubjectDetailPayload,
+            as: EvaluationSubjectDetail.self
+        )
+    }
+
+    private static func preservesEvaluationPreflightItemNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationPreflightItemPayload,
+            as: EvaluationPreflightItem.self,
+            keys: ["subject_id"]
+        )
+    }
+
+    private static func rejectsMissingEvaluationPreflightItemNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            ["subject_id"],
+            payload: evaluationPreflightItemPayload,
+            as: EvaluationPreflightItem.self
+        )
+    }
+
+    private static func preservesEvaluationPreflightReportNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationPreflightReportPayload,
+            as: EvaluationPreflightReport.self,
+            keys: ["next_transition"]
+        )
+    }
+
+    private static func rejectsMissingEvaluationPreflightReportNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            ["next_transition"],
+            payload: evaluationPreflightReportPayload,
+            as: EvaluationPreflightReport.self
+        )
+    }
+
+    private static func preservesEvaluationTaskItemNulls() -> Bool {
+        explicitNullsRoundTrip(
+            evaluationTaskItemPayload,
+            as: EvaluationTaskItem.self,
+            keys: ["review_status"]
+        )
+    }
+
+    private static func rejectsMissingEvaluationTaskItemNulls() -> Bool {
+        rejectsPayloadWithoutRequiredKeys(
+            ["review_status"],
+            payload: evaluationTaskItemPayload,
+            as: EvaluationTaskItem.self
+        )
+    }
+
     private static func keepsFacilitiesTransitionOutputsTyped() -> Bool {
         func caseFromTriage(_ body: Operations.TriageFacilitiesCase.Output.Ok.Body) -> FacilitiesCase {
             switch body { case let .json(caseValue): return caseValue }
@@ -220,6 +390,34 @@ private enum GeneratedClientContractTests {
         return object.keys.contains(key) && object[key] is NSNull
     }
 
+    private static func explicitNullsRoundTrip<Model: Codable>(
+        _ payload: Data,
+        as type: Model.Type,
+        keys: [String]
+    ) -> Bool {
+        guard
+            let decoded = try? decoder.decode(type, from: payload),
+            let data = try? encoder.encode(decoded),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return false
+        }
+        return keys.allSatisfy { object.keys.contains($0) && object[$0] is NSNull }
+    }
+
+    private static func rejectsPayloadWithoutRequiredKeys<Model: Decodable>(
+        _ keys: [String],
+        payload: Data,
+        as type: Model.Type
+    ) -> Bool {
+        guard (try? decoder.decode(type, from: payload)) != nil else {
+            return false
+        }
+        return keys.allSatisfy { key in
+            rejectsPayloadWithoutRequiredKey(key, payload: payload, as: type)
+        }
+    }
+
     private static func rejectsPayloadWithoutRequiredKey<Model: Decodable>(
         _ key: String,
         payload: Data,
@@ -275,6 +473,48 @@ private enum GeneratedClientContractTests {
 
     private static var validEvidencePage: Data {
         Data(#"{"items":[],"limit":50,"offset":0,"total":0,"as_of":42,"next_cursor":null}"#.utf8)
+    }
+
+    private static var evaluationUnitProgressPayload: Data {
+        Data(#"{"org_unit":null,"total":1,"manager_submitted":0}"#.utf8)
+    }
+
+    private static var evaluationSubjectSummaryPayload: Data {
+        Data(
+            #"{"id":"00000000-0000-0000-0000-000000000001","cycle_id":"00000000-0000-0000-0000-000000000002","employee_id":"00000000-0000-0000-0000-000000000003","employee_name":"Employee","org_unit":null,"manager_user_id":"00000000-0000-0000-0000-000000000004","state":"ENROLLED","final_grade":null,"rv_code":null}"#.utf8
+        )
+    }
+
+    private static var evaluationCycleDetailPayload: Data {
+        Data(
+            #"{"id":"00000000-0000-0000-0000-000000000001","name":"2026 Review","kind":"REGULAR","period_label":"2026","due_date":"2026-12-31","stage":"DRAFT","subjects_total":0,"manager_submitted":0,"self_submitted":0,"calibrated":0,"finalized":0,"created_at":"2026-07-25T12:00:00Z","opened_at":null,"calibration_started_at":null,"finalized_at":null,"archived_at":null,"created_by":"00000000-0000-0000-0000-000000000002","progress_by_unit":[],"subjects":[]}"#.utf8
+        )
+    }
+
+    private static var evaluationReviewPayload: Data {
+        Data(
+            #"{"id":"00000000-0000-0000-0000-000000000001","subject_id":"00000000-0000-0000-0000-000000000002","kind":"SELF","status":"DRAFT","evaluator_user_id":"00000000-0000-0000-0000-000000000003","grade":null,"note":null,"evidence_links":[],"submitted_at":null,"updated_at":"2026-07-25T12:00:00Z"}"#.utf8
+        )
+    }
+
+    private static var evaluationSubjectDetailPayload: Data {
+        Data(
+            #"{"id":"00000000-0000-0000-0000-000000000001","cycle_id":"00000000-0000-0000-0000-000000000002","employee_id":"00000000-0000-0000-0000-000000000003","employee_name":"Employee","org_unit":null,"manager_user_id":"00000000-0000-0000-0000-000000000004","state":"ENROLLED","final_grade":null,"rv_code":null,"goals":[],"reviews":[],"calibrated_grade":null,"calibration_reason":null,"calibrated_by":null,"calibrated_at":null,"finalized_at":null}"#.utf8
+        )
+    }
+
+    private static var evaluationPreflightItemPayload: Data {
+        Data(#"{"code":"READY","message":"Ready","subject_id":null}"#.utf8)
+    }
+
+    private static var evaluationPreflightReportPayload: Data {
+        Data(#"{"next_transition":null,"blockers":[],"advisories":[]}"#.utf8)
+    }
+
+    private static var evaluationTaskItemPayload: Data {
+        Data(
+            #"{"subject_id":"00000000-0000-0000-0000-000000000001","cycle_id":"00000000-0000-0000-0000-000000000002","cycle_name":"2026 Review","due_date":"2026-12-31","employee_id":"00000000-0000-0000-0000-000000000003","employee_name":"Employee","kind":"SELF","review_status":null}"#.utf8
+        )
     }
 }
 
