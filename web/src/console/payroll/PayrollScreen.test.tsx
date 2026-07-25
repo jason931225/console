@@ -16,7 +16,7 @@ import type { PayrollCapabilities } from "./payrollCapabilities";
 import { PayrollScreen } from "./PayrollScreen";
 
 const navigateSpy = vi.fn();
-vi.mock("react-router-dom", () => ({
+vi.mock("react-router", () => ({
   useNavigate: () => navigateSpy,
 }));
 

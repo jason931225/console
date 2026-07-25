@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import type { ConsoleApiClient } from "../../api/client";
 import { notifCategoryTone, notifScreenLabel, notifStrings as text } from "../../i18n/notif";
