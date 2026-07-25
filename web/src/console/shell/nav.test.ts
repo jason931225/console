@@ -89,6 +89,32 @@ describe("console nav deny-by-omission", () => {
     expect(s.has("compliance")).toBe(false);
   });
 
+  it("mirrors payroll's org-wide backend boundary in mounted inventory", () => {
+    const payrollRead = "payroll_run_read";
+
+    // ADMIN is a branch-management role. The payroll API's org-wide gate
+    // rejects it even when its ordinary matrix row is Allow.
+    expect(screens(grants([ROLES.ADMIN]), MOUNTED_SCREEN_KEYS).has("payroll")).toBe(false);
+    expect(
+      screens(
+        grants([ROLES.ADMIN], [FEATURES.EMPLOYEE_DIRECTORY_READ]),
+        MOUNTED_SCREEN_KEYS,
+      ).has("payroll"),
+    ).toBe(false);
+
+    // ConsoleGrants intentionally contains no capability scope. A flattened
+    // feature hint therefore cannot prove the all-branch grant payroll needs.
+    expect(
+      screens(grants([ROLES.MEMBER], [payrollRead]), MOUNTED_SCREEN_KEYS).has("payroll"),
+    ).toBe(false);
+
+    expect(screens(grants([ROLES.EXECUTIVE]), MOUNTED_SCREEN_KEYS).has("payroll")).toBe(true);
+    expect(screens(grants([ROLES.SUPER_ADMIN]), MOUNTED_SCREEN_KEYS).has("payroll")).toBe(true);
+
+    // Mounted authorization does not change production exposure.
+    expect(screens(grants([ROLES.SUPER_ADMIN])).has("payroll")).toBe(false);
+  });
+
   it("unlocks RoleManage surfaces for SUPER_ADMIN", () => {
     const s = screens(grants([ROLES.SUPER_ADMIN]), MOUNTED_SCREEN_KEYS);
     expect(s.has("policy")).toBe(true);

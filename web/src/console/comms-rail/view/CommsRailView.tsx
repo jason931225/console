@@ -52,9 +52,12 @@ interface CommsRailViewCommonProps {
   copy: CommsRailCopy;
   retryingSource?: CommsRailSource;
   onRetry?: (source: CommsRailSource) => void;
-  onDrill?: (item: CommsRailItem, target: CommsRailTarget) => void;
-  /** Inline detail ownership remains with the embedding console surface. */
-  onDetail?: (item: CommsRailItem, target: InlineTarget) => void;
+  /** The shell currently owns only this concrete messenger route. */
+  onOpenMessengerThread?: (threadId: string) => void;
+  /** Inline mail detail ownership remains with the embedding console surface. */
+  onOpenMailThread?: (item: CommsRailItem, target: InlineTarget) => void;
+  /** Notice detail ownership remains with the embedding console surface. */
+  onOpenNotice?: (item: CommsRailItem, target: InlineTarget) => void;
   /** Full module navigation remains with the embedding router surface. */
   onOpenFullModule?: (item: CommsRailItem, target: FullModuleTarget) => void;
   /** The store-backed mutation owner is injected by the container. */
@@ -65,6 +68,8 @@ interface CommsRailViewCommonProps {
   renderInlineDetail?: (item: CommsRailItem) => ReactNode;
   /** Makes the shell integration invariant assertable without touching its owner. */
   workspacePreservedId?: string;
+  /** Avoid a duplicate landmark when the persistent rail is embedded in the shell chrome. */
+  embedded?: boolean;
 }
 
 export type CommsRailViewProps = CommsRailViewCommonProps & (
@@ -198,8 +203,9 @@ function RailCategory({
   copy,
   retryingSource,
   onRetry,
-  onDrill,
-  onDetail,
+  onOpenMessengerThread,
+  onOpenMailThread,
+  onOpenNotice,
   onOpenFullModule,
   onAction,
   renderInlineDetail,
@@ -209,8 +215,9 @@ function RailCategory({
   copy: CommsRailCopy;
   retryingSource?: CommsRailSource;
   onRetry?: (source: CommsRailSource) => void;
-  onDrill?: (item: CommsRailItem, target: CommsRailTarget) => void;
-  onDetail?: (item: CommsRailItem, target: InlineTarget) => void;
+  onOpenMessengerThread?: (threadId: string) => void;
+  onOpenMailThread?: (item: CommsRailItem, target: InlineTarget) => void;
+  onOpenNotice?: (item: CommsRailItem, target: InlineTarget) => void;
   onOpenFullModule?: (item: CommsRailItem, target: FullModuleTarget) => void;
   onAction?: (action: CommsRailAction) => void;
   renderInlineDetail?: (item: CommsRailItem) => ReactNode;
@@ -223,16 +230,38 @@ function RailCategory({
   const malformed = state.kind === "ready" && items === undefined;
   const unread = items ? unreadCount(items) : 0;
 
+  const canOpenItem = (item: CommsRailItem): boolean => {
+    const target = item.target;
+    if (!target || target.source !== item.source) return false;
+    if (target.kind === "full-screen") return Boolean(onOpenFullModule);
+    if (target.kind === "messenger-thread") return Boolean(onOpenMessengerThread);
+    if (target.source === "messenger") return Boolean(onOpenMessengerThread);
+    if (target.source === "mail") return Boolean(onOpenMailThread);
+    return Boolean(onOpenNotice);
+  };
+
   const openItem = (item: CommsRailItem) => {
     const target = item.target;
-    if (!target) return;
-    if (target.kind === "inline") {
-      if (renderInlineDetail) setDetail(item);
-      onDetail?.(item, target);
-    } else {
+    if (!target || target.source !== item.source) return;
+    if (target.kind === "full-screen") {
       onOpenFullModule?.(item, target);
+      return;
     }
-    onDrill?.(item, target);
+    if (target.kind === "messenger-thread") {
+      onOpenMessengerThread?.(target.id);
+      return;
+    }
+    if (target.source === "messenger") {
+      onOpenMessengerThread?.(target.id);
+      return;
+    }
+    if (target.source === "mail") {
+      if (renderInlineDetail) setDetail(item);
+      onOpenMailThread?.(item, target);
+      return;
+    }
+    if (renderInlineDetail) setDetail(item);
+    onOpenNotice?.(item, target);
   };
 
   return (
@@ -257,16 +286,17 @@ function RailCategory({
             : sourceState(source, state, copy, retryingSource, onRetry)}
           {items && items.length > 0 ? (
             <ul className="commsRail__items" aria-label={name}>
-              {items.map((item) => (
-                <li key={item.id} data-comms-row={item.id} data-testid={`latest-comms-row-${source}-${item.id}`} data-correlation-id={item.id} data-unread={item.unread || undefined}>
-                  {item.target && (onDrill || onDetail || onOpenFullModule || renderInlineDetail) ? (
+              {items.map((item) => {
+                const target = item.target;
+                return <li key={item.id} data-comms-row={item.id} data-testid={`latest-comms-row-${source}-${item.id}`} data-correlation-id={item.id} data-unread={item.unread || undefined}>
+                  {target && canOpenItem(item) ? (
                     <button
                       type="button"
                       className="commsRail__row"
                       aria-expanded={detail?.id === item.id}
-                      data-testid={item.target.kind === "full-screen" ? `latest-comms-open-full-module-${source}-${item.id}` : `latest-comms-drill-${source}-${item.id}`}
+                      data-testid={target.kind === "full-screen" ? `latest-comms-open-full-module-${source}-${item.id}` : `latest-comms-drill-${source}-${item.id}`}
                       data-latest-comms-drill
-                      data-latest-comms-open-full-module={item.target.kind === "full-screen" || undefined}
+                      data-latest-comms-open-full-module={target.kind === "full-screen" || undefined}
                       data-audit-id={`${source}:${item.id}`}
                       onClick={() => { openItem(item); }}
                     >
@@ -283,8 +313,8 @@ function RailCategory({
                       {renderInlineDetail(item)}
                     </section>
                   ) : null}
-                </li>
-              ))}
+                </li>;
+              })}
             </ul>
           ) : null}
         </div>
@@ -316,13 +346,15 @@ export function CommsRailView({
   returnFocusRef,
   retryingSource,
   onRetry,
-  onDrill,
-  onDetail,
+  onOpenMessengerThread,
+  onOpenMailThread,
+  onOpenNotice,
   onOpenFullModule,
   onAction,
   compose,
   renderInlineDetail,
   workspacePreservedId,
+  embedded = false,
 }: CommsRailViewProps) {
   const rootRef = useRef<HTMLElement>(null);
   const isDrawer = presentation === "drawer";
@@ -344,8 +376,9 @@ export function CommsRailView({
           copy={copy}
           retryingSource={retryingSource}
           onRetry={onRetry}
-          onDrill={onDrill}
-          onDetail={onDetail}
+          onOpenMessengerThread={onOpenMessengerThread}
+          onOpenMailThread={onOpenMailThread}
+          onOpenNotice={onOpenNotice}
           onOpenFullModule={onOpenFullModule}
           onAction={onAction}
           renderInlineDetail={renderInlineDetail}
@@ -370,6 +403,9 @@ export function CommsRailView({
         </aside>
       </div>
     );
+  }
+  if (embedded) {
+    return <div ref={rootRef as RefObject<HTMLDivElement>} className="commsRail" data-comms-presentation="persistent" data-comms-embedded="true" data-comms-preserves-workspace={workspacePreservedId ?? "true"}>{contents}</div>;
   }
   return <aside ref={rootRef} className="commsRail" aria-label={copy.landmark} data-comms-presentation="persistent" data-comms-preserves-workspace={workspacePreservedId ?? "true"}>{contents}</aside>;
 }

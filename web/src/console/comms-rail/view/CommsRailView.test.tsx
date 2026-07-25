@@ -103,26 +103,89 @@ describe("CommsRailView", () => {
     expect(screen.queryByRole("button", { name: /Operations/ })).not.toBeInTheDocument();
   });
 
-  it("opens authoritative inline detail without declaring the workspace replaced", async () => {
+  it("opens authorized mail detail without declaring the workspace replaced", async () => {
     const user = userEvent.setup();
-    const onDrill = vi.fn();
-    const { container } = render(view({ onDrill, workspacePreservedId: "overview", renderInlineDetail: (item) => <p>{`Authoritative ${item.id}`}</p> }));
-    await user.click(screen.getByRole("button", { name: /Operations/ }));
-    expect(container.querySelector('[data-comms-detail="thread-1"]')).toBeInTheDocument();
-    expect(screen.getByText("Authoritative thread-1")).toBeInTheDocument();
-    expect(onDrill).toHaveBeenCalledWith(items.messenger, items.messenger.target);
+    const onOpenMailThread = vi.fn();
+    const { container } = render(view({ onOpenMailThread, workspacePreservedId: "overview", renderInlineDetail: (item) => <p>{`Authoritative ${item.id}`}</p> }));
+    await user.click(screen.getByRole("button", { name: /Invoice review/ }));
+    expect(container.querySelector('[data-comms-detail="mail-1"]')).toBeInTheDocument();
+    expect(screen.getByText("Authoritative mail-1")).toBeInTheDocument();
+    expect(onOpenMailThread).toHaveBeenCalledWith(items.mail, items.mail.target);
     expect(container.querySelector('[data-comms-preserves-workspace="overview"]')).toBeInTheDocument();
   });
 
-  it("uses native button keyboard activation for a typed drill", async () => {
+  it("uses native button keyboard activation for an authorized notice drill", async () => {
     const user = userEvent.setup();
-    const onDrill = vi.fn();
-    render(view({ onDrill }));
+    const onOpenNotice = vi.fn();
+    render(view({ onOpenNotice }));
     const row = screen.getByRole("button", { name: /Policy notice/ });
     row.focus();
     await user.keyboard("{Enter}");
-    expect(onDrill).toHaveBeenCalledTimes(1);
+    expect(onOpenNotice).toHaveBeenCalledWith(items.notices, items.notices.target);
     expect(screen.queryByRole("region", { name: "Detail" })).not.toBeInTheDocument();
+  });
+
+  it("makes only rows with an exact source-and-target handler actionable", async () => {
+    const user = userEvent.setup();
+    const onOpenMessengerThread = vi.fn();
+    render(view({ onOpenMessengerThread }));
+
+    const messenger = screen.getByRole("button", { name: /Operations/ });
+    expect(screen.queryByRole("button", { name: /Invoice review/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Approval requested/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Policy notice/ })).not.toBeInTheDocument();
+
+    await user.click(messenger);
+    expect(onOpenMessengerThread).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("opens an explicitly typed notification-origin messenger thread", async () => {
+    const user = userEvent.setup();
+    const onOpenMessengerThread = vi.fn();
+    const messengerMention: CommsRailSnapshot = {
+      ...snapshot(),
+      notifications: {
+        kind: "ready",
+        items: [{
+          ...items.notifications,
+          target: {
+            kind: "messenger-thread",
+            source: "notifications",
+            id: "thread-2",
+          },
+        }],
+        loadedAt: "now",
+      },
+    };
+
+    render(
+      <CommsRailView
+        presentation="persistent"
+        snapshot={messengerMention}
+        copy={copy}
+        onOpenMessengerThread={onOpenMessengerThread}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Approval requested/ }));
+    expect(onOpenMessengerThread).toHaveBeenCalledWith("thread-2");
+  });
+
+  it("fails closed when a mail row carries a forged messenger target", async () => {
+    const user = userEvent.setup();
+    const onOpenMessengerThread = vi.fn();
+    const hostile: CommsRailSnapshot = {
+      ...snapshot(),
+      mail: {
+        kind: "ready",
+        items: [{ ...items.mail, target: { kind: "inline", source: "messenger", id: "thread-1" } }],
+        loadedAt: "now",
+      },
+    };
+
+    render(<CommsRailView presentation="persistent" snapshot={hostile} copy={copy} onOpenMessengerThread={onOpenMessengerThread} />);
+    expect(screen.queryByRole("button", { name: /Invoice review/ })).not.toBeInTheDocument();
+    await user.click(screen.getByText("Invoice review"));
+    expect(onOpenMessengerThread).not.toHaveBeenCalled();
   });
 
   function ControlledDrawer({ trigger }: { trigger: HTMLButtonElement }) {
@@ -173,4 +236,3 @@ describe("CommsRailView", () => {
     expect(messenger).not.toHaveTextContent("Invoice review");
   });
 });
-

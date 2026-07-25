@@ -21,6 +21,10 @@ const routerLocations: string[] = [];
 const server = setupServer(
   http.get("*/api/v1/ontology/object-types", () => HttpResponse.json([])),
   http.get("*/api/v1/workflow-studio/definitions", () => HttpResponse.json({ items: [] })),
+  http.get("*/api/messenger/threads", () => HttpResponse.json({ items: [] })),
+  http.get("*/api/v1/mail/threads", () => HttpResponse.json([])),
+  http.get("*/api/v1/me/notifications", () => HttpResponse.json({ items: [] })),
+  http.get("*/api/v1/notices", () => HttpResponse.json([])),
 );
 
 beforeAll(() => {
@@ -100,7 +104,8 @@ const ADMIN: AuthSession = {
   access_token: "t",
   display_name: "전성진",
   roles: ["ADMIN"],
-  org_id: "org-1",
+  org_id: "22222222-2222-4222-8222-222222222222",
+  user_id: "11111111-1111-4111-8111-111111111111",
 };
 
 const SUPER_ADMIN: AuthSession = {
@@ -264,16 +269,17 @@ describe("ConsoleShell chrome", () => {
         HttpResponse.json({
           items: [
             {
-              id: "mention-1",
-              recipient_user_id: "u1",
+              id: "33333333-3333-4333-8333-333333333333",
+              recipient_user_id: "11111111-1111-4111-8111-111111111111",
               category: "메신저",
               kind: "mention",
               text: "배차 관제에서 회원님을 멘션했습니다",
-              link: { type: "object", kind: "messenger_thread", id: "thread-channel" },
+              link: { type: "object", kind: "messenger_thread", id: "44444444-4444-4444-8444-444444444444" },
               unread: true,
               created_at: "2026-07-03T08:50:00Z",
               read_at: null,
               resolved_at: null,
+              muted: false,
             },
           ],
         }),
@@ -283,12 +289,12 @@ describe("ConsoleShell chrome", () => {
     renderConsole(ADMIN, ["/console/audit"]);
 
     await userEvent.click(
-      await screen.findByRole("button", { name: "배차 관제에서 회원님을 멘션했습니다" }),
+      await screen.findByRole("button", { name: /배차 관제에서 회원님을 멘션했습니다/ }),
     );
 
     await waitFor(() => {
       expect(document.querySelector("[data-router-location]")).toHaveTextContent(
-        "/console/messenger?thread=thread-channel",
+        "/console/messenger?thread=44444444-4444-4444-8444-444444444444",
       );
     });
   });
@@ -300,16 +306,17 @@ describe("ConsoleShell chrome", () => {
         HttpResponse.json({
           items: [
             {
-              id: "mention-mobile",
-              recipient_user_id: "u1",
+              id: "55555555-5555-4555-8555-555555555555",
+              recipient_user_id: "11111111-1111-4111-8111-111111111111",
               category: "메신저",
               kind: "mention",
               text: "모바일 배차 관제 멘션",
-              link: { type: "object", kind: "messenger_thread", id: "thread-mobile" },
+              link: { type: "object", kind: "messenger_thread", id: "66666666-6666-4666-8666-666666666666" },
               unread: true,
               created_at: "2026-07-03T08:50:00Z",
               read_at: null,
               resolved_at: null,
+              muted: false,
             },
           ],
         }),
@@ -324,12 +331,12 @@ describe("ConsoleShell chrome", () => {
     expect(document.querySelector("main")).toHaveAttribute("inert");
 
     await userEvent.click(
-      await within(drawer).findByRole("button", { name: "모바일 배차 관제 멘션" }),
+      await within(drawer).findByRole("button", { name: /모바일 배차 관제 멘션/ }),
     );
 
     await waitFor(() => {
       expect(document.querySelector("[data-router-location]")).toHaveTextContent(
-        "/console/messenger?thread=thread-mobile",
+        "/console/messenger?thread=66666666-6666-4666-8666-666666666666",
       );
     });
     expect(screen.queryByRole("dialog", { name: "커뮤니케이션" })).not.toBeInTheDocument();
@@ -479,7 +486,7 @@ describe("ConsoleShell chrome", () => {
     fireEvent.click(screen.getByRole("button", { name: "커뮤니케이션 펼치기" }));
     expect(rail).toHaveAttribute("data-cshell-rail-open", "true");
     expect(rail).toHaveStyle({ width: "300px" });
-    expect(screen.getByText("커뮤니케이션")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "커뮤니케이션" })).toBeVisible();
   });
 
   it("lets a compact sidebar expand to the full 236px navigation width", () => {

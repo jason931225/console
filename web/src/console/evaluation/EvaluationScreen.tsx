@@ -7,7 +7,7 @@ import {
   useState,
   type SyntheticEvent,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import type { components } from "@maintenance/api-client-ts";
 
