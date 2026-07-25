@@ -153,7 +153,8 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     const [aId, a] = privateRoots[i], [bId, b] = privateRoots[j];
     if (aId !== bId && (a === b || a.startsWith(`${b.replace(/\/\*\*$/, '')}/`) || b.startsWith(`${a.replace(/\/\*\*$/, '')}/`))) fail(`overlapping private roots: ${aId}:${a} and ${bId}:${b}`);
   }
-  if (array(jurisdiction.target_jurisdiction_set).length !== 1 || jurisdiction.target_jurisdiction_set[0] !== 'KR' || !array(jurisdiction.jurisdictions).every((entry) => entry?.country_code === 'KR' && entry.id === 'JUR-KR-001')) fail('jurisdiction target must be exactly KR / JUR-KR-001');
+  const targets = array(jurisdiction.target_jurisdiction_set); const jurisdictionRows = array(jurisdiction.jurisdictions);
+  if (targets.length !== 1 || targets[0] !== 'KR' || jurisdictionRows.length !== 1 || jurisdictionRows[0]?.id !== 'JUR-KR-001' || jurisdictionRows[0]?.country_code !== 'KR') fail('jurisdiction target must be exactly KR / JUR-KR-001');
   const controls = new Map(); for (const control of array(jurisdiction.controls)) { if (controls.has(control.id)) fail(`duplicate control id: ${control.id}`); controls.set(control.id, control); }
   if (!controls.size) fail('jurisdiction register has no controls');
   for (const control of controls.values()) {

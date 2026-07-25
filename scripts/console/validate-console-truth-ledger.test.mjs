@@ -154,3 +154,10 @@ test('a real SSH-signed canonical Git receipt is the only non-HOLD admission pat
     assert.throws(() => validateConsoleTruthLedger(wrongDigest, fixtureJurisdiction, { expectedCandidateSha: candidateSha, repoRoot: root }), /digest/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('Korea jurisdiction rows require exactly one canonical JUR-KR-001 row', () => {
+  const empty = structuredClone(jurisdiction); empty.jurisdictions = [];
+  assert.throws(() => validateConsoleTruthLedger(registry, empty, { expectedCandidateSha: registry.candidate.sha }), /jurisdiction target/);
+  const duplicate = structuredClone(jurisdiction); duplicate.jurisdictions.push(structuredClone(duplicate.jurisdictions[0]));
+  assert.throws(() => validateConsoleTruthLedger(registry, duplicate, { expectedCandidateSha: registry.candidate.sha }), /jurisdiction target/);
+});
