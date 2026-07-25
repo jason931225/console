@@ -597,3 +597,24 @@ persistence, remaining vertical implementation, regenerated shared faces at a
 reviewed source freeze, complete browser/accessibility/iOS/user-story
 verification, production exposure, merge, deployment, and live production
 readback remain open.
+
+## P0/G0 exact-candidate truth ledger — 2026-07-24
+
+The current candidate is `ebdf4c81d22502fac7a46192dd0b237fc0748241`; its
+authority base is `8e42b9a2ea42c4d79ed498044a9f50f623299f7f`, and historical
+implementation-freeze evidence is
+`78cb5197927a031ead30c6dc0426c23455d3cb16`. These are deliberately distinct.
+The v2 capability registry carries the only machine-readable candidate truth:
+all rows currently remain `HOLD` pending exact candidate-bound proof. The
+healthy dev-auth stack is not exact-candidate proof because its backend binary
+predates the candidate and exposes neither build SHA nor binary digest.
+
+Every capability is benchmarked independently against its own category leaders
+with dated source observations, measurable native outcomes, differentiated
+outcomes, non-goals, evidence binding, and independent review. The shared
+omni-platform gate covers identity/scope, object/action/workflow, search,
+audit/lineage, and interoperability; it is additive and cannot waive a module's
+native benchmark. `CAP-ASSET-MASTER-ACTION` is a separate walking skeleton and
+is not an Equipment 3R claim. Korea controls remain HOLD until qualified
+source, applicability, effective-date, candidate evidence, and I2/I3 receipts
+exist.

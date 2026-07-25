@@ -23,3 +23,15 @@
 Repository-tracked documents are authoritative. Untracked agent/runtime state,
 including `.omc/`, is not a source of truth and must not be required to resume,
 review, integrate, or verify console work.
+
+## P0/G0 truth-ledger baseline (2026-07-24)
+
+`console-capability-registry-v2` is the exact-candidate ledger. It preserves
+historical local-train claims separately from `DECLARED`/`PLANNED`/`IMPLEMENTED`/
+`VERIFIED`/`EXPOSED`/`HOLD` candidate truth, and requires a capability-native
+benchmark dossier plus the additive omni-platform gate. Every module is held
+until its own dated comparator observations, candidate-bound evidence, and
+independent outcome review are admitted; shared platform evidence cannot waive
+native parity. `node scripts/console/validate-console-truth-ledger.mjs` is the
+fail-closed structural gate. The Korea register remains HOLD pending qualified
+source and attributable review authority.

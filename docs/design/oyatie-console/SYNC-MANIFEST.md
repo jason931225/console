@@ -55,3 +55,10 @@ Last sync: **2026-07-24T10:06:37Z** via the first-party Claude Design MCP export
 1. Accepted repository ADRs, [`docs/program/console-enterprise-roadmap.md`](../../program/console-enterprise-roadmap.md), and exact revision-bound source — architecture and implementation truth.
 2. This directory's fresh authority files, read through the retained authority-boundary preambles and declared local divergences — design intent and prototype history.
 3. The live Design project when a fresh first-party readback is available — design intent only, never implementation evidence.
+
+## Candidate-bound design digest overlay (2026-07-24)
+
+The exact local HTML digest used by the P0 ledger is
+`845edf2ff0a445cdfa3a74bb5e031b43606ac8045fa5b805486887a13aabcfed`.
+It binds visual/interaction intent only. It does not establish implementation,
+backend wiring, benchmark parity, runtime provenance, release, or deployment.

@@ -202,7 +202,7 @@ export function validateReviewReceiptForAnchor(receipt, anchor, lane, authority,
   return valid;
 }
 function validateInputs(registry, options) {
-  if (!registry || registry.schema_version !== 'console-capability-registry-v1') throw new Error('unsupported console capability registry schema');
+  if (!registry || !['console-capability-registry-v1', 'console-capability-registry-v2'].includes(registry.schema_version)) throw new Error('unsupported console capability registry schema');
   if (!FULL_SHA.test(options.anchorSha ?? '')) throw new Error('anchor SHA must be a full lowercase 40-character Git SHA');
   if (!Number.isInteger(options.maxWriters) || options.maxWriters < 1) throw new Error('max writers must be a positive integer');
   if (!Number.isFinite(options.qualityBias) || options.qualityBias < 0 || options.qualityBias > 1) throw new Error('quality bias must be between 0 and 1');
