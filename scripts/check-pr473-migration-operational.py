@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -43,27 +42,16 @@ EXPECTED_TESTS = (
     ("leave", "mnt-leave-adapter-postgres", "leave_migration_expand_contract", "backend/crates/leave/adapter-postgres/tests/leave_migration_expand_contract.rs", "legacy_leave_mutations_require_exactly_one_same_transaction_audit"),
     ("leave", "mnt-leave-adapter-postgres", "leave_migration_expand_contract", "backend/crates/leave/adapter-postgres/tests/leave_migration_expand_contract.rs", "staged_employee_import_rejects_payload_not_equal_to_immutable_ledger"),
 )
-APALIS_DB_TESTS = (
-    (
-        "mnt-platform-jobs",
-        "apalis_adapter",
-        "backend/crates/platform/jobs/tests/apalis_adapter.rs",
-        "apalis_adapter_dedupes_repeated_idempotency_keys",
-    ),
-    (
-        "mnt-platform-jobs",
-        "apalis_adapter",
-        "backend/crates/platform/jobs/tests/apalis_adapter.rs",
-        "apalis_worker_retention_prunes_only_stale_unreferenced_workers",
-    ),
-    (
-        "mnt-platform-jobs",
-        "apalis_schema_contract",
-        "backend/crates/platform/jobs/tests/apalis_schema_contract.rs",
-        "owner_and_runtime_apalis_schema_contract_is_fail_closed",
-    ),
+BUCK_POSTGRES_HARNESS = Path("tools/buck/test_needs_postgres.sh")
+# Generated target labels are the execution boundary for this operational gate.
+# The disposable harness, not a job-level service database, supplies SQLx's
+# bootstrap authority and per-invocation database lifecycle.
+OPERATIONAL_SQLX_TARGETS = (
+    "//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-key_revision_migration_upgrade",
+    "//backend/crates/leave/adapter-postgres:mnt-leave-adapter-postgres-itest-leave_migration_expand_contract",
+    "//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_adapter",
+    "//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_schema_contract",
 )
-ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 class GateError(ValueError):
@@ -121,86 +109,6 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise GateError("manifest guarded_tests must equal the 11 exact expected tuples in canonical order")
 
 
-def validate_cargo_metadata(
-    manifest: dict[str, Any], metadata: dict[str, Any], repo_root: Path
-) -> None:
-    repo_root = repo_root.resolve()
-    packages = metadata.get("packages")
-    if not isinstance(packages, list):
-        raise GateError("cargo metadata packages must be an array")
-    package_map: dict[str, dict[str, Any]] = {}
-    for package in packages:
-        if isinstance(package, dict) and isinstance(package.get("name"), str):
-            if package["name"] in package_map:
-                raise GateError(f"cargo metadata duplicates package {package['name']}")
-            package_map[package["name"]] = package
-
-    declared_tests = [
-        (test["package"], test["target"], test["source"])
-        for test in manifest["guarded_tests"]
-    ]
-    declared_tests.extend(
-        (package, target, source)
-        for package, target, source, _ in APALIS_DB_TESTS
-    )
-    for package_name, target_name, source_path in declared_tests:
-        package = package_map.get(package_name)
-        if package is None:
-            raise GateError(f"cargo metadata is missing package {package_name}")
-        matches = []
-        for target in package.get("targets", []):
-            if not isinstance(target, dict):
-                continue
-            if target.get("name") != target_name or "test" not in target.get("kind", []):
-                continue
-            source = Path(str(target.get("src_path", ""))).resolve()
-            expected_source = (repo_root / source_path).resolve()
-            try:
-                expected_source.relative_to(repo_root)
-                source.relative_to(repo_root)
-            except ValueError as error:
-                raise GateError(
-                    f"guarded test source escapes repository root: {source_path}"
-                ) from error
-            if not expected_source.is_file():
-                raise GateError(f"guarded test source is not a regular file: {source_path}")
-            if source == expected_source:
-                matches.append(target)
-        if len(matches) != 1:
-            raise GateError(
-                f"cargo metadata must contain exactly one test target tuple "
-                f"{package_name}:{target_name}:{source_path} (found {len(matches)})"
-            )
-
-
-def validate_exact_test_output(output: str, test_name: str) -> None:
-    clean = ANSI_ESCAPE.sub("", output)
-    lines = [line.strip() for line in clean.splitlines()]
-    running = [line for line in lines if re.fullmatch(r"running \d+ tests?", line)]
-    if running != ["running 1 test"]:
-        raise GateError(f"{test_name}: expected exactly one 'running 1 test' line, got {running}")
-
-    result_lines = [
-        line
-        for line in lines
-        if re.fullmatch(r"test .+ \.\.\. (?:ok|FAILED|ignored)", line)
-    ]
-    expected_result = f"test {test_name} ... ok"
-    if result_lines != [expected_result]:
-        raise GateError(
-            f"{test_name}: expected one exact root result line {expected_result!r}, got {result_lines}"
-        )
-
-    summaries = [line for line in lines if line.startswith("test result:")]
-    if len(summaries) != 1 or not re.fullmatch(
-        r"test result: ok\. 1 passed; 0 failed; 0 ignored; \d+ measured; \d+ filtered out; finished in .+",
-        summaries[0] if summaries else "",
-    ):
-        raise GateError(
-            f"{test_name}: expected one summary with 1 passed, 0 failed, 0 ignored; got {summaries}"
-        )
-
-
 def run(
     command: list[str], *, cwd: Path, env: dict[str, str], show_stdout: bool = True
 ) -> subprocess.CompletedProcess[str]:
@@ -221,115 +129,37 @@ def run(
     return completed
 
 
-def execute(repo_root: Path, cargo: str) -> int:
-    manifest = load_manifest(repo_root / MANIFEST_PATH)
+def execute(repo_root: Path) -> int:
+    load_manifest(repo_root / MANIFEST_PATH)
+    harness = repo_root / BUCK_POSTGRES_HARNESS
+    if not harness.is_file() or not os.access(harness, os.X_OK):
+        raise GateError(
+            f"Buck2 disposable PostgreSQL harness is not executable: {BUCK_POSTGRES_HARNESS}"
+        )
+
     env = dict(os.environ)
-    env["SQLX_OFFLINE"] = "true"
-    env["CARGO_TERM_COLOR"] = "never"
-    env.pop("RUST_TEST_NOCAPTURE", None)
-    metadata_command = [
-        cargo,
-        "metadata",
-        "--locked",
-        "--format-version",
-        "1",
-        "--no-deps",
-        "--manifest-path",
-        "backend/Cargo.toml",
-    ]
-    metadata_result = run(metadata_command, cwd=repo_root, env=env, show_stdout=False)
-    if metadata_result.returncode != 0:
-        raise GateError(f"cargo metadata exited {metadata_result.returncode}")
-    try:
-        metadata = json.loads(metadata_result.stdout)
-    except json.JSONDecodeError as error:
-        raise GateError(f"cargo metadata did not emit valid JSON: {error}") from error
-    validate_cargo_metadata(manifest, metadata, repo_root)
+    # CI can export reusable service URLs.  Do not allow them to cross into
+    # this gate: the harness supplies bounded URLs after bootstrapping its own
+    # disposable authority.
+    for variable in (
+        "DATABASE_URL",
+        "MNT_APALIS_OWNER_DATABASE_URL",
+        "MNT_APALIS_RUNTIME_DATABASE_URL",
+        "MNT_APALIS_ADMIN_DATABASE_URL",
+    ):
+        env.pop(variable, None)
 
-    tests = manifest["guarded_tests"]
-    failures: list[str] = []
-
-    for package, target, _source, name in APALIS_DB_TESTS:
-        command = [
-            cargo,
-            "test",
-            "--locked",
-            "--manifest-path",
-            "backend/Cargo.toml",
-            "-p",
-            package,
-            "--test",
-            target,
-            "--",
-            name,
-            "--exact",
-            "--test-threads=1",
-        ]
-        completed = run(command, cwd=repo_root, env=env)
-        if completed.returncode != 0:
-            failures.append(f"{name}: cargo test exited {completed.returncode}")
-            continue
-        try:
-            validate_exact_test_output(completed.stdout + completed.stderr, name)
-        except GateError as error:
-            failures.append(str(error))
-
-    workspace_command = [
-        cargo,
-        "test",
-        "--locked",
-        "--manifest-path",
-        "backend/Cargo.toml",
-        "--workspace",
-        "--no-fail-fast",
-        "--",
-        "--test-threads=1",
-        "--exact",
-    ]
-    for _package, _target, _source, name in APALIS_DB_TESTS:
-        workspace_command.extend(("--skip", name))
-    for test in tests:
-        workspace_command.extend(("--skip", test["name"]))
-    workspace_result = run(workspace_command, cwd=repo_root, env=env)
-    if workspace_result.returncode != 0:
-        failures.append(f"workspace tests exited {workspace_result.returncode}")
-
-    for test in tests:
-        command = [
-            cargo,
-            "test",
-            "--locked",
-            "--manifest-path",
-            "backend/Cargo.toml",
-            "-p",
-            test["package"],
-            "--test",
-            test["target"],
-            "--",
-            test["name"],
-            "--exact",
-            "--test-threads=1",
-        ]
-        completed = run(command, cwd=repo_root, env=env)
-        if completed.returncode != 0:
-            failures.append(f"{test['name']}: cargo test exited {completed.returncode}")
-            continue
-        try:
-            validate_exact_test_output(completed.stdout + completed.stderr, test["name"])
-        except GateError as error:
-            failures.append(str(error))
-
-    if failures:
-        print("PR 473 migration operational gate FAILED:", file=sys.stderr)
-        for failure in failures:
-            print(f"- {failure}", file=sys.stderr)
-        return 1
+    completed = run([str(harness), *OPERATIONAL_SQLX_TARGETS], cwd=repo_root, env=env)
+    if completed.returncode != 0:
+        raise GateError(
+            f"Buck2 disposable PostgreSQL operational targets exited {completed.returncode}"
+        )
     print(
         "PR 473 migration operational gate passed: "
-        "3 exact Apalis database tests, workspace, plus 11 exact guarded tests"
+        "Buck2 disposable PostgreSQL harness ran the 3 exact Apalis database tests "
+        "and the 11 guarded migration regressions"
     )
     return 0
-
 
 def resolve_repo_root(repo_root: Path | None, backend_dir: Path | None) -> Path:
     if repo_root is not None:
@@ -344,10 +174,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("backend_dir", nargs="?", type=Path)
     parser.add_argument("--repo-root", type=Path)
-    parser.add_argument("--cargo", default="cargo")
     args = parser.parse_args()
     try:
-        return execute(resolve_repo_root(args.repo_root, args.backend_dir), args.cargo)
+        return execute(resolve_repo_root(args.repo_root, args.backend_dir))
     except GateError as error:
         print(f"PR 473 migration operational gate FAILED: {error}", file=sys.stderr)
         return 1

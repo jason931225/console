@@ -6,6 +6,7 @@ import copy
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -24,40 +25,6 @@ def valid_manifest() -> dict:
     return json.loads(
         (SCRIPT.parents[1] / gate.MANIFEST_PATH).read_text(encoding="utf-8")
     )
-
-
-def valid_output(name: str) -> str:
-    return f"""
-running 1 test
-test {name} ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.01s
-"""
-
-
-def valid_metadata() -> dict:
-    packages = {}
-    declared_tests = [
-        (test["package"], test["target"], test["source"])
-        for test in valid_manifest()["guarded_tests"]
-    ]
-    declared_tests.extend(
-        (package, target, source)
-        for package, target, source, _name in gate.APALIS_DB_TESTS
-    )
-    for package_name, target_name, source in declared_tests:
-        package = packages.setdefault(
-            package_name, {"name": package_name, "targets": []}
-        )
-        if not any(target["name"] == target_name for target in package["targets"]):
-            package["targets"].append(
-                {
-                    "name": target_name,
-                    "kind": ["test"],
-                    "src_path": str(SCRIPT.parents[1] / source),
-                }
-            )
-    return {"packages": list(packages.values())}
 
 
 class ManifestTests(unittest.TestCase):
@@ -100,103 +67,6 @@ class ManifestTests(unittest.TestCase):
             with self.assertRaises(gate.GateError):
                 gate.load_manifest(path)
 
-    def test_validates_cargo_package_target_and_source_tuple(self) -> None:
-        manifest = valid_manifest()
-        metadata = valid_metadata()
-        gate.validate_cargo_metadata(manifest, metadata, SCRIPT.parents[1])
-        metadata["packages"][0]["targets"][0]["src_path"] = "/wrong/source.rs"
-        with self.assertRaises(gate.GateError):
-            gate.validate_cargo_metadata(manifest, metadata, SCRIPT.parents[1])
-
-    def test_validates_apalis_package_target_and_source_tuple(self) -> None:
-        manifest = valid_manifest()
-        metadata = valid_metadata()
-        jobs = next(
-            package
-            for package in metadata["packages"]
-            if package["name"] == "mnt-platform-jobs"
-        )
-        adapter = next(
-            target for target in jobs["targets"] if target["name"] == "apalis_adapter"
-        )
-        adapter["src_path"] = "/wrong/apalis_adapter.rs"
-        with self.assertRaises(gate.GateError):
-            gate.validate_cargo_metadata(manifest, metadata, SCRIPT.parents[1])
-
-    def test_rejects_a_declared_source_symlink_that_escapes_the_repository(self) -> None:
-        manifest = valid_manifest()
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory) / "repo"
-            outside = Path(directory) / "outside.rs"
-            outside.write_text("", encoding="utf-8")
-            sources = {}
-            for test in manifest["guarded_tests"]:
-                source = repo / test["source"]
-                if source not in sources:
-                    source.parent.mkdir(parents=True, exist_ok=True)
-                    if test["domain"] == "ontology":
-                        source.symlink_to(outside)
-                    else:
-                        source.write_text("", encoding="utf-8")
-                    sources[source] = True
-            packages = {}
-            for test in manifest["guarded_tests"]:
-                package = packages.setdefault(
-                    test["package"], {"name": test["package"], "targets": []}
-                )
-                if not any(target["name"] == test["target"] for target in package["targets"]):
-                    package["targets"].append(
-                        {
-                            "name": test["target"],
-                            "kind": ["test"],
-                            "src_path": str(repo / test["source"]),
-                        }
-                    )
-            with self.assertRaisesRegex(gate.GateError, "escapes repository root"):
-                gate.validate_cargo_metadata(
-                    manifest, {"packages": list(packages.values())}, repo
-                )
-
-
-class ExactResultTests(unittest.TestCase):
-    name = "migration_0165_upgrades_legacy_sibling_versions_without_tenant_leakage"
-
-    def test_accepts_one_exact_root_pass(self) -> None:
-        gate.validate_exact_test_output(valid_output(self.name), self.name)
-
-    def assert_rejected(self, output: str) -> None:
-        with self.assertRaises(gate.GateError):
-            gate.validate_exact_test_output(output, self.name)
-
-    def test_rejects_zero_running_tests(self) -> None:
-        self.assert_rejected(valid_output(self.name).replace("running 1 test", "running 0 tests"))
-
-    def test_rejects_ignored_test(self) -> None:
-        self.assert_rejected(
-            valid_output(self.name)
-            .replace("... ok", "... ignored")
-            .replace("1 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 1 ignored")
-        )
-
-    def test_rejects_failed_test(self) -> None:
-        self.assert_rejected(
-            valid_output(self.name)
-            .replace("... ok", "... FAILED")
-            .replace("test result: ok. 1 passed; 0 failed", "test result: FAILED. 0 passed; 1 failed")
-        )
-
-    def test_rejects_duplicate_result(self) -> None:
-        output = valid_output(self.name).replace(
-            f"test {self.name} ... ok", f"test {self.name} ... ok\ntest {self.name} ... ok"
-        )
-        self.assert_rejected(output)
-
-    def test_rejects_nested_result_name(self) -> None:
-        self.assert_rejected(valid_output(self.name).replace(self.name, f"nested::{self.name}", 1))
-
-    def test_rejects_suffix_spoofed_result_name(self) -> None:
-        self.assert_rejected(valid_output(self.name).replace(self.name, f"{self.name}_evil", 1))
-
 
 class CommandLineTests(unittest.TestCase):
     def test_backend_directory_resolves_to_repository_root(self) -> None:
@@ -205,86 +75,43 @@ class CommandLineTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.TestCase):
-    def test_runs_apalis_tests_then_workspace_with_all_skips_then_guarded_tests(self) -> None:
-        tests = valid_manifest()["guarded_tests"]
+    def test_requires_the_buck_owned_disposable_postgres_harness(self) -> None:
+        completed = subprocess.CompletedProcess(
+            ["tools/buck/test_needs_postgres.sh"], 0, "buck test passed\n", ""
+        )
 
-        def fake_run(command, **_kwargs):
-            if command[1] == "metadata":
-                return subprocess.CompletedProcess(command, 0, json.dumps(valid_metadata()), "")
-            if "--workspace" in command:
-                return subprocess.CompletedProcess(command, 0, "workspace ok\n", "")
-            name = command[command.index("--") + 1]
-            return subprocess.CompletedProcess(command, 0, valid_output(name), "")
+        with patch.object(gate, "run", return_value=completed) as run_mock:
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
 
-        with patch.dict(gate.os.environ, {"RUST_TEST_NOCAPTURE": "1"}, clear=False):
-            with patch.object(gate, "run", side_effect=fake_run) as run_mock:
+        self.assertEqual(run_mock.call_count, 1)
+        command = run_mock.call_args.args[0]
+        self.assertEqual(command[0], str(SCRIPT.parents[1] / gate.BUCK_POSTGRES_HARNESS))
+        self.assertEqual(command[1:], list(gate.OPERATIONAL_SQLX_TARGETS))
+        self.assertNotIn("cargo", command)
+        self.assertNotIn("DATABASE_URL", run_mock.call_args.kwargs["env"])
+
+    def test_rejects_reusable_ci_database_urls_before_harness_invocation(self) -> None:
+        completed = subprocess.CompletedProcess(["buck"], 0, "", "")
+        inherited = {
+            "DATABASE_URL": "postgres://superuser@ci/reusable",
+            "MNT_APALIS_OWNER_DATABASE_URL": "postgres://owner@ci/reusable",
+            "MNT_APALIS_RUNTIME_DATABASE_URL": "postgres://runtime@ci/reusable",
+            "MNT_APALIS_ADMIN_DATABASE_URL": "postgres://admin@ci/reusable",
+        }
+        with patch.dict(os.environ, inherited, clear=False):
+            with patch.object(gate, "run", return_value=completed) as run_mock:
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-                    self.assertEqual(gate.execute(SCRIPT.parents[1], "cargo"), 0)
+                    self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
+        environment = run_mock.call_args.kwargs["env"]
+        for key in inherited:
+            self.assertNotIn(key, environment)
 
-        self.assertEqual(run_mock.call_count, 16)
-        for call in run_mock.call_args_list:
-            self.assertIn("--locked", call.args[0])
-            self.assertEqual(call.kwargs["env"]["CARGO_TERM_COLOR"], "never")
-            self.assertNotIn("RUST_TEST_NOCAPTURE", call.kwargs["env"])
-        apalis_calls = run_mock.call_args_list[1:4]
-        self.assertEqual(
-            [call.args[0][call.args[0].index("--") + 1] for call in apalis_calls],
-            [test[3] for test in gate.APALIS_DB_TESTS],
-        )
-        for call, (package, target, _source, name) in zip(
-            apalis_calls, gate.APALIS_DB_TESTS, strict=True
-        ):
-            command = call.args[0]
-            self.assertEqual(command[command.index("-p") + 1], package)
-            self.assertEqual(command[command.index("--test") + 1], target)
-            self.assertEqual(
-                command[command.index("--") + 1 :],
-                [name, "--exact", "--test-threads=1"],
-            )
-
-        workspace = run_mock.call_args_list[4].args[0]
-        self.assertIn("--exact", workspace[workspace.index("--") + 1 :])
-        self.assertEqual(workspace.count("--skip"), 14)
-        self.assertEqual(
-            [workspace[index + 1] for index, value in enumerate(workspace) if value == "--skip"],
-            [test[3] for test in gate.APALIS_DB_TESTS]
-            + [test["name"] for test in tests],
-        )
-        exact_names = [
-            call.args[0][call.args[0].index("--") + 1]
-            for call in run_mock.call_args_list[5:]
-        ]
-        self.assertEqual(exact_names, [test["name"] for test in tests])
-        for call, test in zip(run_mock.call_args_list[5:], tests, strict=True):
-            command = call.args[0]
-            self.assertEqual(
-                command[command.index("--") + 1 :],
-                [test["name"], "--exact", "--test-threads=1"],
-            )
-
-    def test_aggregates_workspace_and_exact_result_failures(self) -> None:
-        exact_count = 0
-
-        def fake_run(command, **_kwargs):
-            nonlocal exact_count
-            if command[1] == "metadata":
-                return subprocess.CompletedProcess(command, 0, json.dumps(valid_metadata()), "")
-            if "--workspace" in command:
-                return subprocess.CompletedProcess(command, 9, "workspace failed\n", "")
-            exact_count += 1
-            name = command[command.index("--") + 1]
-            output = valid_output(name)
-            if exact_count == 1:
-                output = output.replace("running 1 test", "running 0 tests")
-            return subprocess.CompletedProcess(command, 0, output, "")
-
-        with patch.object(gate, "run", side_effect=fake_run):
-            stderr = io.StringIO()
-            with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
-                self.assertEqual(gate.execute(SCRIPT.parents[1], "cargo"), 1)
-        self.assertEqual(exact_count, 14)
-        self.assertIn("workspace tests exited 9", stderr.getvalue())
-        self.assertIn("expected exactly one 'running 1 test'", stderr.getvalue())
+    def test_fails_when_buck_harness_fails(self) -> None:
+        completed = subprocess.CompletedProcess(["buck"], 19, "", "")
+        with patch.object(gate, "run", return_value=completed):
+            with self.assertRaisesRegex(gate.GateError, "Buck2 disposable PostgreSQL"):
+                gate.execute(SCRIPT.parents[1])
 
 
 if __name__ == "__main__":

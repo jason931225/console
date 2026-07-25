@@ -14,7 +14,7 @@ if [[ ! "${isolation_name}" =~ ^[[:alnum:]_.-]+$ ]]; then
   echo "buck-postgres: isolation name must contain only letters, digits, dot, underscore, or dash" >&2
   exit 1
 fi
-database="mnt_buck_test_$$"
+database="mnt_buck_test_$$_contract"
 
 cleanup() {
   local status=$?
@@ -94,6 +94,12 @@ fi
 # only on those test-process connections; production migration URLs never set
 # it, and destroying the per-invocation container ends its lifecycle.
 database_url="postgres://mnt_buck_admin:${admin_password}@127.0.0.1:${port}/${database}?options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1"
+apalis_owner_database_url="postgres://mnt_app:${app_password}@127.0.0.1:${port}/${database}"
+apalis_runtime_database_url="postgres://mnt_rt:${runtime_password}@127.0.0.1:${port}/${database}"
 
 BUCK_ISOLATION_DIR="${isolation_name}" "${buck_bin}" test --local-only "$@" \
-  -- --env "DATABASE_URL=${database_url}" --env RUST_TEST_THREADS=1
+  -- --env "DATABASE_URL=${database_url}" \
+  --env "MNT_APALIS_OWNER_DATABASE_URL=${apalis_owner_database_url}" \
+  --env "MNT_APALIS_RUNTIME_DATABASE_URL=${apalis_runtime_database_url}" \
+  --env "MNT_APALIS_ADMIN_DATABASE_URL=${database_url}" \
+  --env RUST_TEST_THREADS=1
