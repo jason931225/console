@@ -382,7 +382,9 @@ export function OntologyWorkspaceBody({
                     setFocusRequest(undefined);
                     ws.onGraphFocusChange(instanceId);
                   }}
-                  resolveNodeDescriptor={ws.resolveNodeDescriptor}
+                  runtime={ws.objectRuntime}
+                  tenantScopeKey={authorityPartition}
+                  authorityKey={authorityPartition}
                   projectedTypeIds={ws.projectedTypeIds}
                   requestedFocusId={visibleFocusRequest?.instanceId}
                 />

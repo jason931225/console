@@ -160,3 +160,12 @@ describe("ObjectCard acting chips (dynamic layer)", () => {
     expect((chip as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe("ObjectCard actionable controls", () => {
+  it("does not render mutation controls when no real handler is wired", () => {
+    renderCard(allowGate);
+    expect(screen.queryByRole("button", { name: T.actionAria(T.samples.actions.reassign) })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.edit.override })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.relations.add })).toBeNull();
+  });
+});

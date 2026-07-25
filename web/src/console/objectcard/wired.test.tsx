@@ -8,7 +8,7 @@ import { ko } from "../../i18n/ko";
 import { PolicyGateProvider, type PolicyGate } from "../policy";
 import { createObjectCardStub } from "./stub";
 import { objectCardGovStrings } from "./strings";
-import { GovernedObjectCard } from "./wired";
+import { GovernedObjectCardResolved } from "./wired";
 import type { ObjectCardDescriptor, ObjectCardHandlers } from "./types";
 
 const T = ko.console.objectcard;
@@ -105,7 +105,7 @@ function renderGoverned(
   const descriptor = createObjectCardStub();
   return render(
     <PolicyGateProvider gate={allowGate}>
-      <GovernedObjectCard
+      <GovernedObjectCardResolved
         api={api}
         descriptor={descriptor}
         handlers={handlers}
@@ -123,7 +123,7 @@ function renderGovernedWith(
 ) {
   return render(
     <PolicyGateProvider gate={gate}>
-      <GovernedObjectCard api={api} descriptor={descriptor} handlers={handlers} />
+      <GovernedObjectCardResolved api={api} descriptor={descriptor} handlers={handlers} />
     </PolicyGateProvider>,
   );
 }
@@ -170,7 +170,7 @@ describe("GovernedObjectCard action preflight → execute", () => {
     });
     view.rerender(
       <PolicyGateProvider gate={allowGate}>
-        <GovernedObjectCard api={apiB} descriptor={descriptorB} />
+        <GovernedObjectCardResolved api={apiB} descriptor={descriptorB} />
       </PolicyGateProvider>,
     );
 
@@ -203,7 +203,7 @@ describe("GovernedObjectCard action preflight → execute", () => {
     // the fence between the old continuation and this new authority.
     view.rerender(
       <PolicyGateProvider gate={gateB}>
-        <GovernedObjectCard api={api} descriptor={descriptor} />
+        <GovernedObjectCardResolved api={api} descriptor={descriptor} />
       </PolicyGateProvider>,
     );
     stalePreflight.resolve(
@@ -415,7 +415,7 @@ describe("GovernedObjectCard §20 override → four-eyes decide", () => {
     openOverride();
     view.rerender(
       <PolicyGateProvider gate={gateB}>
-        <GovernedObjectCard api={api} descriptor={descriptor} />
+        <GovernedObjectCardResolved api={api} descriptor={descriptor} />
       </PolicyGateProvider>,
     );
     opened.resolve(HttpResponse.json(overrideSummary, { status: 201 }));
@@ -500,7 +500,7 @@ describe("GovernedObjectCard §20 override → four-eyes decide", () => {
     fireEvent.click(await screen.findByRole("button", { name: S.override.approve }));
     view.rerender(
       <PolicyGateProvider gate={gateB}>
-        <GovernedObjectCard api={api} descriptor={descriptor} handlers={{ onEdit: onEditB }} />
+        <GovernedObjectCardResolved api={api} descriptor={descriptor} handlers={{ onEdit: onEditB }} />
       </PolicyGateProvider>,
     );
     decided.resolve(
@@ -595,7 +595,7 @@ describe("GovernedObjectCard lifecycle transition preflight", () => {
     });
     view.rerender(
       <PolicyGateProvider gate={allowGate}>
-        <GovernedObjectCard api={api} descriptor={changedState} />
+        <GovernedObjectCardResolved api={api} descriptor={changedState} />
       </PolicyGateProvider>,
     );
     stalePreflight.resolve(apiResult({ configured: true, config: {}, outcome: passingChain }));
@@ -631,7 +631,7 @@ describe("GovernedObjectCard lifecycle transition preflight", () => {
     });
     view.rerender(
       <PolicyGateProvider gate={allowGate}>
-        <GovernedObjectCard api={apiB} descriptor={descriptorB} />
+        <GovernedObjectCardResolved api={apiB} descriptor={descriptorB} />
       </PolicyGateProvider>,
     );
 

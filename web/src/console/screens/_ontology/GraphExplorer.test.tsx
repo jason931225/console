@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ko } from "../../../i18n/ko";
 import type { ObjectExplorerModel, ObjectExplorerNode } from "../../explore";
 import type { ObjectCardDescriptor } from "../../objectcard";
+import type { ObjectRuntimePort } from "../../runtime/objectRuntime";
 import { GraphExplorer } from "./GraphExplorer";
 
 // The docked inspector renders a real ObjectCard; open the policy gate so it
@@ -42,6 +43,29 @@ function resolvedDescriptor(node: ObjectExplorerNode): ObjectCardDescriptor {
   };
 }
 
+
+function runtimeFor(
+  resolve: (reference: Parameters<ObjectRuntimePort["resolve"]>[0], options: Parameters<ObjectRuntimePort["resolve"]>[1]) => Promise<ObjectCardDescriptor | undefined>,
+): ObjectRuntimePort {
+  return { authority: "ontology", resolve };
+}
+
+function governedProps(runtime: ObjectRuntimePort) {
+  return {
+    api: {} as never,
+    runtime,
+    tenantScopeKey: "tenant-a",
+    authorityKey: "authority-a",
+  };
+}
+
+function resolvedRuntime(): ObjectRuntimePort {
+  return runtimeFor((reference) => {
+    const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
+    return Promise.resolve(resolvedDescriptor(node));
+  });
+}
+
 describe("GraphExplorer", () => {
   it("renders typed nodes, relation-labelled edges and a legend by type", () => {
     render(<GraphExplorer model={model} />);
@@ -74,35 +98,44 @@ describe("GraphExplorer", () => {
   });
 
   it("resolves the focus-node inspector card on mount, before any click", async () => {
-    const resolve = vi.fn((node: ObjectExplorerNode) => Promise.resolve(resolvedDescriptor(node)));
-    render(<GraphExplorer model={model} resolveNodeDescriptor={resolve} />);
+    const resolve = vi.fn((reference) => {
+      const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
+      return Promise.resolve(resolvedDescriptor(node));
+    });
+    render(<GraphExplorer model={model} {...governedProps(runtimeFor(resolve))} />);
     // The docked inspector opens with the focus node's real card — no click, so
     // the relation/property rows are never falsely empty (관계 0개) on landing.
     await waitFor(() => {
       expect(screen.getByText("월 계약금")).toBeInTheDocument();
     });
-    expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+    expect(resolve.mock.calls.some(([reference]) => reference.id === "n1" && reference.tenantScopeKey === "tenant-a" && reference.authorityKey === "authority-a")).toBe(true);
   });
 
   it("resolves a second node's card when it is activated", async () => {
-    const resolve = vi.fn((node: ObjectExplorerNode) => Promise.resolve(resolvedDescriptor(node)));
-    render(<GraphExplorer model={model} resolveNodeDescriptor={resolve} />);
+    const resolve = vi.fn((reference) => {
+      const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
+      return Promise.resolve(resolvedDescriptor(node));
+    });
+    render(<GraphExplorer model={model} {...governedProps(runtimeFor(resolve))} />);
     await waitFor(() => {
-      expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+      expect(resolve.mock.calls.some(([reference]) => reference.id === "n1" && reference.tenantScopeKey === "tenant-a" && reference.authorityKey === "authority-a")).toBe(true);
     });
     fireEvent.click(screen.getByRole("button", { name: ko.console.explore.actions.recenter("경비 근무 장구") }));
     await waitFor(() => {
-      expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ id: "n2" }));
+      expect(resolve.mock.calls.some(([reference]) => reference.id === "n2")).toBe(true);
     });
   });
 
   it("focuses and resolves an exact host-requested instance once it is in the graph", async () => {
-    const resolve = vi.fn((node: ObjectExplorerNode) => Promise.resolve(resolvedDescriptor(node)));
+    const resolve = vi.fn((reference) => {
+      const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
+      return Promise.resolve(resolvedDescriptor(node));
+    });
     const view = render(
       <GraphExplorer
         model={{ ...model, nodes: [model.nodes[0]] }}
         requestedFocusId="n2"
-        resolveNodeDescriptor={resolve}
+        {...governedProps(runtimeFor(resolve))}
       />,
     );
     expect(
@@ -115,12 +148,12 @@ describe("GraphExplorer", () => {
       <GraphExplorer
         model={model}
         requestedFocusId="n2"
-        resolveNodeDescriptor={resolve}
+        {...governedProps(runtimeFor(resolve))}
       />,
     );
 
     await waitFor(() => {
-      expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ id: "n2" }));
+      expect(resolve.mock.calls.some(([reference]) => reference.id === "n2")).toBe(true);
       expect(
         screen.getByRole("complementary", {
           name: ko.console.objectcard.panel("경비 근무 장구"),
@@ -131,25 +164,31 @@ describe("GraphExplorer", () => {
 
   it("ignores authority cancellation and permits the current resolver to retry", async () => {
     const cancelled = vi.fn().mockResolvedValue(undefined);
-    const view = render(<GraphExplorer model={model} resolveNodeDescriptor={cancelled} />);
+    const view = render(<GraphExplorer model={model} {...governedProps(runtimeFor(cancelled))} />);
     await waitFor(() => {
-      expect(cancelled).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+      expect(cancelled.mock.calls.some(([reference]) => reference.id === "n1")).toBe(true);
     });
 
-    const current = vi.fn((node: ObjectExplorerNode) => Promise.resolve(resolvedDescriptor(node)));
-    view.rerender(<GraphExplorer model={model} resolveNodeDescriptor={current} />);
+    const current = vi.fn((reference) => {
+      const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
+      return Promise.resolve(resolvedDescriptor(node));
+    });
+    view.rerender(<GraphExplorer model={model} {...governedProps(runtimeFor(current))} />);
     await waitFor(() => {
-      expect(current).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+      expect(current.mock.calls.some(([reference]) => reference.id === "n1")).toBe(true);
       expect(screen.getByText("월 계약금")).toBeInTheDocument();
     });
   });
 
   it("shows the honest 조회 전용 state for a projected node and never resolves it", () => {
-    const resolve = vi.fn((node: ObjectExplorerNode) => Promise.resolve(resolvedDescriptor(node)));
+    const resolve = vi.fn((reference) => {
+      const node = model.nodes.find((candidate) => candidate.id === reference.id) ?? model.nodes[0];
+      return Promise.resolve(resolvedDescriptor(node));
+    });
     render(
       <GraphExplorer
         model={model}
-        resolveNodeDescriptor={resolve}
+        {...governedProps(runtimeFor(resolve))}
         projectedTypeIds={new Set(["t1"])}
       />,
     );
@@ -178,5 +217,42 @@ describe("GraphExplorer", () => {
     expect(
       screen.getByRole("list", { name: G.relationList }),
     ).toHaveTextContent("NK보안 경비용역 공급 경비 근무 장구");
+  });
+});
+
+describe("GraphExplorer runtime authority fencing", () => {
+  it("aborts a superseded authority read and never renders the retired descriptor", async () => {
+    let resolveA!: (value: ObjectCardDescriptor | undefined) => void;
+    const pendingA = new Promise<ObjectCardDescriptor | undefined>((resolve) => {
+      resolveA = resolve;
+    });
+    const runtimeA = runtimeFor(() => pendingA);
+    const runtimeB = resolvedRuntime();
+    const view = render(<GraphExplorer model={model} {...governedProps(runtimeA)} />);
+
+    view.rerender(
+      <GraphExplorer
+        model={model}
+        api={{} as never}
+        runtime={runtimeB}
+        tenantScopeKey="tenant-b"
+        authorityKey="authority-b"
+      />,
+    );
+    resolveA({ ...resolvedDescriptor(model.nodes[0]), title: "A secret object" });
+
+    await waitFor(() => {
+      expect(screen.getByText("NK보안 경비용역")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("A secret object")).not.toBeInTheDocument();
+  });
+
+  it("does not render a card or object-count surface when the scoped runtime omits a denied reference", async () => {
+    const denied = runtimeFor(() => Promise.resolve(undefined));
+    render(<GraphExplorer model={model} {...governedProps(denied)} />);
+    await waitFor(() => {
+      expect(screen.queryByText("Loading object")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole("heading", { name: "NK보안 경비용역" })).not.toBeInTheDocument();
   });
 });

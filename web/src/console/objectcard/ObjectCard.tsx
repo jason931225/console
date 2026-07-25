@@ -410,20 +410,22 @@ function RelationList({
                 {relation.title}
               </span>
             </span>
-            <PolicyGated
-              action={OBJECT_CARD_ACTIONS.linkDelete}
-              resource={{ kind: "object_link", id: relation.linkId }}
-            >
-              <button
-                type="button"
-                aria-label={T.relations.removeAria(farLabel)}
-                data-window-control="true"
-                onClick={() => onRemove?.(relation.linkId)}
-                style={removeButtonStyle}
+            {onRemove ? (
+              <PolicyGated
+                action={OBJECT_CARD_ACTIONS.linkDelete}
+                resource={{ kind: "object_link", id: relation.linkId }}
               >
-                {T.relations.remove}
-              </button>
-            </PolicyGated>
+                <button
+                  type="button"
+                  aria-label={T.relations.removeAria(farLabel)}
+                  data-window-control="true"
+                  onClick={() => onRemove(relation.linkId)}
+                  style={removeButtonStyle}
+                >
+                  {T.relations.remove}
+                </button>
+              </PolicyGated>
+            ) : null}
           </li>
         );
       })}
@@ -437,10 +439,11 @@ function RelationDraw({
   onResolveCode,
 }: {
   objectId: string;
-  onAdd: (draft: { code: string; title: string; linkType: string }) => void;
+  onAdd?: (draft: { code: string; title: string; linkType: string }) => void;
   /** GET /ontology/resolve?code= — real title before drawing (no fabricated titles). */
   onResolveCode?: (code: string) => Promise<{ title: string } | null>;
 }) {
+  if (!onAdd) return null;
   const DYN = objectCardDynStrings();
   const [code, setCode] = useState("");
   const [linkType, setLinkType] = useState("relates_to");
@@ -647,7 +650,7 @@ function ActionBar({
   actions: ObjectCardAction[];
   onAction?: (action: ObjectCardAction, ctx: { reason?: string }) => void;
 }) {
-  if (actions.length === 0) return null;
+  if (actions.length === 0 || !onAction) return null;
   return (
     <div style={chipRowStyle}>
       {actions.map((action) => (
@@ -682,6 +685,7 @@ function EditBar({
   objectId: string;
   onEdit?: (ctx: { mode: "direct" | "override"; reason?: string }) => void;
 }) {
+  if (!onEdit) return null;
   const isDraft = lifecycleState === "draft";
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -809,7 +813,7 @@ export function ObjectCard({ descriptor, handlers }: ObjectCardProps) {
         <Section title={T.sections.relationDraw} labelledById="object-card-relation-draw">
           <RelationDraw
             objectId={descriptor.id}
-            onAdd={(draft) => handlers?.onRelationAdd?.(draft)}
+            onAdd={handlers?.onRelationAdd}
             onResolveCode={handlers?.onResolveCode}
           />
         </Section>
@@ -846,9 +850,9 @@ export function ObjectCard({ descriptor, handlers }: ObjectCardProps) {
             <ActingChips acting={descriptor.acting} onNavigate={handlers?.onActingChipClick} />
           </Section>
         ) : null}
-        {descriptor.actions.length > 0 ? (
+        {descriptor.actions.length > 0 && handlers?.onAction ? (
           <Section title={T.sections.actions} count={descriptor.actions.length} labelledById="object-card-actions">
-            <ActionBar objectId={descriptor.id} actions={descriptor.actions} onAction={handlers?.onAction} />
+            <ActionBar objectId={descriptor.id} actions={descriptor.actions} onAction={handlers.onAction} />
           </Section>
         ) : null}
       </div>
