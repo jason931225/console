@@ -21,7 +21,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use mnt_kernel_core::{
-    BranchId, BranchScope, ErrorKind, KernelError, OrgId, SupportTicketId, TraceContext, UserId,
+    BranchId, BranchScope, CustomerId, ErrorKind, KernelError, OrgId, SiteId, SupportTicketId,
+    TraceContext, UserId, WorkOrderId,
 };
 use mnt_platform_auth::JwtVerifier;
 use mnt_platform_authz::{Action, Feature, Principal, authorize};
@@ -33,9 +34,13 @@ use mnt_support_adapter_postgres::{
 };
 use mnt_support_application::{
     AddCommentCommand, AssignTicketCommand, CommentAudience, CreateCustomerIntakeCommand,
-    CreateInternalTicketCommand, ListTicketsQuery, TicketNotification, TransitionTicketCommand,
+    CreateInternalTicketCommand, LinkTicketCommand, ListFieldSitesQuery, ListTicketsQuery,
+    RecordAcceptanceCommand, TicketNotification, TransitionTicketCommand,
 };
-use mnt_support_domain::{TicketCategory, TicketOrigin, TicketPriority, TicketStatus};
+use mnt_support_domain::{
+    AcceptanceChannel, AcceptanceKind, FieldSlaState, TicketCategory, TicketOrigin, TicketPriority,
+    TicketStatus,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::{Duration, OffsetDateTime};
@@ -50,6 +55,10 @@ pub const SUPPORT_TICKET_ASSIGN_PATH_TEMPLATE: &str = "/api/v1/support/tickets/{
 pub const SUPPORT_TICKET_TRANSITION_PATH_TEMPLATE: &str = "/api/v1/support/tickets/{id}/transition";
 pub const SUPPORT_TICKET_COMMENTS_PATH_TEMPLATE: &str = "/api/v1/support/tickets/{id}/comments";
 pub const SUPPORT_INTAKE_PATH: &str = "/api/v1/support/intake";
+pub const SUPPORT_TICKET_LINK_PATH_TEMPLATE: &str = "/api/v1/support/tickets/{id}/link";
+pub const SUPPORT_TICKET_ACCEPTANCE_PATH_TEMPLATE: &str = "/api/v1/support/tickets/{id}/acceptance";
+pub const FIELD_SITES_PATH: &str = "/api/v1/field/sites";
+pub const FIELD_SITE_PATH_TEMPLATE: &str = "/api/v1/field/sites/{id}";
 pub const SUPPORT_ROUTE_PATHS: &[&str] = &[
     SUPPORT_TICKETS_PATH,
     SUPPORT_TICKET_PATH_TEMPLATE,
@@ -57,6 +66,10 @@ pub const SUPPORT_ROUTE_PATHS: &[&str] = &[
     SUPPORT_TICKET_TRANSITION_PATH_TEMPLATE,
     SUPPORT_TICKET_COMMENTS_PATH_TEMPLATE,
     SUPPORT_INTAKE_PATH,
+    SUPPORT_TICKET_LINK_PATH_TEMPLATE,
+    SUPPORT_TICKET_ACCEPTANCE_PATH_TEMPLATE,
+    FIELD_SITES_PATH,
+    FIELD_SITE_PATH_TEMPLATE,
 ];
 
 // ---------------------------------------------------------------------------
@@ -132,6 +145,13 @@ pub fn router(state: SupportRestState) -> Router {
             post(transition_ticket),
         )
         .route(SUPPORT_TICKET_COMMENTS_PATH_TEMPLATE, post(add_comment))
+        .route(SUPPORT_TICKET_LINK_PATH_TEMPLATE, post(link_ticket))
+        .route(
+            SUPPORT_TICKET_ACCEPTANCE_PATH_TEMPLATE,
+            post(record_acceptance),
+        )
+        .route(FIELD_SITES_PATH, get(list_field_sites))
+        .route(FIELD_SITE_PATH_TEMPLATE, get(get_field_site))
         .with_state(state.clone());
     let authed = mnt_platform_request_context::with_request_context(authed, verifier, pool);
     // Unauthenticated intake route — no JWT required, but still needs a tenant
@@ -198,6 +218,8 @@ struct ListTicketsRequest {
     category: Option<TicketCategory>,
     origin: Option<TicketOrigin>,
     assignee_user_id: Option<UserId>,
+    /// Restrict to tickets linked to one customer site (field-console queue).
+    site_id: Option<SiteId>,
     #[serde(default)]
     include_untriaged: bool,
     /// Page size; the adapter always clamps to `1..=100` and defaults a missing
@@ -205,6 +227,50 @@ struct ListTicketsRequest {
     limit: Option<i64>,
     /// Keyset cursor: the id of the last ticket from the previous page.
     cursor: Option<SupportTicketId>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListFieldSitesRequest {
+    /// Substring match on site name or customer name.
+    q: Option<String>,
+    customer_id: Option<CustomerId>,
+    /// Filter on the derived per-site SLA state.
+    sla: Option<FieldSlaState>,
+    /// Page size; the adapter clamps to `1..=100`.
+    limit: Option<i64>,
+    /// Keyset cursor: the id of the last site from the previous page.
+    cursor: Option<SiteId>,
+}
+
+/// Bind a ticket to the field object chain. Each field distinguishes absent
+/// (leave untouched) from explicit JSON `null` (clear the link); at least one
+/// must be present (422, enforced by the store).
+#[derive(Debug, Deserialize)]
+struct LinkTicketRequest {
+    #[serde(default, deserialize_with = "double_option")]
+    site_id: Option<Option<SiteId>>,
+    #[serde(default, deserialize_with = "double_option")]
+    work_order_id: Option<Option<WorkOrderId>>,
+}
+
+/// Distinguish an absent JSON field (`None`) from an explicit `null`
+/// (`Some(None)`), so PATCH-style link clearing is expressible.
+fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
+#[derive(Debug, Deserialize)]
+struct RecordAcceptanceRequest {
+    kind: AcceptanceKind,
+    channel: AcceptanceChannel,
+    /// Customer-side acknowledger name (1..=200 chars, store-enforced).
+    accepted_by: String,
+    /// Optional note (<=2000 chars); required by the store on a decline.
+    note: Option<String>,
 }
 
 /// Intake acknowledgement. Deliberately minimal — no internal identifiers, no
@@ -278,6 +344,7 @@ async fn list_tickets(
             category: query.category,
             origin: query.origin,
             assignee_user_id: query.assignee_user_id,
+            site_id: query.site_id,
             include_untriaged: query.include_untriaged && cross_branch,
             limit: query.limit,
             cursor: query.cursor,
@@ -379,6 +446,135 @@ async fn add_comment(
         .map_err(RestError::from_store)?;
     deliver_notifications(&state, &notifications).await;
     Ok((StatusCode::CREATED, Json(view)))
+}
+
+// ---------------------------------------------------------------------------
+// Field console (customer-site overview / detail / link / acceptance)
+// ---------------------------------------------------------------------------
+
+async fn list_field_sites(
+    State(state): State<SupportRestState>,
+    headers: HeaderMap,
+    Query(query): Query<ListFieldSitesRequest>,
+) -> Result<impl IntoResponse, RestError> {
+    let principal = principal_from_headers(&state, &headers).await?;
+    // Field read gate mirrors the shell nav gate (work_order_read_all): the
+    // overview carries customer PII (contact, geo), so the open-signup MEMBER
+    // tier is denied server-side, not just nav-hidden.
+    authorize(
+        &principal,
+        Action::new(Feature::WorkOrderReadAll),
+        representative_branch(&principal.branch_scope)?,
+    )
+    .map_err(RestError::from_kernel)?;
+    let page = state
+        .store
+        .list_field_sites(ListFieldSitesQuery {
+            branch_scope: principal.branch_scope,
+            q: query.q,
+            customer_id: query.customer_id,
+            sla: query.sla,
+            limit: query.limit,
+            cursor: query.cursor,
+        })
+        .await
+        .map_err(RestError::from_store)?;
+    Ok(Json(page))
+}
+
+async fn get_field_site(
+    State(state): State<SupportRestState>,
+    headers: HeaderMap,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<impl IntoResponse, RestError> {
+    let principal = principal_from_headers(&state, &headers).await?;
+    let site_id = SiteId::from_uuid(id);
+    // Scope resolution first: an out-of-scope site is a 404 (never 403) so its
+    // existence does not leak; then the feature check on the resolved branch.
+    let branch = state
+        .store
+        .site_branch_in_scope(site_id, &principal.branch_scope)
+        .await
+        .map_err(RestError::from_store)?;
+    authorize(&principal, Action::new(Feature::WorkOrderReadAll), branch)
+        .map_err(RestError::from_kernel)?;
+    let detail = state
+        .store
+        .field_site_detail(site_id, &principal.branch_scope)
+        .await
+        .map_err(RestError::from_store)?;
+    Ok(Json(detail))
+}
+
+async fn link_ticket(
+    State(state): State<SupportRestState>,
+    headers: HeaderMap,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<LinkTicketRequest>,
+) -> Result<impl IntoResponse, RestError> {
+    let principal = principal_from_headers(&state, &headers).await?;
+    let ticket_id = SupportTicketId::from_uuid(id);
+    // Same authority as assign: linking an untriaged customer ticket to a site
+    // IS triage, so it carries the same cross-branch rule.
+    authorize_on_ticket(&state, &principal, ticket_id, Feature::AssigneeManage).await?;
+    let summary = state
+        .store
+        .link_ticket(LinkTicketCommand {
+            actor: principal.user_id,
+            ticket_id,
+            branch_scope: principal.branch_scope,
+            site_id: body.site_id,
+            work_order_id: body.work_order_id,
+            trace: TraceContext::generate(),
+            occurred_at: OffsetDateTime::now_utc(),
+        })
+        .await
+        .map_err(RestError::from_store)?;
+    Ok(Json(summary))
+}
+
+async fn record_acceptance(
+    State(state): State<SupportRestState>,
+    headers: HeaderMap,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<RecordAcceptanceRequest>,
+) -> Result<impl IntoResponse, RestError> {
+    let principal = principal_from_headers(&state, &headers).await?;
+    let ticket_id = SupportTicketId::from_uuid(id);
+    authorize_on_ticket(&state, &principal, ticket_id, Feature::AssigneeManage).await?;
+    let idempotency_key = idempotency_key_header(&headers)?;
+    let (view, notifications, _replayed) = state
+        .store
+        .record_acceptance(RecordAcceptanceCommand {
+            actor: principal.user_id,
+            ticket_id,
+            kind: body.kind,
+            channel: body.channel,
+            accepted_by: body.accepted_by,
+            note: body.note,
+            idempotency_key,
+            trace: TraceContext::generate(),
+            occurred_at: OffsetDateTime::now_utc(),
+        })
+        .await
+        .map_err(RestError::from_store)?;
+    // A replay carries no notifications, so the fan-out is naturally once-only.
+    deliver_notifications(&state, &notifications).await;
+    Ok((StatusCode::CREATED, Json(view)))
+}
+
+/// Required `Idempotency-Key` header (sibling-pilot semantics). Presence is
+/// checked here; the 16..=200-char bound is enforced by the store.
+fn idempotency_key_header(headers: &HeaderMap) -> Result<String, RestError> {
+    headers
+        .get("Idempotency-Key")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            RestError::from_kernel(KernelError::validation(
+                "Idempotency-Key header is required",
+            ))
+        })
 }
 
 // ---------------------------------------------------------------------------
