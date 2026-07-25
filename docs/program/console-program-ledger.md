@@ -329,3 +329,6 @@ Candidate advanced to the commit fixing `tools/buck/run_test_with_postgres_env.s
 
 ## CANDIDATE REBIND (2026-07-25, migration contiguity)
 Candidate advanced to the commit renumbering the ontology catalog migration 0211 → 0204. The migration-safety gate was the only failing step in the backend job — fmt, clippy and the test suites passed — because 0203 jumped to 0211 while 0204–0210 sat pre-assigned to CRM lanes that have not landed. Fixed by the policy already in §5: the integrator assigns at merge, taking the next free number. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, frozen PR491/base reconciliation)
+Candidate advanced to signed merge `008e20dca426dc41c7444a39ccf85edce135b220` with first parent the frozen PR491 consolidation and second parent the signed operational-runtime authority base. The merge carries the contiguous ontology catalog migration at 0204 and preserves the credential-loader PostgreSQL Buck wrapper targets. Every capability, evidence contract, jurisdiction binding, control trace, review disposition, and exposure state remains `HOLD`; no completion, legal qualification, deployment, or production-exposure claim is promoted by this authority-only child.
