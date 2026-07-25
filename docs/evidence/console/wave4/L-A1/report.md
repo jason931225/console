@@ -1,14 +1,14 @@
 # L-A1 — ontology catalog additive-upgrade path
 
 **Lane** `w4-a1-catalog` · **worktree** `/Users/jasonlee/Developer/maintenance-worktrees/w4-a1-catalog-20260725`
-· **branch** `claude/w4-a1-catalog-20260725` · **migration slot** 0211
+· **branch** `claude/w4-a1-catalog-20260725` · **migration slot** 0204
 · **date** 2026-07-25
 
 > **Slot history.** L-A1 was first assigned 0203 and committed against it. The
-> integrator then swapped 0203↔0211 in ledger commit `b33cbc4d`, and
+> integrator then swapped 0203↔0204 in ledger commit `b33cbc4d`, and
 > `0203_leave_api_revoke_directory_manager_helper.sql` merged onto the spine
 > under the old number. The migration and every reference to it were renumbered
-> to **0211** before this lane finished; no `0203` reference survives anywhere
+> to **0204** before this lane finished; no `0203` reference survives anywhere
 > in L-A1's diff.
 
 ---
@@ -29,7 +29,7 @@ Reproduced as a red test before the fix — see §4.1.
 
 ## 2. What was built
 
-One migration, `backend/crates/platform/db/migrations/0211_ontology_catalog_additive_upgrade.sql`.
+One migration, `backend/crates/platform/db/migrations/0204_ontology_catalog_additive_upgrade.sql`.
 No new tables, no Rust API change, no OpenAPI/client change.
 
 **`ont_builtin_catalog_installs` becomes an append-only per-tenant history.**
@@ -93,7 +93,7 @@ routine's SQL (0165). Comment corrected to say so.
 |---|---|---|
 | `backend/crates/ontology/**` | yes | test + BUCK target + seed.rs doc fix |
 | `docs/evidence/console/wave4/L-A1/**` | yes | this report + manifests |
-| `backend/crates/platform/db/migrations/0211_*.sql` | **shared** | slot 0211 assigned to L-A1 by the ledger; written in-tree per the ledger's recorded integrator deviation (§5 note, 2026-07-25). Manifest: `manifests/shared-roots.json` |
+| `backend/crates/platform/db/migrations/0211_*.sql` | **shared** | slot 0204 assigned to L-A1 by the ledger; written in-tree per the ledger's recorded integrator deviation (§5 note, 2026-07-25). Manifest: `manifests/shared-roots.json` |
 | `tools/buck/gen_first_party.py` | **foreign** | one appended dict line registering the new test's postgres resource. Manifest: `manifests/shared-roots.json` |
 
 Untouched: `web/**`, `backend/openapi/openapi.yaml`, `clients/**`,
@@ -136,7 +136,7 @@ With the migration restored: `5 passed; 0 failed`.
 
 **Three of the five are genuine red-proof tests.** The other two pass either way
 and are regression cover, not evidence: the digest test never installs anything,
-and the fresh-tenant test only exercises a first install, which the pre-0211
+and the fresh-tenant test only exercises a first install, which the pre-0204
 installer already handled. Stated here because a suite that is "all green after,
 all red before" would be the claim to distrust.
 
@@ -188,8 +188,8 @@ contiguity:
 ```
 mnt-gate-migration-safety: FAILED - 9 violation(s):
   [NonContiguousMigrationVersion] missing migration version 0201 before 0202
-  [NonContiguousMigrationVersion] missing migration version 0203 before 0211
-  ... 0204, 0205, 0206, 0207, 0208, 0209, 0210 before 0211
+  [NonContiguousMigrationVersion] missing migration version 0203 before 0204
+  ... 0204, 0205, 0206, 0207, 0208, 0209, 0210 before 0204
 ```
 
 Two distinct causes, neither this lane's to fix:
@@ -199,13 +199,13 @@ Two distinct causes, neither this lane's to fix:
   integrator on 2026-07-25**; L-A1 was instructed not to fill or renumber
   around it.
 - **0203–0210** — an artifact of lane isolation. This worktree holds only
-  L-A1's migration, so every sibling slot below 0211 reads as missing. All
+  L-A1's migration, so every sibling slot below 0204 reads as missing. All
   eight are real and land on merge: 0203 (leave, already on the spine) and
   0204–0210 (CRM lanes L-X1…L-X5, L-X7, L-X8 per ledger §4). The gate can
   therefore only go green **on the merged spine**, never in this worktree.
 
 **One thing for the integrator to watch:** L-A1 now holds the highest slot, so
-if any of 0204–0210 is dropped rather than landed, 0211 leaves a permanent
+if any of 0204–0210 is dropped rather than landed, 0204 leaves a permanent
 contiguity gap behind it.
 
 ### 5.2 `tools/buck/gen_first_party.py` — resolved elsewhere; this lane's target verified
@@ -247,7 +247,7 @@ generator still raises here — expected, not a new break.
 `blocker_queue_is_tenant_scoped_cascades_and_attachment_effects_are_write_checked`
 and `instance_list_composes_enforced_permit_forbid_and_tenant_scope` fail with
 `"unable to evaluate object visibility policy"`. Verified **identical with and
-without 0211** — pre-existing, not this lane's. Reported to the integrator
+without 0204** — pre-existing, not this lane's. Reported to the integrator
 2026-07-25; acknowledged and being routed.
 
 ### 5.4 `key_revision_migration_upgrade.rs` is racy under one shared PostgreSQL
@@ -255,7 +255,7 @@ without 0211** — pre-existing, not this lane's. Reported to the integrator
 It rewrites **cluster-global** role attributes (`ALTER ROLE mnt_app ...`,
 `REVOKE mnt_ontology_writer FROM ...`) to reduce the schema to its pre-0165
 shape, so two cargo test binaries hitting the same server can clobber each
-other. Reproduced **without** 0211 (2 of 3 baseline runs red). Green 3/3 when
+other. Reproduced **without** 0204 (2 of 3 baseline runs red). Green 3/3 when
 run alone. Buck gives every target its own disposable PostgreSQL plus
 `RUST_TEST_THREADS=1`, so CI is unaffected. Not fixed here — it is not this
 lane's file to redesign.
@@ -300,19 +300,19 @@ for the integrator to schedule.
 
 `ontology_api.protected_audit_writer_guard` (0165:297) makes four ontology audit
 actions unforgeable by `mnt_rt` — including `ontology.object_type.builtin_install`,
-which this same installer emits in the same transaction. The two names 0211 adds
+which this same installer emits in the same transaction. The two names 0204 adds
 (`ontology.builtin_catalog.install` / `.upgrade`) are **not** in that array, and
 `mnt_rt` holds `INSERT` on `audit_events` (0031:85), so it can write a row
 claiming a tenant was upgraded to a version and digest it never received.
 
 Why it was not fixed here:
 
-- **It is not a regression.** Before 0211 the marker append was audited by
-  nothing at all, so 0211 strictly adds evidence. Every audit action in the
+- **It is not a regression.** Before 0204 the marker append was audited by
+  nothing at all, so 0204 strictly adds evidence. Every audit action in the
   repository outside those four (and 0166's leave set) is equally forgeable by
   `mnt_rt`; holding this one action to a bar no sibling meets would be
   inconsistent, not safer.
-- **The migration is already merged on the spine at 0211** and editing it in
+- **The migration is already merged on the spine at 0204** and editing it in
   place would change an applied migration's sqlx checksum for anyone who has run
   it. `backend/crates/platform/db/migrations/**` is a shared collision root and
   this lane may not self-assign a follow-up slot.
@@ -392,7 +392,7 @@ never written to and never restarted.
 
 | Claim | Verdict |
 |---|---|
-| The blocker is real and 0211 fixes its root cause | **Confirmed.** 0165's installer raises `different_catalog_already_installed` for any tenant holding a marker, before it looks at a single key. The fix is in that decision, not around it: the version/digest pair is re-read as history, and the per-key branch is what decides create-vs-retain. No caller, signature or return shape changed. |
+| The blocker is real and 0204 fixes its root cause | **Confirmed.** 0165's installer raises `different_catalog_already_installed` for any tenant holding a marker, before it looks at a single key. The fix is in that decision, not around it: the version/digest pair is re-read as history, and the per-key branch is what decides create-vs-retain. No caller, signature or return shape changed. |
 | The test genuinely fails without the fix | **Confirmed by re-running it.** 3 of 5 red with `0211_*.sql` removed, all 5 green restored, error byte-identical to §4.1. The other two pass either way — now stated in §4.1 rather than implied. |
 | `empty_org_required` still guards a first install | **Confirmed.** `key_write_cas_as_runtime_role`'s race test still observes the installer blocking on the org advisory lock and then rejecting the now-non-empty org, with 0 markers and 0 install audits. 7/7 green. |
 | The pre-existing keys are untouched | **Confirmed** by the fingerprint comparison, which includes row ids, `created_at`/`updated_at` and the key-revision sidecar — an upgrade that recreated or restaged anything would move them. |
