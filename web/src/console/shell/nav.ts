@@ -39,7 +39,6 @@ export const FEATURES = {
   INTEGRITY_FINDINGS_READ: "integrity_findings_read",
   ROLE_MANAGE: "role_manage",
   SALES_MANAGE: "sales_manage",
-  PAYROLL_RUN_READ: "payroll_run_read",
 } as const;
 
 const ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN];
