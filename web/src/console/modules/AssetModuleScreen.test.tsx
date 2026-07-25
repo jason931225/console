@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,6 +10,34 @@ import { AssetWorkspace } from "../asset/AssetWorkspace";
 import { AssetModuleScreen } from "./AssetModuleScreen";
 
 const equipmentId = "00000000-0000-4000-8000-000000000001";
+const consoleTokens = readFileSync(resolve(process.cwd(), "src/console/tokens.css"), "utf8");
+const assetWorkspaceStyles = readFileSync(resolve(process.cwd(), "src/console/asset/assetWorkspace.css"), "utf8");
+
+function declarationBlock(css: string, selector: string): string {
+  const selectorStart = css.indexOf(selector);
+  const blockStart = css.indexOf("{", selectorStart);
+  const blockEnd = css.indexOf("\n}", blockStart);
+  if (selectorStart < 0 || blockStart < 0 || blockEnd < 0) throw new Error(`Missing ${selector} token block`);
+  return css.slice(blockStart + 1, blockEnd);
+}
+
+function token(block: string, name: string): string {
+  const value = block.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, "i"))?.[1];
+  if (!value) throw new Error(`Missing ${name} token`);
+  return value;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (hex: string) => {
+    const channels = hex.match(/[0-9a-f]{2}/gi)?.map((channel) => Number.parseInt(channel, 16) / 255);
+    if (!channels || channels.length !== 3) throw new Error(`Invalid color ${hex}`);
+    const [red, green, blue] = channels.map((channel) => channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  };
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 const row = {
   equipment_id: equipmentId,
   branch_id: "00000000-0000-4000-8000-000000000002",
@@ -45,6 +76,18 @@ function apiForTest() {
 }
 
 describe("AssetWorkspace", () => {
+  it("keeps primary-action contrast at WCAG AA in light and dark console themes", () => {
+    const primaryButton = declarationBlock(assetWorkspaceStyles, ".asset-workspace__button");
+    expect(primaryButton).toContain("background: var(--teal);");
+    expect(primaryButton).toContain("color: var(--surface);");
+
+    const light = declarationBlock(consoleTokens, ".console {");
+    const dark = declarationBlock(consoleTokens, ".console[data-console-theme=\"dark\"],");
+    for (const theme of [light, dark]) {
+      expect(contrastRatio(token(theme, "--surface"), token(theme, "--teal"))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it("never mounts an old authorized asset workspace after the session changes", async () => {
     let resolveOld!: (value: unknown) => void;
     const oldAuthz = new Promise<unknown>((resolve) => { resolveOld = resolve; });
