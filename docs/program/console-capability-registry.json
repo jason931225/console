@@ -1796,7 +1796,163 @@
     "ios": 0,
     "graph": 1,
     "cas": 1
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-LOGISTICS-PILOT",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "logistics"
+    ],
+    "source_mounted": true,
+    "production_exposed": false,
+    "registry_body_present": true,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-LOGISTICS-PILOT"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "logistics execution",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/INDEX.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
+     }
+    ],
+    "required_outcomes": "A real logistics execution workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-LOGISTICS-PILOT-N1",
+      "persona_scenario": "Authorized Logistics subcontracting signature workflow operator",
+      "action_workflow": "shipment milestones preserve ordered custody events",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT: shipment milestones preserve ordered custody events",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-LOGISTICS-PILOT-N2",
+      "persona_scenario": "Authorized Logistics subcontracting signature workflow operator",
+      "action_workflow": "proof of delivery binds recipient evidence",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT: proof of delivery binds recipient evidence",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-LOGISTICS-PILOT-N3",
+      "persona_scenario": "Authorized Logistics subcontracting signature workflow operator",
+      "action_workflow": "settlement reconciles completed movement",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT: settlement reconciles completed movement",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-LOGISTICS-PILOT-O1",
+      "persona_scenario": "Cross-module Logistics subcontracting signature workflow operator",
+      "action_workflow": "CAP-LOGISTICS-PILOT omni interaction 1",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-LOGISTICS-PILOT-O2",
+      "persona_scenario": "Cross-module Logistics subcontracting signature workflow operator",
+      "action_workflow": "CAP-LOGISTICS-PILOT omni interaction 2",
+      "measurable_assertion": "CAP-LOGISTICS-PILOT omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-LOGISTICS-PILOT/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Logistics subcontracting signature workflow; seed references are not comparator evidence."
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-IFM-PILOT",
@@ -2932,7 +3088,163 @@
    "wave23_consolidation": {
     "backend": "merged b2535498, run_lifecycle_api 4/4 + adapter/domain, mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-PAYROLL-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "payroll"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-PAYROLL-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "enterprise payroll",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/finance.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/finance.md"
+     }
+    ],
+    "required_outcomes": "A real enterprise payroll workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-PAYROLL-CONSOLE-N1",
+      "persona_scenario": "Authorized Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "payroll close blocks unresolved exceptions",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE: payroll close blocks unresolved exceptions",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PAYROLL-CONSOLE-N2",
+      "persona_scenario": "Authorized Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "calculation approval precedes disbursement",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE: calculation approval precedes disbursement",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PAYROLL-CONSOLE-N3",
+      "persona_scenario": "Authorized Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "payslip is traceable to approved calculation",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE: payslip is traceable to approved calculation",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-PAYROLL-CONSOLE-O1",
+      "persona_scenario": "Cross-module Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "CAP-PAYROLL-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-PAYROLL-CONSOLE-O2",
+      "persona_scenario": "Cross-module Payroll run pipeline: close, calculate, exceptions, approval, disbursement, payslip receipt operator",
+      "action_workflow": "CAP-PAYROLL-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-PAYROLL-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-PAYROLL-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-ATTENDANCE-CONSOLE",
@@ -3340,7 +3652,163 @@
    "wave23_consolidation": {
     "backend": "merged 8a99f4c9, recruiting_pipeline_api 2/2, mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-RECRUITING",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "recruit"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-RECRUITING"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "talent acquisition",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/people.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/people.md"
+     }
+    ],
+    "required_outcomes": "A real talent acquisition workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-RECRUITING-N1",
+      "persona_scenario": "Authorized Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "candidate and application remain distinct records",
+      "measurable_assertion": "CAP-RECRUITING: candidate and application remain distinct records",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-RECRUITING-N2",
+      "persona_scenario": "Authorized Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "stage rubric records evaluator decision",
+      "measurable_assertion": "CAP-RECRUITING: stage rubric records evaluator decision",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-RECRUITING-N3",
+      "persona_scenario": "Authorized Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "offer acceptance transitions to hire",
+      "measurable_assertion": "CAP-RECRUITING: offer acceptance transitions to hire",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-RECRUITING-O1",
+      "persona_scenario": "Cross-module Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "CAP-RECRUITING omni interaction 1",
+      "measurable_assertion": "CAP-RECRUITING omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-RECRUITING-O2",
+      "persona_scenario": "Cross-module Recruiting: posting publish preflight, applicant pipeline, offer, hire creates employee object operator",
+      "action_workflow": "CAP-RECRUITING omni interaction 2",
+      "measurable_assertion": "CAP-RECRUITING omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-RECRUITING/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-ORG-CONSOLE",
@@ -3459,7 +3927,163 @@
    "wave23_consolidation": {
     "backend": "merged a4ae5ab5, org_change_api 3/3, mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-ORG-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "orgchart"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-ORG-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "organization management",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/people.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/people.md"
+     }
+    ],
+    "required_outcomes": "A real organization management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-ORG-CONSOLE-N1",
+      "persona_scenario": "Authorized Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "position change is effective dated",
+      "measurable_assertion": "CAP-ORG-CONSOLE: position change is effective dated",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ORG-CONSOLE-N2",
+      "persona_scenario": "Authorized Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "organization change is reviewed before activation",
+      "measurable_assertion": "CAP-ORG-CONSOLE: organization change is reviewed before activation",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ORG-CONSOLE-N3",
+      "persona_scenario": "Authorized Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "as-of view reconstructs prior structure",
+      "measurable_assertion": "CAP-ORG-CONSOLE: as-of view reconstructs prior structure",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-ORG-CONSOLE-O1",
+      "persona_scenario": "Cross-module Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "CAP-ORG-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-ORG-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-ORG-CONSOLE-O2",
+      "persona_scenario": "Cross-module Organization chart: entities, sites, teams, positions, governed org-change lifecycle operator",
+      "action_workflow": "CAP-ORG-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-ORG-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-ORG-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-EVALUATION-CONSOLE",
@@ -3578,7 +4202,163 @@
    "wave23_consolidation": {
     "backend": "merged d5a2ba73, evaluation_cycle_api 2/2 (dark, no app mount), mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-EVALUATION-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "evaluation"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-EVALUATION-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "performance management",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/people.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/people.md"
+     }
+    ],
+    "required_outcomes": "A real performance management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-EVALUATION-CONSOLE-N1",
+      "persona_scenario": "Authorized Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "self review precedes manager review",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE: self review precedes manager review",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EVALUATION-CONSOLE-N2",
+      "persona_scenario": "Authorized Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "calibration records ordered adjustment",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE: calibration records ordered adjustment",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EVALUATION-CONSOLE-N3",
+      "persona_scenario": "Authorized Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "finalization locks evidenced result",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE: finalization locks evidenced result",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-EVALUATION-CONSOLE-O1",
+      "persona_scenario": "Cross-module Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "CAP-EVALUATION-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-EVALUATION-CONSOLE-O2",
+      "persona_scenario": "Cross-module Performance review cycles: goals, self/manager evaluation, calibration, person-ledger finalization operator",
+      "action_workflow": "CAP-EVALUATION-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-EVALUATION-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-EVALUATION-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-INVENTORY-CONSOLE",
@@ -3977,7 +4757,163 @@
    },
    "wave23_consolidation": {
     "note": "Backend = codex-landed dispatch spec (dispatch_pipeline_api on spine). FE: spine has complete DispatchConsole/P1 flow; lane DispatchScreen was incompatible alt using a different dispatchApi — reverted to spine, lane FE deferred."
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-DISPATCH-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "dispatch"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-DISPATCH-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "field dispatch",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/field.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/field.md"
+     }
+    ],
+    "required_outcomes": "A real field dispatch workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-DISPATCH-CONSOLE-N1",
+      "persona_scenario": "Authorized Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "constraint assignment detects conflict",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE: constraint assignment detects conflict",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DISPATCH-CONSOLE-N2",
+      "persona_scenario": "Authorized Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "replan preserves superseded assignment lineage",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE: replan preserves superseded assignment lineage",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DISPATCH-CONSOLE-N3",
+      "persona_scenario": "Authorized Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "assignee acknowledgement returns durable receipt",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE: assignee acknowledgement returns durable receipt",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-DISPATCH-CONSOLE-O1",
+      "persona_scenario": "Cross-module Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "CAP-DISPATCH-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DISPATCH-CONSOLE-O2",
+      "persona_scenario": "Cross-module Dispatch queue, crew/vehicle assignment, tracking to completion operator",
+      "action_workflow": "CAP-DISPATCH-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-DISPATCH-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-DISPATCH-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-MAINTENANCE-CONSOLE",
@@ -4096,7 +5032,163 @@
    "wave23_consolidation": {
     "backend": "merged 7921b36e, maintenance_chain_api 4/4, mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-MAINTENANCE-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "maintenance"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-MAINTENANCE-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "maintenance management",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/field.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/field.md"
+     }
+    ],
+    "required_outcomes": "A real maintenance management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-N1",
+      "persona_scenario": "Authorized Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "request creates governed work order",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE: request creates governed work order",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-N2",
+      "persona_scenario": "Authorized Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "status and cost gates control completion",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE: status and cost gates control completion",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-N3",
+      "persona_scenario": "Authorized Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "evidence updates asset history",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE: evidence updates asset history",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-O1",
+      "persona_scenario": "Cross-module Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "CAP-MAINTENANCE-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-MAINTENANCE-CONSOLE-O2",
+      "persona_scenario": "Cross-module Maintenance request to scheduled work order, execution evidence, asset-history close operator",
+      "action_workflow": "CAP-MAINTENANCE-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-MAINTENANCE-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-MAINTENANCE-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-FIELD-CONSOLE",
@@ -4215,7 +5307,163 @@
    "wave23_consolidation": {
     "backend": "merged 11cbdc59, field_visit_api 3/3, mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-FIELD-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "field"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-FIELD-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "field service",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/field.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/field.md"
+     }
+    ],
+    "required_outcomes": "A real field service workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-FIELD-CONSOLE-N1",
+      "persona_scenario": "Authorized Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "field check-in captures scoped presence",
+      "measurable_assertion": "CAP-FIELD-CONSOLE: field check-in captures scoped presence",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-FIELD-CONSOLE-N2",
+      "persona_scenario": "Authorized Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "work log requires acceptance",
+      "measurable_assertion": "CAP-FIELD-CONSOLE: work log requires acceptance",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-FIELD-CONSOLE-N3",
+      "persona_scenario": "Authorized Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "offline conflict resolves with audit trail",
+      "measurable_assertion": "CAP-FIELD-CONSOLE: offline conflict resolves with audit trail",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-FIELD-CONSOLE-O1",
+      "persona_scenario": "Cross-module Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "CAP-FIELD-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-FIELD-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-FIELD-CONSOLE-O2",
+      "persona_scenario": "Cross-module Customer-site intake to field visit, check-in, work log, acceptance operator",
+      "action_workflow": "CAP-FIELD-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-FIELD-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-FIELD-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-DOCS-EVIDENCE-CONSOLE",
@@ -4331,7 +5579,163 @@
    },
    "wave23_consolidation": {
     "note": "DEFERRED: spine added cursor pagination to the live mounted evidence crate; lane rewrote ListEvidenceObjectsQuery as TryFrom w/ different error type — incompatible dual impl. Spine wins. Needs dedicated feature-merge."
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-DOCS-EVIDENCE-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "docs"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "document and evidence management",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/evidence.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/evidence.md"
+     }
+    ],
+    "required_outcomes": "A real document and evidence management workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-N1",
+      "persona_scenario": "Authorized Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "classification applies retention policy",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE: classification applies retention policy",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-N2",
+      "persona_scenario": "Authorized Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "legal hold blocks disposition",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE: legal hold blocks disposition",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-N3",
+      "persona_scenario": "Authorized Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "fixity and custody evidence survive lifecycle",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE: fixity and custody evidence survive lifecycle",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-O1",
+      "persona_scenario": "Cross-module Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "CAP-DOCS-EVIDENCE-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DOCS-EVIDENCE-CONSOLE-O2",
+      "persona_scenario": "Cross-module Records registration, classification/retention, WORM evidence chain, verified retrieval operator",
+      "action_workflow": "CAP-DOCS-EVIDENCE-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-DOCS-EVIDENCE-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-DOCS-EVIDENCE-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-NOTIF-CONSOLE",
@@ -4451,7 +5855,163 @@
    "wave23_consolidation": {
     "backend": "merged fe1e8b91, notif_routing_api 1/1, mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-NOTIF-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "notif"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-NOTIF-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "enterprise notifications",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/comms.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "SOURCE_BOUNDED_STARTING_DOSSIER; module-specific corpus contains dated official URLs and source observations.",
+      "official_urls_referenced_in": "docs/program/benchmark-matrix/comms.md"
+     }
+    ],
+    "required_outcomes": "A real enterprise notifications workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-NOTIF-CONSOLE-N1",
+      "persona_scenario": "Authorized Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "source aggregation deduplicates notification",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE: source aggregation deduplicates notification",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-NOTIF-CONSOLE-N2",
+      "persona_scenario": "Authorized Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "persistent acknowledgement changes unread state",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE: persistent acknowledgement changes unread state",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-NOTIF-CONSOLE-N3",
+      "persona_scenario": "Authorized Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "deep link opens authorized source context",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE: deep link opens authorized source context",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-NOTIF-CONSOLE-O1",
+      "persona_scenario": "Cross-module Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "CAP-NOTIF-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-NOTIF-CONSOLE-O2",
+      "persona_scenario": "Cross-module Notification full view: aggregate by object/channel, resolve to source, ack/mute/route operator",
+      "action_workflow": "CAP-NOTIF-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-NOTIF-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-NOTIF-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "SOURCE_BOUNDED_STARTING_DOSSIER",
+    "missing_dossier_reason": null
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-BOARD-CONSOLE",
@@ -4570,7 +6130,163 @@
    "wave23_consolidation": {
     "backend": "merged d1fbf660, board_ack_api 1/1, mnt-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-BOARD-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "REQUIRED_UNRESOLVED"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "board"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-BOARD-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "enterprise communications",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/INDEX.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
+     }
+    ],
+    "required_outcomes": "A real enterprise communications workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-BOARD-CONSOLE-N1",
+      "persona_scenario": "Authorized Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "scoped publication uses versioned content",
+      "measurable_assertion": "CAP-BOARD-CONSOLE: scoped publication uses versioned content",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BOARD-CONSOLE-N2",
+      "persona_scenario": "Authorized Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "acknowledgement is attributable",
+      "measurable_assertion": "CAP-BOARD-CONSOLE: acknowledgement is attributable",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BOARD-CONSOLE-N3",
+      "persona_scenario": "Authorized Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "amendment retains prior version lineage",
+      "measurable_assertion": "CAP-BOARD-CONSOLE: amendment retains prior version lineage",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-BOARD-CONSOLE-O1",
+      "persona_scenario": "Cross-module Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "CAP-BOARD-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-BOARD-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-BOARD-CONSOLE-O2",
+      "persona_scenario": "Cross-module Scoped notice publishing with acknowledgment tracking operator",
+      "action_workflow": "CAP-BOARD-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-BOARD-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-BOARD-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for Scoped notice publishing with acknowledgment tracking; seed references are not comparator evidence."
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-DIRECTORY-CONSOLE",
@@ -4664,7 +6380,163 @@
    },
    "wave23_consolidation": {
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
-   }
+   },
+   "truth": {
+    "declared": "DECLARED",
+    "implementation": "HOLD",
+    "verification": "HOLD",
+    "exposure": "HOLD"
+   },
+   "delivery_unit": {
+    "id": "DU-DIRECTORY-CONSOLE",
+    "kind": "module_capability",
+    "buck2_targets": [],
+    "reason": "Exact candidate-bound Buck2 target set has not been independently established; this registry preserves HOLD rather than inventing a target.",
+    "rust_status": "NOT_APPLICABLE"
+   },
+   "dependency_edges": [
+    {
+     "target": "CAP-SHARED-ONTOLOGY-WORKFLOW",
+     "type": "requires"
+    }
+   ],
+   "route_presentation": {
+    "route_keys": [
+     "directory"
+    ],
+    "source_mounted": false,
+    "production_exposed": false,
+    "registry_body_present": false,
+    "nav_declared": true,
+    "evidence_receipt_status": "HOLD",
+    "source": "exact candidate source inventory"
+   },
+   "candidate_evidence": {
+    "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+    "status": "HOLD",
+    "reason": "No exact candidate-bound module completion receipt has been admitted; legacy implementation and local-train claims remain historical only.",
+    "paths": [
+     "docs/evidence/console/CAP-DIRECTORY-CONSOLE"
+    ],
+    "contract": {
+     "source_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "backend_binary_digest_or_build_sha": "HOLD: P1D found the healthy dev-auth backend was built before exact candidate and embeds/exposes no build SHA or binary digest.",
+     "database": "HOLD: no exact candidate database receipt admitted.",
+     "api": "HOLD: no exact candidate API receipt admitted.",
+     "browser": "HOLD: local dev-auth stack is healthy but no exact candidate browser receipt admitted.",
+     "trace_logs": "HOLD: persona matrix is declarative structural coverage (393 checks), not executed maturity evidence."
+    }
+   },
+   "benchmark": {
+    "category": "people and organization directory",
+    "comparator_sources": [
+     {
+      "source": "docs/program/benchmark-matrix/INDEX.md",
+      "observation_as_of": "2026-07-24",
+      "observation": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER; adjacent corpus is not a module-native comparator dossier.",
+      "seed_only": true
+     }
+    ],
+    "required_outcomes": "A real people and organization directory workflow is authorized, backend-wired, audited, and demonstrably useful end-to-end.",
+    "differentiated_outcomes": "Interoperates through shared object, action, workflow, search, and lineage contracts without weakening module-native workflow quality.",
+    "non_goals": "Prototype checklists, mock rows, visual resemblance alone, or historical local-train status are not delivery evidence.",
+    "verdict": "HOLD",
+    "evidence_binding": "candidate:88c57a1d519b43bc4c0e7b721c62bc248b938b38; no exact module comparison or user-story evidence admitted",
+    "native_outcomes": [
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-N1",
+      "persona_scenario": "Authorized People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "PBAC search excludes restricted people",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE: PBAC search excludes restricted people",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/native-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-N2",
+      "persona_scenario": "Authorized People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "organization placement resolves as-of",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE: organization placement resolves as-of",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/native-2.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-N3",
+      "persona_scenario": "Authorized People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "restricted fields are omitted and audited",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE: restricted fields are omitted and audited",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/native-3.json",
+      "status": "HOLD"
+     }
+    ],
+    "omni_outcomes": [
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-O1",
+      "persona_scenario": "Cross-module People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "CAP-DIRECTORY-CONSOLE omni interaction 1",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE omni measurable assertion 1: scope-safe typed object/action linkage",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/omni-1.json",
+      "status": "HOLD"
+     },
+     {
+      "id": "CAP-DIRECTORY-CONSOLE-O2",
+      "persona_scenario": "Cross-module People/team directory: live org placement, contact channels, object links, PBAC-scoped search operator",
+      "action_workflow": "CAP-DIRECTORY-CONSOLE omni interaction 2",
+      "measurable_assertion": "CAP-DIRECTORY-CONSOLE omni measurable assertion 2: auditable lineage across the module boundary",
+      "required_receipts": "docs/evidence/console/CAP-DIRECTORY-CONSOLE/omni-2.json",
+      "status": "HOLD"
+     }
+    ],
+    "independent_outcome_review": {
+     "status": "HOLD",
+     "reason": "No independent candidate-bound outcome review receipt is admitted."
+    },
+    "dossier_status": "HOLD_INSUFFICIENT_CATEGORY_DOSSIER",
+    "missing_dossier_reason": "No category-native comparator dossier exists yet for People/team directory: live org placement, contact channels, object links, PBAC-scoped search; seed references are not comparator evidence."
+   },
+   "jurisdiction_bindings": [
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-PRIVACY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-WORKFORCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-SAFETY-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-FINANCE-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-LOCATION-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    },
+    {
+     "jurisdiction_id": "JUR-KR-001",
+     "control_id": "CTRL-KR-RECORDS-001",
+     "candidate_sha": "88c57a1d519b43bc4c0e7b721c62bc248b938b38",
+     "status": "HOLD",
+     "reason": "Qualified Korean legal/control source and candidate-bound test/evidence receipt have not been admitted."
+    }
+   ]
   },
   {
    "id": "CAP-ASSET-MASTER-ACTION",
@@ -4996,35 +6868,27 @@
     "status": "HOLD_UNMAPPED"
    },
    {
-    "key": "dispatch",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "maintenance",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "field",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
-    "key": "docs",
-    "status": "HOLD_UNMAPPED"
-   },
-   {
     "key": "compliance",
     "status": "HOLD_UNMAPPED"
    },
    {
-    "key": "notif",
+    "key": "inbox",
     "status": "HOLD_UNMAPPED"
    },
    {
-    "key": "board",
+    "key": "mail",
     "status": "HOLD_UNMAPPED"
    },
    {
-    "key": "directory",
+    "key": "messenger",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "people",
+    "status": "HOLD_UNMAPPED"
+   },
+   {
+    "key": "support",
     "status": "HOLD_UNMAPPED"
    }
   ]
