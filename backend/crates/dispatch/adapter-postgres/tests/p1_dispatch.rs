@@ -739,8 +739,13 @@ async fn queue_is_branch_scoped_and_cursor_pages_are_disjoint(pool: PgPool) {
     mnt_platform_request_context::scope_org(OrgId::knl(), async move {
         let seeded = seed_dispatch_context(&pool).await;
         let second = seed_work_order(&pool, seeded.branch_id, seeded.receptionist, 2).await;
-        let store = PgDispatchStore::new(pool);
+        let other_branch = seed_branch(&pool).await;
+        let other_receptionist =
+            seed_user(&pool, "Other receptionist", "RECEPTIONIST", other_branch).await;
+        let other_branch_work_order =
+            seed_work_order(&pool, other_branch, other_receptionist, 3).await;
         let now = datetime!(2026-06-12 09:00 UTC);
+        let store = PgDispatchStore::new(pool);
         let page1 = store
             .list_dispatch_queue(ListDispatchQueueQuery {
                 branch_scope: mnt_kernel_core::BranchScope::Branches(
@@ -754,6 +759,7 @@ async fn queue_is_branch_scoped_and_cursor_pages_are_disjoint(pool: PgPool) {
             .await
             .unwrap();
         assert_eq!(page1.items.len(), 1);
+        assert_eq!(page1.stats.unassigned_count, 2);
         let cursor = page1
             .next_after
             .clone()
@@ -773,7 +779,22 @@ async fn queue_is_branch_scoped_and_cursor_pages_are_disjoint(pool: PgPool) {
             .await
             .unwrap();
         assert_eq!(page2.items.len(), 1);
+        assert_eq!(page2.stats.unassigned_count, 2);
         assert_ne!(page1.items[0].work_order_id, page2.items[0].work_order_id);
+        assert!(
+            page1
+                .items
+                .iter()
+                .chain(page2.items.iter())
+                .all(|item| item.branch_id == seeded.branch_id)
+        );
+        assert!(
+            page1
+                .items
+                .iter()
+                .chain(page2.items.iter())
+                .all(|item| item.work_order_id != other_branch_work_order)
+        );
         assert!(
             page1
                 .items
@@ -1027,6 +1048,7 @@ async fn seed_work_order(
     requested_by: UserId,
     sequence: i32,
 ) -> WorkOrderId {
+    let recorded_at = datetime!(2026-06-12 08:59 UTC);
     let customer_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO registry_customers (branch_id, name, org_id) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -1076,7 +1098,7 @@ async fn seed_work_order(
             requested_by, status, priority, symptom, created_at, updated_at, org_id
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, 'RECEIVED', 'P1',
-                'Emergency dispatch test', now(), now(), $8)
+                'Emergency dispatch test', $8, $8, $9)
         "#,
     )
     .bind(*work_order_id.as_uuid())
@@ -1086,6 +1108,7 @@ async fn seed_work_order(
     .bind(customer_id)
     .bind(site_id)
     .bind(*requested_by.as_uuid())
+    .bind(recorded_at)
     .bind(*OrgId::knl().as_uuid())
     .execute(pool)
     .await

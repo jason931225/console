@@ -8,12 +8,11 @@ import { describe, it } from "node:test";
 import { evaluateCiPreflight } from "./check-ci-preflight.mjs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", import.meta.url), "utf8");
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
 const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
 const reachabilityPreflightCommands = [
   "node --test scripts/console/route-inventory.test.mjs",
-  "node --test scripts/console/validate-console-truth-ledger.test.mjs",
-  "node --test scripts/console/plan-fanout.test.mjs",
   "tools/buck/run_test_with_postgres_env.test.sh",
   "tools/buck/test_needs_postgres.test.sh",
 ];
@@ -24,8 +23,8 @@ const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Ca
 
 `;
 
-function expectFailure(source, message) {
-  const { failures } = evaluateCiPreflight(source);
+function expectFailure(source, message, buckBuildFile = postgresWrapperBuildFile) {
+  const { failures } = evaluateCiPreflight(source, buckBuildFile);
   assert.ok(failures.some((failure) => failure.includes(message)), failures.join("\n"));
 }
 
@@ -375,20 +374,51 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
   });
 
-  it("passes the exact integration tip to every console validator and planner surface", () => {
-    for (const command of [
-      "npm run check:console-truth-ledger",
-      "node --test scripts/console/validate-console-truth-ledger.test.mjs",
-      "node --test scripts/console/plan-fanout.test.mjs",
-    ]) {
-      expectFailure(
-        workflow.replace(
-          `        env:\n          CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }}\n        run: ${command}`,
-          `        run: ${command}`,
-        ),
-        `preflight must pass CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }} to ${command}`,
-      );
-    }
+  it("requires explicit exact-M C/T derivation before every normal-PR console admission", () => {
+    expectFailure(
+      workflow.replace('          CONSOLE_AUTHORITY_TIP_SHA="$(git rev-parse "$CONSOLE_SYNTHETIC_MERGE_SHA^2")"\n', ''),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('          CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"\n', '          CONSOLE_CANDIDATE_SHA="$GITHUB_SHA"\n'),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('        if: ${{ github.event_name == \'pull_request\' }}\n        run: npm run check:console-truth-ledger', '        run: npm run check:console-truth-ledger'),
+      "exact C/T/M derivation",
+    );
+    expectFailure(
+      workflow.replace('          CONSOLE_SYNTHETIC_MERGE_SHA="$(git rev-parse "$GITHUB_SHA^{commit}")"\n', ''),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('          CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"\n', '          test "$(git rev-parse HEAD)" = "$CONSOLE_SYNTHETIC_MERGE_SHA"\n          CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"\n'),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('        run: node --test scripts/console/validate-console-truth-ledger.test.mjs', '        if: ${{ github.event_name == \'pull_request\' }}\n        run: node --test scripts/console/validate-console-truth-ledger.test.mjs'),
+      "validate-console-truth-ledger.test.mjs",
+    );
+    expectFailure(
+      workflow.replace('        run: node --test scripts/console/plan-fanout.test.mjs', '        if: ${{ github.event_name == \'pull_request\' }}\n        run: node --test scripts/console/plan-fanout.test.mjs'),
+      "plan-fanout.test.mjs",
+    );
+    expectFailure(
+      workflow.replace('      - name: Console authority-train regression\n        run: node --test scripts/console/verify-console-authority-train.test.mjs\n\n', ''),
+      "verify-console-authority-train.test.mjs",
+    );
+    expectFailure(
+      workflow.replace('        if: ${{ github.event_name == \'pull_request\' }}\n        run: node scripts/console/plan-fanout.mjs', '        run: node scripts/console/plan-fanout.mjs'),
+      "plan-fanout.mjs",
+    );
+    expectFailure(
+      workflow.replace('        run: npm run check:console-truth-ledger', '        run: CONSOLE_INTEGRATION_TIP_SHA="$CONSOLE_AUTHORITY_TIP_SHA" npm run check:console-truth-ledger'),
+      "CONSOLE_INTEGRATION_TIP_SHA",
+    );
+    expectFailure(
+      workflow.replace('        run: node scripts/console/plan-fanout.mjs --candidate "$CONSOLE_CANDIDATE_SHA" --authority-tip "$CONSOLE_AUTHORITY_TIP_SHA" --synthetic-merge "$CONSOLE_SYNTHETIC_MERGE_SHA"', '        run: node scripts/console/plan-fanout.mjs'),
+      "plan-fanout.mjs",
+    );
   });
 
   it("rejects omission and comment-only reachability regressions", () => {
@@ -520,10 +550,26 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
     expectFailure(
       workflow.replace(
+        "//tools/buck:attendance-concurrency-postgres",
         "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
-        "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution",
       ),
       "postgres-domain-reachability must run the locked PostgreSQL reachability targets",
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper dispatch-p1-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "dispatch-p1-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "dispatch-p1-postgres",\n    test = "unexpected_loader.sh",',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper attendance-concurrency-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency)"]',
+        'args = ["$(location //backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution)"]',
+      ),
     );
     expectFailure(
       workflow.replace(
@@ -531,6 +577,44 @@ ${preflightRustToolchainSetup.trimEnd()}`,
         "      - name: Unexpected Cargo test\n        run: cargo test -p mnt-support-domain\n\n      - name: Support domain unit target\n",
       ),
       "support-domain-unit must contain only the locked ordered Buck2 run steps",
+    );
+    expectFailure(
+      workflow.replace(
+        "//tools/buck:app-inline-postgres",
+        "//backend/app:mnt-app-itest-inline-postgres",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "//tools/buck:app-dev-auth-persona-guard-postgres",
+        "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper app-inline-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "app-inline-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],\n    deps = ["//backend/app:mnt-app-itest-inline-postgres"],\n    labels = ["test.integration", "resource.postgres", "needs-postgres"],',
+        'name = "app-inline-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],\n    deps = ["//backend/app:mnt-app-itest-inline-postgres"],\n    labels = ["owner.backend.app", "domain.app", "test.integration", "resource.postgres", "needs-postgres"],',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper app-dev-auth-persona-guard-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "app-dev-auth-persona-guard-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "app-dev-auth-persona-guard-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper app-dev-auth-persona-guard-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'deps = ["//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],',
+        'deps = ["//backend/app:mnt-app-itest-inline-postgres"],',
+      ),
     );
   });
 

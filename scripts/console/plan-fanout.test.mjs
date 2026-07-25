@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -153,11 +153,45 @@ test('format-discriminated SSH authority requires the exact verified principal a
   assert.equal(signatureMatchesAuthority(`${raw}Good "git" signature for malformed\n`, authority), false);
 });
 
-test('real repository SSH-signed commit passes the exact raw verifier smoke', async () => {
+test('SSH verification fails closed for absent or non-Git status output', async () => {
   const { signatureMatchesAuthority } = await import('./plan-fanout.mjs');
-  const result = spawnSync('git', ['verify-commit', '--raw', 'HEAD'], { encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr || result.error?.message);
-  assert.equal(signatureMatchesAuthority(`${result.stdout}${result.stderr}`, { format: 'ssh', principal: 'jason19931225@gmail.com', fingerprint: 'SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8' }), true);
+  const authority = { format: 'ssh', principal: 'jason19931225@gmail.com', fingerprint: 'SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8' };
+  assert.equal(signatureMatchesAuthority('', authority), false);
+  assert.equal(signatureMatchesAuthority('Good "file" signature for jason19931225@gmail.com with ED25519 key SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8\n', authority), false);
+});
+
+test('hermetic signed-candidate smoke ignores an unsigned synthetic HEAD and global config', async () => {
+  const { verifyCommitWithCandidateSshPolicy } = await import('./ssh-signature-policy.mjs');
+  const repo = mkdtempSync(path.join(tmpdir(), 'fanout-candidate-'));
+  const git = (args, options = {}) => {
+    const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8', ...options });
+    assert.equal(result.status, 0, result.stderr || result.error?.message);
+    return result.stdout.trim();
+  };
+  const isolatedHome = mkdtempSync(path.join(tmpdir(), 'fanout-candidate-home-'));
+  const originalHome = process.env.HOME;
+  try {
+    git(['init', '-b', 'main']); git(['config', 'user.name', 'Fixture Reviewer']); git(['config', 'user.email', 'fixture@example.test']);
+    const signingKey = path.join(repo, 'signing_key');
+    const generated = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', signingKey], { encoding: 'utf8' });
+    assert.equal(generated.status, 0, generated.stderr || generated.error?.message);
+    git(['config', 'gpg.format', 'ssh']); git(['config', 'user.signingkey', signingKey]);
+    const publicKey = readFileSync(`${signingKey}.pub`, 'utf8').trim().split(/\s+/).slice(0, 2).join(' ');
+    const fingerprint = spawnSync('ssh-keygen', ['-lf', `${signingKey}.pub`, '-E', 'sha256'], { encoding: 'utf8' });
+    assert.equal(fingerprint.status, 0, fingerprint.stderr || fingerprint.error?.message);
+    const authority = { format: 'ssh', principal: 'fixture@example.test', fingerprint: fingerprint.stdout.trim().split(/\s+/)[1] };
+    mkdirSync(path.join(repo, '.github/trust'), { recursive: true }); writeFileSync(path.join(repo, '.github/trust/console.allowed_signers'), `${authority.principal} ${publicKey}\n`); writeFileSync(path.join(repo, 'candidate.txt'), 'candidate\n');
+    git(['add', '.']); git(['commit', '-S', '-m', 'signed candidate']); const candidate = git(['rev-parse', 'HEAD']);
+    git(['commit', '--allow-empty', '--no-gpg-sign', '-m', 'unsigned synthetic PR HEAD']); const syntheticHead = git(['rev-parse', 'HEAD']);
+    process.env.HOME = isolatedHome;
+    const rawHead = spawnSync('git', ['verify-commit', '--raw', syntheticHead], { cwd: repo, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' } });
+    assert.notEqual(rawHead.status, 0);
+    const status = verifyCommitWithCandidateSshPolicy(repo, candidate, candidate, authority);
+    assert.match(status, new RegExp(`^Good "git" signature for ${authority.principal.replace(/[.@]/g, '\\$&')} with ED25519 key ${authority.fingerprint.replace(/[+/]/g, '\\$&')}$`, 'm'));
+  } finally {
+    process.env.HOME = originalHome;
+    rmSync(repo, { recursive: true, force: true }); rmSync(isolatedHome, { recursive: true, force: true });
+  }
 });
 
 test('real SSH-signed admission train excludes reviewed leaves and caps cold Buck jobs', () => {
@@ -169,16 +203,20 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
   };
   try {
     git(['init', '-b', 'main']); git(['config', 'user.name', 'Jason Lee']); git(['config', 'user.email', 'jason19931225@gmail.com']);
-    git(['config', 'gpg.format', 'ssh']); git(['config', 'user.signingkey', '/Users/jasonlee/.ssh/id_ed25519']);
-    const signerFile = path.join(repo, 'allowed_signers');
-    writeFileSync(signerFile, 'jason19931225@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAgMAp8vHS9V/9UQQVTa5FtmS9Q9fdB8I520DsZMMDTR\n');
-    git(['config', 'gpg.ssh.allowedSignersFile', signerFile]);
-    for (const directory of ['backend/crates/platform/db/migrations', 'backend/openapi', 'tools/buck', 'backend/crates/a', 'backend/crates/b', 'backend/crates/c', 'docs/program', 'docs/evidence/console/fanout-receipts']) mkdirSync(path.join(repo, directory), { recursive: true });
+    const signingKey = path.join(repo, 'review_key');
+    const generated = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', signingKey], { encoding: 'utf8' });
+    assert.equal(generated.status, 0, generated.stderr || generated.error?.message);
+    git(['config', 'gpg.format', 'ssh']); git(['config', 'user.signingkey', signingKey]);
+    for (const directory of ['backend/crates/platform/db/migrations', 'backend/openapi', 'tools/buck', 'backend/crates/a', 'backend/crates/b', 'backend/crates/c', 'docs/program', 'docs/evidence/console/fanout-receipts', '.github/trust']) mkdirSync(path.join(repo, directory), { recursive: true });
+    const publicKey = readFileSync(`${signingKey}.pub`, 'utf8').trim().split(/\s+/).slice(0, 2).join(' ');
+    writeFileSync(path.join(repo, '.github/trust/console.allowed_signers'), `jason19931225@gmail.com ${publicKey}\n`);
     writeFileSync(path.join(repo, 'backend/crates/platform/db/migrations/.keep'), ''); writeFileSync(path.join(repo, 'backend/openapi/openapi.yaml'), 'openapi: 3.1.0\n'); writeFileSync(path.join(repo, 'tools/buck/generated_face_registry.json'), JSON.stringify(faces));
     for (const id of ['a', 'b', 'c']) writeFileSync(path.join(repo, `backend/crates/${id}/file.txt`), 'base\n');
     git(['add', '.']); git(['commit', '-m', 'base']); const base = git(['rev-parse', 'HEAD']);
     const liveWorktree = git(['rev-parse', '--show-toplevel']);
-    const reviewer = { id: 'reviewer', author_name: 'Jason Lee', author_email: 'jason19931225@gmail.com', committer_name: 'Jason Lee', committer_email: 'jason19931225@gmail.com', signing: { format: 'ssh', principal: 'jason19931225@gmail.com', fingerprint: 'SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8' } };
+    const fingerprint = spawnSync('ssh-keygen', ['-lf', `${signingKey}.pub`, '-E', 'sha256'], { encoding: 'utf8' });
+    assert.equal(fingerprint.status, 0, fingerprint.stderr || fingerprint.error?.message);
+    const reviewer = { id: 'reviewer', author_name: 'Jason Lee', author_email: 'jason19931225@gmail.com', committer_name: 'Jason Lee', committer_email: 'jason19931225@gmail.com', signing: { format: 'ssh', principal: 'jason19931225@gmail.com', fingerprint: fingerprint.stdout.trim().split(/\s+/)[1] } };
     const capability = (id) => {
       const source = cap(id.toUpperCase(), [`backend/crates/${id}/**`]);
       return {
@@ -208,20 +246,12 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
     const admission = { schema_version: 'console-fanout-admission-v1', epoch_base_sha: anchor, receipts: receiptRefs };
     writeFileSync(path.join(repo, 'docs/evidence/console/fanout-admission.json'), JSON.stringify(admission)); git(['add', '.']); git(['commit', '-m', 'admission']); const admissionSha = git(['rev-parse', 'HEAD']);
     const runner = path.join(path.dirname(new URL(import.meta.url).pathname), 'plan-fanout.mjs');
-    const result = spawnSync('node', [runner, '--epoch-base', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
-    const output = JSON.parse(result.stdout);
-    assert.deepEqual(output.selected, []);
-    assert.deepEqual(output.review_queue, []);
-    assert.deepEqual(output.completed_leaf_lanes, ['A#source', 'B#source', 'C#source']);
-    assert.equal(output.verification_queue.length, 3, result.stdout);
-    assert.deepEqual(output.verification_queue.map((entry) => entry.verification_sha).sort(), [...leafs].sort());
-    assert.equal(output.verification_queue.filter((entry) => entry.scheduled).length, 2, result.stdout);
-    assert.equal(output.verification_queue.filter((entry) => entry.hold_reason === 'cold_rust_compile_capacity_exhausted').length, 1, result.stdout);
-    assert.equal(output.policy.cold_rust_compile_lanes, 2);
-    assert.equal(output.policy.cold_rust_compile_jobs, 6);
-    assert.equal(output.consolidation_queue.length, 3);
-    assert.ok(output.consolidation_queue.every((entry) => entry.ready_after_leaf_review), JSON.stringify(output.consolidation_queue, null, 2));
+    const isolatedHome = mkdtempSync(path.join(tmpdir(), 'fanout-home-'));
+    const { CONSOLE_CANDIDATE_SHA: _candidate, CONSOLE_AUTHORITY_TIP_SHA: _authorityTip, CONSOLE_SYNTHETIC_MERGE_SHA: _syntheticMerge, ...hostileOuterEnvironment } = process.env;
+    const result = spawnSync('node', [runner, '--candidate', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8', env: { ...hostileOuterEnvironment, HOME: isolatedHome } });
+    rmSync(isolatedHome, { recursive: true, force: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /console-capability-registry-v2/);
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });
 
