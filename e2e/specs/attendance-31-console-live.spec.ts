@@ -599,9 +599,13 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
   await substitutionDialog
     .getByLabel("이름 검색")
     .fill(eligibleCandidateName);
-  const eligibleCandidate = substitutionDialog.getByRole("listitem", {
-    name: new RegExp(eligibleCandidateName),
-  });
+  // The product renders a semantic list, but the row itself has no stable
+  // accessible name. Scope from the exact, persisted employee name that the
+  // preceding assertion already proves is visible; the scoped action remains a
+  // user-facing control rather than a test-only affordance.
+  const eligibleCandidate = substitutionDialog
+    .getByText(eligibleCandidateName, { exact: true })
+    .locator("..");
   await expect(eligibleCandidate).toBeVisible({ timeout: 15_000 });
   await eligibleCandidate.getByRole("button", { name: "배정" }).click();
   await expect(substitutionDialog).toHaveCount(0, { timeout: 15_000 });
