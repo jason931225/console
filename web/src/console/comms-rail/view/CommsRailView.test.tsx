@@ -103,26 +103,40 @@ describe("CommsRailView", () => {
     expect(screen.queryByRole("button", { name: /Operations/ })).not.toBeInTheDocument();
   });
 
-  it("opens authoritative inline detail without declaring the workspace replaced", async () => {
+  it("opens authorized mail detail without declaring the workspace replaced", async () => {
     const user = userEvent.setup();
-    const onDrill = vi.fn();
-    const { container } = render(view({ onDrill, workspacePreservedId: "overview", renderInlineDetail: (item) => <p>{`Authoritative ${item.id}`}</p> }));
-    await user.click(screen.getByRole("button", { name: /Operations/ }));
-    expect(container.querySelector('[data-comms-detail="thread-1"]')).toBeInTheDocument();
-    expect(screen.getByText("Authoritative thread-1")).toBeInTheDocument();
-    expect(onDrill).toHaveBeenCalledWith(items.messenger, items.messenger.target);
+    const onOpenMailThread = vi.fn();
+    const { container } = render(view({ onOpenMailThread, workspacePreservedId: "overview", renderInlineDetail: (item) => <p>{`Authoritative ${item.id}`}</p> }));
+    await user.click(screen.getByRole("button", { name: /Invoice review/ }));
+    expect(container.querySelector('[data-comms-detail="mail-1"]')).toBeInTheDocument();
+    expect(screen.getByText("Authoritative mail-1")).toBeInTheDocument();
+    expect(onOpenMailThread).toHaveBeenCalledWith(items.mail, items.mail.target);
     expect(container.querySelector('[data-comms-preserves-workspace="overview"]')).toBeInTheDocument();
   });
 
-  it("uses native button keyboard activation for a typed drill", async () => {
+  it("uses native button keyboard activation for an authorized notice drill", async () => {
     const user = userEvent.setup();
-    const onDrill = vi.fn();
-    render(view({ onDrill }));
+    const onOpenNotice = vi.fn();
+    render(view({ onOpenNotice }));
     const row = screen.getByRole("button", { name: /Policy notice/ });
     row.focus();
     await user.keyboard("{Enter}");
-    expect(onDrill).toHaveBeenCalledTimes(1);
+    expect(onOpenNotice).toHaveBeenCalledWith(items.notices, items.notices.target);
     expect(screen.queryByRole("region", { name: "Detail" })).not.toBeInTheDocument();
+  });
+
+  it("makes only rows with an exact source-and-target handler actionable", async () => {
+    const user = userEvent.setup();
+    const onOpenMessengerThread = vi.fn();
+    render(view({ onOpenMessengerThread }));
+
+    const messenger = screen.getByRole("button", { name: /Operations/ });
+    expect(screen.queryByRole("button", { name: /Invoice review/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Approval requested/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Policy notice/ })).not.toBeInTheDocument();
+
+    await user.click(messenger);
+    expect(onOpenMessengerThread).toHaveBeenCalledWith("thread-1");
   });
 
   function ControlledDrawer({ trigger }: { trigger: HTMLButtonElement }) {
@@ -173,4 +187,3 @@ describe("CommsRailView", () => {
     expect(messenger).not.toHaveTextContent("Invoice review");
   });
 });
-
