@@ -2163,12 +2163,27 @@ async fn backdate_promotion(owner_pool: &PgPool, id: Uuid, at: OffsetDateTime) {
         .unwrap();
 }
 
-async fn clear_leave_remaining(owner_pool: &PgPool, employee: Uuid) {
-    sqlx::query("UPDATE employees SET leave_remaining = NULL WHERE id = $1")
-        .bind(employee)
-        .execute(owner_pool)
+/// `trg_employees_leave_command_only` exempts only `mnt_leave_definer`, so the
+/// fixture drops to it the same way `seed_employee` does. Nothing in production
+/// may clear a balance this way — that is the point of the guard.
+async fn clear_leave_remaining(owner_pool: &PgPool, org: Uuid, employee: Uuid) {
+    let mut tx = owner_pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL ROLE mnt_leave_definer")
+        .execute(&mut *tx)
         .await
         .unwrap();
+    sqlx::query("SELECT set_config('app.current_org', $1, true)")
+        .bind(org.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE employees SET leave_remaining = NULL WHERE id = $1 AND org_id = $2")
+        .bind(employee)
+        .bind(org)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
 }
 
 async fn notice_payload(owner_pool: &PgPool, inbox_doc_id: Uuid) -> serde_json::Value {
@@ -2236,7 +2251,9 @@ async fn statutory_push_enforces_the_section_61_windows_as_runtime_role(owner_po
     let branch = seed_branch(&owner_pool, knl_uuid).await;
     let actor = seed_user(&owner_pool, knl_uuid).await;
     let target = seed_user(&owner_pool, knl_uuid).await;
-    let target_emp = seed_employee(&owner_pool, knl_uuid, 15.0, 2.0, 13.0).await;
+    // A half-day remainder: proves the notice trims the NUMERIC(16,6) storage
+    // scale without rounding the fraction away.
+    let target_emp = seed_employee(&owner_pool, knl_uuid, 15.5, 2.0, 13.5).await;
     link_user_to_employee_and_branch(&owner_pool, knl_uuid, target, target_emp, branch).await;
 
     let store = test_store(&rt, &command_pool);
@@ -2326,9 +2343,10 @@ async fn statutory_push_enforces_the_section_61_windows_as_runtime_role(owner_po
     assert_eq!(r1.ap_submission, ApSubmission::PendingEngineDefinition);
     backdate_promotion(&owner_pool, *r1.id.as_uuid(), r1_at).await;
 
-    // The notice states the roster's own figure, exactly, not a client float.
+    // The notice states the roster's own figure, exactly, not a client float —
+    // and not the raw `13.500000` the NUMERIC(16,6) column renders.
     let r1_payload = notice_payload(&owner_pool, r1.inbox_doc_id).await;
-    assert_eq!(r1_payload["unused_days"], serde_json::json!("13.00"));
+    assert_eq!(r1_payload["unused_days"], serde_json::json!("13.5"));
     assert_eq!(
         r1_payload["legal_basis"],
         serde_json::json!("근로기준법 제61조제1항 제1호")
@@ -2484,7 +2502,7 @@ async fn statutory_push_enforces_the_section_61_windows_as_runtime_role(owner_po
 
     // §61①1 requires the notice to state the unused-day count. An employee the
     // roster has not established one for gets a refusal, never a printed zero.
-    clear_leave_remaining(&owner_pool, fresh_emp).await;
+    clear_leave_remaining(&owner_pool, knl_uuid, fresh_emp).await;
     let unknown_days = push(
         PromotionKind::Promotion,
         1,

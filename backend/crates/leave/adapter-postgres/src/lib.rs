@@ -1303,7 +1303,10 @@ impl PgLeaveStore {
     }
 
     /// The employee's 미사용 연차 일수, exactly as the roster records it
-    /// (`NUMERIC(10,2)` rendered as text — never a float on a legal notice).
+    /// (`employees.leave_remaining NUMERIC(16,6)` since migration 0166, rendered
+    /// as text — never a float on a legal notice). `trim_scale` drops the storage
+    /// scale's trailing zeros without changing the value, so the notice served to
+    /// a worker reads `13일` / `13.5일`, not `13.000000일`.
     /// Doubles as the target-exists check: a missing employee is `not_found`,
     /// an employee whose roster figure was never established is a conflict, and
     /// neither ever becomes a fabricated zero.
@@ -1315,7 +1318,7 @@ impl PgLeaveStore {
         let row = with_org_conn::<_, _, PgLeaveError>(&self.pool, org, move |tx| {
             Box::pin(async move {
                 Ok(sqlx::query_scalar::<_, Option<String>>(
-                    "SELECT leave_remaining::text FROM employees WHERE id = $1",
+                    "SELECT trim_scale(leave_remaining)::text FROM employees WHERE id = $1",
                 )
                 .bind(target_employee_id)
                 .fetch_optional(tx.as_mut())
@@ -1990,7 +1993,7 @@ mod statutory_notice_tests {
         let (title, body) = notice_body(
             &command(PromotionKind::Refusal, 2, Vec::new()),
             2,
-            "13.00",
+            "13.5",
             &designated,
         );
         assert_eq!(title, "노무수령거부 통지");
@@ -2011,7 +2014,7 @@ mod statutory_notice_tests {
         let (title, body) = notice_body(
             &command(PromotionKind::Promotion, 2, designated.clone()),
             2,
-            "13.00",
+            "13.5",
             &designated,
         );
         assert_eq!(title, "연차 사용 촉진 통지 (2차 사용 시기 지정)");
@@ -2020,7 +2023,7 @@ mod statutory_notice_tests {
                 .to_string()
                 .contains("2026-12-23, 2026-12-24")
         );
-        assert_eq!(body["unused_days"], serde_json::json!("13.00"));
+        assert_eq!(body["unused_days"], serde_json::json!("13.5"));
     }
 
     #[test]
@@ -2028,12 +2031,12 @@ mod statutory_notice_tests {
         let (title, body) = notice_body(
             &command(PromotionKind::Promotion, 1, Vec::new()),
             1,
-            "13.00",
+            "13.5",
             &[],
         );
         assert_eq!(title, "연차 사용 촉진 통지 (1차 촉구)");
         let text = body["paragraphs"].to_string();
-        assert!(text.contains("13.00일"), "{text}");
+        assert!(text.contains("13.5일"), "{text}");
         assert!(text.contains("10일 이내"), "{text}");
         assert!(text.contains("2026-12-31"), "{text}");
     }
@@ -2046,7 +2049,7 @@ mod statutory_notice_tests {
         let (_, body) = notice_body(
             &command(PromotionKind::Promotion, 2, designated.clone()),
             2,
-            "13.00",
+            "13.5",
             &designated,
         );
         assert_eq!(recorded_designated_dates(&body).unwrap(), designated);
