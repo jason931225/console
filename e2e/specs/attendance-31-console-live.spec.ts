@@ -550,20 +550,44 @@ function isManagerAttendanceEndpoint(pathname: string): boolean {
   return isAttendanceScope(pathname) && !isMemberAttendanceEndpoint(pathname);
 }
 
+const MEMBER_ATTENDANCE_DIAGNOSTIC_CAPACITY = 24;
+
+type MemberAttendanceEvidenceCheckpoint = {
+  successfulResponseCounts: ReadonlyMap<MemberAttendanceEndpoint, number>;
+  managerRequestCount: number;
+  attendance403Count: number;
+};
+
+function pushSanitizedDiagnostic<T>(ring: T[], observation: T): void {
+  if (ring.length === MEMBER_ATTENDANCE_DIAGNOSTIC_CAPACITY) ring.shift();
+  ring.push(observation);
+}
+
 /**
- * Captures only metadata that is safe to surface in assertion diagnostics. In
- * particular this never retains a raw URL, request headers, bearer token,
- * query value, or request/response body.
+ * Captures only fixed-capacity metadata that is safe to surface in assertion
+ * diagnostics. In particular this never retains a raw URL, request headers,
+ * bearer token, query value, or request/response body. Monotonic counters are
+ * deliberately separate from the diagnostic rings, so evidence cannot be
+ * evicted before a phase assertion consumes it.
  */
 function attachMemberAttendanceResponseEvidence(page: Page) {
-  const responses: SanitizedHttpObservation[] = [];
-  const managerRequests: SanitizedRequestObservation[] = [];
-  const attendance403s: SanitizedHttpObservation[] = [];
+  const responseDiagnostics: SanitizedHttpObservation[] = [];
+  const managerRequestDiagnostics: SanitizedRequestObservation[] = [];
+  const attendance403Diagnostics: SanitizedHttpObservation[] = [];
+  const successfulResponseCounts = new Map<MemberAttendanceEndpoint, number>(
+    MEMBER_ATTENDANCE_ENDPOINTS.map((pathname) => [pathname, 0]),
+  );
+  let managerRequestCount = 0;
+  let attendance403Count = 0;
 
   const onRequest = (request: Request) => {
     const pathname = new URL(request.url()).pathname;
     if (!isManagerAttendanceEndpoint(pathname)) return;
-    managerRequests.push({ method: request.method(), pathname });
+    managerRequestCount += 1;
+    pushSanitizedDiagnostic(managerRequestDiagnostics, {
+      method: request.method(),
+      pathname,
+    });
   };
   const onResponse = (response: Response) => {
     const request = response.request();
@@ -574,54 +598,64 @@ function attachMemberAttendanceResponseEvidence(page: Page) {
       pathname,
       status: response.status(),
     };
-    if (isMemberAttendanceEndpoint(pathname)) responses.push(observation);
-    if (observation.status === 403) attendance403s.push(observation);
+    if (isMemberAttendanceEndpoint(pathname)) {
+      pushSanitizedDiagnostic(responseDiagnostics, observation);
+      if (observation.method === "GET" && observation.status === 200) {
+        successfulResponseCounts.set(
+          pathname,
+          (successfulResponseCounts.get(pathname) ?? 0) + 1,
+        );
+      }
+    }
+    if (observation.status === 403) {
+      attendance403Count += 1;
+      pushSanitizedDiagnostic(attendance403Diagnostics, observation);
+    }
   };
 
   page.on("request", onRequest);
   page.on("response", onResponse);
 
-  const bounded = <T>(observations: readonly T[]) => observations.slice(-24);
   const diagnostics = () => JSON.stringify({
-    member_responses: bounded(responses),
-    manager_requests: bounded(managerRequests),
-    attendance_403s: bounded(attendance403s),
+    member_responses: responseDiagnostics,
+    manager_requests: managerRequestDiagnostics,
+    attendance_403s: attendance403Diagnostics,
   });
-  const checkpoint = () => ({
-    responseCount: responses.length,
-    managerRequestCount: managerRequests.length,
-    attendance403Count: attendance403s.length,
+  const checkpoint = (): MemberAttendanceEvidenceCheckpoint => ({
+    successfulResponseCounts: new Map(successfulResponseCounts),
+    managerRequestCount,
+    attendance403Count,
   });
   const assertPrincipalBoundLoad = (
     phase: string,
-    since: ReturnType<typeof checkpoint>,
+    since: MemberAttendanceEvidenceCheckpoint,
   ) => {
-    const phaseResponses = responses.slice(since.responseCount);
     for (const pathname of MEMBER_ATTENDANCE_ENDPOINTS) {
       expect(
-        phaseResponses,
+        (successfulResponseCounts.get(pathname) ?? 0) -
+          (since.successfulResponseCounts.get(pathname) ?? 0),
         `${phase} must receive GET 200 from ${pathname}; sanitized evidence: ${diagnostics()}`,
-      ).toContainEqual({ method: "GET", pathname, status: 200 });
+      ).toBeGreaterThan(0);
     }
     expect(
-      managerRequests.slice(since.managerRequestCount),
+      managerRequestCount - since.managerRequestCount,
       `${phase} must not request manager attendance endpoints; sanitized evidence: ${diagnostics()}`,
-    ).toEqual([]);
+    ).toBe(0);
     expect(
-      attendance403s.slice(since.attendance403Count),
+      attendance403Count - since.attendance403Count,
       `${phase} must not receive 403 in attendance/self-service scope; sanitized evidence: ${diagnostics()}`,
-    ).toEqual([]);
+    ).toBe(0);
   };
 
   const assertNoManagerAttendanceOr403s = () => {
     expect(
-      managerRequests,
+      managerRequestCount,
       `MEMBER story must not request manager attendance endpoints; sanitized evidence: ${diagnostics()}`,
-    ).toEqual([]);
+    ).toBe(0);
     expect(
-      attendance403s,
+      attendance403Count,
       `MEMBER story must not receive 403 in attendance/self-service scope; sanitized evidence: ${diagnostics()}`,
-    ).toEqual([]);
+    ).toBe(0);
   };
 
   return {
