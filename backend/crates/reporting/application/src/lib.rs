@@ -99,6 +99,18 @@ impl AnalyticsFactBinding {
                 "analytics fact binding scope does not match its vertical",
             ));
         }
+        if let AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Branch(branch_id)) =
+            resolved_scope
+        {
+            if !authorized_branch_scope.allows(branch_id) {
+                return Err(KernelError::forbidden(
+                    "analytics fact binding branch is outside the authorized scope",
+                ));
+            }
+        }
+        // Region membership is not represented by `BranchScope`; adapters must
+        // resolve a region to its branches and verify that membership before
+        // issuing a region capability. Integration tests must cover that check.
         Ok(Self {
             vertical,
             resolved_scope,
@@ -722,6 +734,21 @@ mod analytics_contract_tests {
         .unwrap();
         assert_ne!(issued_for_a, attempted_for_b);
         assert!(!issued_for_a.authorized_branch_scope().allows(branch_b));
+    }
+
+    #[test]
+    fn fact_binding_rejects_branch_outside_authorized_scope() {
+        let branch_a = mnt_kernel_core::BranchId::new();
+        let branch_b = mnt_kernel_core::BranchId::new();
+        assert!(
+            AnalyticsFactBinding::new(
+                AnalyticsVertical::Dashboard,
+                AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Branch(branch_a)),
+                BranchScope::single(branch_b),
+                AnalyticsFactQueryIdentity::new("dashboard-july-branch-a").unwrap(),
+            )
+            .is_err()
+        );
     }
 
     #[test]
