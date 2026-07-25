@@ -51,7 +51,7 @@ test("every compliance catalog operation documents its JSON internal-error respo
   const catalogEnd = openapi.indexOf("  /api/v1/location-consent/status:", catalogStart);
   const catalog = openapi.slice(catalogStart, catalogEnd);
   const operationCount = (catalog.match(/^    (get|post):$/gm) ?? []).length;
-  assert.equal(operationCount, 12);
+  assert.equal(operationCount, 13);
   assert.equal(
     (catalog.match(/'500': \{ \$ref: '#\/components\/responses\/InternalServerError' \}/g) ?? []).length,
     operationCount,
@@ -68,4 +68,20 @@ test("omitted regulation links remain optional in the generated TypeScript reque
     typescript,
     /regulation_links\?: components\["schemas"\]\["RegulationLinkRequest"\]\[\];/,
   );
+});
+
+
+test("evidence acceptance is a typed no-body lifecycle operation with truthful failures", () => {
+  const path = "  /api/v1/compliance/evidence-bindings/{id}/accept:\n";
+  const start = openapi.indexOf(path);
+  assert.notEqual(start, -1, "acceptance path is documented");
+  const end = openapi.indexOf("  /api/v1/location-consent/status:\n", start);
+  const operation = openapi.slice(start, end);
+  assert.match(operation, /operationId: acceptComplianceEvidenceBinding/);
+  assert.match(operation, /name: id, in: path, required: true, schema: \{ \$ref: '#\/components\/schemas\/Uuid' \}/);
+  assert.doesNotMatch(operation, /requestBody:/);
+  for (const status of ["200", "401", "403", "404", "409", "422", "500", "503"]) {
+    assert.match(operation, new RegExp(`'${status}':`));
+  }
+  assert.match(typescript, /acceptComplianceEvidenceBinding:/);
 });

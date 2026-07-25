@@ -1,17 +1,17 @@
 //! REST API for Location Information Act consent controls.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use mnt_compliance_adapter_postgres::{PgComplianceError, PgComplianceStore};
 use mnt_compliance_application::{
-    ArrivalEventPage, ArrivalEventQuery, AuditStreamPage, AuditStreamQuery, AuditStreamReadKind,
-    CEO_COVERT_AUDIT_STREAM_KEY, ComplianceControlQuery, ComplianceFrameworkQuery,
-    ComplianceObligationQuery, ConsentTransitionCommand, ConsentTransitionKind,
-    CreateComplianceControlCommand, CreateComplianceFrameworkCommand,
+    AcceptEvidenceBindingCommand, ArrivalEventPage, ArrivalEventQuery, AuditStreamPage,
+    AuditStreamQuery, AuditStreamReadKind, CEO_COVERT_AUDIT_STREAM_KEY, ComplianceControlQuery,
+    ComplianceFrameworkQuery, ComplianceObligationQuery, ConsentTransitionCommand,
+    ConsentTransitionKind, CreateComplianceControlCommand, CreateComplianceFrameworkCommand,
     CreateComplianceObligationCommand, CreateEvidenceBindingCommand, CreateRegulationImpactCommand,
     EvidenceBindingQuery, LinkControlObligationCommand, LinkObligationRegulationCommand,
     LocationConsentLedgerEntry, LocationConsentLedgerPage, LocationConsentLedgerQuery, PageRequest,
@@ -44,6 +44,7 @@ pub const COMPLIANCE_ROUTE_PATHS: &[&str] = &[
     "/api/v1/compliance/framework-controls",
     "/api/v1/compliance/control-obligation-coverage",
     "/api/v1/compliance/evidence-bindings",
+    "/api/v1/compliance/evidence-bindings/{id}/accept",
     "/api/v1/location-consent/status",
     "/api/v1/location-consent/grant",
     "/api/v1/location-consent/suspend",
@@ -104,6 +105,10 @@ pub fn router(state: ComplianceRestState) -> Router {
         .route(
             "/api/v1/compliance/evidence-bindings",
             get(list_evidence_bindings).post(create_evidence_binding),
+        )
+        .route(
+            "/api/v1/compliance/evidence-bindings/{id}/accept",
+            post(accept_evidence_binding),
         )
         .route("/api/v1/location-consent/status", get(get_status))
         .route("/api/v1/location-consent/grant", post(grant_consent))
@@ -367,6 +372,16 @@ fn require_compliance_manage(principal: &Principal) -> Result<(), RestError> {
 
 fn require_compliance_evidence_link(principal: &Principal) -> Result<(), RestError> {
     require_org_catalog_feature(principal, Feature::ComplianceEvidenceLink)
+}
+
+fn require_evidence_link_with_read(principal: &Principal) -> Result<(), RestError> {
+    require_compliance_read(principal)?;
+    require_compliance_evidence_link(principal)
+}
+
+fn require_evidence_accept_with_read(principal: &Principal) -> Result<(), RestError> {
+    require_compliance_read(principal)?;
+    require_compliance_manage(principal)
 }
 
 fn require_org_catalog_feature(principal: &Principal, feature: Feature) -> Result<(), RestError> {
@@ -733,13 +748,41 @@ async fn list_evidence_bindings(
     Ok(Json(result))
 }
 
+/// Accept a proposed evidence binding. This is an explicit lifecycle action,
+/// not a generic catalog update: the binding's evidence identity/provenance
+/// stays immutable and the adapter records the audited status edge atomically.
+async fn accept_evidence_binding(
+    State(state): State<ComplianceRestState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<mnt_compliance_domain::EvidenceBinding>, RestError> {
+    let principal = principal_from_headers(&state, &headers).await?;
+    require_evidence_accept_with_read(&principal)?;
+    let id = id.parse().map_err(|_| {
+        RestError::from_kernel(KernelError::validation(
+            "evidence binding id must be a UUID",
+        ))
+    })?;
+    let result = state
+        .store
+        .accept_evidence_binding(AcceptEvidenceBindingCommand {
+            actor: principal.user_id,
+            id,
+            trace: current_trace_context(),
+            occurred_at: time::OffsetDateTime::now_utc(),
+        })
+        .await
+        .map_err(RestError::from_store)?;
+    Ok(Json(result))
+}
+
 async fn create_evidence_binding(
     State(state): State<ComplianceRestState>,
     headers: HeaderMap,
     Json(body): Json<CreateEvidenceBindingRequest>,
 ) -> Result<Json<mnt_compliance_domain::EvidenceBinding>, RestError> {
     let principal = principal_from_headers(&state, &headers).await?;
-    require_compliance_evidence_link(&principal)?;
+    require_evidence_link_with_read(&principal)?;
     let result = state
         .store
         .create_evidence_binding(CreateEvidenceBindingCommand {
@@ -1356,7 +1399,66 @@ impl IntoResponse for RestError {
 
 #[cfg(test)]
 mod tests {
-    use super::LocationPingRequest;
+    use super::{
+        LocationPingRequest, RestError, require_evidence_accept_with_read,
+        require_evidence_link_with_read,
+    };
+    use axum::{http::StatusCode, response::IntoResponse};
+    use mnt_kernel_core::{BranchScope, KernelError, OrgId, UserId};
+    use mnt_platform_authz::{EffectiveFeatureGrant, Feature, PermissionLevel, Principal};
+    use std::collections::BTreeSet;
+
+    fn principal_with(feature: Feature) -> Principal {
+        Principal::new(
+            UserId::new(),
+            OrgId::knl(),
+            BTreeSet::new(),
+            BranchScope::All,
+        )
+        .with_effective_feature_grants(vec![EffectiveFeatureGrant::new(
+            feature,
+            PermissionLevel::Allow,
+            BranchScope::All,
+        )])
+    }
+
+    #[test]
+    fn evidence_link_without_compliance_read_is_forbidden() {
+        let error =
+            require_evidence_link_with_read(&principal_with(Feature::ComplianceEvidenceLink))
+                .expect_err("an action grant cannot imply compliance catalog read");
+        assert_eq!(error.into_response().status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn evidence_accept_without_compliance_read_is_forbidden() {
+        let error =
+            require_evidence_accept_with_read(&principal_with(Feature::ComplianceDomainManage))
+                .expect_err("an action grant cannot imply compliance catalog read");
+        assert_eq!(error.into_response().status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn evidence_acceptance_error_mapping_preserves_forbidden_conflict_and_unavailable_truth() {
+        assert_eq!(
+            RestError::from_kernel(KernelError::forbidden("not allowed"))
+                .into_response()
+                .status(),
+            StatusCode::FORBIDDEN,
+        );
+        assert_eq!(
+            RestError::from_kernel(KernelError::conflict("already accepted"))
+                .into_response()
+                .status(),
+            StatusCode::CONFLICT,
+        );
+        assert_eq!(
+            RestError::unavailable("auth dependency unavailable")
+                .into_response()
+                .status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+        );
+    }
 
     #[test]
     fn location_ping_accepts_fractional_rfc3339_timestamp() {

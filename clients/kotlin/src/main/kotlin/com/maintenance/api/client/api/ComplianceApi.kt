@@ -86,6 +86,79 @@ open class ComplianceApi(basePath: kotlin.String = defaultBasePath, client: Call
     }
 
     /**
+     * POST /api/v1/compliance/evidence-bindings/{id}/accept
+     * Accept a proposed compliance evidence binding
+     * Applies the immutable PROPOSED-to-ACCEPTED lifecycle action. The server preserves evidence identity and provenance and records an audit snapshot.
+     * @param id
+     * @return EvidenceBinding
+     * @throws IllegalStateException If the request is not correctly configured
+     * @throws IOException Rethrows the OkHttp execute method exception
+     * @throws UnsupportedOperationException If the API returns an informational or redirection response
+     * @throws ClientException If the API returns a client error response
+     * @throws ServerException If the API returns a server error response
+     */
+    @Suppress("UNCHECKED_CAST")
+    @Throws(IllegalStateException::class, IOException::class, UnsupportedOperationException::class, ClientException::class, ServerException::class)
+    suspend fun acceptComplianceEvidenceBinding(id: java.util.UUID) : EvidenceBinding = withContext(Dispatchers.IO) {
+        val localVarResponse = acceptComplianceEvidenceBindingWithHttpInfo(id = id)
+
+        return@withContext when (localVarResponse.responseType) {
+            ResponseType.Success -> (localVarResponse as Success<*>).data as EvidenceBinding
+            ResponseType.Informational -> throw UnsupportedOperationException("Client does not support Informational responses.")
+            ResponseType.Redirection -> throw UnsupportedOperationException("Client does not support Redirection responses.")
+            ResponseType.ClientError -> {
+                val localVarError = localVarResponse as ClientError<*>
+                throw ClientException("Client error : ${localVarError.statusCode} ${localVarError.message.orEmpty()}", localVarError.statusCode, localVarResponse)
+            }
+            ResponseType.ServerError -> {
+                val localVarError = localVarResponse as ServerError<*>
+                throw ServerException("Server error : ${localVarError.statusCode} ${localVarError.message.orEmpty()} ${localVarError.body}", localVarError.statusCode, localVarResponse)
+            }
+        }
+    }
+
+    /**
+     * POST /api/v1/compliance/evidence-bindings/{id}/accept
+     * Accept a proposed compliance evidence binding
+     * Applies the immutable PROPOSED-to-ACCEPTED lifecycle action. The server preserves evidence identity and provenance and records an audit snapshot.
+     * @param id
+     * @return ApiResponse<EvidenceBinding?>
+     * @throws IllegalStateException If the request is not correctly configured
+     * @throws IOException Rethrows the OkHttp execute method exception
+     */
+    @Suppress("UNCHECKED_CAST")
+    @Throws(IllegalStateException::class, IOException::class)
+    suspend fun acceptComplianceEvidenceBindingWithHttpInfo(id: java.util.UUID) : ApiResponse<EvidenceBinding?> = withContext(Dispatchers.IO) {
+        val localVariableConfig = acceptComplianceEvidenceBindingRequestConfig(id = id)
+
+        return@withContext request<Unit, EvidenceBinding>(
+            localVariableConfig
+        )
+    }
+
+    /**
+     * To obtain the request config of the operation acceptComplianceEvidenceBinding
+     *
+     * @param id
+     * @return RequestConfig
+     */
+    fun acceptComplianceEvidenceBindingRequestConfig(id: java.util.UUID) : RequestConfig<Unit> {
+        val localVariableBody = null
+        val localVariableQuery: MultiValueMap = mutableMapOf()
+        val localVariableHeaders: MutableMap<String, String> = mutableMapOf()
+        localVariableHeaders["Accept"] = "application/json"
+
+        return RequestConfig(
+            method = RequestMethod.POST,
+            path = "/api/v1/compliance/evidence-bindings/{id}/accept".replace("{"+"id"+"}", encodeURIComponent(id.toString())),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = true,
+            body = localVariableBody
+        )
+    }
+
+    /**
      * POST /api/v1/compliance/evidence-bindings
      * Create an audited evidence binding
      *

@@ -84,13 +84,16 @@ export interface ConsoleNavGroup {
  */
 export const MOUNTED_SCREEN_KEYS = [
   "overview",
+  "attendance",
   "mywork",
   "inbox",
   "leave",
   "benefit",
   "people",
   "sales",
+  "consulting",
   "finance",
+  "inventory",
   "asset",
   "appr",
   "policy",
@@ -105,19 +108,31 @@ export const MOUNTED_SCREEN_KEYS = [
   "scheduled",
   "messenger",
   "mail",
+  "logistics",
+  "equipment",
+  "payroll",
+  "recruit",
+  "orgchart",
+  "evaluation",
+  "maintenance",
+  "field",
+  "notif",
+  "board",
+  "directory",
 ] as const;
 
 export type MountedScreenKey = (typeof MOUNTED_SCREEN_KEYS)[number];
 
 /**
- * ADR-0025 evidence-approved production exposure manifest.
+ * Production exposure manifest.
  *
  * Bodies in `MOUNTED_SCREEN_KEYS` remain development inventory unless named
- * here. Sales is the sole reviewed vertical slice: its authenticated route is
- * still gated by the server-owned rollout decision and its management grant.
- * Every other body remains DARK until separately approved.
+ * here. The exact candidate has no independently verified production-exposure
+ * authority, so every mounted body remains DARK. A future vertical may be added
+ * only with its own completed evidence gate; server rollout alone cannot expose
+ * an inventory body.
  */
-export const EXPOSED_SCREEN_KEYS: readonly MountedScreenKey[] = ["sales"];
+export const EXPOSED_SCREEN_KEYS: readonly MountedScreenKey[] = [];
 
 const MOUNTED_SCREENS: ReadonlySet<string> = new Set(MOUNTED_SCREEN_KEYS);
 
@@ -196,6 +211,9 @@ export const NAV_GROUPS: readonly ConsoleNavGroup[] = [
         icon: "calc",
         gate: g(DIRECTORY_ROLES, [FEATURES.EMPLOYEE_DIRECTORY_READ]),
       },
+      // Personal attendance self-service is available to every authenticated
+      // principal in the mounted inventory. Manager workspace access remains
+      // server-authorized and separately gated inside the screen.
       { screen: "attendance", labelKey: "console.shell.nav.attendance", icon: "clock" },
       { screen: "leave", labelKey: "console.shell.nav.leave", icon: "calCheck" },
       { screen: "benefit", labelKey: "console.shell.nav.benefit", icon: "heart", gate: g(MANAGEMENT_ROLES, [FEATURES.BENEFIT_CATALOG_READ]) },
@@ -232,6 +250,28 @@ export const NAV_GROUPS: readonly ConsoleNavGroup[] = [
         labelKey: "console.shell.nav.field",
         icon: "mapPin",
         gate: g(OPERATIONAL_ROLES, [FEATURES.WORK_ORDER_READ_ALL]),
+      },
+      {
+        screen: "logistics",
+        labelKey: "console.shell.nav.logistics",
+        icon: "truck",
+        // grant-only PBAC module: built-in role matrix denies every logistics
+        // feature, so the gate lists features only — roles cannot widen it.
+        gate: g(undefined, [
+          "logistics_receive",
+          "logistics_putaway",
+          "logistics_release",
+          "logistics_pick_pack",
+          "logistics_dispatch",
+          "logistics_pod",
+          "logistics_settle",
+        ]),
+      },
+      {
+        screen: "equipment",
+        labelKey: "console.shell.nav.equipment",
+        icon: "box",
+        gate: g(OPERATIONAL_ROLES, ["equipment_3r_observe"]),
       },
     ],
   },

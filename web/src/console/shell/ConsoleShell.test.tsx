@@ -2,10 +2,13 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import { useEffect, type ReactNode } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router";
+import type { ConsoleAuthz, ScopeOption } from "./authz";
 
 import { AuthTestProvider } from "../../test/AuthTestProvider";
+import { useAuth } from "../../context/auth";
 import type { AuthSession } from "../../context/auth";
 import type { ConsoleApiClient } from "../../api/client";
 import { ConsoleApp } from "../ConsoleApp";
@@ -14,6 +17,7 @@ import { Sidebar } from "./Sidebar";
 import type { ThemeMode } from "./theme";
 
 const markConsoleRoute = vi.fn<(screen: string) => void>();
+const routerLocations: string[] = [];
 const server = setupServer(
   http.get("*/api/v1/ontology/object-types", () => HttpResponse.json([])),
   http.get("*/api/v1/workflow-studio/definitions", () => HttpResponse.json({ items: [] })),
@@ -36,12 +40,41 @@ vi.mock("../rum/rum", () => ({
   },
 }));
 
+// Shell chrome is synchronous presentation over the session's deny-by-omission
+// grants. Keep it independent from the async authz transport, which is covered
+// by authz.ts tests and otherwise leaves a one-render empty shell in jsdom.
+vi.mock("./authz", () => {
+  return {
+    UNION_SCOPE_ID: "__union__",
+    useConsoleScopes: (unionLabel: string) => ({
+      options: [{ id: "__union__", label: unionLabel, memberIds: [], isUnion: true }] satisfies ScopeOption[],
+      loading: false,
+    }),
+    ConsoleAuthzProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+    useConsoleAuthz: () => {
+      const { session } = useAuth();
+      return {
+        grants: {
+          roles: session?.roles ?? [],
+          featureGrants: session?.feature_grants ?? [],
+        },
+        source: "jwt" as const,
+        ready: true,
+      } satisfies ConsoleAuthz;
+    },
+  };
+});
+
 function RouterProbe() {
   const location = useLocation();
   const navigate = useNavigate();
+  const renderedLocation = `${location.pathname}${location.search}${location.hash}`;
+  useEffect(() => {
+    routerLocations.push(renderedLocation);
+  }, [renderedLocation]);
   return (
     <>
-      <output data-router-location>{`${location.pathname}${location.search}${location.hash}`}</output>
+      <output data-router-location>{renderedLocation}</output>
       <button type="button" onClick={() => void navigate(-1)}>
         history back
       </button>
@@ -93,6 +126,7 @@ function stubViewport(width: number) {
 describe("ConsoleShell chrome", () => {
   beforeEach(() => {
     markConsoleRoute.mockClear();
+    routerLocations.length = 0;
   });
 
   afterEach(() => {
@@ -113,6 +147,22 @@ describe("ConsoleShell chrome", () => {
     expect(screen.getByRole("complementary", { name: "커뮤니케이션" })).toBeInTheDocument();
     // screen body slot
     expect(screen.getByLabelText("화면 본문")).toBeInTheDocument();
+  });
+
+  it("logs out through the account menu and preserves the exact console destination for local role switching", async () => {
+    const user = userEvent.setup();
+    renderConsole(ADMIN, ["/console/attendance?tab=team#today"]);
+
+    await user.click(screen.getByRole("button", { name: "사용자 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "다른 계정으로 전환" }),
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-router-location]")).toHaveTextContent(
+        "/login?next=%2Fconsole%2Fattendance%3Ftab%3Dteam%23today",
+      );
+    });
   });
 
   it("identity chip renders person + team · role from the self-profile (never a raw dev label)", async () => {
@@ -192,6 +242,20 @@ describe("ConsoleShell chrome", () => {
     await userEvent.click(screen.getByRole("button", { name: "통합 개요" }));
     const rail = screen.getByRole("complementary", { name: "커뮤니케이션" });
     expect(rail).toHaveAttribute("data-cshell-rail-open", "true");
+  });
+
+  it("suppresses the shell comms rail on the object explorer so its governed card is the only right rail", async () => {
+    renderConsole(ADMIN, ["/console/objectExplorer"]);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("화면 본문")).toHaveAttribute(
+        "data-cshell-screen",
+        "objectExplorer",
+      );
+    });
+    expect(
+      screen.queryByRole("complementary", { name: "커뮤니케이션" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens a server-linked messenger mention in the canonical registered screen URL", async () => {
@@ -344,11 +408,11 @@ describe("ConsoleShell chrome", () => {
       expect(document.querySelector("[data-router-location]")?.textContent).toBe(
         "/console/scheduled?keep=1#anchor",
       );
-      expect(screen.getByRole("tab", { name: "예약" })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
+      expect(screen.getByRole("heading", { name: "예약 작업" })).toBeVisible();
     });
+    expect(routerLocations).not.toContain(
+      "/console/scheduled?keep=1&tab=monitors#anchor",
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "워크플로 스튜디오" }));
     await waitFor(() => {
@@ -615,5 +679,33 @@ describe("Sidebar badges", () => {
       <Sidebar {...base} collapsed badges={{ overview: { count: 150, tone: "neutral" } }} />,
     );
     expect(screen.queryByText("99+")).not.toBeInTheDocument();
+  });
+
+  it("uses the people screen alias without a missing-i18n warning", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(
+      <Sidebar
+        {...base}
+        groups={[
+          {
+            labelKey: "console.shell.nav.groups.hr",
+            labelId: "hr",
+            items: [
+              {
+                screen: "people",
+                labelKey: "console.shell.nav.hr",
+                icon: "users",
+              },
+            ],
+          },
+        ]}
+        activeScreen="people"
+        collapsed={false}
+        badges={{}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "인사 관리" })).toBeInTheDocument();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
