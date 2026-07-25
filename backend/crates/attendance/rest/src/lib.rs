@@ -114,7 +114,6 @@ impl AttendanceRestState {
         Self { store, jwt }
     }
 }
-#[must_use]
 pub fn router(state: AttendanceRestState) -> Router {
     let verifier = state.jwt.clone();
     let pool = state.store.pool().clone();

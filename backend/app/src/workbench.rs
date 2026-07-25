@@ -73,7 +73,6 @@ impl WorkbenchState {
 
 /// Router is wrapped in the same verified request-context layer as the native
 /// source routes, so a missing/invalid session is rejected before composition.
-#[must_use]
 pub fn router(state: WorkbenchState) -> Router {
     let verifier = state.jwt_verifier.clone();
     let pool = state.pool.clone();
