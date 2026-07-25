@@ -1208,6 +1208,7 @@ function hasDetailLazyControlScroll(files) {
     && /\.scrollDismissesKeyboard\s*\(\s*\.immediately\s*\)/.test(detailView)
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailStartWorkButton\]\s*\)/g) ?? []).length === 1
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailSubmitReportButton\]\s*\)/g) ?? []).length === 2
+    && /scrollToElement\s*\(\s*app\.staticTexts\[KO\.reportSuccessMessage\]\s*,\s*in:\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]\s*,\s*topSentinel:\s*app\.buttons\[AID\.detailSubmitReportButton\]\s*,\s*timeout:\s*15\s*\)/.test(critical)
     && (camera.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailCaptureEvidenceButton\]\s*\)/g) ?? []).length === 1;
 }
 

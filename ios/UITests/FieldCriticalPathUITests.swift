@@ -133,7 +133,15 @@ final class FieldCriticalPathUITests: FieldUITestCase {
         submit.tap()
 
         XCTAssertNotNil(
-            scrollToDetailElement(app.staticTexts[KO.reportSuccessMessage], timeout: 15),
+            scrollToElement(
+                app.staticTexts[KO.reportSuccessMessage],
+                in: app.descendants(matching: .any)[AID.detailView],
+                // The response is inserted immediately after the report controls.
+                // Preserve that local scroll position instead of resetting the
+                // full Form to its first section before searching forward.
+                topSentinel: app.buttons[AID.detailSubmitReportButton],
+                timeout: 15
+            ),
             "Submitting the isolated report fixture must prove the live API success response."
         )
         XCTAssertNotNil(

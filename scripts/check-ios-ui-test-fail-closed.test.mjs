@@ -878,6 +878,12 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/UITests/FieldCriticalPathUITests.swift": validFiles["ios/UITests/FieldCriticalPathUITests.swift"].replace("scrollToDetailElement(app.buttons[AID.detailSubmitReportButton])", "app.buttons[AID.detailSubmitReportButton]"),
     }), lazyScroll);
     expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": validFiles["ios/UITests/FieldCriticalPathUITests.swift"].replace(
+        "topSentinel: app.buttons[AID.detailSubmitReportButton],",
+        "topSentinel: app.staticTexts[KO.locationConsentTitle],",
+      ),
+    }), lazyScroll);
+    expectsFailure(evaluate({
       "ios/UITests/CameraCaptureUITests.swift": validFiles["ios/UITests/CameraCaptureUITests.swift"].replace("scrollToDetailElement(app.buttons[AID.detailCaptureEvidenceButton])", "app.buttons[AID.detailCaptureEvidenceButton]"),
     }), lazyScroll);
   });
