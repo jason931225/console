@@ -540,6 +540,9 @@ function ScheduleDetail({
   onSave: () => void;
   onCancel: () => void;
 }) {
+  const pending = Boolean(
+    props.pendingWorkflowId && schedule.workflowId === props.pendingWorkflowId,
+  );
   const showScheduleActions =
     !props.readOnly &&
     Boolean(
@@ -551,7 +554,11 @@ function ScheduleDetail({
     );
 
   return (
-    <section aria-labelledby="console-schedule-detail-title" style={cardStyle}>
+    <section
+      aria-labelledby="console-schedule-detail-title"
+      aria-busy={pending || undefined}
+      style={cardStyle}
+    >
       <div style={sectionHeaderStyle}>
         <h2 id="console-schedule-detail-title" style={sectionTitleStyle}>
           {schedule.name}
@@ -578,6 +585,7 @@ function ScheduleDetail({
             <input
               aria-label={T.labels.scheduleName}
               value={draft.name}
+              disabled={pending}
               onChange={(event) => {
                 onDraftChange({ ...draft, name: event.currentTarget.value });
               }}
@@ -589,6 +597,7 @@ function ScheduleDetail({
             <input
               aria-label={T.labels.scheduleCron}
               value={draft.cron}
+              disabled={pending}
               onChange={(event) => {
                 onDraftChange({ ...draft, cron: event.currentTarget.value });
               }}
@@ -600,6 +609,7 @@ function ScheduleDetail({
             <input
               aria-label={T.labels.scheduleCronLabel}
               value={draft.cronLabel}
+              disabled={pending}
               onChange={(event) => {
                 onDraftChange({ ...draft, cronLabel: event.currentTarget.value });
               }}
@@ -618,7 +628,8 @@ function ScheduleDetail({
                 onClick={() => {
                   runAction(() => props.onScheduleToggle?.(schedule.id, !schedule.active));
                 }}
-                style={buttonStyle}
+                disabled={pending}
+                style={pending ? disabledButtonStyle : buttonStyle}
               >
                 {schedule.active ? T.actions.disable : T.actions.enable}
               </button>
@@ -631,7 +642,8 @@ function ScheduleDetail({
                 onClick={() => {
                   runAction(() => props.onScheduleRun?.(schedule.id));
                 }}
-                style={buttonStyle}
+                disabled={pending}
+                style={pending ? disabledButtonStyle : buttonStyle}
               >
                 {T.actions.run}
               </button>
@@ -640,7 +652,12 @@ function ScheduleDetail({
           {isEditing ? (
             <>
               <PolicyGated action={WORKFLOW_AUTO_ACTIONS.saveSchedule} resource={{ kind: "schedule", id: schedule.id }}>
-                <button type="button" onClick={onSave} style={buttonStyle}>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={onSave}
+                  style={pending ? disabledButtonStyle : buttonStyle}
+                >
                   {T.actions.saveSchedule}
                 </button>
               </PolicyGated>
@@ -650,7 +667,12 @@ function ScheduleDetail({
             </>
           ) : props.onScheduleSave || props.onScheduleEdit ? (
             <PolicyGated action={WORKFLOW_AUTO_ACTIONS.editSchedule} resource={{ kind: "schedule", id: schedule.id }}>
-              <button type="button" onClick={onEdit} style={buttonStyle}>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={onEdit}
+                style={pending ? disabledButtonStyle : buttonStyle}
+              >
                 {T.actions.editSchedule}
               </button>
             </PolicyGated>
@@ -662,7 +684,8 @@ function ScheduleDetail({
                 onClick={() => {
                   runAction(() => props.onScheduleDelete?.(schedule.id));
                 }}
-                style={buttonStyle}
+                disabled={pending}
+                style={pending ? disabledButtonStyle : buttonStyle}
               >
                 {T.actions.deleteSchedule}
               </button>
