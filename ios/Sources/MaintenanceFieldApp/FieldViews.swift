@@ -752,6 +752,7 @@ struct TodayListView: View {
 
 struct MessengerTabView: View {
     @ObservedObject var viewModel: FieldViewModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         List {
@@ -900,6 +901,16 @@ struct MessengerTabView: View {
         // than allowing scrolling content to alter their contrast.
         .toolbarBackground(Color.opaqueFieldNavigationBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+        // iOS 26 can otherwise settle a selected AX5 List row underneath the
+        // persistent navigation surface. Reserve a real scroll-safe viewport;
+        // this preserves the complete thread rather than hiding or truncating it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if dynamicTypeSize.isAccessibilitySize {
+                Color.clear
+                    .frame(height: 56)
+                    .accessibilityHidden(true)
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {

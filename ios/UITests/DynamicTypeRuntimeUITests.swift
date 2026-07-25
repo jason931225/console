@@ -61,6 +61,14 @@ final class DynamicTypeRuntimeUITests: FieldUITestCase {
         let threadID = try UITestFixture.requiredID(UITestFixture.messengerThreadID)
         let thread = app.buttons[AID.messengerThreadRow(threadID)]
         XCTAssertTrue(thread.waitForExistence(timeout: 15))
+        let navigationBottom = app.navigationBars.firstMatch.exists
+            ? app.navigationBars.firstMatch.frame.maxY
+            : messenger.frame.minY
+        XCTAssertGreaterThanOrEqual(
+            thread.frame.minY,
+            navigationBottom,
+            "Accessibility Dynamic Type must keep the complete selected Messenger thread outside navigation chrome."
+        )
         let threadTexts = thread.descendants(matching: .staticText).allElementsBoundByIndex
         XCTAssertGreaterThanOrEqual(threadTexts.count, 3, "Accessibility Dynamic Type must retain the full thread title, kind, and member count.")
         let title = threadTexts[0]

@@ -823,8 +823,9 @@ function hasAccessibleMessengerThreadAndNavigationContrast(files) {
   const noContentSuppression = !/\.lineLimit\s*\(|\.minimumScaleFactor\s*\(|\.allowsTightening\s*\(|\.fixedSize\s*\(|\.textCase\s*\(|\.frame\s*\(\s*(?:width|maxWidth|minWidth)\s*:/.test(thread);
   const opaqueNavigationSurface = /static\s+var\s+opaqueFieldNavigationBackground:\s*Color[\s\S]{0,180}Color\s*\(\s*uiColor:\s*\.systemBackground\s*\)/.test(semanticColors);
   const scopedNavigationBackground = /\.toolbarBackground\s*\(\s*Color\.opaqueFieldNavigationBackground\s*,\s*for:\s*\.navigationBar\s*\)[\s\S]{0,180}\.toolbarBackground\s*\(\s*\.visible\s*,\s*for:\s*\.navigationBar\s*\)/.test(messenger);
-  const runtimeGeometry = /testAccessibilityExtraExtraExtraLargeRuntimeContract[\s\S]{0,5400}thread\.descendants\s*\(\s*matching:\s*\.staticText\s*\)[\s\S]{0,840}XCTAssertGreaterThan\s*\(\s*member\.frame\.minY\s*,\s*max\s*\(\s*title\.frame\.maxY\s*,\s*chip\.frame\.maxY\s*\)/.test(runtimeTests);
-  return accessibilityLayout && standardLayout && noContentSuppression && opaqueNavigationSurface && scopedNavigationBackground && runtimeGeometry;
+  const accessibilityViewportReservation = /\.safeAreaInset\s*\(\s*edge:\s*\.top\s*,\s*spacing:\s*0\s*\)[\s\S]{0,260}if\s+dynamicTypeSize\.isAccessibilitySize[\s\S]{0,180}Color\.clear[\s\S]{0,120}\.frame\s*\(\s*height:\s*56\s*\)/.test(messenger);
+  const runtimeGeometry = /testAccessibilityExtraExtraExtraLargeRuntimeContract[\s\S]{0,2800}thread\.frame\.minY\s*,\s*navigationBottom[\s\S]{0,2800}thread\.descendants\s*\(\s*matching:\s*\.staticText\s*\)[\s\S]{0,840}XCTAssertGreaterThan\s*\(\s*member\.frame\.minY\s*,\s*max\s*\(\s*title\.frame\.maxY\s*,\s*chip\.frame\.maxY\s*\)/.test(runtimeTests);
+  return accessibilityLayout && standardLayout && noContentSuppression && opaqueNavigationSurface && scopedNavigationBackground && accessibilityViewportReservation && runtimeGeometry;
 }
 
 function hasContrastStableCapsules(files) {
