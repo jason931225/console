@@ -44,6 +44,7 @@ const postgresWrapperContracts = [
   ["attendance-concurrency-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
   ["app-inline-postgres", "//backend/app:mnt-app-itest-inline-postgres"],
   ["app-dev-auth-persona-guard-postgres", "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
+  ["app-evaluation-cycle-api-postgres", "//backend/app:mnt-app-itest-evaluation_cycle_api"],
   ["ontology-builtin-catalog-additive-upgrade-postgres", "//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-builtin_catalog_additive_upgrade_as_runtime_role"],
   ["app-org-change-api-postgres", "//backend/app:mnt-app-itest-org_change_api"],
   ["app-purchase-request-collection-api-postgres", "//backend/app:mnt-app-itest-purchase_request_collection_api"],

@@ -102,6 +102,14 @@ sh_test(
 )
 
 sh_test(
+    name = "app-evaluation-cycle-api-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/app:mnt-app-itest-evaluation_cycle_api)"],
+    deps = ["//backend/app:mnt-app-itest-evaluation_cycle_api"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
     name = "ontology-builtin-catalog-additive-upgrade-postgres",
     test = "run_test_with_postgres_env.sh",
     args = ["$(location //backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-builtin_catalog_additive_upgrade_as_runtime_role)"],
