@@ -1,13 +1,13 @@
 import { recruitingStrings as text } from "../../i18n/recruiting";
 import type {
   RecruitApplicantStage,
-  RecruitApplicantView,
+  RecruitApplicantRouting,
   RecruitAssessmentScore,
   RecruitEmploymentType,
   RecruitOfferStatus,
   RecruitOfferView,
   RecruitPostingStatus,
-  RecruitPostingView,
+  RecruitPostingRow,
   RecruitRejectReason,
 } from "./recruitingApi";
 
@@ -110,7 +110,7 @@ export function eventLabel(action: string): string {
   return lookup(text.card.event, action.toUpperCase()) ?? action;
 }
 
-export function headStatLine(postings: readonly RecruitPostingView[]): string {
+export function headStatLine(postings: readonly RecruitPostingRow[]): string {
   let applicants = 0;
   let interviews = 0;
   for (const posting of postings) {
@@ -126,8 +126,8 @@ export function preflightCheckLabel(key: string): string {
 }
 
 /** Subrow status line, derived — the backend does not store prose. */
-export function applicantStatusLine(applicant: RecruitApplicantView): string {
-  if (applicant.rejected) {
+export function applicantStatusLine(applicant: RecruitApplicantRouting): string {
+  if ((applicant.rejected_at !== null)) {
     return text.card.rejectedBanner(rejectReasonLabel(applicant.reject_reason));
   }
   return `${stageLabel(applicant.stage)} · ${dateTimeLabel(applicant.updated_at)}`;

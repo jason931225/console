@@ -82,7 +82,7 @@ export function CandidateCard(props: Props) {
   const [offerDeadline, setOfferDeadline] = useState("");
   const [adjustAmount, setAdjustAmount] = useState("");
   const [hireOpen, setHireOpen] = useState(false);
-  const [hireForm, setHireForm] = useState<HireRecruitApplicantRequest>({
+  const [hireForm, setHireForm] = useState<Record<keyof HireRecruitApplicantRequest, string>>({
     employee_number: "",
     phone: "",
     org_unit: "",
@@ -108,13 +108,13 @@ export function CandidateCard(props: Props) {
   const canManage = capabilities.canManage && !busy;
   const hireable =
     applicant.stage === "OFFER" &&
-    !applicant.rejected &&
+    !(applicant.rejected_at !== null) &&
     !isPool &&
     offer?.status === "ACCEPTED" &&
     capabilities.canHire;
 
   const primary = (() => {
-    if (!capabilities.canManage || applicant.rejected) return undefined;
+    if (!capabilities.canManage || (applicant.rejected_at !== null)) return undefined;
     if (applicant.stage === "APPLIED") return { label: text.card.ctaScreening, run: props.onAdvance };
     if (applicant.stage === "SCREENING") return { label: text.card.ctaInterview, run: props.onAdvance };
     if (applicant.stage === "INTERVIEW") {
@@ -187,22 +187,22 @@ export function CandidateCard(props: Props) {
           {STAGE_ORDER.map((stage, index) => (
             <span key={stage} className="recruiting__step-slot">
               {index > 0 && (
-                <span className={!applicant.rejected && index <= stageIndex ? "recruiting__step-line recruiting__step-line--done" : "recruiting__step-line"} />
+                <span className={!(applicant.rejected_at !== null) && index <= stageIndex ? "recruiting__step-line recruiting__step-line--done" : "recruiting__step-line"} />
               )}
               <span className="recruiting__step">
                 <span className={
-                  applicant.rejected ? "recruiting__step-dot"
+                  (applicant.rejected_at !== null) ? "recruiting__step-dot"
                     : index < stageIndex ? "recruiting__step-dot recruiting__step-dot--done"
                       : index === stageIndex ? "recruiting__step-dot recruiting__step-dot--now"
                         : "recruiting__step-dot"
                 } />
-                <span className={!applicant.rejected && index === stageIndex ? "recruiting__step-label recruiting__step-label--now" : "recruiting__step-label"}>{stageLabel(stage)}</span>
+                <span className={!(applicant.rejected_at !== null) && index === stageIndex ? "recruiting__step-label recruiting__step-label--now" : "recruiting__step-label"}>{stageLabel(stage)}</span>
               </span>
             </span>
           ))}
         </div>
         <div className="recruiting__card-body">
-          {applicant.rejected && (
+          {(applicant.rejected_at !== null) && (
             <div className="recruiting__banner recruiting__banner--danger recruiting__banner--row" role="status">
               <span className="recruiting__banner-grow">{text.card.rejectedBanner(rejectReasonLabel(applicant.reject_reason))}</span>
               {capabilities.canManage && (
@@ -228,7 +228,7 @@ export function CandidateCard(props: Props) {
             <div className="recruiting__section-head">
               <span className="recruiting__section-title">{text.card.assessment}</span>
               {applicant.assessment !== null && (
-                <span className="recruiting__section-note">{applicant.assessment.assessed_by} · {dateTimeLabel(applicant.assessment.assessed_at)}</span>
+                <span className="recruiting__section-note">{applicant.assessment.by ?? ""} · {applicant.assessment.at === null ? "" : dateTimeLabel(applicant.assessment.at)}</span>
               )}
             </div>
             <div className="recruiting__chip-row">
@@ -238,7 +238,7 @@ export function CandidateCard(props: Props) {
                   : score === "SUITABLE" ? "recruiting__score recruiting__score--ok"
                     : score === "UNSUITABLE" ? "recruiting__score recruiting__score--danger"
                       : "recruiting__score recruiting__score--warn";
-                return capabilities.canManage && !applicant.rejected ? (
+                return capabilities.canManage && !(applicant.rejected_at !== null) ? (
                   <button key={score} type="button" className={className} aria-pressed={active} disabled={busy} onClick={() => { props.onAssess(score); }}>{scoreLabel(score)}</button>
                 ) : (
                   active && <span key={score} className={className}>{scoreLabel(score)}</span>
@@ -246,7 +246,7 @@ export function CandidateCard(props: Props) {
               })}
             </div>
           </section>
-          {offer !== undefined && !applicant.rejected && (
+          {offer !== undefined && !(applicant.rejected_at !== null) && (
             <section aria-label={text.card.offer} className="recruiting__offer">
               <div className="recruiting__section-head">
                 <span className="recruiting__section-title">{text.card.offer}</span>
@@ -254,7 +254,7 @@ export function CandidateCard(props: Props) {
                 <span className={offer.status === "ACCEPTED" ? "recruiting__chip recruiting__chip--ok" : offer.status === "EXTENDED" ? "recruiting__chip recruiting__chip--warn" : "recruiting__chip recruiting__chip--muted"}>
                   {offerStatusLabel(offer.status)}
                 </span>
-                <span className="recruiting__section-note">{text.card.offerSentPrefix}{dateTimeLabel(offer.created_at)}</span>
+                <span className="recruiting__section-note">{text.card.offerSentPrefix}{dateTimeLabel(offer.extended_at)}</span>
               </div>
               {offer.reply_deadline !== null && (
                 <div className="recruiting__section-note">{text.card.replyDeadline} {dateTimeLabel(offer.reply_deadline)}</div>
@@ -284,7 +284,7 @@ export function CandidateCard(props: Props) {
               )}
             </section>
           )}
-          {offerFormOpen && capabilities.canManage && !applicant.rejected && applicant.stage === "INTERVIEW" && (
+          {offerFormOpen && capabilities.canManage && !(applicant.rejected_at !== null) && applicant.stage === "INTERVIEW" && (
             <section aria-label={text.card.ctaOffer} className="recruiting__offer">
               <div className="recruiting__section-head">
                 <span className="recruiting__section-title">{text.card.ctaOffer}</span>
@@ -386,7 +386,7 @@ export function CandidateCard(props: Props) {
               <div className="recruiting__req-row">
                 <button type="button" className="recruiting__ghost" onClick={() => { setHireOpen(false); }}>{text.hire.cancel}</button>
                 <span className="recruiting__spacer" />
-                <button type="button" className="recruiting__primary" disabled={busy || !hireReady} onClick={() => { props.onHire(hireForm); }}>{text.hire.submit}</button>
+                <button type="button" className="recruiting__primary" disabled={busy || !hireReady} onClick={() => { props.onHire({ ...hireForm, base_pay: hireForm.base_pay === "" ? null : hireForm.base_pay }); }}>{text.hire.submit}</button>
               </div>
             </section>
           )}
@@ -410,11 +410,11 @@ export function CandidateCard(props: Props) {
                   <li key={event.id} className="recruiting__event">
                     <span className="recruiting__mono recruiting__event-at">{dateTimeLabel(event.occurred_at)}</span>
                     <span className="recruiting__event-label">{eventLabel(event.action)}</span>
-                    {typeof event.actor_name === "string" && event.actor_name !== "" && (
-                      <span className="recruiting__section-note">{event.actor_name}</span>
+                    {typeof event.actor === "string" && event.actor !== "" && (
+                      <span className="recruiting__section-note">{event.actor}</span>
                     )}
-                    {typeof event.note === "string" && event.note !== "" && (
-                      <span className="recruiting__section-note recruiting__event-note">{event.note}</span>
+                    {typeof event.reason === "string" && event.reason !== "" && (
+                      <span className="recruiting__section-note recruiting__event-note">{event.reason}</span>
                     )}
                   </li>
                 ))}
@@ -422,7 +422,7 @@ export function CandidateCard(props: Props) {
             )}
           </section>
         </div>
-        {capabilities.canManage && !applicant.rejected && applicant.stage !== "HIRED" && (
+        {capabilities.canManage && !(applicant.rejected_at !== null) && applicant.stage !== "HIRED" && (
           <div className="recruiting__card-foot">
             <div className="recruiting__menu-anchor">
               <button type="button" className="recruiting__ghost recruiting__ghost--danger" disabled={busy} onClick={() => { setRejectMenuOpen((open) => !open); }} aria-expanded={rejectMenuOpen}>

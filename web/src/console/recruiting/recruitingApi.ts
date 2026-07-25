@@ -1,3 +1,5 @@
+import type { components } from "@maintenance/api-client-ts";
+
 import type { ConsoleApiClient } from "../../api/client";
 
 /**
@@ -7,159 +9,45 @@ import type { ConsoleApiClient } from "../../api/client";
  * backend lane builds the same contract in parallel, so every path, field, and
  * error shape here is the sync point (deviation is a defect, not a preference).
  *
- * The generated `@maintenance/api-client-ts` schema predates the recruiting
- * tag, so the paths below are retyped module-locally against the contract and
- * the client is cast once at this boundary. When the integrator regenerates
- * the clients, swap these DTOs for `components["schemas"]` and delete the cast.
  */
 
-export type RecruitPostingStatus = "DRAFT" | "PUBLISHED" | "CLOSED";
-export type RecruitEmploymentType = "REGULAR" | "RESIDENT_SHIFT" | "PART_TIME" | "POOL_DAILY";
-export type RecruitPostingScope = "INTERNAL" | "EXTERNAL";
-export type RecruitApplicantStage = "APPLIED" | "SCREENING" | "INTERVIEW" | "OFFER" | "HIRED";
-export type RecruitAssessmentScore = "SUITABLE" | "NEUTRAL" | "UNSUITABLE";
-export type RecruitRejectReason =
-  | "CAREER_SHORTFALL"
-  | "ROLE_MISMATCH"
-  | "COMP_MISMATCH"
-  | "ACCEPTED_ELSEWHERE"
-  | "OTHER";
-export type RecruitOfferStatus = "EXTENDED" | "SUPERSEDED" | "WITHDRAWN" | "ACCEPTED" | "DECLINED";
-export type RecruitOfferPeriod = "MONTHLY" | "DAILY";
-export type RecruitOfferDecision = "ACCEPTED" | "DECLINED";
-
-export interface RecruitStageCounts {
-  applied: number;
-  screening: number;
-  interview: number;
-  offer: number;
-}
-
-export interface RecruitPostingView {
-  id: string;
-  code: string;
-  role_title: string;
-  company: string;
-  worksite: string;
-  employment_type: RecruitEmploymentType;
-  scope: RecruitPostingScope;
-  headcount: number;
-  hired_count: number;
-  deadline: string | null;
-  requirements: string[];
-  status: RecruitPostingStatus;
-  position_ref: string | null;
-  updated_at: string;
-  stage_counts: RecruitStageCounts;
-}
-
-export interface RecruitAssessmentView {
-  score: RecruitAssessmentScore;
-  assessed_by: string;
-  assessed_at: string;
-}
-
-export interface RecruitApplicantView {
-  id: string;
-  applicant_no: string;
-  posting_id: string;
-  name: string;
-  stage: RecruitApplicantStage;
-  hold: boolean;
-  doc_requested: boolean;
-  rejected: boolean;
-  reject_reason: RecruitRejectReason | null;
-  assessment: RecruitAssessmentView | null;
-  profile_lines: string[];
-  source_document: string | null;
-  hired_employee_id: string | null;
-  applied_at: string;
-  updated_at: string;
-}
-
-export interface RecruitOfferView {
-  id: string;
-  version: number;
-  amount: string;
-  amount_period: RecruitOfferPeriod;
-  reply_deadline: string | null;
-  status: RecruitOfferStatus;
-  created_at: string;
-}
-
-export interface RecruitStageEventView {
-  id: string;
-  action: string;
-  occurred_at: string;
-  actor_name?: string | null;
-  note?: string | null;
-}
-
-export interface RecruitPreflightCheck {
-  key: string;
-  ok: boolean;
-  note: string;
-}
-
-export interface RecruitPreflightResponse {
-  checks: RecruitPreflightCheck[];
-  publishable: boolean;
-}
-
-export interface RecruitPostingListResponse {
-  items: RecruitPostingView[];
-}
-
-export interface RecruitPostingDetailResponse {
-  posting: RecruitPostingView;
-  applicants: RecruitApplicantView[];
-}
-
-export interface RecruitApplicantDetailResponse {
-  applicant: RecruitApplicantView;
-  offers: RecruitOfferView[];
-  events: RecruitStageEventView[];
-}
-
-export interface RecruitTalentPoolItem {
-  applicant_no: string;
-  name: string;
-  role_title: string;
-  reason: RecruitRejectReason;
-  rejected_at: string;
-}
-
-export interface RecruitTalentPoolResponse {
-  items: RecruitTalentPoolItem[];
-}
-
-export interface CreateRecruitPostingRequest {
-  role_title: string;
-  company: string;
-  worksite: string;
-  employment_type: RecruitEmploymentType;
-  scope: RecruitPostingScope;
-  headcount: number;
-  deadline?: string;
-  requirements: string[];
-  position_ref?: string;
-}
-
-export interface HireRecruitApplicantRequest {
-  employee_number: string;
-  phone: string;
-  org_unit: string;
-  position: string;
-  site: string;
-  home_branch_id: string;
-  base_pay: string;
-}
-
-export interface HireRecruitApplicantResponse {
-  employee_id: string;
-  applicant: RecruitApplicantView;
-  posting: RecruitPostingView;
-}
+export type RecruitPostingStatus = components["schemas"]["RecruitPostingStatus"];
+export type RecruitEmploymentType = components["schemas"]["RecruitEmploymentType"];
+export type RecruitPostingScope = components["schemas"]["RecruitPostingScope"];
+export type RecruitApplicantStage = components["schemas"]["RecruitApplicantStage"];
+export type RecruitAssessmentScore = components["schemas"]["RecruitAssessmentScore"];
+export type RecruitRejectReason = components["schemas"]["RecruitRejectReason"];
+export type RecruitOfferStatus = components["schemas"]["RecruitOfferStatus"];
+export type RecruitOfferPeriod = components["schemas"]["RecruitAmountPeriod"];
+export type RecruitStageCounts = components["schemas"]["RecruitStageCounts"];
+export type RecruitPostingView = components["schemas"]["RecruitPosting"];
+export type RecruitPostingRow = components["schemas"]["RecruitPostingSummary"];
+export type RecruitAssessmentView = components["schemas"]["RecruitAssessment"];
+export type RecruitApplicantView = components["schemas"]["RecruitApplicant"];
+export type RecruitApplicantRow = components["schemas"]["RecruitApplicantSummary"];
+/**
+ * The pipeline-routing fields both applicant projections carry. The list
+ * projection is non-PII (no profile/assessment) and the detail projection has
+ * no `assessed` flag, so neither is a subtype of the other; handlers that only
+ * route take this intersection.
+ */
+export type RecruitApplicantRouting = Pick<
+  RecruitApplicantRow,
+  "id" | "posting_id" | "applicant_no" | "name" | "stage" | "hold" | "doc_requested" | "rejected_at" | "reject_reason" | "hired_employee_id" | "created_at" | "updated_at"
+>;
+export type RecruitOfferView = components["schemas"]["RecruitOffer"];
+export type RecruitStageEventView = components["schemas"]["RecruitStageEvent"];
+export type RecruitPreflightCheck = components["schemas"]["RecruitPreflightCheck"];
+export type RecruitPreflightResponse = components["schemas"]["RecruitPostingPreflightResponse"];
+export type RecruitPostingListResponse = components["schemas"]["RecruitPostingListResponse"];
+export type RecruitPostingDetailResponse = components["schemas"]["RecruitPostingDetailResponse"];
+export type RecruitApplicantDetailResponse = components["schemas"]["RecruitApplicantDetailResponse"];
+export type RecruitTalentPoolItem = components["schemas"]["RecruitTalentPoolEntry"];
+export type RecruitTalentPoolResponse = components["schemas"]["RecruitTalentPoolListResponse"];
+export type CreateRecruitPostingRequest = components["schemas"]["CreateRecruitPostingRequest"];
+export type HireRecruitApplicantRequest = components["schemas"]["HireRecruitApplicantRequest"];
+export type HireRecruitApplicantResponse = components["schemas"]["HireRecruitApplicantResponse"];
+export type RecruitOfferDecision = components["schemas"]["RecordRecruitOfferReplyRequest"]["decision"];
 
 export class RecruitingApiError extends Error {
   constructor(
@@ -188,6 +76,13 @@ function envelopeMessage(error: unknown, status: number): string {
   return `Recruiting request failed (${String(status)})`;
 }
 
+const PREFLIGHT_KEYS: readonly RecruitPreflightCheck["key"][] = [
+  "role_defined",
+  "quota_defined",
+  "no_duplicate_open",
+  "exposure_attested",
+];
+
 function parseChecks(error: unknown): RecruitPreflightCheck[] | undefined {
   if (!error || typeof error !== "object") return undefined;
   const raw = (error as { checks?: unknown }).checks;
@@ -196,8 +91,9 @@ function parseChecks(error: unknown): RecruitPreflightCheck[] | undefined {
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const check = item as Record<string, unknown>;
-    if (typeof check.key !== "string" || typeof check.ok !== "boolean") continue;
-    checks.push({ key: check.key, ok: check.ok, note: typeof check.note === "string" ? check.note : "" });
+    const key = PREFLIGHT_KEYS.find((known) => known === check.key);
+    if (key === undefined || typeof check.ok !== "boolean") continue;
+    checks.push({ key, ok: check.ok, note: typeof check.note === "string" ? check.note : "" });
   }
   return checks.length > 0 ? checks : undefined;
 }
@@ -250,26 +146,23 @@ export interface RecruitPostingListQuery {
 
 /** Recruiting transport bound to the authenticated ConsoleApiClient. */
 export function createRecruitingApi(api: ConsoleApiClient) {
-  // ponytail: one boundary cast — the generated client predates the recruiting
-  // tag; retarget to typed generated paths when clients/ts regenerates.
-  const transport = api as unknown as RecruitingTransport;
   return {
     listPostings: async (query?: RecruitPostingListQuery, signal?: AbortSignal) => {
-      const result = await transport.GET("/api/v1/recruiting/postings", {
+      const result = await api.GET("/api/v1/recruiting/postings", {
         params: { query: { status: query?.status, scope: query?.scope } },
         signal,
       });
       return requireData(result) as RecruitPostingListResponse;
     },
     getPosting: async (id: string, signal?: AbortSignal) => {
-      const result = await transport.GET("/api/v1/recruiting/postings/{id}", {
-        params: { path: { id } },
+      const result = await api.GET("/api/v1/recruiting/postings/{postingId}", {
+        params: { path: { postingId: id } },
         signal,
       });
       return requireData(result) as RecruitPostingDetailResponse;
     },
     createPosting: async (input: CreateRecruitPostingRequest, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/postings", { body: input, signal });
+      const result = await api.POST("/api/v1/recruiting/postings", { body: input, signal });
       return requireData(result) as RecruitPostingView;
     },
     updatePosting: async (
@@ -277,16 +170,16 @@ export function createRecruitingApi(api: ConsoleApiClient) {
       input: CreateRecruitPostingRequest & { expected_updated_at: string },
       signal?: AbortSignal,
     ) => {
-      const result = await transport.PUT("/api/v1/recruiting/postings/{id}", {
-        params: { path: { id } },
+      const result = await api.PUT("/api/v1/recruiting/postings/{postingId}", {
+        params: { path: { postingId: id } },
         body: input,
         signal,
       });
       return requireData(result) as RecruitPostingView;
     },
     preflightPosting: async (id: string, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/postings/{id}/preflight", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/postings/{postingId}/preflight", {
+        params: { path: { postingId: id } },
         signal,
       });
       return requireData(result) as RecruitPreflightResponse;
@@ -296,16 +189,16 @@ export function createRecruitingApi(api: ConsoleApiClient) {
       input: { attest_exposure_scope: boolean; expected_updated_at: string },
       signal?: AbortSignal,
     ) => {
-      const result = await transport.POST("/api/v1/recruiting/postings/{id}/publish", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/postings/{postingId}/publish", {
+        params: { path: { postingId: id } },
         body: input,
         signal,
       });
       requireOk(result);
     },
     closePosting: async (id: string, input: { expected_updated_at: string }, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/postings/{id}/close", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/postings/{postingId}/close", {
+        params: { path: { postingId: id } },
         body: input,
         signal,
       });
@@ -316,47 +209,47 @@ export function createRecruitingApi(api: ConsoleApiClient) {
       input: { name: string; profile_lines: string[]; source_document?: string },
       signal?: AbortSignal,
     ) => {
-      const result = await transport.POST("/api/v1/recruiting/postings/{id}/applicants", {
-        params: { path: { id: postingId } },
+      const result = await api.POST("/api/v1/recruiting/postings/{postingId}/applicants", {
+        params: { path: { postingId } },
         body: input,
         signal,
       });
       return requireData(result) as RecruitApplicantView;
     },
     getApplicant: async (id: string, signal?: AbortSignal) => {
-      const result = await transport.GET("/api/v1/recruiting/applicants/{id}", {
-        params: { path: { id } },
+      const result = await api.GET("/api/v1/recruiting/applicants/{applicantId}", {
+        params: { path: { applicantId: id } },
         signal,
       });
       return requireData(result) as RecruitApplicantDetailResponse;
     },
     advanceApplicant: async (id: string, input: { expected_updated_at: string }, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/advance", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/advance", {
+        params: { path: { applicantId: id } },
         body: input,
         signal,
       });
       requireOk(result);
     },
     assessApplicant: async (id: string, input: { score: RecruitAssessmentScore }, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/assess", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/assess", {
+        params: { path: { applicantId: id } },
         body: input,
         signal,
       });
       requireOk(result);
     },
     holdApplicant: async (id: string, input: { hold: boolean }, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/hold", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/hold", {
+        params: { path: { applicantId: id } },
         body: input,
         signal,
       });
       requireOk(result);
     },
     requestDocuments: async (id: string, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/request-documents", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/request-documents", {
+        params: { path: { applicantId: id } },
         signal,
       });
       requireOk(result);
@@ -366,16 +259,16 @@ export function createRecruitingApi(api: ConsoleApiClient) {
       input: { reason: RecruitRejectReason; note?: string },
       signal?: AbortSignal,
     ) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/reject", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/reject", {
+        params: { path: { applicantId: id } },
         body: input,
         signal,
       });
       requireOk(result);
     },
     reinstateApplicant: async (id: string, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/reinstate", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/reinstate", {
+        params: { path: { applicantId: id } },
         signal,
       });
       requireOk(result);
@@ -385,8 +278,8 @@ export function createRecruitingApi(api: ConsoleApiClient) {
       input: { amount: string; amount_period: RecruitOfferPeriod; reply_deadline: string },
       signal?: AbortSignal,
     ) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/offer", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/offer", {
+        params: { path: { applicantId: id } },
         body: input,
         signal,
       });
@@ -397,16 +290,16 @@ export function createRecruitingApi(api: ConsoleApiClient) {
       input: { amount: string; reply_deadline?: string },
       signal?: AbortSignal,
     ) => {
-      const result = await transport.POST("/api/v1/recruiting/offers/{id}/adjust", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/offers/{offerId}/adjust", {
+        params: { path: { offerId: id } },
         body: input,
         signal,
       });
       return requireData(result) as RecruitOfferView;
     },
     withdrawOffer: async (id: string, input: { reason: string }, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/offers/{id}/withdraw", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/offers/{offerId}/withdraw", {
+        params: { path: { offerId: id } },
         body: input,
         signal,
       });
@@ -417,23 +310,23 @@ export function createRecruitingApi(api: ConsoleApiClient) {
       input: { decision: RecruitOfferDecision },
       signal?: AbortSignal,
     ) => {
-      const result = await transport.POST("/api/v1/recruiting/offers/{id}/record-reply", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/offers/{offerId}/record-reply", {
+        params: { path: { offerId: id } },
         body: input,
         signal,
       });
       requireOk(result);
     },
     hireApplicant: async (id: string, input: HireRecruitApplicantRequest, signal?: AbortSignal) => {
-      const result = await transport.POST("/api/v1/recruiting/applicants/{id}/hire", {
-        params: { path: { id } },
+      const result = await api.POST("/api/v1/recruiting/applicants/{applicantId}/hire", {
+        params: { path: { applicantId: id } },
         body: input,
         signal,
       });
       return requireData(result) as HireRecruitApplicantResponse;
     },
     listTalentPool: async (signal?: AbortSignal) => {
-      const result = await transport.GET("/api/v1/recruiting/talent-pool", { signal });
+      const result = await api.GET("/api/v1/recruiting/talent-pool", { signal });
       return requireData(result) as RecruitTalentPoolResponse;
     },
     listBranches: async (signal?: AbortSignal) => {

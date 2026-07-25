@@ -13,7 +13,10 @@ import {
   type CreateRecruitPostingRequest,
   type HireRecruitApplicantRequest,
   type RecruitApplicantDetailResponse,
+  type RecruitApplicantRouting,
+  type RecruitApplicantRow,
   type RecruitApplicantView,
+  type RecruitPostingRow,
   type RecruitPostingView,
   type RecruitTalentPoolItem,
 } from "./recruitingApi";
@@ -67,12 +70,12 @@ function formText(data: FormData, name: string): string {
 
 /** Pure — the subrow's one action-driving label per pipeline state. */
 function nextActionLabel(
-  posting: RecruitPostingView,
-  applicant: RecruitApplicantView,
+  posting: RecruitPostingRow,
+  applicant: RecruitApplicantRow,
   capabilities: RecruitingCapabilities,
 ): string | undefined {
   if (!capabilities.canManage) return undefined;
-  if (applicant.rejected) return text.reconsider;
+  if ((applicant.rejected_at !== null)) return text.reconsider;
   if (applicant.stage === "APPLIED" || applicant.stage === "SCREENING") {
     return text.advanceTo(stageLabel(STAGE_ORDER[STAGE_ORDER.indexOf(applicant.stage) + 1]));
   }
@@ -105,19 +108,19 @@ export function RecruitingScreen(props: Props) {
 
 function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
   const recruitingApi = useMemo(() => createRecruitingApi(api), [api]);
-  const [postings, setPostings] = useState<RecruitPostingView[]>([]);
+  const [postings, setPostings] = useState<RecruitPostingRow[]>([]);
   const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
   const [denied, setDenied] = useState(!capabilities.canRead);
   const [talent, setTalent] = useState<RecruitTalentPoolItem[]>();
   const [talentVisible, setTalentVisible] = useState(true);
   const [openId, setOpenId] = useState<string>();
-  const [applicants, setApplicants] = useState<RecruitApplicantView[]>();
+  const [applicants, setApplicants] = useState<RecruitApplicantRow[]>();
   const [openState, setOpenState] = useState<"loading" | "ready" | "error">("ready");
   const [card, setCard] = useState<{ applicantId: string; postingId: string }>();
   const [cardDetail, setCardDetail] = useState<RecruitApplicantDetailResponse>();
   const [cardState, setCardState] = useState<"loading" | "ready" | "error">("ready");
   const [cardError, setCardError] = useState<string>();
-  const [composer, setComposer] = useState<{ posting?: RecruitPostingView }>();
+  const [composer, setComposer] = useState<{ posting?: RecruitPostingRow }>();
   const [composerError, setComposerError] = useState<string>();
   const [preflight, setPreflight] = useState<PreflightState>();
   const [menuFor, setMenuFor] = useState<string>();
@@ -234,7 +237,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
         if (!isCurrent(token)) return;
         setApplicants(detail.applicants);
         setOpenState("ready");
-        setPostings((current) => current.map((posting) => (posting.id === detail.posting.id ? detail.posting : posting)));
+        setPostings((current) => current.map((posting) => (posting.id === detail.posting.id ? { ...posting, ...detail.posting } : posting)));
       },
       (cause: unknown) => {
         if (!isCurrent(token)) return;
@@ -400,7 +403,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
 
   // ---- applicant actions ---------------------------------------------------
 
-  const advanceApplicant = useCallback((applicant: RecruitApplicantView) => {
+  const advanceApplicant = useCallback((applicant: RecruitApplicantRouting) => {
     const stageIndex = STAGE_ORDER.indexOf(applicant.stage);
     const next = STAGE_ORDER[stageIndex + 1] as (typeof STAGE_ORDER)[number] | undefined;
     void runMutation(
@@ -409,7 +412,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
     );
   }, [recruitingApi, runMutation]);
 
-  const holdApplicant = useCallback((applicant: RecruitApplicantView) => {
+  const holdApplicant = useCallback((applicant: RecruitApplicantRouting) => {
     setMenuFor(undefined);
     void runMutation(
       (signal) => recruitingApi.holdApplicant(applicant.id, { hold: !applicant.hold }, signal),
@@ -417,7 +420,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
     );
   }, [recruitingApi, runMutation]);
 
-  const requestDocuments = useCallback((applicant: RecruitApplicantView) => {
+  const requestDocuments = useCallback((applicant: RecruitApplicantRouting) => {
     setMenuFor(undefined);
     void runMutation(
       (signal) => recruitingApi.requestDocuments(applicant.id, signal),
@@ -425,7 +428,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
     );
   }, [recruitingApi, runMutation]);
 
-  const reinstateApplicant = useCallback((applicant: RecruitApplicantView) => {
+  const reinstateApplicant = useCallback((applicant: RecruitApplicantRouting) => {
     void runMutation(
       (signal) => recruitingApi.reinstateApplicant(applicant.id, signal),
       { toast: () => text.toast.reinstated(applicant.name) },
@@ -433,8 +436,8 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
   }, [recruitingApi, runMutation]);
 
   /** The subrow next-action counterpart of {@link nextActionLabel}. */
-  const runNextAction = useCallback((posting: RecruitPostingView, applicant: RecruitApplicantView) => {
-    if (applicant.rejected) {
+  const runNextAction = useCallback((posting: RecruitPostingView, applicant: RecruitApplicantRouting) => {
+    if ((applicant.rejected_at !== null)) {
       reinstateApplicant(applicant);
       return;
     }
@@ -478,7 +481,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
     };
     if (!(event.key in keys)) return;
     event.preventDefault();
-    const target = postings[keys[event.key]] as RecruitPostingView | undefined;
+    const target = postings[keys[event.key]] as RecruitPostingRow | undefined;
     if (target) rowRefs.current.get(target.id)?.focus();
   }, [postings]);
 
@@ -614,7 +617,7 @@ function RecruitingScreenImpl({ api, capabilities, onNavigate }: Props) {
                         <>
                           {applicants.length === 0 && <p className="recruiting__state">{text.applicantsEmpty}</p>}
                           {applicants.map((applicant) => {
-                            const rejected = applicant.rejected;
+                            const rejected = (applicant.rejected_at !== null);
                             const stageClass = rejected ? "recruiting__stage recruiting__stage--danger"
                               : applicant.stage === "OFFER" || applicant.stage === "HIRED" ? "recruiting__stage recruiting__stage--ok"
                                 : applicant.stage === "INTERVIEW" ? "recruiting__stage recruiting__stage--purple"

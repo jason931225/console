@@ -86,7 +86,7 @@ export function PostingComposer({ posting, busy, error, onSaveDraft, onPublish, 
           <span id="recruiting-composer-title" className="recruiting__composer-title">
             {posting ? text.composer.editTitle : text.composer.title}
           </span>
-          <span className="recruiting__chip recruiting__chip--mono">{posting?.code ?? text.composer.draftChip}</span>
+          <span className="recruiting__chip recruiting__chip--mono">{posting?.posting_no ?? text.composer.draftChip}</span>
           <span className="recruiting__spacer" />
           <button type="button" className="recruiting__icon-button" aria-label={text.composer.close} autoFocus onClick={onClose}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18 M6 6l12 12" /></svg>

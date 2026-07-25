@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ConsoleApiClient } from "../../api/client";
 import { recruitingStrings as text } from "../../i18n/recruiting";
-import type { RecruitApplicantView, RecruitPostingView } from "./recruitingApi";
+import type { RecruitApplicantView, RecruitPostingRow } from "./recruitingApi";
 import type { RecruitingCapabilities } from "./recruitingCapabilities";
 import { RecruitingScreen } from "./RecruitingScreen";
 
@@ -12,12 +12,13 @@ const manager: RecruitingCapabilities = { canRead: true, canManage: true, canHir
 const reader: RecruitingCapabilities = { canRead: true, canManage: false, canHire: false };
 const denied: RecruitingCapabilities = { canRead: false, canManage: false, canHire: false };
 
-function posting(over: Partial<RecruitPostingView> = {}): RecruitPostingView {
+function posting(over: Partial<RecruitPostingRow> = {}): RecruitPostingRow {
   return {
-    id: "post-1", code: "JP-01", role_title: "품질관리 매니저", company: "BESTEC",
+    id: "post-1", posting_no: "JP-01", role_title: "품질관리 매니저", company: "BESTEC",
     worksite: "안산공장 품질관리팀", employment_type: "REGULAR", scope: "EXTERNAL",
     headcount: 2, hired_count: 0, deadline: "2026-07-20", requirements: ["ISO 9001"],
-    status: "PUBLISHED", position_ref: null, updated_at: "2026-07-23T00:00:00Z",
+    status: "PUBLISHED", position_ref: null, published_at: "2026-07-05T00:00:00Z",
+    closed_at: null, created_at: "2026-07-01T00:00:00Z", updated_at: "2026-07-23T00:00:00Z",
     stage_counts: { applied: 1, screening: 0, interview: 0, offer: 0 },
     ...over,
   };
@@ -26,10 +27,11 @@ function posting(over: Partial<RecruitPostingView> = {}): RecruitPostingView {
 function applicant(over: Partial<RecruitApplicantView> = {}): RecruitApplicantView {
   return {
     id: "apl-1", applicant_no: "APL-01", posting_id: "post-1", name: "한지원",
-    stage: "APPLIED", hold: false, doc_requested: false, rejected: false,
-    reject_reason: null, assessment: null, profile_lines: ["경력 6년 — 품질관리"],
+    stage: "APPLIED", hold: false, doc_requested: false, rejected_at: null,
+    reject_reason: null, reject_note: null, assessment: null,
+    profile_lines: ["경력 6년 — 품질관리"],
     source_document: "이력서_한지원.pdf", hired_employee_id: null,
-    applied_at: "2026-07-01T00:00:00Z", updated_at: "2026-07-23T00:00:00Z",
+    created_at: "2026-07-01T00:00:00Z", updated_at: "2026-07-23T00:00:00Z",
     ...over,
   };
 }
@@ -65,8 +67,8 @@ function renderScreen(api: ConsoleApiClient, capabilities = manager, sessionKey 
 
 const LIST = "/api/v1/recruiting/postings";
 const POOL = "/api/v1/recruiting/talent-pool";
-const POSTING = "/api/v1/recruiting/postings/{id}";
-const APPLICANT = "/api/v1/recruiting/applicants/{id}";
+const POSTING = "/api/v1/recruiting/postings/{postingId}";
+const APPLICANT = "/api/v1/recruiting/applicants/{applicantId}";
 
 describe("RecruitingScreen", () => {
   it("denies an unauthorized session before any fetch", () => {
@@ -78,7 +80,7 @@ describe("RecruitingScreen", () => {
 
   it("renders the live stat line and posting grammar from the server list", async () => {
     const api = client({
-      [LIST]: [ok({ items: [posting(), posting({ id: "post-2", code: "JP-02", role_title: "경비원 · 야간 상주", scope: "INTERNAL", status: "DRAFT", deadline: null, stage_counts: { applied: 0, screening: 0, interview: 1, offer: 0 } })] })],
+      [LIST]: [ok({ items: [posting(), posting({ id: "post-2", posting_no: "JP-02", role_title: "경비원 · 야간 상주", scope: "INTERNAL", status: "DRAFT", deadline: null, stage_counts: { applied: 0, screening: 0, interview: 1, offer: 0 } })] })],
       [POOL]: [ok({ items: [] })],
     });
     renderScreen(api);
@@ -117,9 +119,9 @@ describe("RecruitingScreen", () => {
 
   it("roves rows with J/K and opens the pipeline with Enter", async () => {
     const api = client({
-      [LIST]: [ok({ items: [posting(), posting({ id: "post-2", code: "JP-02", role_title: "지게차 정비 기사" })] })],
+      [LIST]: [ok({ items: [posting(), posting({ id: "post-2", posting_no: "JP-02", role_title: "지게차 정비 기사" })] })],
       [POOL]: [ok({ items: [] })],
-      [POSTING]: [ok({ posting: posting({ id: "post-2", code: "JP-02", role_title: "지게차 정비 기사" }), applicants: [applicant({ posting_id: "post-2" })] })],
+      [POSTING]: [ok({ posting: posting({ id: "post-2", posting_no: "JP-02", role_title: "지게차 정비 기사" }), applicants: [applicant({ posting_id: "post-2" })] })],
     });
     renderScreen(api);
     const first = await screen.findByRole("button", { name: "품질관리 매니저" });
@@ -161,13 +163,13 @@ describe("RecruitingScreen", () => {
           ok({ posting: posting({ stage_counts: { applied: 0, screening: 1, interview: 0, offer: 0 } }), applicants: [advanced] }),
         ],
       },
-      { "/api/v1/recruiting/applicants/{id}/advance": [ok(undefined)] },
+      { "/api/v1/recruiting/applicants/{applicantId}/advance": [ok(undefined)] },
     );
     renderScreen(api);
     await userEvent.click(await screen.findByRole("button", { name: "품질관리 매니저" }));
     await userEvent.click(await screen.findByRole("button", { name: text.advanceTo(text.stage.SCREENING) }));
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/applicants/{id}/advance", expect.objectContaining({
-      params: { path: { id: "apl-1" } },
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/applicants/{applicantId}/advance", expect.objectContaining({
+      params: { path: { applicantId: "apl-1" } },
       body: { expected_updated_at: "2026-07-23T00:00:00Z" },
     }));
     expect(await screen.findByRole("button", { name: text.advanceTo(text.stage.INTERVIEW) })).toBeVisible();
@@ -181,7 +183,7 @@ describe("RecruitingScreen", () => {
         [POOL]: [ok({ items: [] })],
         [POSTING]: [ok({ posting: posting(), applicants: [applicant()] })],
       },
-      { "/api/v1/recruiting/applicants/{id}/advance": [err(409, { error: { message: "conflict" } })] },
+      { "/api/v1/recruiting/applicants/{applicantId}/advance": [err(409, { error: { message: "conflict" } })] },
     );
     renderScreen(api);
     await userEvent.click(await screen.findByRole("button", { name: "품질관리 매니저" }));
@@ -215,8 +217,8 @@ describe("RecruitingScreen", () => {
         [POOL]: [ok({ items: [] })],
       },
       {
-        "/api/v1/recruiting/postings/{id}/preflight": [ok({ checks: [{ key: "position_worksite", ok: true, note: "품질관리 매니저" }], publishable: true })],
-        "/api/v1/recruiting/postings/{id}/publish": [ok(undefined)],
+        "/api/v1/recruiting/postings/{postingId}/preflight": [ok({ checks: [{ key: "position_worksite", ok: true, note: "품질관리 매니저" }], publishable: true })],
+        "/api/v1/recruiting/postings/{postingId}/publish": [ok(undefined)],
       },
     );
     renderScreen(api);
@@ -225,7 +227,7 @@ describe("RecruitingScreen", () => {
     expect(screen.queryByRole("button", { name: text.preflight.publish })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: text.preflight.attest }));
     await userEvent.click(screen.getByRole("button", { name: text.preflight.publish }));
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/postings/{id}/publish", expect.objectContaining({
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/postings/{postingId}/publish", expect.objectContaining({
       body: { attest_exposure_scope: true, expected_updated_at: draft.updated_at },
     }));
     expect(await screen.findByText(text.toast.published("품질관리 매니저"))).toBeVisible();
@@ -297,7 +299,7 @@ describe("RecruitingScreen", () => {
         ],
         "/api/v1/branches": [ok([{ id: "br-1", name: "안산지점" }])],
       },
-      { "/api/v1/recruiting/applicants/{id}/hire": [ok({ employee_id: "emp-7", applicant: hired, posting: posting({ hired_count: 1 }) })] },
+      { "/api/v1/recruiting/applicants/{applicantId}/hire": [ok({ employee_id: "emp-7", applicant: hired, posting: posting({ hired_count: 1 }) })] },
     );
     render(
       <RecruitingScreen api={api} actorId="actor-1" capabilities={manager} sessionKey="session-a" onNavigate={onNavigate} />,
@@ -315,8 +317,8 @@ describe("RecruitingScreen", () => {
       await within(form).findByRole("option", { name: "안산지점" }),
     );
     await userEvent.click(within(form).getByRole("button", { name: text.hire.submit }));
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/applicants/{id}/hire", expect.objectContaining({
-      params: { path: { id: "apl-1" } },
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/applicants/{applicantId}/hire", expect.objectContaining({
+      params: { path: { applicantId: "apl-1" } },
       body: {
         employee_number: "24-1187", phone: "010-1234-5678", org_unit: "품질관리팀",
         position: "품질관리 매니저", site: "안산공장 품질관리팀", home_branch_id: "br-1", base_pay: "3400000",

@@ -31,13 +31,13 @@ describe("createRecruitingApi", () => {
     expect(api.GET).toHaveBeenCalledWith("/api/v1/recruiting/talent-pool", expect.anything());
 
     await recruiting.advanceApplicant("apl-1", { expected_updated_at: "t1" });
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/applicants/{id}/advance", expect.objectContaining({
-      params: { path: { id: "apl-1" } },
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/applicants/{applicantId}/advance", expect.objectContaining({
+      params: { path: { applicantId: "apl-1" } },
       body: { expected_updated_at: "t1" },
     }));
 
     await recruiting.publishPosting("post-1", { attest_exposure_scope: true, expected_updated_at: "t2" });
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/postings/{id}/publish", expect.objectContaining({
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/recruiting/postings/{postingId}/publish", expect.objectContaining({
       body: { attest_exposure_scope: true, expected_updated_at: "t2" },
     }));
   });
@@ -56,14 +56,14 @@ describe("createRecruitingApi", () => {
     const api = client();
     vi.mocked(api.POST).mockResolvedValue(err(422, {
       error: { message: "게시할 수 없습니다" },
-      checks: [{ key: "duplicate_posting", ok: false, note: "중복 존재" }],
+      checks: [{ key: "no_duplicate_open", ok: false, note: "중복 존재" }],
     }));
     const recruiting = createRecruitingApi(api);
     const failure = await recruiting
       .publishPosting("post-1", { attest_exposure_scope: true, expected_updated_at: "t" })
       .catch((cause: unknown) => cause);
     expect((failure as RecruitingApiError).checks).toEqual([
-      { key: "duplicate_posting", ok: false, note: "중복 존재" },
+      { key: "no_duplicate_open", ok: false, note: "중복 존재" },
     ]);
   });
 
