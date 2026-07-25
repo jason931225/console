@@ -54,4 +54,3 @@ export function parseImmutableJson(text, label = 'immutable JSON') {
   const value = JSON.parse(text);
   return { value, raw_sha256: createHash('sha256').update(text).digest('hex'), canonical_sha256: canonicalReceiptDigest(value) };
 }
-

@@ -213,6 +213,9 @@ export function evaluateCiPreflight(workflow) {
     if (!triggerPathEntries(workflow, trigger).includes("toolchains/**")) {
       failures.push(`${trigger} must include toolchains/** in CI path filters`);
     }
+    if (!triggerPathEntries(workflow, trigger).includes("docs/program/**")) {
+      failures.push(`${trigger} must include docs/program/** in CI path filters`);
+    }
   }
 
   const preflight = jobBlock(workflow, "preflight");

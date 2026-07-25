@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseImmutableJson } from './immutable-json.mjs';
@@ -13,6 +13,7 @@ const STATES = new Set(['DECLARED', 'PLANNED', 'IMPLEMENTED', 'VERIFIED', 'EXPOS
 const VERDICTS = new Set(['MEET', 'EXCEED', 'HOLD']);
 const EDGE_TYPES = new Set(['requires', 'blocks', 'integrates_with', 'validates']);
 const validatedRegistries = new WeakMap();
+const immutableReceiptAttestations = new WeakSet();
 function stable(value) { if (Array.isArray(value)) return value.map(stable); if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).sort(([a],[b]) => a.localeCompare(b, 'en')).map(([k,v]) => [k,stable(v)])); return value; }
 function ledgerDigest(value) { return createHash('sha256').update(JSON.stringify(stable(value))).digest('hex'); }
 const RESOURCE_KEYS = ['writer', 'postgres', 'browser', 'ios', 'graph', 'cas'];
@@ -24,7 +25,49 @@ function nonempty(value, label) { if (typeof value !== 'string' || value.trim() 
 function sha(value, label) { if (!SHA.test(value ?? '')) fail(`${label} must be a full lowercase Git SHA`); return value; }
 function uniqueStrings(values, label) { const seen = new Set(); for (const value of values) { nonempty(value, label); if (seen.has(value)) fail(`duplicate ${label}: ${value}`); seen.add(value); } return seen; }
 
-export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true, resolveBuckTarget = () => true, resolveSource = () => true, resolveBranch = null, resolveReceipt = () => true, expectedCandidateSha, routeFacts } = {}) {
+function canonicalReceiptPath(capabilityId, candidateSha) { return `docs/evidence/console/reviews/${capabilityId}/${candidateSha}.json`; }
+function git(root, args, encoding = 'utf8') { return execFileSync('git', ['-C', root, ...args], { encoding, stdio: ['ignore', 'pipe', 'pipe'] }); }
+function gitSucceeds(root, args) { try { git(root, args); return true; } catch { return false; } }
+function canonicalJsonDigest(value) { return createHash('sha256').update(JSON.stringify(stable(value))).digest('hex'); }
+function sshSignatureMatches(status, signing) {
+  if (signing?.format !== 'ssh' || typeof signing.principal !== 'string' || typeof signing.fingerprint !== 'string') return false;
+  const lines = String(status).split(/\r?\n/).filter((line) => line.startsWith('Good "git" signature'));
+  const match = lines.length === 1 && lines[0].match(/^Good "git" signature for (.+) with [A-Za-z0-9-]+ key (SHA256:[A-Za-z0-9+/]+={0,2})$/);
+  return Boolean(match && match[1] === signing.principal && match[2] === signing.fingerprint);
+}
+function gpgSignatureMatches(status, signing) {
+  if (signing?.format !== 'gpg' || !/^[A-F0-9]{40,64}$/.test(signing.fingerprint ?? '')) return false;
+  const lines = String(status).split(/\r?\n/).filter((line) => line.startsWith('[GNUPG:] VALIDSIG '));
+  return lines.length === 1 && new RegExp(`^\\[GNUPG:\\] VALIDSIG ${signing.fingerprint}(?:\\s|$)`).test(lines[0]);
+}
+function verifyImmutableReviewReceipt(repoRoot, reviewer, cap, candidate, outcomeIds, review) {
+  if (typeof repoRoot !== 'string' || !path.isAbsolute(repoRoot)) fail(`${cap.id} non-HOLD review requires canonical repository root`);
+  const receiptPath = canonicalReceiptPath(cap.id, candidate.sha);
+  if (review.receipt_path !== receiptPath) fail(`${cap.id} review receipt path is not canonical`);
+  if (!gitSucceeds(repoRoot, ['cat-file', '-e', `${review.review_commit}^{commit}`])) fail(`${cap.id} review commit is missing`);
+  const parents = git(repoRoot, ['rev-list', '--parents', '-n', '1', review.review_commit]).trim().split(/\s+/);
+  if (parents.length !== 2 || !gitSucceeds(repoRoot, ['merge-base', '--is-ancestor', candidate.sha, review.review_commit])) fail(`${cap.id} review commit ancestry is invalid`);
+  const changed = git(repoRoot, ['diff-tree', '--no-commit-id', '--name-only', '-r', review.review_commit]).trim().split('\n').filter(Boolean);
+  if (changed.length !== 1 || changed[0] !== receiptPath) fail(`${cap.id} review commit may only change its canonical receipt`);
+  const tree = git(repoRoot, ['ls-tree', review.review_commit, '--', receiptPath]).trim().match(/^(100644|100755) blob ([0-9a-f]{40})\t/);
+  if (!tree) fail(`${cap.id} receipt must be a regular Git blob`);
+  const raw = git(repoRoot, ['show', `${review.review_commit}:${receiptPath}`]);
+  const parsed = parseImmutableJson(raw, `${cap.id} immutable review receipt`).value;
+  const rawDigest = createHash('sha256').update(raw).digest('hex');
+  const canonicalDigest = canonicalJsonDigest(parsed);
+  if (review.receipt_sha256 !== rawDigest || review.receipt_canonical_sha256 !== canonicalDigest) fail(`${cap.id} receipt digest does not bind immutable bytes`);
+  const expectedOutcomes = [...new Set(review.outcome_ids)].sort();
+  const receiptOutcomes = Array.isArray(parsed.outcome_ids) ? [...new Set(parsed.outcome_ids)].sort() : [];
+  if (parsed.candidate_sha !== candidate.sha || parsed.capability_id !== cap.id || JSON.stringify(receiptOutcomes) !== JSON.stringify(expectedOutcomes) || !expectedOutcomes.every((id) => outcomeIds.has(id)) || parsed.evidence_digest !== review.evidence_digest || parsed.verdict !== review.status || parsed.reviewer_id !== reviewer.id) fail(`${cap.id} receipt payload is not bound to review context`);
+  const [authorName, authorEmail, committerName, committerEmail] = git(repoRoot, ['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce', review.review_commit]).trim().split('\0');
+  if (authorName !== reviewer.author_name || authorEmail !== reviewer.author_email || committerName !== reviewer.committer_name || committerEmail !== reviewer.committer_email) fail(`${cap.id} review commit identity is not trusted`);
+  const signature = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', review.review_commit], { encoding: 'utf8' });
+  const status = `${signature.stdout ?? ''}${signature.stderr ?? ''}`;
+  if (signature.status !== 0 || !(sshSignatureMatches(status, reviewer.signing) || gpgSignatureMatches(status, reviewer.signing))) fail(`${cap.id} review signature is not trusted`);
+  const attestation = Object.freeze({}); immutableReceiptAttestations.add(attestation); return attestation;
+}
+
+export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true, resolveBuckTarget = () => true, resolveSource = () => true, resolveBranch = null, expectedCandidateSha, routeFacts, repoRoot } = {}) {
   object(registry, 'registry'); object(jurisdiction, 'jurisdiction register');
   if (registry.schema_version !== 'console-capability-registry-v2') fail('unsupported console capability registry schema');
   if (jurisdiction.schema_version !== 'console-jurisdiction-register-v2') fail('unsupported console jurisdiction register schema');
@@ -74,9 +117,9 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     if (!['SOURCE_BOUNDED_STARTING_DOSSIER','HOLD_INSUFFICIENT_CATEGORY_DOSSIER'].includes(benchmark.dossier_status)) fail(`${cap.id} benchmark dossier status is invalid`);
     if (benchmark.dossier_status === 'HOLD_INSUFFICIENT_CATEGORY_DOSSIER') nonempty(benchmark.missing_dossier_reason, `${cap.id} missing dossier reason`);
     if (!VERDICTS.has(benchmark.verdict)) fail(`${cap.id} benchmark verdict is invalid`);
-    nonempty(benchmark.independent_outcome_review?.status, `${cap.id} independent outcome review status`); if (benchmark.independent_outcome_review.status !== 'HOLD') { const review=benchmark.independent_outcome_review; if (review.candidate_sha !== candidate.sha || !nonempty(review.receipt_path, `${cap.id} review receipt path`) || !nonempty(review.reviewer_id, `${cap.id} independent reviewer`) || review.reviewer_id === cap.owner || !resolveReceipt(review, candidate.sha)) fail(`${cap.id} non-HOLD outcome review is not independent candidate-bound receipt-backed evidence`); }
+    nonempty(benchmark.independent_outcome_review?.status, `${cap.id} independent outcome review status`);
     if (benchmark.verdict !== 'HOLD' && evidence.status !== 'VERIFIED') fail(`${cap.id} non-HOLD benchmark requires verified candidate evidence`);
-    if (benchmark.independent_outcome_review.status !== 'HOLD') { const review=benchmark.independent_outcome_review; const reviewer=array(registry.review_authority?.reviewers).find((entry) => entry.id === review.reviewer_id); if (!reviewer || review.reviewer_id === cap.owner || review.capability_id !== cap.id || review.candidate_sha !== candidate.sha || !Array.isArray(review.outcome_ids) || !review.outcome_ids.length || !review.outcome_ids.every((id) => outcomeIds.has(id)) || !/^[0-9a-f]{64}$/.test(review.evidence_digest ?? '') || !SHA.test(review.review_commit ?? '')) fail(`${cap.id} non-HOLD review receipt schema is invalid`); const receipt=resolveReceipt(review, candidate.sha); if (!(receipt === true || (receipt?.tracked_regular === true && receipt?.candidate_bound === true && receipt?.digest_verified === true && receipt?.commit_ancestor === true && receipt?.trusted_identity === reviewer.id && receipt?.signature_verified === true && receipt?.fingerprint === reviewer.signing?.fingerprint))) fail(`${cap.id} non-HOLD review receipt is not immutable trusted evidence`); }
+    if (benchmark.independent_outcome_review.status !== 'HOLD') { const review=benchmark.independent_outcome_review; const reviewer=array(registry.review_authority?.reviewers).find((entry) => entry.id === review.reviewer_id); if (!reviewer || review.reviewer_id === cap.owner || review.capability_id !== cap.id || review.candidate_sha !== candidate.sha || !Array.isArray(review.outcome_ids) || !review.outcome_ids.length || new Set(review.outcome_ids).size !== review.outcome_ids.length || !review.outcome_ids.every((id) => outcomeIds.has(id)) || !/^[0-9a-f]{64}$/.test(review.evidence_digest ?? '') || !SHA.test(review.review_commit ?? '') || !/^[0-9a-f]{64}$/.test(review.receipt_sha256 ?? '') || !/^[0-9a-f]{64}$/.test(review.receipt_canonical_sha256 ?? '')) fail(`${cap.id} non-HOLD review receipt schema is invalid`); const attestation=verifyImmutableReviewReceipt(repoRoot, reviewer, cap, candidate, outcomeIds, review); if (!immutableReceiptAttestations.has(attestation)) fail(`${cap.id} internal receipt attestation was not minted`); }
     const delivery = object(cap.delivery_unit, `${cap.id} delivery unit`);
     nonempty(delivery.id, `${cap.id} delivery unit id`);
     if (!['NOT_APPLICABLE','REQUIRED','REQUIRED_UNRESOLVED'].includes(delivery.rust_status)) fail(`${cap.id} delivery unit has invalid Rust status`);
@@ -119,7 +162,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     nonempty(control.unhold_authority, `${control.id} explicit unhold authority`);
     if (!array(control.capability_traceability).length) fail(`${control.id} missing capability traceability`); const traceTuples = new Set(); for (const trace of control.capability_traceability) { const tuple=`${trace.capability_id}|${trace.candidate_sha}`; if (traceTuples.has(tuple)) fail(`${control.id} duplicate trace tuple`); traceTuples.add(tuple); if (trace.candidate_sha !== candidate.sha) fail(`${control.id} trace is not candidate-bound`); } if (control.candidate_evidence?.candidate_sha !== candidate.sha) fail(`${control.id} control evidence is not candidate-bound`);
   }
-  for (const cap of registry.capabilities) for (const binding of cap.jurisdiction_bindings) {
+  const bindingTuples = new Set(); for (const cap of registry.capabilities) for (const binding of cap.jurisdiction_bindings) { const tuple=`${binding.control_id}|${cap.id}|${binding.candidate_sha}`; if (bindingTuples.has(tuple)) fail(`${cap.id} duplicate jurisdiction binding`); bindingTuples.add(tuple);
     if (binding.jurisdiction_id !== 'JUR-KR-001' || !controls.has(binding.control_id)) fail(`${cap.id} has missing jurisdiction control ${binding.control_id}`);
     if (binding.candidate_sha !== candidate.sha) fail(`${cap.id} jurisdiction binding is not candidate-bound`);
     if (!array(controls.get(binding.control_id).capability_traceability).some((trace) => trace.capability_id === cap.id && trace.candidate_sha === candidate.sha)) fail(`${cap.id} jurisdiction trace is not bidirectional`);
@@ -138,9 +181,8 @@ function main() {
   const resolveSource = (value) => { try { execFileSync('git', ['ls-files','--error-unmatch',value], { cwd: root, stdio: 'ignore' }); try { return typeof value === 'string' && !value.includes('..') && lstatSync(path.join(root, value)).isFile() && !lstatSync(path.join(root, value)).isSymbolicLink() ? { tracked_regular: true } : false; } catch { return false; } } catch { return false; } };
   const resolveBuckTarget = (target) => { try { execFileSync(path.join(root, 'tools/buck2'), ['targets', target], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
   const resolveBranch = (branch) => { try { return execFileSync('git', ['rev-parse', `refs/remotes/origin/${branch}`], { cwd: root, encoding: 'utf8' }).trim(); } catch { return null; } };
-  const resolveReceipt = (review, sha) => { try { execFileSync('git', ['ls-files','--error-unmatch',review.receipt_path], { cwd: root, stdio: 'ignore' }); return typeof review.receipt_path === 'string' && review.candidate_sha === sha && existsSync(path.join(root, review.receipt_path)); } catch { return false; } };
   const resolveSha = (value) => { try { execFileSync('git', ['cat-file', '-e', `${value}^{commit}`], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
   const expectedCandidateSha = process.env.CONSOLE_EXPECTED_CANDIDATE_SHA ?? 'ebdf4c81d22502fac7a46192dd0b237fc0748241';
-  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha, resolveSource, resolveBuckTarget, resolveBranch, resolveReceipt, expectedCandidateSha, routeFacts: extractConsoleRouteFacts(root) }), null, 2));
+  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha, resolveSource, resolveBuckTarget, resolveBranch, expectedCandidateSha, routeFacts: extractConsoleRouteFacts(root), repoRoot: root }), null, 2));
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

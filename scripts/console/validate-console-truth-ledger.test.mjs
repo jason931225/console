@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import { validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
@@ -73,7 +77,7 @@ test('forged comparator source/date and attacker review cannot pass', () => {
   const source = structuredClone(registry);
   assert.throws(() => validateConsoleTruthLedger(source, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveSource: () => false }), /tracked regular file/);
   const review = structuredClone(registry); review.capabilities[0].benchmark.independent_outcome_review = { status: 'MEET', candidate_sha: registry.candidate.sha, receipt_path: 'forged.json', reviewer_id: review.capabilities[0].owner };
-  assert.throws(() => validateConsoleTruthLedger(review, jurisdiction, { expectedCandidateSha: registry.candidate.sha }), /independent candidate-bound receipt-backed/);
+  assert.throws(() => validateConsoleTruthLedger(review, jurisdiction, { expectedCandidateSha: registry.candidate.sha }), /receipt schema/);
 });
 
 test('required Buck target fails closed when resolver rejects it', () => {
@@ -102,11 +106,51 @@ test('non-HOLD promotion requires canonical trusted immutable receipt fields', (
   cap.benchmark.verdict = 'MEET'; cap.candidate_evidence.status = 'VERIFIED';
   cap.benchmark.independent_outcome_review = { status: 'MEET', reviewer_id: 'attacker', candidate_sha: registry.candidate.sha, capability_id: cap.id, outcome_ids: [cap.benchmark.native_outcomes[0].id], evidence_digest: 'a'.repeat(64), review_commit: 'b'.repeat(40), receipt_path: 'docs/evidence/fake.json' };
   assert.throws(() => validateConsoleTruthLedger(promoted, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveReceipt: () => true }), /receipt schema/);
-  const trusted = structuredClone(registry); const c = trusted.capabilities[0]; trusted.candidate_evidence = undefined; c.benchmark.verdict='MEET'; c.candidate_evidence.status='VERIFIED'; c.benchmark.independent_outcome_review={status:'MEET',reviewer_id:'jasonlee-ssh-reviewer',candidate_sha:registry.candidate.sha,capability_id:c.id,outcome_ids:[c.benchmark.native_outcomes[0].id],evidence_digest:'a'.repeat(64),review_commit:'b'.repeat(40),receipt_path:'docs/evidence/fake.json'};
-  assert.throws(() => validateConsoleTruthLedger(trusted, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveReceipt: () => ({ tracked_regular:true, candidate_bound:true, digest_verified:false, commit_ancestor:true, trusted_identity:'jasonlee-ssh-reviewer',signature_verified:true, fingerprint:'SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8' }) }), /immutable trusted evidence/);
+  const trusted = structuredClone(registry); const c = trusted.capabilities[0]; trusted.candidate_evidence = undefined; c.benchmark.verdict='MEET'; c.candidate_evidence.status='VERIFIED'; c.benchmark.independent_outcome_review={status:'MEET',reviewer_id:'jasonlee-ssh-reviewer',candidate_sha:registry.candidate.sha,capability_id:c.id,outcome_ids:[c.benchmark.native_outcomes[0].id],evidence_digest:'a'.repeat(64),review_commit:'b'.repeat(40),receipt_sha256:'c'.repeat(64),receipt_canonical_sha256:'d'.repeat(64),receipt_path:'docs/evidence/fake.json'};
+  assert.throws(() => validateConsoleTruthLedger(trusted, jurisdiction, { expectedCandidateSha: registry.candidate.sha,  }), /canonical repository root/);
 });
 
 test('Korea trace bijection rejects missing trace', () => {
   const bad=structuredClone(jurisdiction); bad.controls[0].capability_traceability.pop();
   assert.throws(() => validateConsoleTruthLedger(registry,bad,{expectedCandidateSha:registry.candidate.sha}),/bidirectional|bijection/);
+});
+
+
+test('Korea exactness rejects duplicate bindings and duplicate targets', () => {
+  const duplicateTarget = structuredClone(jurisdiction); duplicateTarget.target_jurisdiction_set = ['KR', 'KR'];
+  assert.throws(() => validateConsoleTruthLedger(registry, duplicateTarget, { expectedCandidateSha: registry.candidate.sha }), /jurisdiction target/);
+  const duplicateBinding = structuredClone(registry); const cap = duplicateBinding.capabilities[0]; cap.jurisdiction_bindings.push(structuredClone(cap.jurisdiction_bindings[0]));
+  assert.throws(() => validateConsoleTruthLedger(duplicateBinding, jurisdiction, { expectedCandidateSha: registry.candidate.sha }), /duplicate jurisdiction binding/);
+});
+
+
+test('a real SSH-signed canonical Git receipt is the only non-HOLD admission path', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'console-receipt-'));
+  const run = (args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
+  try {
+    run(['init']); run(['config', 'user.name', 'Jason Lee']); run(['config', 'user.email', 'jason19931225@gmail.com']);
+    run(['config', 'gpg.format', 'ssh']); run(['config', 'user.signingkey', `${process.env.HOME}/.ssh/id_ed25519`]);
+    const allowed = path.join(root, 'allowed_signers'); writeFileSync(allowed, 'jason19931225@gmail.com ' + readFileSync(`${process.env.HOME}/.ssh/id_ed25519.pub`, 'utf8'));
+    run(['config', 'gpg.ssh.allowedSignersFile', allowed]);
+    writeFileSync(path.join(root, 'candidate.txt'), 'candidate\n'); run(['add', '.']); run(['commit', '--no-gpg-sign', '-m', 'candidate']);
+    const candidateSha = run(['rev-parse', 'HEAD']);
+    const promoted = structuredClone(registry); const fixtureJurisdiction = structuredClone(jurisdiction); const cap = promoted.capabilities[0];
+    promoted.candidate.sha = candidateSha; promoted.provenance.authority_base_sha = 'a'.repeat(40); promoted.provenance.historical_implementation_freeze_sha = 'b'.repeat(40);
+    for (const capability of promoted.capabilities) { capability.candidate_evidence.candidate_sha = candidateSha; for (const binding of capability.jurisdiction_bindings) binding.candidate_sha = candidateSha; }
+    for (const control of fixtureJurisdiction.controls) { control.candidate_evidence.candidate_sha = candidateSha; for (const trace of control.capability_traceability) trace.candidate_sha = candidateSha; }
+    cap.candidate_evidence.candidate_sha = candidateSha; cap.candidate_evidence.status = 'VERIFIED'; cap.benchmark.verdict = 'MEET';
+    const receiptPath = `docs/evidence/console/reviews/${cap.id}/${candidateSha}.json`; mkdirSync(path.dirname(path.join(root, receiptPath)), { recursive: true });
+    const payload = { candidate_sha: candidateSha, capability_id: cap.id, outcome_ids: [cap.benchmark.native_outcomes[0].id], evidence_digest: 'a'.repeat(64), verdict: 'MEET', reviewer_id: 'jasonlee-ssh-reviewer' };
+    const raw = `${JSON.stringify(payload)}\n`; writeFileSync(path.join(root, receiptPath), raw); run(['add', receiptPath]); run(['commit', '-S', '-m', 'review receipt']);
+    const reviewCommit = run(['rev-parse', 'HEAD']);
+    const [authorName, authorEmail, committerName, committerEmail] = run(['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce', reviewCommit]).split('\0');
+    Object.assign(promoted.review_authority.reviewers[0], { author_name: authorName, author_email: authorEmail, committer_name: committerName, committer_email: committerEmail });
+    const canonicalDigest = createHash('sha256').update(JSON.stringify(Object.fromEntries(Object.entries(payload).sort(([a,], [b,]) => a.localeCompare(b, 'en'))))).digest('hex');
+    cap.benchmark.independent_outcome_review = { status: 'MEET', reviewer_id: payload.reviewer_id, candidate_sha: candidateSha, capability_id: cap.id, outcome_ids: payload.outcome_ids, evidence_digest: payload.evidence_digest, review_commit: reviewCommit, receipt_path: receiptPath, receipt_sha256: createHash('sha256').update(raw).digest('hex'), receipt_canonical_sha256: canonicalDigest };
+    assert.doesNotThrow(() => validateConsoleTruthLedger(promoted, fixtureJurisdiction, { expectedCandidateSha: candidateSha, repoRoot: root }));
+    const forged = structuredClone(promoted); forged.capabilities[0].benchmark.independent_outcome_review.receipt_path = 'package.json';
+    assert.throws(() => validateConsoleTruthLedger(forged, fixtureJurisdiction, { expectedCandidateSha: candidateSha, repoRoot: root }), /not canonical/);
+    const wrongDigest = structuredClone(promoted); wrongDigest.capabilities[0].benchmark.independent_outcome_review.receipt_sha256 = '0'.repeat(64);
+    assert.throws(() => validateConsoleTruthLedger(wrongDigest, fixtureJurisdiction, { expectedCandidateSha: candidateSha, repoRoot: root }), /digest/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -39,6 +39,13 @@ describe("CI preflight contract", () => {
     expectFailure(pullWithoutToolchains, "pull_request must include toolchains/** in CI path filters");
   });
 
+  it("rejects docs/program path removal independently for push and pull_request", () => {
+    expectFailure(workflow.replace('      - "docs/program/**"\n', ""), "push must include docs/program/** in CI path filters");
+    const pullRequest = workflow.indexOf("  pull_request:\n");
+    const withoutPullDocs = workflow.slice(0, pullRequest) + workflow.slice(pullRequest).replace('      - "docs/program/**"\n', "");
+    expectFailure(withoutPullDocs, "pull_request must include docs/program/** in CI path filters");
+  });
+
   it("rejects toolchain entries placed outside each trigger's paths mapping", () => {
     const pushWithoutToolchains = workflow.replace('      - "toolchains/**"\n', "");
     expectFailure(
