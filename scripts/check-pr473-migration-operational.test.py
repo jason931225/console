@@ -87,7 +87,15 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(run_mock.call_count, 1)
         command = run_mock.call_args.args[0]
         self.assertEqual(command[0], str(SCRIPT.parents[1] / gate.BUCK_POSTGRES_HARNESS))
-        self.assertEqual(command[1:], list(gate.OPERATIONAL_SQLX_TARGETS))
+        self.assertEqual(
+            command[1:],
+            [
+                "//tools/buck:pr473-ontology-key-revision-postgres",
+                "//tools/buck:pr473-leave-expand-postgres",
+                "//tools/buck:pr473-apalis-adapter-postgres",
+                "//tools/buck:pr473-apalis-schema-postgres",
+            ],
+        )
         self.assertNotIn("cargo", command)
         self.assertNotIn("DATABASE_URL", run_mock.call_args.kwargs["env"])
 

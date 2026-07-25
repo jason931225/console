@@ -47,10 +47,10 @@ BUCK_POSTGRES_HARNESS = Path("tools/buck/test_needs_postgres.sh")
 # The disposable harness, not a job-level service database, supplies SQLx's
 # bootstrap authority and per-invocation database lifecycle.
 OPERATIONAL_SQLX_TARGETS = (
-    "//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-key_revision_migration_upgrade",
-    "//backend/crates/leave/adapter-postgres:mnt-leave-adapter-postgres-itest-leave_migration_expand_contract",
-    "//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_adapter",
-    "//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_schema_contract",
+    "//tools/buck:pr473-ontology-key-revision-postgres",
+    "//tools/buck:pr473-leave-expand-postgres",
+    "//tools/buck:pr473-apalis-adapter-postgres",
+    "//tools/buck:pr473-apalis-schema-postgres",
 )
 
 

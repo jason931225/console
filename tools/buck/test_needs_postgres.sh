@@ -15,12 +15,14 @@ if [[ ! "${isolation_name}" =~ ^[[:alnum:]_.-]+$ ]]; then
   exit 1
 fi
 database="mnt_buck_test_$$_contract"
+secret_env_file=""
 
 cleanup() {
   local status=$?
   # PostgreSQL state is per invocation, while the Buck daemon is deliberately
   # stable per worktree so concurrent/repeated DB tests reuse compiled actions.
   docker rm -f "${container_name}" >/dev/null 2>&1 || true
+  [[ -z "${secret_env_file}" ]] || rm -f "${secret_env_file}"
   return "${status}"
 }
 trap cleanup EXIT HUP INT TERM
@@ -97,9 +99,19 @@ database_url="postgres://mnt_buck_admin:${admin_password}@127.0.0.1:${port}/${da
 apalis_owner_database_url="postgres://mnt_app:${app_password}@127.0.0.1:${port}/${database}"
 apalis_runtime_database_url="postgres://mnt_rt:${runtime_password}@127.0.0.1:${port}/${database}"
 
+umask 077
+secret_env_file="$(mktemp "${TMPDIR:-/tmp}/mnt-buck-postgres-env.XXXXXX")"
+chmod 600 "${secret_env_file}"
+{
+  printf 'DATABASE_URL=%q\n' "${database_url}"
+  printf 'MNT_APALIS_OWNER_DATABASE_URL=%q\n' "${apalis_owner_database_url}"
+  printf 'MNT_APALIS_RUNTIME_DATABASE_URL=%q\n' "${apalis_runtime_database_url}"
+  printf 'MNT_APALIS_ADMIN_DATABASE_URL=%q\n' "${database_url}"
+} >"${secret_env_file}"
+
+# Only the mode-0600 file path crosses Buck's test-executor argv.  The wrapper
+# target sources it inside the test process, keeping generated passwords and
+# connection URLs out of Buck command output, labels, and daemon event logs.
 BUCK_ISOLATION_DIR="${isolation_name}" "${buck_bin}" test --local-only "$@" \
-  -- --env "DATABASE_URL=${database_url}" \
-  --env "MNT_APALIS_OWNER_DATABASE_URL=${apalis_owner_database_url}" \
-  --env "MNT_APALIS_RUNTIME_DATABASE_URL=${apalis_runtime_database_url}" \
-  --env "MNT_APALIS_ADMIN_DATABASE_URL=${database_url}" \
+  -- --env "MNT_BUCK_POSTGRES_ENV_FILE=${secret_env_file}" \
   --env RUST_TEST_THREADS=1

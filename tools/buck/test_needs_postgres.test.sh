@@ -38,6 +38,20 @@ cat >"${scratch}/buck" <<'BUCK'
 printf 'buck BUCK_ISOLATION_DIR=%q' "${BUCK_ISOLATION_DIR}" >>"${HARNESS_LOG}"
 printf ' %q' "$@" >>"${HARNESS_LOG}"
 printf '\n' >>"${HARNESS_LOG}"
+env_file=""
+for argument in "$@"; do
+  case "${argument}" in
+    MNT_BUCK_POSTGRES_ENV_FILE=*) env_file="${argument#*=}" ;;
+  esac
+done
+[[ -n "${env_file}" && -f "${env_file}" ]]
+[[ "$(stat -f '%Lp' "${env_file}")" == "600" ]]
+grep -Fq 'DATABASE_URL=postgres://mnt_buck_admin:' "${env_file}"
+grep -Fq 'MNT_APALIS_OWNER_DATABASE_URL=postgres://mnt_app:' "${env_file}"
+grep -Fq 'MNT_APALIS_RUNTIME_DATABASE_URL=postgres://mnt_rt:' "${env_file}"
+grep -Fq 'MNT_APALIS_ADMIN_DATABASE_URL=postgres://mnt_buck_admin:' "${env_file}"
+grep -Fq '?options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1' "${env_file}"
+printf 'buck env-file bootstrap marker verified\n' >>"${HARNESS_LOG}"
 exit "${FAKE_BUCK_STATUS:-0}"
 BUCK
 chmod +x "${fake_bin}/docker" "${fake_bin}/openssl" "${scratch}/buck"
@@ -77,14 +91,13 @@ grep -Fq -- 'bash /topology.sh' <<<"${calls}"
 grep -Eq 'buck BUCK_ISOLATION_DIR=mnt-buck-postgres-[^/ ]+' <<<"${calls}"
 assert_regex_absent 'buck BUCK_ISOLATION_DIR=[^ ]*/' "${calls}"
 assert_regex_absent 'buck BUCK_ISOLATION_DIR=[^ ]+ kill$' "${calls}"
-grep -Fq -- 'test --local-only //backend/crates/platform/db:db-itest-runtime --test-filter smoke -- --env DATABASE_URL=postgres://mnt_buck_admin:' <<<"${calls}"
+grep -Fq -- 'test --local-only //backend/crates/platform/db:db-itest-runtime --test-filter smoke -- --env MNT_BUCK_POSTGRES_ENV_FILE=' <<<"${calls}"
 grep -Fq -- '--env RUST_TEST_THREADS=1' <<<"${calls}"
-grep -Fq -- '--env MNT_APALIS_OWNER_DATABASE_URL=postgres://mnt_app:' <<<"${calls}"
-grep -Fq -- '--env MNT_APALIS_RUNTIME_DATABASE_URL=postgres://mnt_rt:' <<<"${calls}"
-grep -Fq -- '--env MNT_APALIS_ADMIN_DATABASE_URL=postgres://mnt_buck_admin:' <<<"${calls}"
-assert_fixed_absent ' --env DATABASE_URL=postgres://mnt_app:' "${calls}"
-grep -Fq -- '@127.0.0.1:49123/mnt_buck_test_' <<<"${calls}"
-grep -Fq -- '?options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1' <<<"${calls}"
+grep -Fq -- '--env MNT_BUCK_POSTGRES_ENV_FILE=' <<<"${calls}"
+assert_fixed_absent 'postgres://mnt_' "$(grep '^buck ' "${log}")"
+assert_fixed_absent 'secret-' "$(grep '^buck ' "${log}")"
+grep -Fq -- 'POSTGRES_DB=mnt_buck_test_' <<<"${calls}"
+grep -Fq -- 'buck env-file bootstrap marker verified' <<<"${calls}"
 grep -Fq -- 'docker rm -f mnt-buck-postgres-' <<<"${calls}"
 
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${log}" \
