@@ -1,8 +1,15 @@
 # L-A1 — ontology catalog additive-upgrade path
 
 **Lane** `w4-a1-catalog` · **worktree** `/Users/jasonlee/Developer/maintenance-worktrees/w4-a1-catalog-20260725`
-· **branch** `claude/w4-a1-catalog-20260725` · **migration slot** 0203 (ledger §4 row 2, assigned to L-A1)
+· **branch** `claude/w4-a1-catalog-20260725` · **migration slot** 0211
 · **date** 2026-07-25
+
+> **Slot history.** L-A1 was first assigned 0203 and committed against it. The
+> integrator then swapped 0203↔0211 in ledger commit `b33cbc4d`, and
+> `0203_leave_api_revoke_directory_manager_helper.sql` merged onto the spine
+> under the old number. The migration and every reference to it were renumbered
+> to **0211** before this lane finished; no `0203` reference survives anywhere
+> in L-A1's diff.
 
 ---
 
@@ -22,7 +29,7 @@ Reproduced as a red test before the fix — see §4.1.
 
 ## 2. What was built
 
-One migration, `backend/crates/platform/db/migrations/0203_ontology_catalog_additive_upgrade.sql`.
+One migration, `backend/crates/platform/db/migrations/0211_ontology_catalog_additive_upgrade.sql`.
 No new tables, no Rust API change, no OpenAPI/client change.
 
 **`ont_builtin_catalog_installs` becomes an append-only per-tenant history.**
@@ -85,7 +92,7 @@ routine's SQL (0165). Comment corrected to say so.
 |---|---|---|
 | `backend/crates/ontology/**` | yes | test + BUCK target + seed.rs doc fix |
 | `docs/evidence/console/wave4/L-A1/**` | yes | this report + manifests |
-| `backend/crates/platform/db/migrations/0203_*.sql` | **shared** | slot 0203 assigned to L-A1 by the ledger; written in-tree per the ledger's recorded integrator deviation (§5 note, 2026-07-25). Manifest: `manifests/shared-roots.json` |
+| `backend/crates/platform/db/migrations/0211_*.sql` | **shared** | slot 0211 assigned to L-A1 by the ledger; written in-tree per the ledger's recorded integrator deviation (§5 note, 2026-07-25). Manifest: `manifests/shared-roots.json` |
 | `tools/buck/gen_first_party.py` | **foreign** | one appended dict line registering the new test's postgres resource. Manifest: `manifests/shared-roots.json` |
 
 Untouched: `web/**`, `backend/openapi/openapi.yaml`, `clients/**`,
@@ -109,7 +116,7 @@ bypassed by the owner.
 
 ### 4.1 Red before green
 
-With `0203_*.sql` removed from the migrations directory:
+With `0211_*.sql` removed from the migrations directory:
 
 ```
 test additive_upgrade_adds_only_new_keys_and_is_idempotent_as_runtime_role ... FAILED
@@ -147,60 +154,83 @@ With the migration restored: `4 passed; 0 failed`.
 | `cargo run -p mnt-gate-tenant-isolation` | **PASSED** |
 | `cargo run -p mnt-gate-audit-coverage` | **PASSED** |
 | `cargo run -p mnt-gate-rls-arming` | **PASSED** |
-| `cargo run -p mnt-gate-migration-safety` | **FAILED — pre-existing**, see §5.1 |
+| `cargo run -p mnt-gate-migration-safety` | **FAILED — contiguity only, no duplicate**, see §5.1 |
 
 ## 5. Honest residuals
 
-### 5.1 `mnt-gate-migration-safety` is red on this branch, and the ledger causes it
+### 5.1 `mnt-gate-migration-safety` — no duplicate; 9 contiguity gaps, none actionable here
+
+After the renumber the gate reports **no `DuplicateMigrationVersion`** — the
+0203 collision with the merged
+`0203_leave_api_revoke_directory_manager_helper.sql` is gone. What remains is
+contiguity:
 
 ```
-[NonContiguousMigrationVersion] missing migration version 0201 before 0202
+mnt-gate-migration-safety: FAILED - 9 violation(s):
+  [NonContiguousMigrationVersion] missing migration version 0201 before 0202
+  [NonContiguousMigrationVersion] missing migration version 0203 before 0211
+  ... 0204, 0205, 0206, 0207, 0208, 0209, 0210 before 0211
 ```
 
-Reproduced with `0203_*.sql` removed — **identical failure**, so it is not this
-lane's. But it is not going away on its own: the wave-4 slot ledger deliberately
-**reserves 0201 as an unavailable gap**, and this ship-blocking gate requires
-contiguous versions. Either 0201 gets filled by the evidence-retention subject
-before the train lands, or the reservation has to be released. **Integrator
-decision, not a lane decision.**
+Two distinct causes, neither this lane's to fix:
 
-### 5.2 `tools/buck/gen_first_party.py` cannot run to completion on this branch
+- **0201** — the ledger's deliberate reserved gap. Reproduced with `0211_*.sql`
+  removed (gate then reports exactly this one violation). **Taken by the
+  integrator on 2026-07-25**; L-A1 was instructed not to fill or renumber
+  around it.
+- **0203–0210** — an artifact of lane isolation. This worktree holds only
+  L-A1's migration, so every sibling slot below 0211 reads as missing. All
+  eight are real and land on merge: 0203 (leave, already on the spine) and
+  0204–0210 (CRM lanes L-X1…L-X5, L-X7, L-X8 per ledger §4). The gate can
+  therefore only go green **on the merged spine**, never in this worktree.
 
-It aborts on **14 pre-existing unregistered test targets** that other lanes
-added without a resource declaration:
+**One thing for the integrator to watch:** L-A1 now holds the highest slot, so
+if any of 0204–0210 is dropped rather than landed, 0211 leaves a permanent
+contiguity gap behind it.
 
-```
-mnt-app: board_ack_api, evaluation_cycle_api, field_visit_api,
-         maintenance_chain_api, notif_routing_api, org_change_api,
-         recruiting_pipeline_api
-mnt-orgchange-domain: unit
-mnt-payroll-adapter-postgres: payroll_lifecycle_rls_as_runtime_role, unit
-mnt-payroll-rest: run_lifecycle_api
-mnt-recruiting-application: unit
-mnt-recruiting-domain: unit
-mnt-workorder-domain: settlement_fsm
-```
+### 5.2 `tools/buck/gen_first_party.py` — resolved elsewhere; this lane's target verified
 
-This lane registered **its own** entry in the table and hand-wrote the matching
-`rust_test` target in `backend/crates/ontology/adapter-postgres/BUCK`, byte-matching
-the neighbouring generated targets and placed at the generator's alphabetical
-position (`sorted()` over `tests/*.rs`, so before `c_chain_...`). It could not be
-machine-verified because the generator will not emit anything until the 14 above
-are declared. Flagged to the buck-preflight lane.
+Reported by this lane: the generator aborted on **14 pre-existing unregistered
+test targets** from other lanes (mnt-app `board_ack_api`,
+`evaluation_cycle_api`, `field_visit_api`, `maintenance_chain_api`,
+`notif_routing_api`, `org_change_api`, `recruiting_pipeline_api`;
+`mnt-orgchange-domain` unit; `mnt-payroll-adapter-postgres`
+`payroll_lifecycle_rls_as_runtime_role` + unit; `mnt-payroll-rest`
+`run_lifecycle_api`; `mnt-recruiting-application` unit;
+`mnt-recruiting-domain` unit; `mnt-workorder-domain` `settlement_fsm`).
+
+**Fixed by the `hf-buck-preflight` lane** (`claude/hf-buck-preflight-20260725`
+@ `b84c2598`): intervening spine commits declared 13, that lane declared the
+14th plus a 15th (`mnt-platform-db` `tests/lifecycle_maker_checker.rs`) added
+by the four-eyes merge. `gen_first_party.py` now exits 0 and
+`tools/buck/preflight.sh` exits 0.
+
+**This lane's hand-written target is confirmed byte-identical to generator
+output.** That lane took L-A1's evidence commit into a throwaway worktree,
+merged its own branch in to supply the full declaration table, and re-ran the
+generator: 166 BUCK files generated, exit 0, `git status --short` empty —
+`backend/crates/ontology/adapter-postgres/BUCK` came back unchanged. No
+follow-up needed beyond taking the spine.
+
+L-A1 keeps its one appended `TEST_RESOURCE_REQUIREMENTS` line; that is the
+declaration and it is correct. Until this branch takes the spine (or that
+lane's branch) its local copy of the table has only L-A1's entry, so the
+generator still raises here — expected, not a new break.
 
 ### 5.3 `mnt-ontology-rest --test object_type_cas_as_runtime_role` is red on this branch
 
 `blocker_queue_is_tenant_scoped_cascades_and_attachment_effects_are_write_checked`
 and `instance_list_composes_enforced_permit_forbid_and_tenant_scope` fail with
 `"unable to evaluate object visibility policy"`. Verified **identical with and
-without 0203** — pre-existing, not this lane's.
+without 0211** — pre-existing, not this lane's. Reported to the integrator
+2026-07-25; acknowledged and being routed.
 
 ### 5.4 `key_revision_migration_upgrade.rs` is racy under one shared PostgreSQL
 
 It rewrites **cluster-global** role attributes (`ALTER ROLE mnt_app ...`,
 `REVOKE mnt_ontology_writer FROM ...`) to reduce the schema to its pre-0165
 shape, so two cargo test binaries hitting the same server can clobber each
-other. Reproduced **without** 0203 (2 of 3 baseline runs red). Green 3/3 when
+other. Reproduced **without** 0211 (2 of 3 baseline runs red). Green 3/3 when
 run alone. Buck gives every target its own disposable PostgreSQL plus
 `RUST_TEST_THREADS=1`, so CI is unaffected. Not fixed here — it is not this
 lane's file to redesign.

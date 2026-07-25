@@ -7,10 +7,11 @@
   "shared_root_touches": [
     {
       "root": "backend/crates/platform/db/migrations/**",
-      "path": "backend/crates/platform/db/migrations/0203_ontology_catalog_additive_upgrade.sql",
-      "slot": "0203",
-      "slot_source": "docs/program/wave4-migration-slot-ledger.md section 4 row 2 (assigned to L-A1, 2026-07-25)",
+      "path": "backend/crates/platform/db/migrations/0211_ontology_catalog_additive_upgrade.sql",
+      "slot": "0211",
+      "slot_source": "docs/program/wave4-migration-slot-ledger.md, as reassigned by the integrator on 2026-07-25",
       "slot_self_assigned": false,
+      "slot_history": "First assigned 0203 (ledger section 4 row 2) and committed against it. The integrator then swapped 0203<->0211 in ledger commit b33cbc4d, while 0203_leave_api_revoke_directory_manager_helper.sql merged onto the spine under the old number. Renamed to 0211 with git mv before this lane finished; no 0203 reference survives anywhere in L-A1's diff.",
       "written_in_tree": true,
       "written_in_tree_rationale": "The ledger's own recorded integrator deviation (section 5 note, 2026-07-25) accepts a lane writing its assigned migration directly when the integrator lands it in the same pass; a manifest round-trip would add a copy step with drift risk and no safety gain. The number came from the ledger, never from `ls`.",
       "new_tables": "none",
@@ -40,9 +41,11 @@
       "root": "tools/buck/gen_first_party.py",
       "change": "one appended line in TEST_RESOURCE_REQUIREMENTS['mnt-ontology-adapter-postgres']['integration']: 'tests/builtin_catalog_additive_upgrade_as_runtime_role.rs': 'postgres'",
       "why": "The generator refuses to emit any BUCK file unless every discovered test target has a reviewed resource declaration. Registering the new test keeps this lane from adding to that debt.",
-      "generator_could_not_be_run": true,
-      "generator_blocker": "gen_first_party.py aborts on 14 PRE-EXISTING unregistered targets from other lanes (mnt-app board_ack_api / evaluation_cycle_api / field_visit_api / maintenance_chain_api / notif_routing_api / org_change_api / recruiting_pipeline_api; mnt-orgchange-domain unit; mnt-payroll-adapter-postgres payroll_lifecycle_rls_as_runtime_role + unit; mnt-payroll-rest run_lifecycle_api; mnt-recruiting-application unit; mnt-recruiting-domain unit; mnt-workorder-domain settlement_fsm). Reproduced before this lane's change.",
-      "compensating_action": "The rust_test target in backend/crates/ontology/adapter-postgres/BUCK was hand-written to byte-match the neighbouring generated targets (identical env, labels and deps) and placed at the generator's alphabetical position. It must be re-verified by running the generator once the 14 entries above are declared."
+      "generator_could_not_be_run_on_this_branch": true,
+      "generator_blocker": "gen_first_party.py aborted on 14 PRE-EXISTING unregistered targets from other lanes (mnt-app board_ack_api / evaluation_cycle_api / field_visit_api / maintenance_chain_api / notif_routing_api / org_change_api / recruiting_pipeline_api; mnt-orgchange-domain unit; mnt-payroll-adapter-postgres payroll_lifecycle_rls_as_runtime_role + unit; mnt-payroll-rest run_lifecycle_api; mnt-recruiting-application unit; mnt-recruiting-domain unit; mnt-workorder-domain settlement_fsm). Reproduced before this lane's change.",
+      "generator_blocker_resolved_by": "hf-buck-preflight lane, branch claude/hf-buck-preflight-20260725 @ b84c2598: 13 declared by intervening spine commits, the 14th plus a 15th (mnt-platform-db tests/lifecycle_maker_checker.rs) declared there. gen_first_party.py and tools/buck/preflight.sh both exit 0 with the full table.",
+      "compensating_action": "The rust_test target in backend/crates/ontology/adapter-postgres/BUCK was hand-written to byte-match the neighbouring generated targets (identical env, labels and deps) and placed at the generator's alphabetical position.",
+      "compensating_action_verified": "CONFIRMED byte-identical by the hf-buck-preflight lane: L-A1's evidence commit was taken into a throwaway worktree, that lane's branch merged in to supply the full declaration table, and the generator re-run - 166 BUCK files generated, exit 0, `git status --short` empty, backend/crates/ontology/adapter-postgres/BUCK unchanged. No follow-up needed beyond taking the spine."
     }
   ],
   "not_touched": [
@@ -55,16 +58,24 @@
     "web/src/console/shell/nav.ts",
     "web/src/console/screens/registry.ts"
   ],
-  "integrator_decisions_required": [
+  "raised_by_this_lane_owned_elsewhere": [
     {
       "id": "L-A1-D1",
       "severity": "ship-blocking for the whole wave, pre-existing, not caused by this lane",
       "issue": "mnt-gate-migration-safety fails with [NonContiguousMigrationVersion] missing migration version 0201 before 0202. The ledger deliberately reserves 0201 as an unavailable gap; the gate requires contiguous versions. Reproduced with this lane's migration removed - identical failure.",
-      "options": [
-        "fill 0201 with the evidence-retention subject before the train lands",
-        "release the 0201 reservation and renumber",
-        "amend the gate to honour explicitly reserved gaps"
-      ]
+      "status": "TAKEN BY THE INTEGRATOR 2026-07-25. L-A1 was instructed not to fill or renumber around 0201. No action in this lane."
+    },
+    {
+      "id": "L-A1-D2",
+      "severity": "blocks any lane adding a test file, pre-existing, not caused by this lane",
+      "issue": "gen_first_party.py aborted on 14 unregistered test targets, so BUCK could not be regenerated.",
+      "status": "RESOLVED by the hf-buck-preflight lane; this lane's hand-written target independently verified byte-identical to generator output. See the tools/buck/gen_first_party.py entry above."
+    },
+    {
+      "id": "L-A1-D3",
+      "severity": "red test on the branch, pre-existing, not caused by this lane",
+      "issue": "mnt-ontology-rest --test object_type_cas_as_runtime_role: blocker_queue_is_tenant_scoped_cascades_and_attachment_effects_are_write_checked and instance_list_composes_enforced_permit_forbid_and_tenant_scope fail with 'unable to evaluate object visibility policy'. Verified identical with and without this lane's migration.",
+      "status": "Reported to the integrator 2026-07-25; acknowledged and being routed. No action in this lane."
     }
   ]
 }
