@@ -66,6 +66,8 @@ class WorkOrderMappersTest {
         status = status,
         priority = priority,
         resultType = WorkResultType.UNKNOWN,
+        maintenanceType = null,
+        maintenanceCause = null,
         targetDueAt = OffsetDateTime.parse("2026-06-12T13:00:00Z"),
         createdAt = OffsetDateTime.parse("2026-06-12T08:00:00Z"),
         updatedAt = OffsetDateTime.parse("2026-06-12T08:05:00Z"),

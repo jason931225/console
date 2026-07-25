@@ -118,6 +118,8 @@ class OfflineQueueRepositoryTest {
         status = status,
         priority = PriorityLevel.P1,
         resultType = WorkResultType.UNKNOWN,
+        maintenanceType = null,
+        maintenanceCause = null,
         evidenceVerified = false,
     )
 }
