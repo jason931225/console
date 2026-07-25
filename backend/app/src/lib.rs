@@ -708,34 +708,21 @@ impl AppConfig {
                     "PLATFORM_FORCE_COMMAND_DATABASE_URL is required for api role when DATABASE_URL is configured".to_owned(),
                 ));
             }
-            if database_url.is_some() && leave_command_database_url == database_url {
-                return Err(AppError::Config(
-                    "LEAVE_COMMAND_DATABASE_URL must be distinct from DATABASE_URL".to_owned(),
-                ));
-            }
-            if database_url.is_some() && ontology_command_database_url == database_url {
-                return Err(AppError::Config(
-                    "ONTOLOGY_COMMAND_DATABASE_URL must be distinct from DATABASE_URL".to_owned(),
-                ));
-            }
-            if ontology_command_database_url == leave_command_database_url
-                && ontology_command_database_url.is_some()
-            {
-                return Err(AppError::Config(
-                    "ONTOLOGY_COMMAND_DATABASE_URL must be distinct from LEAVE_COMMAND_DATABASE_URL"
-                        .to_owned(),
-                ));
-            }
-            if let Some(force_url) = platform_force_command_database_url.as_deref() {
-                if Some(force_url) == database_url.as_deref()
-                    || Some(force_url) == leave_command_database_url.as_deref()
-                    || Some(force_url) == ontology_command_database_url.as_deref()
-                {
-                    return Err(AppError::Config(
-                        "PLATFORM_FORCE_COMMAND_DATABASE_URL must be distinct from every other database URL".to_owned(),
-                    ));
-                }
-            }
+            ensure_distinct_database_urls([
+                ("DATABASE_URL", database_url.as_deref()),
+                (
+                    "LEAVE_COMMAND_DATABASE_URL",
+                    leave_command_database_url.as_deref(),
+                ),
+                (
+                    "ONTOLOGY_COMMAND_DATABASE_URL",
+                    ontology_command_database_url.as_deref(),
+                ),
+                (
+                    "PLATFORM_FORCE_COMMAND_DATABASE_URL",
+                    platform_force_command_database_url.as_deref(),
+                ),
+            ])?;
 
             if let (Some(database_url), Some(leave_url), Some(ontology_url), Some(force_url)) = (
                 database_url.as_deref(),
@@ -2438,6 +2425,24 @@ fn postgres_options_set_role(options: &str) -> bool {
             .split_once('=')
             .is_some_and(|(name, _)| name.eq_ignore_ascii_case("role"))
     })
+}
+
+fn ensure_distinct_database_urls<const N: usize>(
+    urls: [(&str, Option<&str>); N],
+) -> Result<(), AppError> {
+    for (index, (name, url)) in urls.iter().enumerate() {
+        let Some(url) = url else {
+            continue;
+        };
+        for (earlier_name, earlier_url) in &urls[..index] {
+            if earlier_url.is_some_and(|earlier_url| earlier_url == *url) {
+                return Err(AppError::Config(format!(
+                    "{name} must be distinct from {earlier_name}"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn ensure_distinct_database_credentials<const N: usize>(
@@ -5990,28 +5995,53 @@ mod command_database_config_tests {
                 "postgresql://mnt_rt:shared%2Dsecret@db/maintenance",
                 "postgresql://mnt_leave_cmd:shared-secret@db/leave",
                 ONTOLOGY_COMMAND_URL,
+                PLATFORM_FORCE_COMMAND_URL,
                 "DATABASE_URL and LEAVE_COMMAND_DATABASE_URL",
             ),
             (
                 RUNTIME_URL,
                 "postgresql://mnt_leave_cmd:shared%2Dsecret@db/leave",
                 "postgresql://mnt_ontology_cmd:shared-secret@db/ontology",
+                PLATFORM_FORCE_COMMAND_URL,
                 "LEAVE_COMMAND_DATABASE_URL and ONTOLOGY_COMMAND_DATABASE_URL",
             ),
             (
                 "postgresql://mnt_rt:query-secret@db/runtime",
                 LEAVE_COMMAND_URL,
                 "postgresql://mnt_ontology_cmd:different@db/ontology?password=query-secret",
+                PLATFORM_FORCE_COMMAND_URL,
                 "DATABASE_URL and ONTOLOGY_COMMAND_DATABASE_URL",
+            ),
+            (
+                "postgresql://mnt_rt:force-secret@db/runtime",
+                LEAVE_COMMAND_URL,
+                ONTOLOGY_COMMAND_URL,
+                "postgresql://mnt_platform_force_cmd:force-secret@db/platform-force",
+                "DATABASE_URL and PLATFORM_FORCE_COMMAND_DATABASE_URL",
+            ),
+            (
+                RUNTIME_URL,
+                "postgresql://mnt_leave_cmd:force-secret@db/leave",
+                ONTOLOGY_COMMAND_URL,
+                "postgresql://mnt_platform_force_cmd:force-secret@db/platform-force",
+                "LEAVE_COMMAND_DATABASE_URL and PLATFORM_FORCE_COMMAND_DATABASE_URL",
+            ),
+            (
+                RUNTIME_URL,
+                LEAVE_COMMAND_URL,
+                "postgresql://mnt_ontology_cmd:force-secret@db/ontology",
+                "postgresql://mnt_platform_force_cmd:force-secret@db/platform-force",
+                "ONTOLOGY_COMMAND_DATABASE_URL and PLATFORM_FORCE_COMMAND_DATABASE_URL",
             ),
         ];
 
-        for (runtime, leave, ontology, expected_pair) in cases {
+        for (runtime, leave, ontology, platform_force, expected_pair) in cases {
             let error = AppConfig::from_pairs([
                 ("MNT_APP_ROLE", "api"),
                 ("DATABASE_URL", runtime),
                 ("LEAVE_COMMAND_DATABASE_URL", leave),
                 ("ONTOLOGY_COMMAND_DATABASE_URL", ontology),
+                ("PLATFORM_FORCE_COMMAND_DATABASE_URL", platform_force),
             ])
             .unwrap_err();
             let message = error.to_string();
@@ -6021,6 +6051,7 @@ mod command_database_config_tests {
             );
             assert!(!message.contains("shared-secret"));
             assert!(!message.contains("query-secret"));
+            assert!(!message.contains("force-secret"));
         }
     }
 

@@ -84,12 +84,19 @@ describe("iOS hermetic UI CI contract", () => {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("timeout-minutes: 45", "timeout-minutes: 90") }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("fail-fast: false", "fail-fast: true") }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("max-parallel: 5", "max-parallel: 15") }), matrixGate);
-    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      `critical-lifecycle)
-                SHARD_TIMEOUT_SECONDS=210`,
-      `critical-lifecycle)
-                SHARD_TIMEOUT_SECONDS=540`,
-    ) }), matrixGate);
+    for (const [shard, budget, invalidBudget] of [
+      ["preflight-session", 60, 30],
+      ["critical-lifecycle", 300, 540],
+      ["camera-capture", 150, 90],
+      ["messenger-mutation", 180, 120],
+    ]) {
+      expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+        `${shard})
+                SHARD_TIMEOUT_SECONDS=${budget}`,
+        `${shard})
+                SHARD_TIMEOUT_SECONDS=${invalidBudget}`,
+      ) }), matrixGate);
+    }
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       'shards: "critical-today critical-lifecycle camera-capture"',
       'shards: "critical-today camera-capture"',
@@ -103,7 +110,8 @@ describe("iOS hermetic UI CI contract", () => {
   it("rejects an uncapped, missing, or functional-result-substituting XCTest prewarm", () => {
     const prewarmGate = "cap an infrastructure-only XCTest prewarm";
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("timing_start xctest-prewarm", "timing_start removed-prewarm") }), prewarmGate);
-    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('"$RAW_RESULTS/xctest-prewarm.xcresult" 45', '"$RAW_RESULTS/xctest-prewarm.xcresult" 180') }), prewarmGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('"$RAW_RESULTS/xctest-prewarm.xcresult" 75', '"$RAW_RESULTS/xctest-prewarm.xcresult" 45') }), prewarmGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('"$RAW_RESULTS/xctest-prewarm.xcresult" 75', '"$RAW_RESULTS/xctest-prewarm.xcresult" 180') }), prewarmGate);
     expectsFailure(evaluate({ "ios/UITests/XCTestPrewarmUITests.swift": validFiles["ios/UITests/XCTestPrewarmUITests.swift"].replace(".runningForeground", ".notRunning") }), prewarmGate);
   });
   it("rejects toolchain and job-root drift", () => {
@@ -569,6 +577,13 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
     expectsFailure(evaluate({
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
         fieldViews,
+        "Color(uiColor: .systemGray5)",
+        "Color(uiColor: .tertiarySystemFill)",
+      ),
+    }), contrastGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
         `.font(.caption)
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 8)`,
@@ -781,6 +796,12 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
     expectsFailure(evaluate({ "ios/UITests/FieldCriticalPathUITests.swift": validFiles["ios/UITests/FieldCriticalPathUITests.swift"].replaceAll("app.terminate()", "") }), "scoped mutations");
     expectsFailure(evaluate({ "ios/UITests/MessengerUITests.swift": validFiles["ios/UITests/MessengerUITests.swift"].replace("app.terminate()", "") }), "scoped mutations");
     expectsFailure(evaluate({ "ios/UITests/CameraCaptureUITests.swift": "if previewIsUsable { return }\ncancel.tap()" }), "scoped mutations");
+    expectsFailure(evaluate({
+      "ios/UITests/CameraCaptureUITests.swift": validFiles["ios/UITests/CameraCaptureUITests.swift"].replace(
+        "XCTAssertTrue(\n            cancel.waitForNonExistence(timeout: 5),",
+        "XCTAssertFalse(\n            cancel.waitForExistence(timeout: 5),",
+      ),
+    }), "scoped mutations");
     expectsFailure(evaluate({ "ios/UITests/LoginValidationUITests.swift": "XCTAssertTrue(loginError.exists)" }), "scoped mutations");
   });
 });

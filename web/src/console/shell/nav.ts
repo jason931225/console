@@ -124,14 +124,15 @@ export const MOUNTED_SCREEN_KEYS = [
 export type MountedScreenKey = (typeof MOUNTED_SCREEN_KEYS)[number];
 
 /**
- * ADR-0025 evidence-approved production exposure manifest.
+ * Production exposure manifest.
  *
  * Bodies in `MOUNTED_SCREEN_KEYS` remain development inventory unless named
- * here. Sales is the sole reviewed vertical slice: its authenticated route is
- * still gated by the server-owned rollout decision and its management grant.
- * Every other body remains DARK until separately approved.
+ * here. The exact candidate has no independently verified production-exposure
+ * authority, so every mounted body remains DARK. A future vertical may be added
+ * only with its own completed evidence gate; server rollout alone cannot expose
+ * an inventory body.
  */
-export const EXPOSED_SCREEN_KEYS: readonly MountedScreenKey[] = ["sales"];
+export const EXPOSED_SCREEN_KEYS: readonly MountedScreenKey[] = [];
 
 const MOUNTED_SCREENS: ReadonlySet<string> = new Set(MOUNTED_SCREEN_KEYS);
 

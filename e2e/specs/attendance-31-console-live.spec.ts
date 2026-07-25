@@ -5,6 +5,8 @@ import {
   expect,
   test,
   type Page,
+  type Request,
+  type Response,
 } from "@playwright/test";
 
 import {
@@ -522,6 +524,151 @@ async function loginAs(page: Page, role: DevRole): Promise<void> {
   await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 });
 }
 
+const MEMBER_ATTENDANCE_ENDPOINTS = [
+  "/api/v1/hr/attendance-records/me",
+  "/api/v1/attendance/me/exceptions",
+  "/api/v1/attendance/me/week52",
+] as const;
+
+type MemberAttendanceEndpoint = (typeof MEMBER_ATTENDANCE_ENDPOINTS)[number];
+type SanitizedHttpObservation = {
+  method: string;
+  pathname: string;
+  status: number;
+};
+type SanitizedRequestObservation = Pick<SanitizedHttpObservation, "method" | "pathname">;
+
+function isMemberAttendanceEndpoint(pathname: string): pathname is MemberAttendanceEndpoint {
+  return (MEMBER_ATTENDANCE_ENDPOINTS as readonly string[]).includes(pathname);
+}
+
+function isAttendanceScope(pathname: string): boolean {
+  return pathname.startsWith("/api/v1/attendance/") || pathname.startsWith("/api/v1/hr/attendance-records");
+}
+
+function isManagerAttendanceEndpoint(pathname: string): boolean {
+  return isAttendanceScope(pathname) && !isMemberAttendanceEndpoint(pathname);
+}
+
+const MEMBER_ATTENDANCE_DIAGNOSTIC_CAPACITY = 24;
+
+type MemberAttendanceEvidenceCheckpoint = {
+  successfulResponseCounts: ReadonlyMap<MemberAttendanceEndpoint, number>;
+  managerRequestCount: number;
+  attendance403Count: number;
+};
+
+function pushSanitizedDiagnostic<T>(ring: T[], observation: T): void {
+  if (ring.length === MEMBER_ATTENDANCE_DIAGNOSTIC_CAPACITY) ring.shift();
+  ring.push(observation);
+}
+
+/**
+ * Captures only fixed-capacity metadata that is safe to surface in assertion
+ * diagnostics. In particular this never retains a raw URL, request headers,
+ * bearer token, query value, or request/response body. Monotonic counters are
+ * deliberately separate from the diagnostic rings, so evidence cannot be
+ * evicted before a phase assertion consumes it.
+ */
+function attachMemberAttendanceResponseEvidence(page: Page) {
+  const responseDiagnostics: SanitizedHttpObservation[] = [];
+  const managerRequestDiagnostics: SanitizedRequestObservation[] = [];
+  const attendance403Diagnostics: SanitizedHttpObservation[] = [];
+  const successfulResponseCounts = new Map<MemberAttendanceEndpoint, number>(
+    MEMBER_ATTENDANCE_ENDPOINTS.map((pathname) => [pathname, 0]),
+  );
+  let managerRequestCount = 0;
+  let attendance403Count = 0;
+
+  const onRequest = (request: Request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (!isManagerAttendanceEndpoint(pathname)) return;
+    managerRequestCount += 1;
+    pushSanitizedDiagnostic(managerRequestDiagnostics, {
+      method: request.method(),
+      pathname,
+    });
+  };
+  const onResponse = (response: Response) => {
+    const request = response.request();
+    const pathname = new URL(response.url()).pathname;
+    if (!isAttendanceScope(pathname)) return;
+    const observation = {
+      method: request.method(),
+      pathname,
+      status: response.status(),
+    };
+    if (isMemberAttendanceEndpoint(pathname)) {
+      pushSanitizedDiagnostic(responseDiagnostics, observation);
+      if (observation.method === "GET" && observation.status === 200) {
+        successfulResponseCounts.set(
+          pathname,
+          (successfulResponseCounts.get(pathname) ?? 0) + 1,
+        );
+      }
+    }
+    if (observation.status === 403) {
+      attendance403Count += 1;
+      pushSanitizedDiagnostic(attendance403Diagnostics, observation);
+    }
+  };
+
+  page.on("request", onRequest);
+  page.on("response", onResponse);
+
+  const diagnostics = () => JSON.stringify({
+    member_responses: responseDiagnostics,
+    manager_requests: managerRequestDiagnostics,
+    attendance_403s: attendance403Diagnostics,
+  });
+  const checkpoint = (): MemberAttendanceEvidenceCheckpoint => ({
+    successfulResponseCounts: new Map(successfulResponseCounts),
+    managerRequestCount,
+    attendance403Count,
+  });
+  const assertPrincipalBoundLoad = (
+    phase: string,
+    since: MemberAttendanceEvidenceCheckpoint,
+  ) => {
+    for (const pathname of MEMBER_ATTENDANCE_ENDPOINTS) {
+      expect(
+        (successfulResponseCounts.get(pathname) ?? 0) -
+          (since.successfulResponseCounts.get(pathname) ?? 0),
+        `${phase} must receive GET 200 from ${pathname}; sanitized evidence: ${diagnostics()}`,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      managerRequestCount - since.managerRequestCount,
+      `${phase} must not request manager attendance endpoints; sanitized evidence: ${diagnostics()}`,
+    ).toBe(0);
+    expect(
+      attendance403Count - since.attendance403Count,
+      `${phase} must not receive 403 in attendance/self-service scope; sanitized evidence: ${diagnostics()}`,
+    ).toBe(0);
+  };
+
+  const assertNoManagerAttendanceOr403s = () => {
+    expect(
+      managerRequestCount,
+      `MEMBER story must not request manager attendance endpoints; sanitized evidence: ${diagnostics()}`,
+    ).toBe(0);
+    expect(
+      attendance403Count,
+      `MEMBER story must not receive 403 in attendance/self-service scope; sanitized evidence: ${diagnostics()}`,
+    ).toBe(0);
+  };
+
+  return {
+    checkpoint,
+    assertPrincipalBoundLoad,
+    assertNoManagerAttendanceOr403s,
+    detach: () => {
+      page.off("request", onRequest);
+      page.off("response", onResponse);
+    },
+  };
+}
+
 async function loginAsMemberWithoutBranch(page: Page): Promise<void> {
   await page.goto("/login");
   const roleSwitcher = page.getByRole("region", { name: "로컬 역할 전환" });
@@ -599,9 +746,13 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
   await substitutionDialog
     .getByLabel("이름 검색")
     .fill(eligibleCandidateName);
-  const eligibleCandidate = substitutionDialog.getByRole("listitem", {
-    name: new RegExp(eligibleCandidateName),
-  });
+  // The product renders a semantic list, but the row itself has no stable
+  // accessible name. Scope from the exact, persisted employee name that the
+  // preceding assertion already proves is visible; the scoped action remains a
+  // user-facing control rather than a test-only affordance.
+  const eligibleCandidate = substitutionDialog
+    .getByText(eligibleCandidateName, { exact: true })
+    .locator("..");
   await expect(eligibleCandidate).toBeVisible({ timeout: 15_000 });
   await eligibleCandidate.getByRole("button", { name: "배정" }).click();
   await expect(substitutionDialog).toHaveCount(0, { timeout: 15_000 });
@@ -628,10 +779,15 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
     .toBe("1");
 
   // Cancellation is a visible screen workflow, not a REST call; persist both
-  // state and its corresponding immutable audit event.
-  const cancellationButton = page.getByRole("button", { name: "대근 취소" });
-  await expect(cancellationButton).toBeVisible({ timeout: 15_000 });
-  await cancellationButton.click();
+  // state and its corresponding immutable audit event. Scope the action to the
+  // exact worker row created above: other seeded substitutions may also render
+  // a cancellation control, but are a different operational fact.
+  const assignedCandidateDayRow = page
+    .locator(".attendance__dayrow")
+    .filter({ has: page.getByText(eligibleCandidateName, { exact: true }) })
+    .filter({ has: page.getByText("대근 투입", { exact: true }) });
+  await expect(assignedCandidateDayRow).toHaveCount(1, { timeout: 15_000 });
+  await assignedCandidateDayRow.getByRole("button", { name: "대근 취소" }).click();
   const cancellationDialog = page.getByRole("dialog", {
     name: "대근 편성 취소",
   });
@@ -659,7 +815,11 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
   // Move to the isolated future month. This avoids unrelated current-month
   // leave data while exercising the same server-derived close preflight.
   await page.getByRole("button", { name: "월간" }).click();
-  await page.getByRole("button", { name: "다음 달" }).click();
+  const monthBoard = page.getByRole("region", { name: "근무 현황" });
+  await expect(monthBoard).toHaveCount(1);
+  const nextMonth = monthBoard.getByRole("button", { name: "다음 달" });
+  await expect(nextMonth).toHaveCount(1);
+  await nextMonth.click();
   await expect(
     page.getByText(`${closeYear}년 ${closeMonthNumber}월`),
   ).toBeVisible();
@@ -778,18 +938,10 @@ test.describe("ATTENDANCE-31 live MEMBER self-service story", () => {
     page,
   }) => {
     const consoleGuard = attachConsoleGuard(page);
-    const ownAttendanceRequests: URL[] = [];
-    page.on("request", (request) => {
-      if (request.method() !== "GET") return;
-      const url = new URL(request.url());
-      if (
-        url.pathname === "/api/v1/attendance/me/exceptions" ||
-        url.pathname === "/api/v1/attendance/me/week52"
-      ) {
-        ownAttendanceRequests.push(url);
-      }
-    });
-    await loginAsMemberWithoutBranch(page);
+    const attendanceEvidence = attachMemberAttendanceResponseEvidence(page);
+    try {
+      await loginAsMemberWithoutBranch(page);
+      const linkedLoad = attendanceEvidence.checkpoint();
     expect(
       memberScalar(
         `SELECT employee_id::text FROM users WHERE phone = ${sqlLiteral(memberPhone)}`,
@@ -816,23 +968,7 @@ test.describe("ATTENDANCE-31 live MEMBER self-service story", () => {
       selfService.getByText("현재 주간 근태 집계가 연결되지 않았습니다."),
     ).toHaveCount(0);
 
-    expect(ownAttendanceRequests.map((url) => url.pathname)).toEqual(
-      expect.arrayContaining([
-        "/api/v1/attendance/me/exceptions",
-        "/api/v1/attendance/me/week52",
-      ]),
-    );
-    for (const url of ownAttendanceRequests) {
-      for (const selector of [
-        "employee_id",
-        "branch_id",
-        "actor_id",
-        "manager_id",
-        "org_id",
-      ]) {
-        expect(url.searchParams.has(selector), `${url} leaked ${selector}`).toBe(false);
-      }
-    }
+    attendanceEvidence.assertPrincipalBoundLoad("linked MEMBER attendance load", linkedLoad);
 
     await selfService
       .getByRole("button", { name: new RegExp(memberExceptionDetail) })
@@ -854,14 +990,22 @@ test.describe("ATTENDANCE-31 live MEMBER self-service story", () => {
         `UPDATE users SET employee_id = NULL WHERE phone = ${sqlLiteral(memberPhone)} RETURNING id::text`,
       ),
     ).toMatch(/^[0-9a-f-]{36}$/i);
-    const unlinkedWeek52Response = page.waitForResponse(
-      (response) =>
-        response.request().method() === "GET" &&
-        new URL(response.url()).pathname === "/api/v1/attendance/me/week52",
+    const unlinkedReload = attendanceEvidence.checkpoint();
+    const unlinkedResponses = Promise.all(
+      MEMBER_ATTENDANCE_ENDPOINTS.map((pathname) =>
+        page.waitForResponse(
+          (response) =>
+            response.request().method() === "GET" &&
+            new URL(response.url()).pathname === pathname,
+        ),
+      ),
     );
     await page.reload();
-    const week52Response = await unlinkedWeek52Response;
+    const [recordsResponse, exceptionsResponse, week52Response] = await unlinkedResponses;
+    expect(recordsResponse.status()).toBe(200);
+    expect(exceptionsResponse.status()).toBe(200);
     expect(week52Response.status()).toBe(200);
+    attendanceEvidence.assertPrincipalBoundLoad("unlinked MEMBER attendance reload", unlinkedReload);
     const unlinkedWeek52 = await week52Response.json();
     expect(unlinkedWeek52).toEqual({ status: "not_available" });
     expect(unlinkedWeek52).not.toHaveProperty("projection");
@@ -872,6 +1016,10 @@ test.describe("ATTENDANCE-31 live MEMBER self-service story", () => {
     await assertNoAxeViolations(page, {
       context: "attendance MEMBER self-service linkage and unavailable states",
     });
-    consoleGuard.assertClean();
+    attendanceEvidence.assertNoManagerAttendanceOr403s();
+      consoleGuard.assertClean();
+    } finally {
+      attendanceEvidence.detach();
+    }
   });
 });

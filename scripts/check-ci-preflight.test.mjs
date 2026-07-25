@@ -9,6 +9,14 @@ import { evaluateCiPreflight } from "./check-ci-preflight.mjs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
+const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
+const reachabilityPreflightCommands = [
+  "node --test scripts/console/route-inventory.test.mjs",
+  "node --test scripts/console/validate-console-truth-ledger.test.mjs",
+  "node --test scripts/console/plan-fanout.test.mjs",
+  "tools/buck/run_test_with_postgres_env.test.sh",
+  "tools/buck/test_needs_postgres.test.sh",
+];
 const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Cargo.lock consistency
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
@@ -37,6 +45,13 @@ describe("CI preflight contract", () => {
       "",
     );
     expectFailure(pullWithoutToolchains, "pull_request must include toolchains/** in CI path filters");
+  });
+
+  it("rejects docs/program path removal independently for push and pull_request", () => {
+    expectFailure(workflow.replace('      - "docs/program/**"\n', ""), "push must include docs/program/** in CI path filters");
+    const pullRequest = workflow.indexOf("  pull_request:\n");
+    const withoutPullDocs = workflow.slice(0, pullRequest) + workflow.slice(pullRequest).replace('      - "docs/program/**"\n', "");
+    expectFailure(withoutPullDocs, "pull_request must include docs/program/** in CI path filters");
   });
 
   it("rejects toolchain entries placed outside each trigger's paths mapping", () => {
@@ -343,14 +358,57 @@ describe("CI preflight contract", () => {
   it("requires the pinned Rust toolchain before Cargo-dependent preflight tests", () => {
     expectFailure(
       workflow.replace(preflightRustToolchainSetup, "").replace(
-        "      - name: CI preflight contract tests\n        run: node --test scripts/check-ci-preflight.test.mjs",
+        `      - name: CI preflight contract tests\n        run: ${ciPreflightTests}`,
         `      - name: CI preflight contract tests
-        run: node --test scripts/check-ci-preflight.test.mjs
+        run: ${ciPreflightTests}
 
 ${preflightRustToolchainSetup.trimEnd()}`,
       ),
-      "preflight must install the pinned Rust toolchain before node --test scripts/check-ci-preflight.test.mjs",
+      `preflight must install the pinned Rust toolchain before ${ciPreflightTests}`,
     );
+  });
+
+  it("requires a full-history checkout for merge-tip console validation", () => {
+    expectFailure(
+      workflow.replace("          fetch-depth: 0\n", ""),
+      "preflight checkout must fetch full history with fetch-depth: 0",
+    );
+  });
+
+  it("passes the exact integration tip to every console validator and planner surface", () => {
+    for (const command of [
+      "npm run check:console-truth-ledger",
+      "node --test scripts/console/validate-console-truth-ledger.test.mjs",
+      "node --test scripts/console/plan-fanout.test.mjs",
+    ]) {
+      expectFailure(
+        workflow.replace(
+          `        env:\n          CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }}\n        run: ${command}`,
+          `        run: ${command}`,
+        ),
+        `preflight must pass CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }} to ${command}`,
+      );
+    }
+  });
+
+  it("rejects omission and comment-only reachability regressions", () => {
+    for (const command of reachabilityPreflightCommands) {
+      expectFailure(workflow.replace(`        run: ${command}\n`, ""), command);
+      expectFailure(workflow.replace(`        run: ${command}\n`, `        # ${command}\n`), command);
+    }
+  });
+
+  it("rejects conditional and continue-on-error reachability regressions", () => {
+    for (const command of reachabilityPreflightCommands) {
+      expectFailure(
+        workflow.replace(`        run: ${command}\n`, `        if: \${{ false }}\n        run: ${command}\n`),
+        "unconditionally",
+      );
+      expectFailure(
+        workflow.replace(`        run: ${command}\n`, `        continue-on-error: true\n        run: ${command}\n`),
+        "unconditionally",
+      );
+    }
   });
 
   it("rejects a preflight that does not run npm and Cargo lock consistency gates", () => {
@@ -432,5 +490,130 @@ ${preflightRustToolchainSetup.trimEnd()}`,
   it("rejects failure-insensitive job-level conditions on protected jobs", () => {
     expectFailure(workflow.replace("  backend:\n", "  backend:\n    if: always()\n"), "backend must not define job-level if");
     expectFailure(workflow.replace("  browser-e2e:\n", "  browser-e2e:\n    if: ${{ !cancelled() }}\n"), "browser-e2e must not define job-level if");
+  });
+
+  it("rejects job-level preflight failure bypasses", () => {
+    expectFailure(
+      workflow.replace("  preflight:\n", "  preflight:\n    if: always()\n"),
+      "preflight must not define job-level if",
+    );
+    expectFailure(
+      workflow.replace("  preflight:\n", "  preflight:\n    continue-on-error: true\n"),
+      "preflight must not define job-level continue-on-error",
+    );
+  });
+
+  it("locks post-preflight Buck2 reachability targets and disallows added run surfaces", () => {
+    expectFailure(
+      workflow.replace(
+        "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit",
+        "cargo test -p mnt-support-domain",
+      ),
+      "support-domain-unit must run tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit",
+    );
+    expectFailure(
+      workflow.replace(
+        "tools/buck/test_needs_postgres.sh --num-threads=1",
+        "tools/buck/test_needs_postgres.sh",
+      ),
+      "postgres-domain-reachability must run the locked PostgreSQL reachability targets",
+    );
+    expectFailure(
+      workflow.replace(
+        "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
+        "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution",
+      ),
+      "postgres-domain-reachability must run the locked PostgreSQL reachability targets",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Support domain unit target\n",
+        "      - name: Unexpected Cargo test\n        run: cargo test -p mnt-support-domain\n\n      - name: Support domain unit target\n",
+      ),
+      "support-domain-unit must contain only the locked ordered Buck2 run steps",
+    );
+  });
+
+  it("preserves fail-fast backend and dev-up ordering", () => {
+    const sourceGateDisplaced = workflow
+      .replace("      - name: Layer-boundary gate\n", "      - name: Displaced source gate\n")
+      .replace("      - name: Reconcile portable PostgreSQL role topology\n", "      - name: Layer-boundary gate\n");
+    expectFailure(sourceGateDisplaced, "backend must run source-only gates immediately after clippy");
+
+    const unitAfterPostgres = workflow
+      .replace("      - name: Buck2 mnt-app unit suite\n", "      - name: Temporary Buck2 step\n")
+      .replace("      - name: Buck2 mnt-app inline PostgreSQL suites\n", "      - name: Buck2 mnt-app unit suite\n");
+    expectFailure(unitAfterPostgres, "backend must preserve the locked fail-fast step order");
+
+    const devUpContractAfterDiskPurge = workflow
+      .replace("      - name: dev-up compose contract unit test\n", "      - name: Temporary dev-up step\n")
+      .replace("      - name: Free runner disk for Rust backend\n", "      - name: dev-up compose contract unit test\n");
+    expectFailure(devUpContractAfterDiskPurge, "dev-up-smoke must preserve the locked fail-fast step order");
+  });
+
+  it("fails closed when optimized gates or targets are commented, weakened, or duplicated", () => {
+    expectFailure(
+      workflow.replace(
+        "        run: cargo run -p mnt-gate-layer-boundary",
+        "        # cargo run -p mnt-gate-layer-boundary",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Audit-coverage gate\n",
+        "      - name: Audit-coverage gate\n        if: ${{ false }}\n",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Migration-safety gate\n",
+        "      - name: Migration-safety gate\n        continue-on-error: true\n",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Audit-coverage gate\n",
+        "      - name: Layer-boundary gate\n        if: ${{ !cancelled() }}\n        run: cargo run -p mnt-gate-layer-boundary\n\n      - name: Audit-coverage gate\n",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "        run: env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit",
+        "        # env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: dev-up compose contract unit test\n        run: node --test scripts/dev-up-compose.test.mjs",
+        "      - name: dev-up compose contract unit test\n        continue-on-error: true\n        run: node --test scripts/dev-up-compose.test.mjs",
+      ),
+      "dev-up-smoke must preserve the locked fail-fast step multiset and failure semantics",
+    );
+  });
+
+  it("keeps protected backend steps fail-fast and runs PR 473 contract tests before topology", () => {
+    expectFailure(
+      workflow.replace(
+        "      - name: rustfmt check\n",
+        "      - name: rustfmt check\n        if: ${{ !cancelled() }}\n",
+      ),
+      "backend must not use !cancelled() on protected fail-fast steps",
+    );
+    expectFailure(
+      workflow.replace(
+        "        run: python3 scripts/check-pr473-migration-operational.test.py -v",
+        "        # python3 scripts/check-pr473-migration-operational.test.py -v",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    const pr473ContractAfterTopology = workflow
+      .replace("      - name: PR 473 migration operational contract tests\n", "      - name: Deferred PR 473 contract tests\n")
+      .replace("      - name: Reconcile portable PostgreSQL role topology\n", "      - name: PR 473 migration operational contract tests\n");
+    expectFailure(pr473ContractAfterTopology, "backend must preserve the locked fail-fast step order");
   });
 });

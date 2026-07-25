@@ -85,7 +85,8 @@
     "check:korean-institutional-connectivity": "node scripts/check-korean-institutional-connectivity.mjs",
     "kic:scrape-public-docs": "node scripts/korean-connectivity/public-doc-scraper.mjs",
     "kic:generate-nhis-loss-report-fixture": "node scripts/korean-connectivity/nhis-edi-loss-report.mjs",
-    "kic:local-cert-login-fixture": "node scripts/korean-connectivity/local-certificate-agent.mjs"
+    "kic:local-cert-login-fixture": "node scripts/korean-connectivity/local-certificate-agent.mjs",
+    "check:console-truth-ledger": "node scripts/console/validate-console-truth-ledger.mjs"
   },
   "dependencies": {
     "pg": "8.21.0"

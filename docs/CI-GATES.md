@@ -176,6 +176,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:adrs`
 - `check:browser-persona-matrix`
 - `check:ci-preflight`
+- `check:console-truth-ledger`
 - `check:cx-reporting-maturity`
 - `check:enterprise-ux-parity`
 - `check:financial-maturity`

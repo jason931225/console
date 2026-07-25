@@ -9,10 +9,30 @@ const reindeerToolchainSource = `source ${reindeerToolchainLock}`;
 const reindeerToolchainInstall = 'rustup toolchain install "$REINDEER_TOOLCHAIN" --profile minimal';
 const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
+const ciPreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs";
+const consoleRouteInventoryTestCommand = "node --test scripts/console/route-inventory.test.mjs";
+const consoleTruthLedgerTestCommand = "node --test scripts/console/validate-console-truth-ledger.test.mjs";
+const consoleFanoutPlannerTestCommand = "node --test scripts/console/plan-fanout.test.mjs";
+const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
+const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
+const consoleIntegrationTipEnv = "CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}";
+const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
+const postgresDomainReachabilityCommands = [
+  "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+  "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \\",
+  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \\",
+  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
+];
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
-  "node --test scripts/check-ci-preflight.test.mjs",
+  "npm run check:console-truth-ledger",
+  ciPreflightTestCommand,
+  consoleRouteInventoryTestCommand,
+  consoleTruthLedgerTestCommand,
+  consoleFanoutPlannerTestCommand,
+  buckPostgresEnvironmentTestCommand,
+  buckPostgresHarnessTestCommand,
   "npm run check:ci-preflight",
   "npm run check:root-workspaces",
   "npm run test:root-workspaces",
@@ -33,6 +53,8 @@ const protectedJobs = [
   "ios-app",
   "browser-e2e",
   "generated-face-authority",
+  "support-domain-unit",
+  "postgres-domain-reachability",
 ];
 
 function triggerPathEntries(workflow, trigger) {
@@ -75,6 +97,73 @@ function multilineRunCommands(step) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function hasEnvironment(step, entry) {
+  return step.includes(`        env:\n          ${entry}\n`);
+}
+
+function requireUnconditionalRun(steps, command, job, failures) {
+  const matchingSteps = steps.filter((step) => runScalar(step) === command);
+  if (matchingSteps.length === 0) {
+    failures.push(`${job} must run ${command}`);
+  } else if (matchingSteps.some((step) => !isUnconditional(step))) {
+    failures.push(`${job} must run ${command} unconditionally without if or continue-on-error`);
+  }
+}
+
+function requireUnconditionalMultilineRun(steps, commands, job, failures) {
+  const matchingSteps = steps.filter((step) => multilineRunCommands(step).join("\n") === commands.join("\n"));
+  if (matchingSteps.length === 0) {
+    failures.push(`${job} must run the locked PostgreSQL reachability targets`);
+  } else if (matchingSteps.some((step) => !isUnconditional(step))) {
+    failures.push(`${job} must run the locked PostgreSQL reachability targets unconditionally without if or continue-on-error`);
+  }
+}
+
+function runCommand(step) {
+  const scalar = runScalar(step);
+  return scalar && scalar !== "|" ? scalar : (multilineRunCommands(step).join("\n") || null);
+}
+
+function requireOnlyLockedRuns(steps, commands, job, failures) {
+  const actual = steps.map(runCommand).filter(Boolean);
+  if (actual.length !== commands.length || actual.some((command, index) => command !== commands[index])) {
+    failures.push(`${job} must contain only the locked ordered Buck2 run steps`);
+  }
+}
+
+function stepName(step) {
+  return step.match(/^name: ([^\n]+)$/m)?.[1] ?? null;
+}
+
+function hasOnlyExpectedCondition(step, expectedIf) {
+  const conditions = [...step.matchAll(/^        if: ([^\n]+)$/gm)].map((match) => match[1]);
+  return (expectedIf === null
+    ? conditions.length === 0
+    : conditions.length === 1 && conditions[0] === expectedIf)
+    && !/^        continue-on-error:/m.test(step);
+}
+
+function requireOrderedStepContracts(steps, contracts, job, failures) {
+  const indexes = [];
+  for (const contract of contracts) {
+    const matches = steps
+      .map((step, index) => ({ step, index }))
+      .filter(({ step }) => stepName(step) === contract.name);
+    if (matches.length !== 1
+      || (contract.run !== undefined && runCommand(matches[0]?.step) !== contract.run)
+      || !hasOnlyExpectedCondition(matches[0]?.step ?? "", contract.if)) {
+      failures.push(`${job} must preserve the locked fail-fast step multiset and failure semantics`);
+      indexes.push(-1);
+    } else {
+      indexes.push(matches[0].index);
+    }
+  }
+  if (indexes.some((index) => index < 0) || indexes.some((index, position) => position > 0 && index <= indexes[position - 1])) {
+    failures.push(`${job} must preserve the locked fail-fast step order`);
+  }
+  return indexes;
 }
 
 const apiContractCaptureName = "Capture Buck2-built app for contract test";
@@ -160,7 +249,7 @@ function requirePreflightRustToolchainBefore(steps, failures) {
     return;
   }
   for (const command of [
-    "node --test scripts/check-ci-preflight.test.mjs",
+    ciPreflightTestCommand,
     "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null",
   ]) {
     const commandIndex = steps.findIndex((step) => runScalar(step) === command);
@@ -212,6 +301,9 @@ export function evaluateCiPreflight(workflow) {
     if (!triggerPathEntries(workflow, trigger).includes("toolchains/**")) {
       failures.push(`${trigger} must include toolchains/** in CI path filters`);
     }
+    if (!triggerPathEntries(workflow, trigger).includes("docs/program/**")) {
+      failures.push(`${trigger} must include docs/program/** in CI path filters`);
+    }
   }
 
   const preflight = jobBlock(workflow, "preflight");
@@ -221,15 +313,118 @@ export function evaluateCiPreflight(workflow) {
   }
 
   const preflightSteps = stepBlocks(preflight);
+  if (/^    if:/m.test(preflight)) {
+    failures.push("preflight must not define job-level if");
+  }
+  if (/^    continue-on-error:/m.test(preflight)) {
+    failures.push("preflight must not define job-level continue-on-error");
+  }
+  const checkout = preflightSteps.find((step) => step.startsWith("name: Checkout\n"));
+  if (!checkout || !/^        with:\n(?:          [^\n]+\n)*          fetch-depth: 0$/m.test(checkout)) {
+    failures.push("preflight checkout must fetch full history with fetch-depth: 0");
+  }
   requireDotSlashBefore(preflightSteps, "tools/buck/preflight.sh", "preflight", failures);
   requirePreflightRustToolchainBefore(preflightSteps, failures);
   for (const command of requiredPreflightCommands) {
-    const matchingSteps = preflightSteps.filter((step) => runScalar(step) === command);
-    if (matchingSteps.length === 0) {
-      failures.push(`preflight must run ${command}`);
-    } else if (matchingSteps.some((step) => !isUnconditional(step))) {
-      failures.push(`preflight must run ${command} unconditionally without if or continue-on-error`);
+    requireUnconditionalRun(preflightSteps, command, "preflight", failures);
+  }
+  for (const command of ["npm run check:console-truth-ledger", consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
+    const step = preflightSteps.find((candidate) => runScalar(candidate) === command);
+    if (!step || !hasEnvironment(step, consoleIntegrationTipEnv)) {
+      failures.push(`preflight must pass ${consoleIntegrationTipEnv} to ${command}`);
     }
+  }
+
+  const supportDomainUnit = jobBlock(workflow, "support-domain-unit");
+  if (supportDomainUnit) {
+    const steps = stepBlocks(supportDomainUnit);
+    requireUnconditionalRun(steps, supportDomainUnitCommand, "support-domain-unit", failures);
+    requireOnlyLockedRuns(steps, [dotSlashBootstrap, supportDomainUnitCommand], "support-domain-unit", failures);
+  }
+
+  const postgresDomainReachability = jobBlock(workflow, "postgres-domain-reachability");
+  if (postgresDomainReachability) {
+    const steps = stepBlocks(postgresDomainReachability);
+    requireUnconditionalMultilineRun(
+      steps,
+      postgresDomainReachabilityCommands,
+      "postgres-domain-reachability",
+      failures,
+    );
+    requireOnlyLockedRuns(
+      steps,
+      [dotSlashBootstrap, postgresDomainReachabilityCommands.join("\n")],
+      "postgres-domain-reachability",
+      failures,
+    );
+  }
+
+  const backend = jobBlock(workflow, "backend");
+  if (backend) {
+    const steps = stepBlocks(backend);
+    const failFastIf = null;
+    const pr473ContractTestCommand = "python3 scripts/check-pr473-migration-operational.test.py -v";
+    if (steps.some((step) => step.includes("if: ${{ !cancelled() }}"))) {
+      failures.push("backend must not use !cancelled() on protected fail-fast steps");
+    }
+    const sourceGateContracts = [
+      ["Layer-boundary gate", "cargo run -p mnt-gate-layer-boundary"],
+      ["Audit-coverage gate", "cargo run -p mnt-gate-audit-coverage"],
+      ["Migration-safety gate", "cargo run -p mnt-gate-migration-safety"],
+      ["Tenant-isolation gate", "cargo run -p mnt-gate-tenant-isolation"],
+      ["PII-no-logs gate", "cargo run -p mnt-gate-pii-no-logs"],
+      ["RLS-arming gate", "cargo run -p mnt-gate-rls-arming"],
+      ["Dev-auth-absence gate", "cargo run -p mnt-gate-dev-auth-absence"],
+      ["IaC tier-discipline gate", "cargo run -p mnt-gate-iac-tier"],
+    ];
+    const gateIndexes = requireOrderedStepContracts(
+      steps,
+      [
+        ["clippy -D warnings", "SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings"],
+        ...sourceGateContracts,
+        ["PR 473 migration operational contract tests", pr473ContractTestCommand],
+        ["Reconcile portable PostgreSQL role topology", undefined],
+        ["PR 473 migration operational gate", "npm run check:pr473-migration-operational"],
+        ["Boot smoke — migrate + serve + /readyz", undefined],
+      ].map(([name, run]) => ({ name, run, if: failFastIf })),
+      "backend",
+      failures,
+    );
+    if (gateIndexes[1] !== gateIndexes[0] + 1) {
+      failures.push("backend must run source-only gates immediately after clippy");
+    }
+    requireOrderedStepContracts(
+      steps,
+      [
+        { name: "Buck2 mnt-app unit suite", run: "env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit", if: failFastIf },
+        {
+          name: "Buck2 mnt-app inline PostgreSQL suites",
+          run: [
+            "tools/buck/test_needs_postgres.sh \\",
+            "//backend/app:mnt-app-itest-inline-postgres \\",
+            "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature",
+          ].join("\n"),
+          if: failFastIf,
+        },
+      ],
+      "backend",
+      failures,
+    );
+  }
+
+  const devUpSmoke = jobBlock(workflow, "dev-up-smoke");
+  if (devUpSmoke) {
+    requireOrderedStepContracts(
+      stepBlocks(devUpSmoke),
+      [
+        { name: "dev-up compose contract unit test", run: "node --test scripts/dev-up-compose.test.mjs", if: null },
+        { name: "Install pinned DotSlash runtime", run: dotSlashBootstrap, if: null },
+        { name: "Free runner disk for Rust backend", run: null, if: null },
+        { name: "Install Rust toolchain (pinned via rust-toolchain.toml)", run: null, if: null },
+      ],
+      "dev-up-smoke",
+      failures,
+    );
   }
 
   const fullGeneratedFaces = jobBlock(workflow, "generated-face-authority");

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { createConsoleCandidateSourceResolver, extractConsoleRouteFactsFromCandidate, isValidatedConsoleTruthLedger, validateConsoleTruthLedger } from './validate-console-truth-ledger.mjs';
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const QUALITY_BIAS_DEFAULT = 0.6;
@@ -202,7 +203,7 @@ export function validateReviewReceiptForAnchor(receipt, anchor, lane, authority,
   return valid;
 }
 function validateInputs(registry, options) {
-  if (!registry || registry.schema_version !== 'console-capability-registry-v1') throw new Error('unsupported console capability registry schema');
+  if (!registry || !['console-capability-registry-v1', 'console-capability-registry-v2'].includes(registry.schema_version)) throw new Error('unsupported console capability registry schema');
   if (!FULL_SHA.test(options.anchorSha ?? '')) throw new Error('anchor SHA must be a full lowercase 40-character Git SHA');
   if (!Number.isInteger(options.maxWriters) || options.maxWriters < 1) throw new Error('max writers must be a positive integer');
   if (!Number.isFinite(options.qualityBias) || options.qualityBias < 0 || options.qualityBias > 1) throw new Error('quality bias must be between 0 and 1');
@@ -292,6 +293,7 @@ export function groupValidatedVerificationEntries(entries) {
 }
 
 export function buildFanoutPlan(registry, options) {
+  if (registry?.schema_version === 'console-capability-registry-v2' && !isValidatedConsoleTruthLedger(registry)) throw new Error('v2 fanout requires a validated truth-ledger attestation');
   validateInputs(registry, options);
   options = { ...options, registry };
   const budgets = resourceBudgets(registry);
@@ -431,61 +433,12 @@ export function buildFanoutPlan(registry, options) {
 }
 
 const ADMISSION_PATH = 'docs/evidence/console/fanout-admission.json';
-function usage() { return ['usage: node scripts/console/plan-fanout.mjs --epoch-base <40-char-sha> [--admission <40-char-sha>] [options]', '', 'options:', '  --registry <path>       capability registry at epoch base', '  --epoch-base <sha>      immutable lane/authority baseline', '  --admission <sha>       immutable receipt manifest commit (default: epoch base)', '  --max-writers <count>   bounded source writers (default: 6)', `  --quality-bias <0..1>   quality weighting (default: ${QUALITY_BIAS_DEFAULT})`].join('\n'); }
-function parseArgs(argv) { const result = { registryPath: 'docs/program/console-capability-registry.json', epochBaseSha: null, admissionSha: null, maxWriters: 6, qualityBias: QUALITY_BIAS_DEFAULT }; for (let i = 0; i < argv.length; i += 1) { const arg = argv[i]; if (arg === '--help' || arg === '-h') { process.stdout.write(`${usage()}\n`); process.exit(0); } const value = argv[i + 1]; if (value === undefined) throw new Error(`missing value for ${arg}`); if (arg === '--registry') result.registryPath = value; else if (arg === '--epoch-base' || arg === '--anchor') result.epochBaseSha = value; else if (arg === '--admission') result.admissionSha = value; else if (arg === '--max-writers') result.maxWriters = Number(value); else if (arg === '--quality-bias') result.qualityBias = Number(value); else throw new Error(`unknown argument: ${arg}`); i += 1; } result.admissionSha ??= result.epochBaseSha; return result; }
+function usage() { return ['usage: node scripts/console/plan-fanout.mjs --epoch-base <40-char-sha> [--admission <40-char-sha>] [options]', '', 'options:', '  --registry <path>       capability registry authority path', '  --epoch-base <sha>      immutable product candidate C', '  --integration-tip <sha> authority/control tip T (or CONSOLE_INTEGRATION_TIP_SHA)', '  --admission <sha>       immutable receipt manifest commit (default: epoch base)', '  --max-writers <count>   bounded source writers (default: 6)', `  --quality-bias <0..1>   quality weighting (default: ${QUALITY_BIAS_DEFAULT})`].join('\n'); }
+function parseArgs(argv) { const result = { registryPath: 'docs/program/console-capability-registry.json', epochBaseSha: null, admissionSha: null, integrationTipSha: process.env.CONSOLE_INTEGRATION_TIP_SHA ?? null, maxWriters: 6, qualityBias: QUALITY_BIAS_DEFAULT }; for (let i = 0; i < argv.length; i += 1) { const arg = argv[i]; if (arg === '--help' || arg === '-h') { process.stdout.write(`${usage()}\n`); process.exit(0); } const value = argv[i + 1]; if (value === undefined) throw new Error(`missing value for ${arg}`); if (arg === '--registry') result.registryPath = value; else if (arg === '--epoch-base' || arg === '--anchor') result.epochBaseSha = value; else if (arg === '--integration-tip') result.integrationTipSha = value; else if (arg === '--admission') result.admissionSha = value; else if (arg === '--expected-candidate') throw new Error('v2 candidate is declared by the immutable registry; --expected-candidate is unsupported'); else if (arg === '--max-writers') result.maxWriters = Number(value); else if (arg === '--quality-bias') result.qualityBias = Number(value); else throw new Error(`unknown argument: ${arg}`); i += 1; } result.admissionSha ??= result.epochBaseSha; return result; }
 function git(repoRoot, args) { return execFileSync('git', ['-C', repoRoot, ...args], { encoding: 'utf8' }).trim(); }
-function skipJsonWhitespace(text, index) { while (index < text.length && /\s/.test(text[index])) index += 1; return index; }
-function scanJsonString(text, index, label) {
-  if (text[index] !== '"') throw new Error(`${label}: expected JSON string`);
-  const start = index; index += 1;
-  while (index < text.length) {
-    const character = text[index];
-    if (character === '"') return { end: index + 1, value: JSON.parse(text.slice(start, index + 1)) };
-    if (character === '\\') { index += 2; continue; }
-    if (character.charCodeAt(0) < 0x20) throw new Error(`${label}: invalid JSON string`);
-    index += 1;
-  }
-  throw new Error(`${label}: unterminated JSON string`);
-}
-function scanJsonValue(text, index, label) {
-  index = skipJsonWhitespace(text, index);
-  if (text[index] === '"') return scanJsonString(text, index, label).end;
-  if (text[index] === '{') {
-    index = skipJsonWhitespace(text, index + 1); const keys = new Set();
-    if (text[index] === '}') return index + 1;
-    while (true) {
-      const key = scanJsonString(text, index, label);
-      if (keys.has(key.value)) throw new Error(`${label}: duplicate JSON key: ${key.value}`);
-      keys.add(key.value); index = skipJsonWhitespace(text, key.end);
-      if (text[index] !== ':') throw new Error(`${label}: expected JSON object colon`);
-      index = scanJsonValue(text, index + 1, label); index = skipJsonWhitespace(text, index);
-      if (text[index] === '}') return index + 1;
-      if (text[index] !== ',') throw new Error(`${label}: expected JSON object delimiter`);
-      index = skipJsonWhitespace(text, index + 1);
-    }
-  }
-  if (text[index] === '[') {
-    index = skipJsonWhitespace(text, index + 1);
-    if (text[index] === ']') return index + 1;
-    while (true) {
-      index = scanJsonValue(text, index, label); index = skipJsonWhitespace(text, index);
-      if (text[index] === ']') return index + 1;
-      if (text[index] !== ',') throw new Error(`${label}: expected JSON array delimiter`);
-      index = skipJsonWhitespace(text, index + 1);
-    }
-  }
-  const end = text.slice(index).search(/[\s,}\]]/);
-  if (end === 0 || index >= text.length) throw new Error(`${label}: invalid JSON value`);
-  return end < 0 ? text.length : index + end;
-}
-export function parseImmutableJson(text, label = 'immutable JSON') {
-  if (typeof text !== 'string') throw new Error(`${label}: immutable JSON must be text`);
-  const end = scanJsonValue(text, 0, label);
-  if (skipJsonWhitespace(text, end) !== text.length) throw new Error(`${label}: trailing JSON data`);
-  const value = JSON.parse(text);
-  return { value, raw_sha256: createHash('sha256').update(text).digest('hex'), canonical_sha256: canonicalReceiptDigest(value) };
-}
-function readAnchorJson(repoRoot, anchor, relativePath) { const raw = execFileSync('git', ['-C', repoRoot, 'show', `${anchor}:${relativePath}`], { encoding: 'utf8' }); return parseImmutableJson(raw, `${anchor}:${relativePath}`).value; }
+export { parseImmutableJson } from './immutable-json.mjs';
+import { parseImmutableJson as parseImmutableJsonInternal } from './immutable-json.mjs';
+function readAnchorJson(repoRoot, anchor, relativePath) { const raw = execFileSync('git', ['-C', repoRoot, 'show', `${anchor}:${relativePath}`], { encoding: 'utf8' }); return parseImmutableJsonInternal(raw, `${anchor}:${relativePath}`).value; }
 export function parseSourceRevision(value) {
   if (typeof value !== 'string' || value.trim() !== value) throw new Error('source_revision must be canonical <ref>@<40sha>');
   const match = value.match(/^(.+?)@([0-9a-f]{40})$/);
@@ -621,6 +574,6 @@ function runtimeEligibility(repoRoot, registry, anchor, receipts) {
   validatedAttestationTokens.add(validatedAttestations);
   return { runtimeLaneEligibility, runtimeConsolidationEligibility, runtimeReviewEligibility, validatedAttestations };
 }
-function main() { const args = parseArgs(process.argv.slice(2)); const repoRoot = process.cwd(); const registry = readAnchorJson(repoRoot, args.epochBaseSha, args.registryPath); const generatedPath = registry.shared_collision_roots?.generated_face_registry; if (typeof generatedPath !== 'string') throw new Error('missing generated-face authority path'); const generated = readAnchorJson(repoRoot, args.epochBaseSha, generatedPath); assertAnchorAuthority(repoRoot, args.epochBaseSha, args.registryPath, registry, generatedPath, generated); const receipts = admissionReceipts(repoRoot, args.epochBaseSha, args.admissionSha); const runtime = runtimeEligibility(repoRoot, registry, args.epochBaseSha, receipts); const plan = buildFanoutPlan(registry, { anchorSha: args.epochBaseSha, admissionSha: args.admissionSha, maxWriters: args.maxWriters, qualityBias: args.qualityBias, generatedFaces: generated, ...runtime }); process.stdout.write(`${JSON.stringify({ ...plan, epoch_base_sha: args.epochBaseSha, admission_sha: args.admissionSha }, null, 2)}\n`); }
+function main() { const args = parseArgs(process.argv.slice(2)); const repoRoot = process.cwd(); let registry = readAnchorJson(repoRoot, args.epochBaseSha, args.registryPath); let candidateSource = null; if (registry.schema_version === 'console-capability-registry-v2' || FULL_SHA.test(args.integrationTipSha ?? '')) { if (!FULL_SHA.test(args.integrationTipSha ?? '')) throw new Error('v2 planner requires --integration-tip <40-char-sha> or CONSOLE_INTEGRATION_TIP_SHA'); registry = readAnchorJson(repoRoot, args.integrationTipSha, args.registryPath); if (registry.schema_version === 'console-capability-registry-v2') { const jurisdiction = readAnchorJson(repoRoot, args.integrationTipSha, 'docs/program/console-jurisdiction-register.json'); candidateSource = createConsoleCandidateSourceResolver(repoRoot, registry.candidate?.sha, args.integrationTipSha); if (args.epochBaseSha !== candidateSource.candidateSha) throw new Error('planner epoch base must equal declared product candidate C'); validateConsoleTruthLedger(registry, jurisdiction, { resolveSha: (sha) => gitSucceeds(repoRoot, ['cat-file', '-e', `${sha}^{commit}`]), resolveBuckTarget: (target) => spawnSync('./tools/buck2', ['targets', target], { cwd: repoRoot, encoding: 'utf8' }).status === 0, resolveSource: candidateSource.resolveSource, routeFacts: extractConsoleRouteFactsFromCandidate(candidateSource), repoRoot }); } } const generatedPath = registry.shared_collision_roots?.generated_face_registry; if (typeof generatedPath !== 'string') throw new Error('missing generated-face authority path'); const generated = readAnchorJson(repoRoot, args.epochBaseSha, generatedPath); if (candidateSource) { if (git(repoRoot, ['status', '--porcelain']) !== '') throw new Error('planner requires a clean worktree'); assertSourceRevision(repoRoot, registry.source_revision, args.epochBaseSha); } else assertAnchorAuthority(repoRoot, args.epochBaseSha, args.registryPath, registry, generatedPath, generated); const receipts = admissionReceipts(repoRoot, args.epochBaseSha, args.admissionSha); const runtime = runtimeEligibility(repoRoot, registry, args.epochBaseSha, receipts); const plan = buildFanoutPlan(registry, { anchorSha: args.epochBaseSha, admissionSha: args.admissionSha, maxWriters: args.maxWriters, qualityBias: args.qualityBias, generatedFaces: generated, ...runtime }); process.stdout.write(`${JSON.stringify({ ...plan, epoch_base_sha: args.epochBaseSha, admission_sha: args.admissionSha }, null, 2)}\n`); }
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null;
 if (invokedPath === import.meta.url) { try { main(); } catch (error) { process.stderr.write(`console-fanout-plan: ${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 1; } }

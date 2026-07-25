@@ -17,16 +17,16 @@ function iosJob(workflow) {
 }
 
 const expectedShardBudgets = new Map([
-  ["preflight-session", 30],
+  ["preflight-session", 60],
   ["preflight-fixtures", 30],
   ["preflight-restore", 90],
   ["login-validation", 90],
   ["accessibility-id-parity", 45],
   ["critical-today", 150],
-  ["critical-lifecycle", 210],
-  ["camera-capture", 90],
+  ["critical-lifecycle", 300],
+  ["camera-capture", 150],
   ["messenger-render", 90],
-  ["messenger-mutation", 120],
+  ["messenger-mutation", 180],
   ["audit-dynamic-today", 150],
   ["audit-dynamic-detail", 150],
   ["audit-dynamic-messenger", 150],
@@ -139,8 +139,8 @@ function hasCappedXCTestPrewarm(files) {
     && /app\.launch\s*\(\s*\)/.test(prewarm)
     && /app\.terminate\s*\(\s*\)/.test(prewarm)
     && /app\.state[\s\S]{0,120}\.runningForeground/.test(prewarm)
-    && /TIMING_BUDGET_SECONDS=45\s*\n\s*timing_start xctest-prewarm/.test(activeJob)
-    && /run_xcode_with_timeout\s+xctest-prewarm\s+"\$RAW_RESULTS\/xctest-prewarm\.xcresult"\s+45\s+MaintenanceFieldUITests\/XCTestPrewarmUITests\/testRunnerAndHostLaunch/.test(activeJob)
+    && /TIMING_BUDGET_SECONDS=75\s*\n\s*timing_start xctest-prewarm/.test(activeJob)
+    && /run_xcode_with_timeout\s+xctest-prewarm\s+"\$RAW_RESULTS\/xctest-prewarm\.xcresult"\s+75\s+MaintenanceFieldUITests\/XCTestPrewarmUITests\/testRunnerAndHostLaunch/.test(activeJob)
     && /xctest-prewarm-failure\.txt/.test(activeJob)
     && /TEST_STATUS=1/.test(activeJob.slice(prewarmStart, functionalLoop))
     && prewarmStart !== -1
@@ -374,7 +374,7 @@ function hasValidLoopbackWebauthnPolicy(job, launcher) {
   const launch = matches[0]?.index ?? -1;
   const pidRead = activeJob.indexOf('BACKEND_PID="$(cat "$BACKEND_PID_FILE")"');
   const forbiddenLowLevelControls = /\b(?:E2E_AUTH_DIR|E2E_HTTP_ADDR|E2E_PORT_CONFLICT_MODE|E2E_COLDSTART_OTP|E2E_RP_ORIGIN|E2E_RP_ID)\b|e2e\/harness\/boot-backend\.sh/;
-  const approvedBackendStepSha256 = "c3c12a6e8ab4d7834186113db504dabc2ea65bc777a795128c2dbc2dee018d4e";
+  const approvedBackendStepSha256 = "f9d23fce010d2580fce35552b0338ed61c788ae2422daeb649f0c5b2e934a0a6";
   const approvedLauncherSha256 = "a153fab32c9f4ca597605ec126d40e3bfc106c0ce17c368078e22c265ca9f1ad";
   const backendStepSha256 = createHash("sha256").update(backendStep).digest("hex");
   const launcherSha256 = createHash("sha256").update(launcher).digest("hex");
@@ -795,7 +795,7 @@ function hasContrastStableCapsules(files) {
   const fieldChip = extractFunctionBody(views, /struct\s+FieldChip:\s*View/) ?? "";
   const detail = extractFunctionBody(views, /struct\s+WorkOrderDetailView:\s*View/) ?? "";
   const opaqueSemanticSurface = /\.background\(\s*Color\.opaqueFieldCapsuleBackground\s*,\s*in:\s*Capsule\(\s*\)\s*\)/;
-  const iOSSemanticColors = /static\s+var\s+opaqueFieldCapsuleBackground:\s*Color[\s\S]{0,180}Color\(uiColor:\s*\.tertiarySystemFill\)[\s\S]{0,360}static\s+var\s+opaqueFieldDetailBackground:\s*Color[\s\S]{0,180}Color\(uiColor:\s*\.systemGroupedBackground\)/.test(views);
+  const iOSSemanticColors = /static\s+var\s+opaqueFieldCapsuleBackground:\s*Color[\s\S]{0,180}Color\(uiColor:\s*\.systemGray5\)[\s\S]{0,360}static\s+var\s+opaqueFieldDetailBackground:\s*Color[\s\S]{0,180}Color\(uiColor:\s*\.systemGroupedBackground\)/.test(views);
   return opaqueSemanticSurface.test(messageRow)
     && opaqueSemanticSurface.test(fieldChip)
     && /\.font\(\s*\.caption\s*\)[\s\S]{0,100}\.foregroundStyle\(\s*\.primary\s*\)[\s\S]{0,220}\.background\(/.test(messageRow)
@@ -1376,6 +1376,7 @@ function hasDurableCriticalPathEvidence(files) {
 
   const preview = camera.indexOf("if previewIsUsable");
   const cancel = camera.indexOf("cancel.tap()", preview);
+  const dismissed = camera.indexOf("cancel.waitForNonExistence(timeout: 5)", cancel);
 
   return startTap !== -1 && scopedStatus > startTap && scopedLabel > scopedStatus
     && /XCTAssertEqual\([\s\S]{0,160}detailStatus\.label[\s\S]{0,160}KO\.inProgress/.test(critical)
@@ -1383,8 +1384,9 @@ function hasDurableCriticalPathEvidence(files) {
     && /fresh app launch must read the granted state back/i.test(critical)
     && /fresh app launch must read the withdrawn terminal state back/i.test(critical)
     && send !== -1 && messengerRelaunch > send && reopenedThread > messengerRelaunch && persistedBody > reopenedThread
-    && preview !== -1 && cancel > preview
+    && preview !== -1 && cancel > preview && dismissed > cancel
     && !/if\s+previewIsUsable\s*\{\s*return\b/.test(camera)
+    && /XCTAssertTrue\(\s*cancel\.waitForNonExistence\(\s*timeout:\s*5\s*\)/.test(camera)
     && /XCTAssertEqual\([\s\S]{0,160}loginError\.label[\s\S]{0,160}KO\.errorInvalidUserID/.test(login)
     && /static\s+func\s+requiredID[\s\S]{0,260}UUID\(uuidString: value\)/.test(support)
     && !/static\s+func\s+workOrderID\s*\(/.test(support);

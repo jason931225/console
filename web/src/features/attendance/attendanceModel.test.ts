@@ -249,6 +249,9 @@ describe("dayBoardRows", () => {
 
       const employee = rows.find((row) => row.type === "employee");
       expect(employee?.type === "employee" && employee.cover).toBeUndefined();
+      expect(
+        rows.filter((row) => row.type === "gap").map((row) => row.exception.id),
+      ).toEqual(["ex-uncovered"]);
     },
   );
 });

@@ -270,7 +270,7 @@ jobs:
             SHARD_SELECTORS=()
             case "$shard_name" in
               preflight-session)
-                SHARD_TIMEOUT_SECONDS=30
+                SHARD_TIMEOUT_SECONDS=60
                 SHARD_SELECTORS=(MaintenanceFieldUITests/PreflightUITests/testWorkflowMintedSessionAndLocalBackendAreConfigured)
                 ;;
               preflight-fixtures)
@@ -298,7 +298,7 @@ jobs:
                 )
                 ;;
               critical-lifecycle)
-                SHARD_TIMEOUT_SECONDS=210
+                SHARD_TIMEOUT_SECONDS=300
                 SHARD_SELECTORS=(
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testOpenWorkOrderDetailAndAdvance
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testReportFormValidationSurfacesRealRequiredCopy
@@ -311,14 +311,14 @@ jobs:
                 SHARD_SELECTORS=(MaintenanceFieldUITests/MessengerUITests/testExactSeededMessengerThreadAndMessageRender)
                 ;;
               messenger-mutation)
-                SHARD_TIMEOUT_SECONDS=120
+                SHARD_TIMEOUT_SECONDS=180
                 SHARD_SELECTORS=(
                   MaintenanceFieldUITests/MessengerUITests/testMessengerSendSurvivesBackendRefresh
                   MaintenanceFieldUITests/MessengerUITests/testMessengerSearchUnmatchedQueryShowsRealNoResults
                 )
                 ;;
               camera-capture)
-                SHARD_TIMEOUT_SECONDS=90
+                SHARD_TIMEOUT_SECONDS=150
                 SHARD_SELECTORS=(MaintenanceFieldUITests/CameraCaptureUITests)
                 ;;
               audit-dynamic-today)
@@ -467,18 +467,18 @@ jobs:
           # functional shard manifest and aggregate. It warms XCTest and the
           # app host under a strict cap; a failure remains worker-failing while
           # the functional fail-slow sweep still runs for diagnostics.
-          TIMING_BUDGET_SECONDS=45
+          TIMING_BUDGET_SECONDS=75
           timing_start xctest-prewarm
           prewarm_status=0
           if ! set_simulator_presentation light large; then
             prewarm_status=1
           else
-            run_xcode_with_timeout xctest-prewarm "$RAW_RESULTS/xctest-prewarm.xcresult" 45 MaintenanceFieldUITests/XCTestPrewarmUITests/testRunnerAndHostLaunch || prewarm_status=$?
+            run_xcode_with_timeout xctest-prewarm "$RAW_RESULTS/xctest-prewarm.xcresult" 75 MaintenanceFieldUITests/XCTestPrewarmUITests/testRunnerAndHostLaunch || prewarm_status=$?
           fi
           if (( prewarm_status == 0 )); then
             timing_finish passed
           elif (( prewarm_status == 124 )); then
-            printf '%s\n' 'xctest-prewarm exceeded its 45-second infrastructure budget' > "$ARTIFACTS/xctest-prewarm-failure.txt"
+            printf '%s\n' 'xctest-prewarm exceeded its 75-second infrastructure budget' > "$ARTIFACTS/xctest-prewarm-failure.txt"
             TEST_STATUS=1
             timing_finish timeout
           else

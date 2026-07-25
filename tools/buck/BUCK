@@ -44,3 +44,39 @@ export_file(
     mode = "reference",
     visibility = ["PUBLIC"],
 )
+
+# Non-generated wrappers keep disposable PostgreSQL credential values out of
+# Buck's test-executor argv.  The harness passes only a mode-0600 file path;
+# this wrapper loads it inside the test process before executing the exact
+# generated Rust integration-test binary.
+sh_test(
+    name = "pr473-ontology-key-revision-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-key_revision_migration_upgrade)"],
+    deps = ["//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-key_revision_migration_upgrade"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "pr473-leave-expand-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/leave/adapter-postgres:mnt-leave-adapter-postgres-itest-leave_migration_expand_contract)"],
+    deps = ["//backend/crates/leave/adapter-postgres:mnt-leave-adapter-postgres-itest-leave_migration_expand_contract"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "pr473-apalis-adapter-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_adapter)"],
+    deps = ["//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_adapter"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "pr473-apalis-schema-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_schema_contract)"],
+    deps = ["//backend/crates/platform/jobs:mnt-platform-jobs-itest-apalis_schema_contract"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)

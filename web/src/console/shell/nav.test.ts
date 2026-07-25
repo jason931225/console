@@ -31,13 +31,12 @@ function screens(
 }
 
 describe("console nav deny-by-omission", () => {
-  it("exposes only the ADR-0025-reviewed sales vertical slice", () => {
+  it("keeps all mounted bodies DARK without independent production-exposure evidence", () => {
     const s = screens(grants([ROLES.MEMBER]));
     expect(MOUNTED_SCREEN_KEYS).toEqual(
       expect.arrayContaining(["overview", "attendance", "mywork", "people", "sales", "inventory", "mail"]),
     );
-    expect(EXPOSED_SCREEN_KEYS).toEqual(["sales"]);
-    // The sole exposed screen remains deny-by-omission for a no-grant member.
+    expect(EXPOSED_SCREEN_KEYS).toEqual([]);
     expect(s).toEqual(new Set());
   });
 
@@ -55,7 +54,7 @@ describe("console nav deny-by-omission", () => {
     // Product exposure remains unchanged: Attendance is mounted but DARK.
     expect(production.has("attendance")).toBe(false);
     expect(isExposedScreenKey("attendance")).toBe(false);
-    expect(EXPOSED_SCREEN_KEYS).toEqual(["sales"]);
+    expect(EXPOSED_SCREEN_KEYS).toEqual([]);
   });
 
   it("hides governance/identity surfaces from a non-privileged persona", () => {
@@ -143,8 +142,8 @@ describe("console nav deny-by-omission", () => {
     ).toBe(true);
   });
 
-  it("uses sales as the only approved default for an authorized persona", () => {
-    expect(defaultScreen(grants([ROLES.ADMIN]))).toBe("sales");
+  it("has no production default while every mounted body remains DARK", () => {
+    expect(defaultScreen(grants([ROLES.ADMIN]))).toBeUndefined();
     expect(defaultScreen(grants([ROLES.MEMBER]))).toBeUndefined();
   });
 
@@ -176,8 +175,8 @@ describe("console nav deny-by-omission", () => {
     expect(consoleScreenPath("a b")).toBe("/console/a%20b");
   });
 
-  it("narrows only production-visible screen keys", () => {
-    expect(isExposedScreenKey("sales")).toBe(true);
+  it("narrows every mounted screen out of production until evidence is admitted", () => {
+    expect(isExposedScreenKey("sales")).toBe(false);
     expect(isExposedScreenKey("audit")).toBe(false);
     expect(isExposedScreenKey("docs")).toBe(false);
     expect(isExposedScreenKey("unknown")).toBe(false);
