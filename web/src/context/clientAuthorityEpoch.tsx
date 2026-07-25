@@ -1,4 +1,10 @@
-import { createContext, useContext, useMemo, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { useAuth } from "./auth";
 
@@ -25,6 +31,10 @@ export interface ClientAuthorityEpoch {
 const ClientAuthorityEpochContext = createContext<ClientAuthorityEpoch | null>(
   null,
 );
+
+const unavailableRuntimeFence: RuntimeFence = Object.freeze({
+  status: "unavailable",
+});
 
 function authorityScopeKey({
   sessionIncarnation,
@@ -69,6 +79,44 @@ function authorityScopeKey({
   });
 }
 
+/**
+ * Provider-local committed state. It is created for an initial mount only and
+ * advances from a layout effect, never while React is rendering a replacement.
+ */
+class ClientAuthorityEpochStore {
+  private current: ClientAuthorityEpoch;
+  private readonly listeners = new Set<() => void>();
+
+  constructor(initialAuthorityKey: string) {
+    this.current = this.createSnapshot(1, initialAuthorityKey);
+  }
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  getSnapshot = (): ClientAuthorityEpoch => this.current;
+
+  publish(authorityKey: string): void {
+    if (this.current.authorityKey === authorityKey) return;
+    this.current = this.createSnapshot(this.current.epoch + 1, authorityKey);
+    for (const listener of this.listeners) listener();
+  }
+
+  private createSnapshot(
+    epoch: number,
+    authorityKey: string,
+  ): ClientAuthorityEpoch {
+    return Object.freeze({
+      epoch,
+      authorityKey,
+      runtimeFence: unavailableRuntimeFence,
+      isCurrent: (candidate: ClientAuthorityEpoch) => this.current === candidate,
+    });
+  }
+}
+
 export function ClientAuthorityEpochProvider({
   children,
   workspaceKey,
@@ -78,10 +126,6 @@ export function ClientAuthorityEpochProvider({
   workspaceKey?: string;
 }) {
   const { session, viewAs } = useAuth();
-  const previousKeyRef = useRef<string | undefined>(undefined);
-  const epochRef = useRef(0);
-  const currentSnapshotRef = useRef<ClientAuthorityEpoch | undefined>(undefined);
-
   const key = authorityScopeKey({
     sessionIncarnation: session?.client_session_incarnation,
     userId: session?.user_id,
@@ -102,23 +146,19 @@ export function ClientAuthorityEpochProvider({
       : undefined,
     workspaceKey,
   });
+  const [store] = useState(() => new ClientAuthorityEpochStore(key));
 
-  const snapshot = useMemo(() => {
-    if (previousKeyRef.current !== key) {
-      previousKeyRef.current = key;
-      epochRef.current += 1;
-    }
+  // Layout effects run only for committed trees and complete before browser
+  // events, so query/action continuations cannot observe a retired authority.
+  useLayoutEffect(() => {
+    store.publish(key);
+  }, [key, store]);
 
-    const nextSnapshot = Object.freeze({
-      epoch: epochRef.current,
-      authorityKey: key,
-      runtimeFence: Object.freeze({ status: "unavailable" as const }),
-      isCurrent: (candidate: ClientAuthorityEpoch) =>
-        currentSnapshotRef.current === candidate,
-    });
-    currentSnapshotRef.current = nextSnapshot;
-    return nextSnapshot;
-  }, [key]);
+  const snapshot = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot,
+  );
 
   return (
     <ClientAuthorityEpochContext.Provider value={snapshot}>
@@ -127,6 +167,7 @@ export function ClientAuthorityEpochProvider({
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useClientAuthorityEpoch(): ClientAuthorityEpoch {
   const epoch = useContext(ClientAuthorityEpochContext);
   if (!epoch) {
