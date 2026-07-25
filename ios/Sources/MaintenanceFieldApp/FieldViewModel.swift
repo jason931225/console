@@ -280,6 +280,9 @@ final class FieldViewModel: ObservableObject {
             // follow-up read can alter the transient loading/error state.
             if syncState == .synced {
                 await refreshToday()
+                if messageKey == nil {
+                    messageKey = "report_submitted"
+                }
             }
             return
         } catch {

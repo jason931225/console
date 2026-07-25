@@ -1,11 +1,36 @@
 @testable import MaintenanceFieldApp
 import Combine
+import HTTPTypes
 import MaintenanceAPIClient
 import MaintenanceFieldCore
+import OpenAPIRuntime
 import XCTest
 
 @MainActor
 final class FieldViewModelReportLifecycleTests: XCTestCase {
+    func testConfirmedReportRemainsSuccessfulAfterSuccessfulTodayRefresh() async throws {
+        let refreshedWorkOrder = workOrder.applyingSubmittedReport(
+            ReportDraft(resultType: .completed, diagnosis: "Resolved", actionTaken: "Replaced"),
+            syncState: .synced
+        )
+        let gateway = ControllableWorkOrderGateway(todayWorkOrders: [refreshedWorkOrder])
+        let viewModel = makeViewModel(gateway: gateway)
+        viewModel.selectedWorkOrder = workOrder
+        viewModel.diagnosis = "Resolved"
+        viewModel.actionTaken = "Replaced"
+
+        await viewModel.submitReport()
+
+        let didRefresh = await gateway.refreshStarted()
+        XCTAssertTrue(didRefresh)
+        XCTAssertEqual(viewModel.today.count, 1)
+        XCTAssertEqual(viewModel.today.first?.status, .reportSubmitted)
+        XCTAssertEqual(viewModel.selectedWorkOrder?.status, .reportSubmitted)
+        XCTAssertEqual(viewModel.selectedWorkOrder?.syncState, .synced)
+        XCTAssertEqual(viewModel.messageKey, "report_submitted")
+        XCTAssertFalse(viewModel.isLoading)
+    }
+
     func testConfirmedReportPublishesSuccessBeforeFailedTodayRefresh() async throws {
         let gateway = ControllableWorkOrderGateway(
             listError: URLError(.networkConnectionLost),
@@ -74,13 +99,20 @@ final class FieldViewModelReportLifecycleTests: XCTestCase {
     private func makeViewModel(gateway: ControllableWorkOrderGateway) -> FieldViewModel {
         let queue = OfflineQueueRepository(store: InMemoryMutationQueueStore(), syncGateway: gateway, deviceIDProvider: { "test-device" })
         let repository = WorkOrderRepository(gateway: gateway, cache: WorkOrderCacheStore(), offlineQueue: queue)
+        let tokenProvider = CurrentTokenProvider(accessToken: "test-access-token")
+        let auxiliaryGateway = GeneratedMaintenanceAPIGateway(
+            serverURL: URL(string: "https://api.example.com")!,
+            tokenProvider: tokenProvider,
+            sessionStore: InMemorySessionTokenStore(),
+            transport: SuccessfulRefreshTransport()
+        )
         let live = FieldAppContainer.live()
         return FieldViewModel(container: FieldAppContainer(
             authRepository: live.authRepository,
             workOrderRepository: repository,
-            evidenceRepository: live.evidenceRepository,
-            messengerRepository: live.messengerRepository,
-            locationConsentRepository: live.locationConsentRepository,
+            evidenceRepository: EvidenceRepository(gateway: auxiliaryGateway, store: EmptyEvidenceUploadStore()),
+            messengerRepository: MessengerRepository(gateway: auxiliaryGateway, outbox: InMemoryMessengerOutboxStore()),
+            locationConsentRepository: LocationConsentRepository(gateway: auxiliaryGateway),
             mobileOperationsRepository: live.mobileOperationsRepository,
             passkeyStepUpRepository: live.passkeyStepUpRepository
         ))
@@ -91,20 +123,67 @@ final class FieldViewModelReportLifecycleTests: XCTestCase {
     }
 }
 
+private actor InMemorySessionTokenStore: SessionTokenStore {
+    func load() -> AuthTokens? { nil }
+    func consumeForRefresh() throws -> AuthTokens? { nil }
+    func save(_ tokens: AuthTokens) throws {}
+    func clear() throws {}
+}
+
+private actor EmptyEvidenceUploadStore: EvidenceUploadStore {
+    func upsert(_ upload: PendingEvidenceUpload) throws {}
+    func pending() -> [PendingEvidenceUpload] { [] }
+    func markSynced(id: String) throws {}
+    func markRetrying(id: String, message: String, retryAttemptCount: Int, nextRetryAt: Date) throws {}
+    func markFailed(id: String, message: String) throws {}
+}
+
+private struct SuccessfulRefreshTransport: ClientTransport {
+    func send(
+        _ request: HTTPRequest,
+        body: HTTPBody?,
+        baseURL: URL,
+        operationID: String
+    ) async throws -> (HTTPResponse, HTTPBody?) {
+        let bytes = Array(
+            """
+            {
+              "consent_id": "00000000-0000-0000-0000-000000000201",
+              "user_id": "00000000-0000-0000-0000-000000000202",
+              "branch_id": "00000000-0000-0000-0000-000000000203",
+              "state": "NO_RECORD",
+              "may_collect": false
+            }
+            """.utf8
+        )
+        let responseBody = HTTPBody(AsyncStream { continuation in
+            continuation.yield(bytes[...])
+            continuation.finish()
+        }, length: .known(Int64(bytes.count)))
+        return (
+            HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+            responseBody
+        )
+    }
+}
+
 private actor ControllableWorkOrderGateway: WorkOrderGateway {
     let reportError: Error?
     let listError: Error?
     let listDelayNanoseconds: UInt64
+    let todayWorkOrders: [TechnicianWorkOrder]
     private var didStartRefresh = false
 
     init(
         reportError: Error? = nil,
         listError: Error? = nil,
-        listDelayNanoseconds: UInt64 = 0
+        listDelayNanoseconds: UInt64 = 0,
+        todayWorkOrders: [TechnicianWorkOrder] = []
     ) {
         self.reportError = reportError
         self.listError = listError
         self.listDelayNanoseconds = listDelayNanoseconds
+        self.todayWorkOrders = todayWorkOrders
     }
 
     func listTodayWorkOrders() async throws -> [TechnicianWorkOrder] {
@@ -113,7 +192,7 @@ private actor ControllableWorkOrderGateway: WorkOrderGateway {
             try await Task.sleep(nanoseconds: listDelayNanoseconds)
         }
         if let listError { throw listError }
-        return []
+        return todayWorkOrders
     }
 
     func refreshStarted() -> Bool { didStartRefresh }
