@@ -486,8 +486,16 @@ class FieldUITestCase: XCTestCase {
       "EXPECTED_BATCHES=(core critical-core critical-report messenger-dynamic audit-standard)",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "EXPECTED_SHARDS=(preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity",
+      "EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
       "EXPECTED_SHARDS=(login-validation accessibility-id-parity",
+    ) }), aggregateGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      "core) expected_manifest='preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity'",
+      "core) expected_manifest='preflight-session preflight-restore preflight-fixtures login-validation accessibility-id-parity'",
+    ) }), aggregateGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      "EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
+      "EXPECTED_SHARDS=(preflight-session preflight-restore preflight-fixtures login-validation accessibility-id-parity",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("((${#summaries[@]} == 1))", "true") }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('node scripts/verify-xcresult-test-results.mjs "${VERIFY_ARGS[@]}" --swift-tests ios/UITests', "true") }), aggregateGate);

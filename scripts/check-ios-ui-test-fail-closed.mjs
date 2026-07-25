@@ -559,6 +559,22 @@ function hasExactFailSlowExecution(job) {
 
 function hasStructuredResultVerification(workerJob, aggregateJob) {
   const activeAggregate = stripInertShellData(aggregateJob);
+  const matrixBatches = matrixShardBatches(workerJob);
+  const aggregateShards = /EXPECTED_SHARDS=\(([^)]*)\)/.exec(activeAggregate)?.[1]?.trim().split(/\s+/) ?? [];
+  const artifactManifests = new Map([...activeAggregate.matchAll(/^\s*([a-z0-9-]+)\)\s+expected_manifest='([^']*)'\s*;;$/gm)]
+    .map(([, batch, shards]) => [batch, shards.trim().split(/\s+/)]));
+  const expectedAggregateShards = [...expectedShardBatches.values()].flat();
+  const hasExactMatrixArtifactAggregateOrder = expectedShardBatches.size === matrixBatches.size
+    && expectedShardBatches.size === artifactManifests.size
+    && aggregateShards.length === expectedAggregateShards.length
+    && expectedAggregateShards.every((shard, index) => aggregateShards[index] === shard)
+    && [...expectedShardBatches].every(([batch, expectedShards]) => {
+      const matrixShards = matrixBatches.get(batch);
+      const artifactShards = artifactManifests.get(batch);
+      return matrixShards?.length === expectedShards.length
+        && artifactShards?.length === expectedShards.length
+        && expectedShards.every((shard, index) => matrixShards[index] === shard && artifactShards[index] === shard);
+    });
   return /^  ios-ui-results:\s*\n    name:[^\n]+\n    needs:\s*ios-ui-tests\s*\n    if:\s*always\(\)\s*$/m.test(aggregateJob)
     && /runs-on:\s*ubuntu-24\.04\b/.test(aggregateJob)
     && /actions\/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0/.test(aggregateJob)
@@ -572,7 +588,7 @@ function hasStructuredResultVerification(workerJob, aggregateJob) {
     && /WORKER_RESULT:\s*\$\{\{ needs\.ios-ui-tests\.result \}\}/.test(aggregateJob)
     && /test\s+"\$\(git rev-parse HEAD\)"\s*=\s*"\$GITHUB_SHA"/.test(activeAggregate)
     && /EXPECTED_BATCHES=\(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive\)/.test(activeAggregate)
-    && /EXPECTED_SHARDS=\(preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5\)/.test(activeAggregate)
+    && hasExactMatrixArtifactAggregateOrder
     && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-mindepth\s+1\s+-maxdepth\s+1\s+-type\s+d\s+-name\s+'ios-ui-test-results-\*'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+7/.test(activeAggregate)
     && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-summary\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+20/.test(activeAggregate)
     && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-tests\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+20/.test(activeAggregate)

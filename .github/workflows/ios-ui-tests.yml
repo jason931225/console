@@ -619,13 +619,13 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           EXPECTED_BATCHES=(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive)
-          EXPECTED_SHARDS=(preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
+          EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
           for batch_name in "${EXPECTED_BATCHES[@]}"; do
             batch_dir="$RESULTS_ROOT/ios-ui-test-results-$batch_name"
             test -d "$batch_dir"
             test "$(cat "$batch_dir/batch-name.txt")" = "$batch_name"
             case "$batch_name" in
-              core) expected_manifest='preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity' ;;
+              core) expected_manifest='preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity' ;;
               critical-core) expected_manifest='critical-today camera-capture' ;;
               critical-report) expected_manifest='critical-report' ;;
               critical-location) expected_manifest='critical-location' ;;
