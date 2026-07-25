@@ -71,7 +71,7 @@ test('forged comparator source/date and attacker review cannot pass', () => {
   const forged = structuredClone(registry); forged.capabilities[0].benchmark.comparator_sources[0].observation_as_of = '2026-99-99';
   assert.throws(() => validateConsoleTruthLedger(forged, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveSource: () => true }), /ISO/);
   const source = structuredClone(registry);
-  assert.throws(() => validateConsoleTruthLedger(source, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveSource: () => false }), /repository-resolvable/);
+  assert.throws(() => validateConsoleTruthLedger(source, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveSource: () => false }), /tracked regular file/);
   const review = structuredClone(registry); review.capabilities[0].benchmark.independent_outcome_review = { status: 'MEET', candidate_sha: registry.candidate.sha, receipt_path: 'forged.json', reviewer_id: review.capabilities[0].owner };
   assert.throws(() => validateConsoleTruthLedger(review, jurisdiction, { expectedCandidateSha: registry.candidate.sha }), /independent candidate-bound receipt-backed/);
 });
@@ -95,4 +95,18 @@ test('branch and jurisdiction target bypasses reject', () => {
   assert.throws(() => validateConsoleTruthLedger(branch, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveBranch: () => 'a'.repeat(40) }), /branch does not resolve/);
   const empty = structuredClone(jurisdiction); empty.target_jurisdiction_set = [];
   assert.throws(() => validateConsoleTruthLedger(registry, empty, { expectedCandidateSha: registry.candidate.sha }), /jurisdiction target/);
+});
+
+test('non-HOLD promotion requires canonical trusted immutable receipt fields', () => {
+  const promoted = structuredClone(registry); const cap = promoted.capabilities[0];
+  cap.benchmark.verdict = 'MEET'; cap.candidate_evidence.status = 'VERIFIED';
+  cap.benchmark.independent_outcome_review = { status: 'MEET', reviewer_id: 'attacker', candidate_sha: registry.candidate.sha, capability_id: cap.id, outcome_ids: [cap.benchmark.native_outcomes[0].id], evidence_digest: 'a'.repeat(64), review_commit: 'b'.repeat(40), receipt_path: 'docs/evidence/fake.json' };
+  assert.throws(() => validateConsoleTruthLedger(promoted, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveReceipt: () => true }), /receipt schema/);
+  const trusted = structuredClone(registry); const c = trusted.capabilities[0]; trusted.candidate_evidence = undefined; c.benchmark.verdict='MEET'; c.candidate_evidence.status='VERIFIED'; c.benchmark.independent_outcome_review={status:'MEET',reviewer_id:'jasonlee-ssh-reviewer',candidate_sha:registry.candidate.sha,capability_id:c.id,outcome_ids:[c.benchmark.native_outcomes[0].id],evidence_digest:'a'.repeat(64),review_commit:'b'.repeat(40),receipt_path:'docs/evidence/fake.json'};
+  assert.throws(() => validateConsoleTruthLedger(trusted, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveReceipt: () => ({ tracked_regular:true, candidate_bound:true, digest_verified:false, commit_ancestor:true, trusted_identity:'jasonlee-ssh-reviewer',signature_verified:true, fingerprint:'SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8' }) }), /immutable trusted evidence/);
+});
+
+test('Korea trace bijection rejects missing trace', () => {
+  const bad=structuredClone(jurisdiction); bad.controls[0].capability_traceability.pop();
+  assert.throws(() => validateConsoleTruthLedger(registry,bad,{expectedCandidateSha:registry.candidate.sha}),/bidirectional|bijection/);
 });
