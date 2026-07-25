@@ -25,6 +25,8 @@ async fn lifecycle_mutations_persist_state_and_audit_in_order(pool: PgPool) {
         let store = PgWorkOrderStore::new(pool.clone());
         let created = store
             .create_work_order(CreateWorkOrderCommand {
+                maintenance_type: None,
+                maintenance_cause: None,
                 actor: seeded.receptionist,
                 branch_id: seeded.branch_id,
                 management_no: "#290".to_owned(),
@@ -179,6 +181,8 @@ async fn update_intake_edits_work_order_narrative_and_audits(pool: PgPool) {
         let store = PgWorkOrderStore::new(pool.clone());
         let created = store
             .create_work_order(CreateWorkOrderCommand {
+                maintenance_type: None,
+                maintenance_cause: None,
                 actor: seeded.receptionist,
                 branch_id: seeded.branch_id,
                 management_no: "#290".to_owned(),
@@ -193,6 +197,8 @@ async fn update_intake_edits_work_order_narrative_and_audits(pool: PgPool) {
 
         let updated = store
             .update_work_order_intake(UpdateWorkOrderIntakeCommand {
+                maintenance_type: None,
+                maintenance_cause: None,
                 actor: seeded.admin,
                 work_order_id: created.id,
                 symptom: Some("Hydraulic oil leak with pump noise".to_owned()),
@@ -297,6 +303,8 @@ async fn request_numbers_are_race_safe_and_sequential_per_day(pool: PgPool) {
         let now = OffsetDateTime::now_utc();
 
         let first = store.create_work_order(CreateWorkOrderCommand {
+            maintenance_type: None,
+            maintenance_cause: None,
             actor: seeded.receptionist,
             branch_id: seeded.branch_id,
             management_no: "290".to_owned(),
@@ -307,6 +315,8 @@ async fn request_numbers_are_race_safe_and_sequential_per_day(pool: PgPool) {
             occurred_at: now,
         });
         let second = store.create_work_order(CreateWorkOrderCommand {
+            maintenance_type: None,
+            maintenance_cause: None,
             actor: seeded.receptionist,
             branch_id: seeded.branch_id,
             management_no: "290".to_owned(),
@@ -345,6 +355,8 @@ async fn create_work_order_emits_post_commit_created_event(pool: PgPool) {
 
         let created = store
             .create_work_order(CreateWorkOrderCommand {
+                maintenance_type: None,
+                maintenance_cause: None,
                 actor: seeded.receptionist,
                 branch_id: seeded.branch_id,
                 management_no: "290".to_owned(),
@@ -506,6 +518,8 @@ async fn create_assigned_work_order(
 ) -> mnt_workorder_application::WorkOrderSummary {
     let created = store
         .create_work_order(CreateWorkOrderCommand {
+            maintenance_type: None,
+            maintenance_cause: None,
             actor: seeded.receptionist,
             branch_id: seeded.branch_id,
             management_no: "290".to_owned(),
