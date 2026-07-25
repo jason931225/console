@@ -79,14 +79,15 @@ describe("iOS hermetic UI CI contract", () => {
     ) }), isolationGate);
   });
   it("rejects watchdog inflation, incomplete batches, or unbounded matrix fanout", () => {
-    const matrixGate = "five bounded isolated shard batches";
+    const matrixGate = "seven bounded isolated shard batches";
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("timeout-minutes: 45", "timeout-minutes: 44") }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("timeout-minutes: 45", "timeout-minutes: 90") }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("fail-fast: false", "fail-fast: true") }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("max-parallel: 5", "max-parallel: 15") }), matrixGate);
     for (const [shard, budget, invalidBudget] of [
       ["preflight-session", 60, 30],
-      ["critical-lifecycle", 300, 540],
+      ["critical-report", 240, 540],
+      ["critical-location", 150, 90],
       ["camera-capture", 150, 90],
       ["messenger-mutation", 180, 120],
     ]) {
@@ -98,12 +99,12 @@ describe("iOS hermetic UI CI contract", () => {
       ) }), matrixGate);
     }
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      'shards: "critical-today critical-lifecycle camera-capture"',
       'shards: "critical-today camera-capture"',
+      'shards: "critical-today"',
     ) }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      'shards: "critical-today critical-lifecycle camera-capture"',
-      'shards: "critical-today critical-lifecycle camera-capture preflight-session"',
+      'shards: "critical-today camera-capture"',
+      'shards: "critical-today camera-capture preflight-session"',
     ) }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("-parallel-testing-enabled NO", "-parallel-testing-enabled YES") }), matrixGate);
   });
@@ -429,6 +430,15 @@ class FieldUITestCase: XCTestCase {
   });
   it("rejects xctestrun, ATS, and fail-slow xcresult regression", () => {
     const failSlow = "each iOS UI matrix worker";
+    const xctestrunGate = "normalize the static UI host path before XCTest prewarm";
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      "--target MaintenanceFieldUITests --ui-target-app-path '__TESTROOT__/Debug-iphonesimulator/MaintenanceFieldApp.app')",
+      "--target MaintenanceFieldUITests)",
+    ) }), xctestrunGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      "--ui-target-app-path '__TESTROOT__/Debug-iphonesimulator/MaintenanceFieldApp.app' --env MNT_UITEST_BASE_URL",
+      "--env MNT_UITEST_BASE_URL",
+    ) }), xctestrunGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('chmod 600 "$XCTESTRUN"', "") }), "mode-0600");
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('CI_PLIST="$D/Info.ci.plist"', 'CI_PLIST="$RUNNER_TEMP/Info.plist"') }), "CI-only job-root");
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('run_xcode_with_timeout "$shard_name" "$result" "$SHARD_TIMEOUT_SECONDS" "${SHARD_SELECTORS[@]}" || { shard_status=$?; TEST_STATUS=1; }', 'run_xcode_with_timeout "$shard_name" "$result" "$SHARD_TIMEOUT_SECONDS" "${SHARD_SELECTORS[@]}"') }), failSlow);
@@ -463,8 +473,8 @@ class FieldUITestCase: XCTestCase {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('name: "ios-ui-test-results-${{ matrix.batch }}"', "name: ios-ui-test-results") }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("if-no-files-found: error", "if-no-files-found: warn") }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "EXPECTED_BATCHES=(core critical messenger-dynamic audit-standard audit-adaptive)",
-      "EXPECTED_BATCHES=(core critical messenger-dynamic audit-standard)",
+      "EXPECTED_BATCHES=(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive)",
+      "EXPECTED_BATCHES=(core critical-core critical-report messenger-dynamic audit-standard)",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       "EXPECTED_SHARDS=(preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity",
