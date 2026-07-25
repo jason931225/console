@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 const CLOSE_MONTH: &str = "2026-07";
 const SUBSTITUTION_KEY: &str = "attendance-substitution-race-key-0001";
+const LOCK_WITNESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn concurrent_branch_month_closes_commit_one_snapshot_and_one_audit(owner_pool: PgPool) {
@@ -342,7 +343,7 @@ async fn wait_for_exact_gate_waiter(
                 blockers,
             );
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(LOCK_WITNESS_POLL_INTERVAL).await;
     }
 }
 

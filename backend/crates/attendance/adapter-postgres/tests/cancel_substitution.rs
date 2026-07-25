@@ -27,6 +27,8 @@ use time::{Duration, OffsetDateTime};
 use tokio::sync::Barrier;
 use uuid::Uuid;
 
+const LOCK_WITNESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn assigned_substitution_cancels_through_runtime_adapter_using_migration_0188_columns(
     owner_pool: PgPool,
@@ -712,7 +714,7 @@ async fn wait_for_advisory_lock_waiter(
                 observed_blockers
             );
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(LOCK_WITNESS_POLL_INTERVAL).await;
     }
 }
 
