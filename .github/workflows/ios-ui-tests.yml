@@ -26,7 +26,7 @@ jobs:
       matrix:
         include:
           - batch: core
-            shards: "preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity"
+            shards: "preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
           - batch: critical-core
             shards: "critical-today camera-capture"
           - batch: critical-report
@@ -263,9 +263,6 @@ jobs:
           XCTESTRUN="$(find "$DERIVED/Build/Products" -name '*.xctestrun' -print -quit)"
           test -n "$XCTESTRUN"
           chmod 600 "$XCTESTRUN"
-          # Prewarm has no renewable session. Normalize its static UI host
-          # before launch; functional shards add credentials only after minting.
-          (cd "$ROOT" && python3 scripts/patch-ios-xctestrun.py "$XCTESTRUN" --target MaintenanceFieldUITests --ui-target-app-path '__TESTROOT__/Debug-iphonesimulator/MaintenanceFieldApp.app')
           timing_finish passed
           export MNT_UITEST_BASE_URL="$URL" MNT_UITEST_WORK_ORDER_ID_DETAIL=00000000-0000-0000-0000-000000f00004 MNT_UITEST_WORK_ORDER_ID_START=00000000-0000-0000-0000-000000f00003 MNT_UITEST_WORK_ORDER_ID_REPORT=00000000-0000-0000-0000-000000f00004 MNT_UITEST_WORK_ORDER_ID_REPORT_SUCCESS=00000000-0000-0000-0000-000000f00005 MNT_UITEST_WORK_ORDER_ID_ADMIN_APPROVE=00000000-0000-0000-0000-000000f00007 MNT_UITEST_WORK_ORDER_ID_ADMIN_REJECT=00000000-0000-0000-0000-000000f00008 MNT_UITEST_WORK_ORDER_ID_CAMERA=00000000-0000-0000-0000-000000f00004 MNT_UITEST_MESSENGER_THREAD_ID=00000000-0000-0000-0000-000000c10001 MNT_UITEST_MESSENGER_INITIAL_MESSAGE_ID=00000000-0000-0000-0000-000000c20001
           configure_shard() {
@@ -475,29 +472,6 @@ jobs:
           printf '%s\n' "$MNT_IOS_BATCH_NAME" > "$ARTIFACTS/batch-name.txt"
           printf '%s\n' "${SHARD_MANIFEST[@]}" > "$ARTIFACTS/shard-manifest.txt"
           TEST_STATUS=0
-          # This is deliberately infrastructure-only and excluded from the
-          # functional shard manifest and aggregate. It warms XCTest and the
-          # app host under a strict cap; a failure remains worker-failing while
-          # the functional fail-slow sweep still runs for diagnostics.
-          TIMING_BUDGET_SECONDS=75
-          timing_start xctest-prewarm
-          prewarm_status=0
-          if ! set_simulator_presentation light large; then
-            prewarm_status=1
-          else
-            run_xcode_with_timeout xctest-prewarm "$RAW_RESULTS/xctest-prewarm.xcresult" 75 MaintenanceFieldUITests/XCTestPrewarmUITests/testRunnerAndHostLaunch || prewarm_status=$?
-          fi
-          if (( prewarm_status == 0 )); then
-            timing_finish passed
-          elif (( prewarm_status == 124 )); then
-            printf '%s\n' 'xctest-prewarm exceeded its 75-second infrastructure budget' > "$ARTIFACTS/xctest-prewarm-failure.txt"
-            TEST_STATUS=1
-            timing_finish timeout
-          else
-            printf '%s\n' 'xctest-prewarm failed before functional shards' > "$ARTIFACTS/xctest-prewarm-failure.txt"
-            TEST_STATUS=1
-            timing_finish failed
-          fi
           for shard_name in "${SHARD_MANIFEST[@]}"; do
             result="$RAW_RESULTS/$shard_name.xcresult"; summary="$ARTIFACTS/$shard_name-summary.json"; tests="$ARTIFACTS/$shard_name-tests.json"
             timing_start "test:$shard_name"

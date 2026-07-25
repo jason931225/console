@@ -40,7 +40,7 @@ const expectedShardBudgets = new Map([
 ]);
 
 const expectedShardBatches = new Map([
-  ["core", ["preflight-session", "preflight-fixtures", "preflight-restore", "login-validation", "accessibility-id-parity"]],
+  ["core", ["preflight-restore", "preflight-session", "preflight-fixtures", "login-validation", "accessibility-id-parity"]],
   ["critical-core", ["critical-today", "camera-capture"]],
   ["critical-report", ["critical-report"]],
   ["critical-location", ["critical-location"]],
@@ -130,26 +130,16 @@ function hasCompleteFailSlowRuntimeBudget(job) {
     && /-parallel-testing-enabled\s+NO\b/.test(job);
 }
 
-function hasCappedXCTestPrewarm(files) {
+function hasFunctionalColdStartProof(files) {
   const workflow = files[".github/workflows/ios-ui-tests.yml"] ?? "";
   const activeJob = stripInertShellData(iosJob(workflow));
   const prewarm = files["ios/UITests/XCTestPrewarmUITests.swift"] ?? "";
-  const prewarmStart = activeJob.indexOf("timing_start xctest-prewarm");
-  const functionalLoop = activeJob.indexOf('for shard_name in "${SHARD_MANIFEST[@]}"; do');
-  return /final\s+class\s+XCTestPrewarmUITests:\s*XCTestCase/.test(prewarm)
-    && /func\s+testRunnerAndHostLaunch\s*\(\s*\)/.test(prewarm)
-    && /let\s+app\s*=\s*XCUIApplication\s*\(\s*\)/.test(prewarm)
-    && /app\.launch\s*\(\s*\)/.test(prewarm)
-    && /app\.terminate\s*\(\s*\)/.test(prewarm)
-    && /app\.state[\s\S]{0,120}\.runningForeground/.test(prewarm)
-    && /TIMING_BUDGET_SECONDS=75\s*\n\s*timing_start xctest-prewarm/.test(activeJob)
-    && /run_xcode_with_timeout\s+xctest-prewarm\s+"\$RAW_RESULTS\/xctest-prewarm\.xcresult"\s+75\s+MaintenanceFieldUITests\/XCTestPrewarmUITests\/testRunnerAndHostLaunch/.test(activeJob)
-    && /xctest-prewarm-failure\.txt/.test(activeJob)
-    && /TEST_STATUS=1/.test(activeJob.slice(prewarmStart, functionalLoop))
-    && prewarmStart !== -1
-    && functionalLoop !== -1
-    && prewarmStart < functionalLoop
-    && !/MNT_IOS_SHARD_BATCH[^\n]*xctest-prewarm/.test(activeJob);
+  const coreShards = matrixShardBatches(activeJob).get("core") ?? [];
+  return prewarm.trim() === ""
+    && !/xctest-prewarm|XCTestPrewarmUITests|testRunnerAndHostLaunch/.test(activeJob)
+    && coreShards.join(" ") === "preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
+    && /preflight-restore\)\s*\n\s*SHARD_TIMEOUT_SECONDS=90\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/PreflightUITests\/testSeederRestoresThenClearsRealSession\)/.test(activeJob)
+    && /run_xcode_with_timeout\s+"\$shard_name"\s+"\$result"\s+"\$SHARD_TIMEOUT_SECONDS"\s+"\$\{SHARD_SELECTORS\[@\]\}"\s+\|\|\s+\{\s*shard_status=\$\?;\s*TEST_STATUS=1;\s*\}/.test(activeJob);
 }
 
 function hasPipelineTimingTelemetry(job) {
@@ -169,7 +159,6 @@ function hasPipelineTimingTelemetry(job) {
     && /trap\s+on_exit\s+EXIT/.test(activeJob)
     && phases.every((phase) => activeJob.includes(`timing_start ${phase}`))
     && /timing_start\s+"test:\$shard_name"/.test(activeJob)
-    && /timing_start xctest-prewarm[\s\S]{0,1200}prewarm_status == 124[\s\S]{0,280}timing_finish timeout/.test(activeJob)
     && /TIMING_BUDGET_SECONDS="\$SHARD_TIMEOUT_SECONDS"/.test(activeJob)
     && /timeout_marker="\$ARTIFACTS\/\$shard_name-timeout\.txt"/.test(activeJob)
     && />\s*"\$timeout_marker"/.test(activeJob)
@@ -377,7 +366,7 @@ function hasValidLoopbackWebauthnPolicy(job, launcher) {
   const launch = matches[0]?.index ?? -1;
   const pidRead = activeJob.indexOf('BACKEND_PID="$(cat "$BACKEND_PID_FILE")"');
   const forbiddenLowLevelControls = /\b(?:E2E_AUTH_DIR|E2E_HTTP_ADDR|E2E_PORT_CONFLICT_MODE|E2E_COLDSTART_OTP|E2E_RP_ORIGIN|E2E_RP_ID)\b|e2e\/harness\/boot-backend\.sh/;
-  const approvedBackendStepSha256 = "1e0c2016a442c489c7babb9c1ddf304f48b810264b0d0fa360df8a7d01c520bf";
+  const approvedBackendStepSha256 = "f38f7aa979e0732ef098895753a7f0b0cd00d6fdf42d85fc0682d9088225c614";
   const approvedLauncherSha256 = "a153fab32c9f4ca597605ec126d40e3bfc106c0ce17c368078e22c265ca9f1ad";
   const backendStepSha256 = createHash("sha256").update(backendStep).digest("hex");
   const launcherSha256 = createHash("sha256").update(launcher).digest("hex");
@@ -521,11 +510,10 @@ function hasMode600Xctestrun(job) {
   const discovered = job.search(/\bXCTESTRUN="\$\(find\s+"\$DERIVED\/Build\/Products"[\s\S]{0,160}-name\s+'\*\.xctestrun'[\s\S]{0,160}-print\s+-quit\)"/);
   const protectedFile = job.search(/chmod\s+600\s+"\$XCTESTRUN"/);
   const staticPatch = job.search(/patch-ios-xctestrun\.py\s+"\$XCTESTRUN"\s+--target\s+MaintenanceFieldUITests\s+--ui-target-app-path\s+'__TESTROOT__\/Debug-iphonesimulator\/MaintenanceFieldApp\.app'\s*\)/);
-  const prewarm = job.search(/timing_start\s+xctest-prewarm/);
   const perShardPatch = /mint_shard_session\s*\(\s*\)[\s\S]{0,4000}patch-ios-xctestrun\.py\s+"\$XCTESTRUN"[\s\S]{0,480}--ui-target-app-path\s+'__TESTROOT__\/Debug-iphonesimulator\/MaintenanceFieldApp\.app'[\s\S]{0,1200}--env\s+MNT_UITEST_ACCESS_TOKEN[\s\S]{0,240}--env\s+MNT_UITEST_REFRESH_TOKEN/.test(job);
   const executed = job.search(/test-without-building[\s\S]{0,160}-xctestrun\s+"\$XCTESTRUN"/);
   return derived !== -1 && discovered > derived && protectedFile > discovered
-    && staticPatch > protectedFile && prewarm > staticPatch && perShardPatch && executed > staticPatch;
+    && staticPatch === -1 && perShardPatch && executed > protectedFile;
 }
 
 function hasExactFailSlowExecution(job) {
@@ -1487,7 +1475,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasCandidateShaBeforeBackendBuild(job), "iOS UI CI must verify git rev-parse HEAD against GITHUB_SHA before building candidate mnt-app"]);
   checks.push([hasOptimizedBehavioralBackendBuild(job), "iOS UI CI must use the measured stripped-debug mnt-app build for behavioral E2E and reject release optimization overhead"]);
   checks.push([hasPipelineTimingTelemetry(job), "iOS UI CI must emit durable phase and per-shard timings so slow stages are diagnosed before budgets change"]);
-  checks.push([hasCappedXCTestPrewarm(files), "iOS UI CI must cap an infrastructure-only XCTest prewarm before functional shards without treating it as product success"]);
+  checks.push([hasFunctionalColdStartProof(files), "iOS UI CI must start with the real preflight-restore shard under its unchanged watchdog, never a standalone XCTest prewarm or functional-result substitute"]);
   checks.push([hasPinnedJobLocalXcodegen(job), "iOS UI CI must install checksum-pinned XcodeGen 2.46.0 under its job root without mutating Homebrew"]);
   checks.push([hasOfficialPostgres184Source(job), "iOS UI CI must build PostgreSQL 18.4 from the official source tarball after SHA-256 verification"]);
   checks.push([hasRequiredPostgresExtensions(job), "iOS UI CI must configure PostgreSQL with OpenSSL and build, install, and load-test the required pgcrypto and pg_trgm extensions before compiling the backend"]);
@@ -1503,7 +1491,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasActionableDetailReadiness(files), "iOS UI navigation must prove detail readiness with the actionable back control, not container hittability"]);
   checks.push([hasDetailLazyControlScroll(files), "iOS UI tests must use one deadline-bounded exact-element scroll for lazy detail controls, using the first detail section as the normalization sentinel"]);
   checks.push([hasEntitledSimulatorSeederContract(job), "iOS UI CI must preserve the Xcode-created Simulator Runner and prove matching app/seeder Mach-O keychain entitlements before test execution"]);
-  checks.push([hasMode600Xctestrun(job), "iOS UI CI must normalize the static UI host path before XCTest prewarm and inject renewable session material only per functional shard through a mode-0600 job-root xctestrun"]);
+  checks.push([hasMode600Xctestrun(job), "iOS UI CI must inject the UI host path and renewable session material only per functional shard through a mode-0600 job-root xctestrun"]);
   checks.push([!/-skip-testing|XCTSkip|optional\/skipped|HAS_REAL_SESSION_SOURCE/.test(workflow + (files["ios/UITests/Support/FieldUITestCase.swift"] ?? "") + (files["ios/UITests/Support/RealSessionSeed.swift"] ?? "")), "iOS UI CI and its test support must not include skip-testing, XCTSkip, or fail-open session branches"]);
   checks.push([! /MNT_UITEST_AUDIT_STRICT/.test(workflow), "iOS UI CI must not make strict accessibility conditional through an environment toggle"]);
   checks.push([hasStrictAccessibility(files), "iOS UI CI must enforce strict accessibility auditing"]);

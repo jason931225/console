@@ -28,7 +28,7 @@ const validFiles = {
   "ios/UITests/MessengerUITests.swift": readFileSync(new URL("../ios/UITests/MessengerUITests.swift", import.meta.url), "utf8"),
   "ios/UITests/CameraCaptureUITests.swift": readFileSync(new URL("../ios/UITests/CameraCaptureUITests.swift", import.meta.url), "utf8"),
   "ios/UITests/PreflightUITests.swift": readFileSync(new URL("../ios/UITests/PreflightUITests.swift", import.meta.url), "utf8"),
-  "ios/UITests/XCTestPrewarmUITests.swift": readFileSync(new URL("../ios/UITests/XCTestPrewarmUITests.swift", import.meta.url), "utf8"),
+  "ios/UITests/XCTestPrewarmUITests.swift": "",
   "ios/UITests/LoginValidationUITests.swift": readFileSync(new URL("../ios/UITests/LoginValidationUITests.swift", import.meta.url), "utf8"),
   "e2e/harness/seed-mobile-ci.sql": readFileSync(new URL("../e2e/harness/seed-mobile-ci.sql", import.meta.url), "utf8"),
 };
@@ -86,6 +86,7 @@ describe("iOS hermetic UI CI contract", () => {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("max-parallel: 5", "max-parallel: 15") }), matrixGate);
     for (const [shard, budget, invalidBudget] of [
       ["preflight-session", 60, 30],
+      ["preflight-restore", 90, 120],
       ["critical-report", 240, 540],
       ["critical-location", 150, 90],
       ["camera-capture", 150, 90],
@@ -108,12 +109,20 @@ describe("iOS hermetic UI CI contract", () => {
     ) }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("-parallel-testing-enabled NO", "-parallel-testing-enabled YES") }), matrixGate);
   });
-  it("rejects an uncapped, missing, or functional-result-substituting XCTest prewarm", () => {
-    const prewarmGate = "cap an infrastructure-only XCTest prewarm";
-    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("timing_start xctest-prewarm", "timing_start removed-prewarm") }), prewarmGate);
-    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('"$RAW_RESULTS/xctest-prewarm.xcresult" 75', '"$RAW_RESULTS/xctest-prewarm.xcresult" 45') }), prewarmGate);
-    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('"$RAW_RESULTS/xctest-prewarm.xcresult" 75', '"$RAW_RESULTS/xctest-prewarm.xcresult" 180') }), prewarmGate);
-    expectsFailure(evaluate({ "ios/UITests/XCTestPrewarmUITests.swift": validFiles["ios/UITests/XCTestPrewarmUITests.swift"].replace(".runningForeground", ".notRunning") }), prewarmGate);
+  it("rejects a standalone XCTest prewarm, non-functional first shard, or functional-result substitution", () => {
+    const coldStartGate = "start with the real preflight-restore shard";
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      "          TEST_STATUS=0",
+      "          TEST_STATUS=0\n          timing_start xctest-prewarm",
+    ) }), coldStartGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      'shards: "preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"',
+      'shards: "preflight-session preflight-restore preflight-fixtures login-validation accessibility-id-parity"',
+    ) }), coldStartGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      "SHARD_SELECTORS=(MaintenanceFieldUITests/PreflightUITests/testSeederRestoresThenClearsRealSession)",
+      "SHARD_SELECTORS=(MaintenanceFieldUITests/XCTestPrewarmUITests/testRunnerAndHostLaunch)",
+    ) }), coldStartGate);
   });
   it("rejects toolchain and job-root drift", () => {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("Build version 17F113", "Build version drift") }), "pin Xcode 26.6");
@@ -430,10 +439,10 @@ class FieldUITestCase: XCTestCase {
   });
   it("rejects xctestrun, ATS, and fail-slow xcresult regression", () => {
     const failSlow = "each iOS UI matrix worker";
-    const xctestrunGate = "normalize the static UI host path before XCTest prewarm";
+    const xctestrunGate = "inject the UI host path and renewable session material only per functional shard";
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "--target MaintenanceFieldUITests --ui-target-app-path '__TESTROOT__/Debug-iphonesimulator/MaintenanceFieldApp.app')",
-      "--target MaintenanceFieldUITests)",
+      'chmod 600 "$XCTESTRUN"',
+      'chmod 600 "$XCTESTRUN"\n          (cd "$ROOT" && python3 scripts/patch-ios-xctestrun.py "$XCTESTRUN" --target MaintenanceFieldUITests --ui-target-app-path \'__TESTROOT__/Debug-iphonesimulator/MaintenanceFieldApp.app\')',
     ) }), xctestrunGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       "--ui-target-app-path '__TESTROOT__/Debug-iphonesimulator/MaintenanceFieldApp.app' --env MNT_UITEST_BASE_URL",
