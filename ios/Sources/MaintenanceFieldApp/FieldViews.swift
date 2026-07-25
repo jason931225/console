@@ -800,6 +800,14 @@ struct MessengerTabView: View {
             }
 
             Section {
+                Text("messenger_threads")
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
                 if viewModel.messengerState.threads.isEmpty {
                     Text("messenger_empty_threads")
                         .accessibilityIdentifier(FieldAccessibilityID.messengerEmptyThreads)
@@ -818,11 +826,7 @@ struct MessengerTabView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(FieldAccessibilityID.messengerThreadRow(thread.id))
                 }
-            } header: {
-                Text("messenger_threads")
-                    .foregroundStyle(.primary)
             }
-            .headerProminence(.increased)
 
             Section {
                 Text("messenger_messages")
@@ -864,16 +868,21 @@ struct MessengerTabView: View {
                         )
                     }
                     HStack(alignment: .bottom) {
-                        TextField(
-                            "",
-                            text: $viewModel.messengerDraft,
-                            prompt: Text("messenger_composer").foregroundStyle(.primary),
-                            axis: .vertical
-                        )
-                            .lineLimit(2...5)
+                        // Native TextField prompts retain placeholder opacity
+                        // even with a primary foreground, which falls below
+                        // contrast requirements at accessibility text sizes.
+                        ZStack(alignment: .leading) {
+                            if viewModel.messengerDraft.isEmpty {
+                                Text("messenger_composer")
+                                    .foregroundStyle(.primary)
+                                    .accessibilityHidden(true)
+                            }
+                            TextField("", text: $viewModel.messengerDraft, axis: .vertical)
+                                .lineLimit(2...5)
+                                .accessibilityLabel(Text("messenger_composer"))
+                                .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
+                        }
                             .layoutPriority(1)
-                            .accessibilityLabel(Text("messenger_composer"))
-                            .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
                         Button {
                             Task { await viewModel.sendMessengerMessage() }
                         } label: {

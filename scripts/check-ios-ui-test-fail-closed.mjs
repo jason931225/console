@@ -44,7 +44,7 @@ const expectedShardBatches = new Map([
   ["critical-core", ["critical-today", "camera-capture"]],
   ["critical-report", ["critical-report"]],
   ["critical-location", ["critical-location"]],
-  ["messenger-dynamic", ["messenger-render", "messenger-mutation", "audit-dynamic-today", "audit-dynamic-detail"]],
+  ["messenger-dynamic", ["messenger-mutation", "messenger-render", "audit-dynamic-today", "audit-dynamic-detail"]],
   ["audit-standard", ["audit-dynamic-messenger", "audit-dynamic-login", "accessibility-standard"]],
   ["audit-adaptive", ["accessibility-largest", "accessibility-dark", "dynamic-type-large", "dynamic-type-ax5"]],
 ]);
@@ -135,10 +135,13 @@ function hasFunctionalColdStartProof(files) {
   const activeJob = stripInertShellData(iosJob(workflow));
   const prewarm = files["ios/UITests/XCTestPrewarmUITests.swift"] ?? "";
   const coreShards = matrixShardBatches(activeJob).get("core") ?? [];
+  const messengerShards = matrixShardBatches(activeJob).get("messenger-dynamic") ?? [];
   return prewarm.trim() === ""
     && !/xctest-prewarm|XCTestPrewarmUITests|testRunnerAndHostLaunch/.test(activeJob)
     && coreShards.join(" ") === "preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
+    && messengerShards.join(" ") === "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"
     && /preflight-restore\)\s*\n\s*SHARD_TIMEOUT_SECONDS=90\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/PreflightUITests\/testSeederRestoresThenClearsRealSession\)/.test(activeJob)
+    && /messenger-mutation\)\s*\n\s*SHARD_TIMEOUT_SECONDS=180\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testMessengerSendSurvivesBackendRefresh[\s\S]{0,160}testMessengerSearchUnmatchedQueryShowsRealNoResults[\s\S]{0,80}\)/.test(activeJob)
     && /run_xcode_with_timeout\s+"\$shard_name"\s+"\$result"\s+"\$SHARD_TIMEOUT_SECONDS"\s+"\$\{SHARD_SELECTORS\[@\]\}"\s+\|\|\s+\{\s*shard_status=\$\?;\s*TEST_STATUS=1;\s*\}/.test(activeJob);
 }
 
@@ -810,10 +813,29 @@ function hasUnobscuredTabContentHost(files) {
     && !/selectedViewController\b|value\s*\(forKey:|NSClassFromString|object_getIvar|recursiveDescription|traitOverrides|additionalSafeAreaInsets|contentInset\b|safeAreaInset\s*\(\s*edge:\s*\.bottom|constraint\s*\(equalToConstant:|\bview\.frame\s*=(?!=)|view\.subviews\b|tabBarController\.tabBar\.bounds\.height/.test(views);
 }
 
-function hasSemanticMessengerMessagesHeader(files) {
+function hasScalableInlineMessengerSectionHeaders(files) {
   const views = files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "";
   const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
-  return /Section\s*\{[\s\S]{0,180}Text\s*\(\s*"messenger_messages"\s*\)[\s\S]{0,300}accessibilityAddTraits\s*\(\s*\.isHeader\s*\)[\s\S]{0,2200}ForEach\s*\(\s*messages\s*\)/.test(messenger);
+  const inlineHeader = (key) => new RegExp(
+    `Section\\s*\\{\\s*Text\\s*\\(\\s*"${key}"\\s*\\)`
+      + `[\\s\\S]{0,160}\\.font\\s*\\(\\s*\\.headline\\s*\\)`
+      + `[\\s\\S]{0,160}\\.fixedSize\\s*\\(\\s*horizontal:\\s*false\\s*,\\s*vertical:\\s*true\\s*\\)`
+      + `[\\s\\S]{0,160}\\.foregroundStyle\\s*\\(\\s*\\.primary\\s*\\)`
+      + `[\\s\\S]{0,160}\\.accessibilityAddTraits\\s*\\(\\s*\\.isHeader\\s*\\)`
+      + `[\\s\\S]{0,160}\\.listRowBackground\\s*\\(\\s*Color\\.clear\\s*\\)`
+      + `[\\s\\S]{0,160}\\.listRowSeparator\\s*\\(\\s*\\.hidden\\s*\\)`,
+  );
+  return inlineHeader("messenger_threads").test(messenger)
+    && inlineHeader("messenger_messages").test(messenger)
+    && !/Section\s*\{[\s\S]{0,2200}\}\s*header:\s*\{[\s\S]{0,240}Text\s*\(\s*"messenger_threads"\s*\)/.test(messenger)
+    && !/headerProminence\s*\(/.test(messenger);
+}
+
+function hasContrastSafeMessengerComposerPlaceholder(files) {
+  const views = files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "";
+  const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
+  return /ZStack\s*\(\s*alignment:\s*\.leading\s*\)\s*\{[\s\S]{0,180}if\s+viewModel\.messengerDraft\.isEmpty\s*\{[\s\S]{0,140}Text\s*\(\s*"messenger_composer"\s*\)[\s\S]{0,120}\.foregroundStyle\s*\(\s*\.primary\s*\)[\s\S]{0,120}\.accessibilityHidden\s*\(\s*true\s*\)[\s\S]{0,180}TextField\s*\(\s*""\s*,\s*text:\s*\$viewModel\.messengerDraft\s*,\s*axis:\s*\.vertical\s*\)[\s\S]{0,180}\.accessibilityLabel\s*\(\s*Text\s*\(\s*"messenger_composer"\s*\)\s*\)[\s\S]{0,180}\.accessibilityIdentifier\s*\(\s*FieldAccessibilityID\.messengerComposerField\s*\)/.test(messenger)
+    && !/TextField\s*\([\s\S]{0,180}text:\s*\$viewModel\.messengerDraft[\s\S]{0,180}prompt:\s*Text\s*\(\s*"messenger_composer"\s*\)/.test(messenger);
 }
 
 function hasAccessibleMessengerThreadAndNavigationContrast(files) {
@@ -1492,7 +1514,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasCandidateShaBeforeBackendBuild(job), "iOS UI CI must verify git rev-parse HEAD against GITHUB_SHA before building candidate mnt-app"]);
   checks.push([hasOptimizedBehavioralBackendBuild(job), "iOS UI CI must use the measured stripped-debug mnt-app build for behavioral E2E and reject release optimization overhead"]);
   checks.push([hasPipelineTimingTelemetry(job), "iOS UI CI must emit durable phase and per-shard timings so slow stages are diagnosed before budgets change"]);
-  checks.push([hasFunctionalColdStartProof(files), "iOS UI CI must start with the real preflight-restore shard under its unchanged watchdog, never a standalone XCTest prewarm or functional-result substitute"]);
+  checks.push([hasFunctionalColdStartProof(files), "iOS UI CI must start cold-sensitive workers with complete functional proofs under unchanged watchdogs, including core restore and Messenger persisted-send/search before focused render, never a standalone XCTest prewarm or result substitute"]);
   checks.push([hasPinnedJobLocalXcodegen(job), "iOS UI CI must install checksum-pinned XcodeGen 2.46.0 under its job root without mutating Homebrew"]);
   checks.push([hasOfficialPostgres184Source(job), "iOS UI CI must build PostgreSQL 18.4 from the official source tarball after SHA-256 verification"]);
   checks.push([hasRequiredPostgresExtensions(job), "iOS UI CI must configure PostgreSQL with OpenSSL and build, install, and load-test the required pgcrypto and pg_trgm extensions before compiling the backend"]);
@@ -1517,7 +1539,8 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasUnobscuredTabContentHost(files), "every authenticated iOS tab must use the direct UIKit content-layout-guide host seam with lifecycle-safe containment and no private hierarchy coupling"]);
   checks.push([hasAccessibilityIDParity(files), "iOS UI CI must mirror every FieldAccessibilityID static and dynamic identifier in UITests AID"]);
   checks.push([hasSectionScopedMessengerMessageRows(files), "iOS messenger search results and selected-thread messages must use section-scoped dynamic accessibility IDs"]);
-  checks.push([hasSemanticMessengerMessagesHeader(files), "iOS messenger messages must retain a scalable semantic header before selected-thread content"]);
+  checks.push([hasScalableInlineMessengerSectionHeaders(files), "iOS Messenger thread and message sections must use scalable semantic in-row headers without pinned translucent section chrome"]);
+  checks.push([hasContrastSafeMessengerComposerPlaceholder(files), "iOS Messenger composer must use a primary-foreground semantic placeholder without native placeholder opacity"]);
   checks.push([hasAccessibleMessengerThreadAndNavigationContrast(files), "iOS Messenger AX5 must preserve complete adaptive thread content and an opaque visible navigation surface"]);
   checks.push([hasContrastStableCapsules(files), "iOS detail actions, status, attachment, and read-progress capsules must use explicit primary foregrounds on contrast-stable adaptive backgrounds"]);
   checks.push([hasModernFullScreenLaunch(files), "iOS app and CI build must preserve a modern full-screen launch contract"]);

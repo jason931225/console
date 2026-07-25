@@ -33,8 +33,12 @@ jobs:
             shards: "critical-report"
           - batch: critical-location
             shards: "critical-location"
+          # The first shard pays this worker's cold XCTest/Simulator launch.
+          # Start with the complete persisted-send/search user story under its
+          # existing 180-second budget; keep the focused render proof at its
+          # unchanged 90-second budget after the functional warm-up.
           - batch: messenger-dynamic
-            shards: "messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail"
+            shards: "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"
           - batch: audit-standard
             shards: "audit-dynamic-messenger audit-dynamic-login accessibility-standard"
           - batch: audit-adaptive
@@ -619,7 +623,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           EXPECTED_BATCHES=(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive)
-          EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
+          EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
           for batch_name in "${EXPECTED_BATCHES[@]}"; do
             batch_dir="$RESULTS_ROOT/ios-ui-test-results-$batch_name"
             test -d "$batch_dir"
@@ -629,7 +633,7 @@ jobs:
               critical-core) expected_manifest='critical-today camera-capture' ;;
               critical-report) expected_manifest='critical-report' ;;
               critical-location) expected_manifest='critical-location' ;;
-              messenger-dynamic) expected_manifest='messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail' ;;
+              messenger-dynamic) expected_manifest='messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail' ;;
               audit-standard) expected_manifest='audit-dynamic-messenger audit-dynamic-login accessibility-standard' ;;
               audit-adaptive) expected_manifest='accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5' ;;
               *) exit 1 ;;

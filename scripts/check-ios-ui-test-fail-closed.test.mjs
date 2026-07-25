@@ -110,7 +110,7 @@ describe("iOS hermetic UI CI contract", () => {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("-parallel-testing-enabled NO", "-parallel-testing-enabled YES") }), matrixGate);
   });
   it("rejects a standalone XCTest prewarm, non-functional first shard, or functional-result substitution", () => {
-    const coldStartGate = "start with the real preflight-restore shard";
+    const coldStartGate = "start cold-sensitive workers with complete functional proofs";
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       "          TEST_STATUS=0",
       "          TEST_STATUS=0\n          timing_start xctest-prewarm",
@@ -120,8 +120,16 @@ describe("iOS hermetic UI CI contract", () => {
       'shards: "preflight-session preflight-restore preflight-fixtures login-validation accessibility-id-parity"',
     ) }), coldStartGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      'shards: "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"',
+      'shards: "messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail"',
+    ) }), coldStartGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       "SHARD_SELECTORS=(MaintenanceFieldUITests/PreflightUITests/testSeederRestoresThenClearsRealSession)",
       "SHARD_SELECTORS=(MaintenanceFieldUITests/XCTestPrewarmUITests/testRunnerAndHostLaunch)",
+    ) }), coldStartGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      "MaintenanceFieldUITests/MessengerUITests/testMessengerSendSurvivesBackendRefresh",
+      "MaintenanceFieldUITests/MessengerUITests/testExactSeededMessengerThreadAndMessageRender",
     ) }), coldStartGate);
   });
   it("rejects toolchain and job-root drift", () => {
@@ -609,11 +617,98 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/UITests/AccessibilityAuditUITests.swift": `${validFiles["ios/UITests/AccessibilityAuditUITests.swift"]}\nlet issueHandler = { _ in }`,
     }), strictGate);
   });
-  it("rejects a messenger messages section without a semantic scalable header", () => {
+  it("rejects Messenger section headers that are not scalable semantic in-row content", () => {
     const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
+    const headerGate = "scalable semantic in-row headers";
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `Section {
+                Text("messenger_threads")`,
+        `Section {
+            } header: {
+                Text("messenger_threads")`,
+      ),
+    }), headerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `Text("messenger_threads")
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)`,
+        `Text("messenger_threads")
+                    .font(.headline)`,
+      ),
+    }), headerGate);
     expectsFailure(evaluate({
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".accessibilityAddTraits(.isHeader)", ""),
-    }), "scalable semantic header");
+    }), headerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".listRowBackground(Color.clear)", ""),
+    }), headerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".listRowSeparator(.hidden)", ""),
+    }), headerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `Text("messenger_threads")
+                    .font(.headline)`,
+        `Text("messenger_threads")
+                    .font(.headline)
+                    .headerProminence(.increased)`,
+      ),
+    }), headerGate);
+  });
+  it("rejects a Messenger composer placeholder with native attenuation or duplicate accessibility", () => {
+    const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
+    const composerGate = "primary-foreground semantic placeholder without native placeholder opacity";
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `ZStack(alignment: .leading) {
+                            if viewModel.messengerDraft.isEmpty {
+                                Text("messenger_composer")
+                                    .foregroundStyle(.primary)
+                                    .accessibilityHidden(true)
+                            }
+                            TextField("", text: $viewModel.messengerDraft, axis: .vertical)`,
+        `TextField(
+                            "",
+                            text: $viewModel.messengerDraft,
+                            prompt: Text("messenger_composer").foregroundStyle(.primary),
+                            axis: .vertical
+                        )`,
+      ),
+    }), composerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `Text("messenger_composer")
+                                    .foregroundStyle(.primary)
+                                    .accessibilityHidden(true)`,
+        `Text("messenger_composer")
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)`,
+      ),
+    }), composerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `Text("messenger_composer")
+                                    .foregroundStyle(.primary)
+                                    .accessibilityHidden(true)`,
+        `Text("messenger_composer")
+                                    .foregroundStyle(.primary)`,
+      ),
+    }), composerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        "if viewModel.messengerDraft.isEmpty {",
+        "if viewModel.messengerDraft.isEmpty == false {",
+      ),
+    }), composerGate);
   });
   it("rejects Messenger AX5 content suppression, missing vertical geometry, and translucent navigation chrome", () => {
     const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
