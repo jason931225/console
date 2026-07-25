@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router";
 import { useAuth } from "../../context/auth";
 import { ApprovalCompose } from "../appr/ApprovalCompose";
 import { MESSENGER_ACTIONS, MessengerConsoleScreen } from "../messenger";
+import { ontologyWorkspaceAuthorityKey } from "../ontology/useOntologyRevisionCommitQueue";
 import { PolicyGateProvider } from "../policy";
 import { GenericModuleScreen } from "./GenericModuleScreen";
 import { getModuleScreen } from "./moduleScreens";
@@ -33,12 +34,13 @@ function sessionCanReadModule(roles: readonly string[] | undefined): boolean {
 }
 
 export function ConsoleModuleRoute() {
-  const { api, session } = useAuth();
+  const { api, session, viewAs } = useAuth();
   const [searchParams] = useSearchParams();
   const screen = searchParams.get("screen") ?? "finance";
   const config = getModuleScreen(screen);
   const featureGrants = useMemo(() => session?.feature_grants ?? [], [session?.feature_grants]);
   const roles = session?.roles;
+  const authorityKey = ontologyWorkspaceAuthorityKey(session, viewAs);
 
   const messengerGate = useMemo(
     () => {
@@ -105,7 +107,7 @@ export function ConsoleModuleRoute() {
 
   return (
     <PolicyGateProvider gate={gate}>
-      <GenericModuleScreen api={api} config={config} />
+      <GenericModuleScreen api={api} config={config} authorityKey={authorityKey} />
     </PolicyGateProvider>
   );
 }
