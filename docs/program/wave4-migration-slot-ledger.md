@@ -79,7 +79,7 @@ done | sed 's|.*/||' | grep -E '^0[0-9]{3}_' | sort -u
 | Highest slot across **all** refs surveyed | **0202** — no ref carries anything above it |
 | Refs at the 0202 high-water | `origin/codex/operational-object-runtime-progress`, `origin/codex/pr488-final-integration-v2-20260725` |
 | `0202` subject | `0202_notification_policies_and_object_agg.sql` (`fe1e8b91`) |
-| `0201` | **absent everywhere — RESERVED, unavailable.** Reserved gap for the evidence-retention subject. No lane may take it. |
+| `0201` | **SPENT 2026-07-25** — released by `0201_release_reserved_evidence_retention_slot.sql`, a documented no-op. The reservation was the defect (see §5). Evidence-retention takes a fresh number at merge when it is written. |
 | First free slot | **0203** |
 
 ## 4. Assignments
@@ -89,7 +89,7 @@ the lane is later dropped, the number is not recycled.
 
 | # | Slot | Assigned to | Subject | State | Appended |
 |---|---|---|---|---|---|
-| 1 | 0201 | — | evidence-retention (reserved gap) | **RESERVED — unavailable** | 2026-07-25 |
+| 1 | 0201 | integrator | release the reserved gap (documented no-op; closes NonContiguousMigrationVersion for every lane) | spent | 2026-07-25 |
 | 2 | 0203 | hf-leaveapi-revoke | REVOKE PUBLIC on leave_api.assert_employee_directory_manager + restore the deny-by-default tripwire | assigned (swapped in 2026-07-25, see §5) | 2026-07-25 |
 | 3 | 0204 | L-X1 | deal aggregate — the CRM trunk | assigned | 2026-07-25 |
 | 4 | 0205 | L-X2 | deal stage transitions + per-stage evidence enum | assigned | 2026-07-25 |
@@ -163,5 +163,10 @@ written, tested migration and needed to land immediately; `L-A1` had written
 nothing, so it moves up. This keeps the sequence contiguous and avoids opening
 eight holes for a security hotfix that is ready now.
 
-`0201` stays a genuine reserved gap and therefore a standing single violation —
-it predates this wave and is the one hole the gate legitimately still reports.
+**Correction, same day:** the paragraph above originally kept `0201` as a
+standing reserved gap and called it an acceptable single violation. That was
+inconsistent with the very reasoning that produced this section — if a hole is a
+real out-of-order hazard, a *permanent* hole is a permanent hazard, and every
+wave-4 lane inherits the red. The L-A1 lane pushed back on it. `0201` is now
+spent by a documented no-op migration, the sequence is contiguous from 0001, and
+reserved gaps are no longer a thing this ledger creates.
