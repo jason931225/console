@@ -296,19 +296,14 @@ final class FieldViewModel: ObservableObject {
             isLoading = false
 
             // A confirmed report is the terminal user action. Refreshing Today
-            // is useful but nonessential, so publish that outcome before the
-            // follow-up read can alter the transient loading/error state.
+            // is useful but nonessential, so its read failure must not replace
+            // the confirmed mutation outcome with an unrelated network error.
             if syncState == .synced {
-                let refreshOutcome = await performTodayRefresh()
+                _ = await performTodayRefresh()
                 guard messageAuthorityGeneration == submissionMessageGeneration else {
                     return
                 }
-                switch refreshOutcome {
-                case .succeeded:
-                    messageKey = "report_submitted"
-                case let .failed(messageKey):
-                    self.messageKey = messageKey
-                }
+                messageKey = "report_submitted"
             }
             return
         } catch {

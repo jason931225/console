@@ -56,7 +56,7 @@ final class FieldViewModelReportLifecycleTests: XCTestCase {
         XCTAssertFalse(viewModel.isLoading)
     }
 
-    func testConfirmedReportPublishesSuccessBeforeFailedTodayRefresh() async throws {
+    func testConfirmedReportRemainsSuccessfulAfterFailedTodayRefresh() async throws {
         let gateway = ControllableWorkOrderGateway(
             listError: URLError(.networkConnectionLost),
             listDelayNanoseconds: 100_000_000
@@ -65,11 +65,9 @@ final class FieldViewModelReportLifecycleTests: XCTestCase {
         viewModel.selectedWorkOrder = workOrder
         viewModel.diagnosis = "Resolved"
         viewModel.actionTaken = "Replaced"
-        var messages: [String?] = []
         var loading: [Bool] = []
-        let messageToken = viewModel.$messageKey.sink { messages.append($0) }
         let loadingToken = viewModel.$isLoading.sink { loading.append($0) }
-        defer { _ = (messageToken, loadingToken) }
+        defer { _ = loadingToken }
 
         let submission = Task { await viewModel.submitReport() }
         await gateway.waitUntilRefreshStarted()
@@ -84,8 +82,7 @@ final class FieldViewModelReportLifecycleTests: XCTestCase {
 
         await submission.value
 
-        XCTAssertTrue(messages.contains("report_submitted"))
-        XCTAssertEqual(viewModel.messageKey, "error_network")
+        XCTAssertEqual(viewModel.messageKey, "report_submitted")
         XCTAssertTrue(loading.suffix(4).elementsEqual([true, false, true, false]))
     }
 

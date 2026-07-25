@@ -1196,9 +1196,9 @@ function hasDetailLazyControlScroll(files) {
   if (detailHelper === null) return false;
 
   return hasBoundedExactElementScroll(files)
-    // The toolbar back control stays mounted while the full-screen detail's
-    // lazy Form materializes. A Form row is not a stable normalization anchor.
-    && /scrollToElement\s*\(\s*element\s*,\s*in:\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]\s*,\s*topSentinel:\s*app\.buttons\[AID\.detailBackButton\]/.test(detailHelper)
+    // A persistent toolbar control cannot prove the lazy Form reached its top;
+    // the first detail section is the stable normalization anchor.
+    && /scrollToElement\s*\(\s*element\s*,\s*in:\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]\s*,\s*topSentinel:\s*app\.staticTexts\[KO\.locationConsentTitle\]/.test(detailHelper)
     && /\.scrollDismissesKeyboard\s*\(\s*\.immediately\s*\)/.test(detailView)
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailStartWorkButton\]\s*\)/g) ?? []).length === 1
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailSubmitReportButton\]\s*\)/g) ?? []).length === 2
@@ -1467,7 +1467,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasDecodedTodayPreflight(files), "iOS preflight must prove the restored session decodes and renders the exact deterministic Today work order, not only an authenticated shell"]);
   checks.push([hasFullFixtureTabBarGeometryEvidence(files), "iOS functional tests must traverse all five deterministic Today rows above the tab bar while accessibility audits remain diagnostic-free"]);
   checks.push([hasActionableDetailReadiness(files), "iOS UI navigation must prove detail readiness with the actionable back control, not container hittability"]);
-  checks.push([hasDetailLazyControlScroll(files), "iOS UI tests must use one deadline-bounded exact-element scroll for lazy detail controls, using the persistent detail toolbar back control as the normalization sentinel"]);
+  checks.push([hasDetailLazyControlScroll(files), "iOS UI tests must use one deadline-bounded exact-element scroll for lazy detail controls, using the first detail section as the normalization sentinel"]);
   checks.push([hasEntitledSimulatorSeederContract(job), "iOS UI CI must preserve the Xcode-created Simulator Runner and prove matching app/seeder Mach-O keychain entitlements before test execution"]);
   checks.push([hasMode600Xctestrun(job), "iOS UI CI must normalize the static UI host path before XCTest prewarm and inject renewable session material only per functional shard through a mode-0600 job-root xctestrun"]);
   checks.push([!/-skip-testing|XCTSkip|optional\/skipped|HAS_REAL_SESSION_SOURCE/.test(workflow + (files["ios/UITests/Support/FieldUITestCase.swift"] ?? "") + (files["ios/UITests/Support/RealSessionSeed.swift"] ?? "")), "iOS UI CI and its test support must not include skip-testing, XCTSkip, or fail-open session branches"]);

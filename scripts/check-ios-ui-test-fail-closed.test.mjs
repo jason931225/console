@@ -840,8 +840,8 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
     }), lazyScroll);
     expectsFailure(evaluate({
       "ios/UITests/Support/FieldUITestCase.swift": fieldCase.replace(
-        "topSentinel: app.buttons[AID.detailBackButton]",
         "topSentinel: app.staticTexts[KO.locationConsentTitle]",
+        "topSentinel: app.buttons[AID.detailBackButton]",
       ),
     }), lazyScroll);
     expectsFailure(evaluate({

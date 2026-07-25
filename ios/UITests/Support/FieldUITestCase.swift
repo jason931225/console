@@ -545,9 +545,9 @@ class FieldUITestCase: XCTestCase {
         scrollToElement(
             element,
             in: app.descendants(matching: .any)[AID.detailView],
-            // The full-screen detail's persistent toolbar button stays mounted
-            // while its lazy Form materializes and anchors normalization.
-            topSentinel: app.buttons[AID.detailBackButton],
+            // A persistent toolbar control cannot prove that the Form reached
+            // its top. Normalize against the first detail section instead.
+            topSentinel: app.staticTexts[KO.locationConsentTitle],
             timeout: timeout,
             maxSwipes: maxSwipes
         )
