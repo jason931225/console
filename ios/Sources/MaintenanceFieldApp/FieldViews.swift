@@ -1404,7 +1404,7 @@ private extension Color {
     /// colors are unavailable, so retain an opaque platform-neutral fallback.
     static var opaqueFieldCapsuleBackground: Color {
         #if os(iOS)
-        Color(uiColor: .tertiarySystemFill)
+        Color(uiColor: .systemGray5)
         #else
         .gray
         #endif

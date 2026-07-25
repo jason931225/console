@@ -66,8 +66,8 @@ final class CameraCaptureUITests: FieldUITestCase {
         }
 
         cancel.tap()
-        XCTAssertFalse(
-            cancel.waitForExistence(timeout: 5),
+        XCTAssertTrue(
+            cancel.waitForNonExistence(timeout: 5),
             "Cancelling any usable camera terminal state must dismiss the camera sheet."
         )
         XCTAssertFalse(
