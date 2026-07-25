@@ -7,63 +7,16 @@ type Wire = components["schemas"];
 export type NotificationLink = Wire["NotificationLink"];
 export type ObjectHead = Wire["ObjectHead"];
 
-/**
- * Contract amendment (CAP-NOTIF-CONSOLE): `+muted` is serde-default `false` on
- * the backend, so it is optional here until the generated client catches up.
- */
-export type NotificationSummary = Wire["NotificationSummary"] & { muted?: boolean };
-
-export interface NotificationPage {
-  items: NotificationSummary[];
-  next_cursor: string | null;
-}
-
-export interface NotificationCategoryCount {
-  category: string;
-  unread: number;
-}
-
-/** Contract amendment: `total_unread`/`by_category` exclude muted; `+muted_unread`. */
-export interface NotificationCountsSummary {
-  total_unread: number;
-  by_category: NotificationCategoryCount[];
-  muted_unread?: number;
-}
-
-export interface NotificationObjectGroup {
-  link: NotificationLink;
-  total: number;
-  unread: number;
-  categories: NotificationCategoryCount[];
-  latest: NotificationSummary;
-  muted: boolean;
-}
-
-export interface NotificationObjectGroupPage {
-  items: NotificationObjectGroup[];
-  next_cursor: string | null;
-}
-
-export type NotificationPolicyScope = "all" | "category" | "object";
-
-export interface NotificationPolicySummary {
-  id: string;
-  scope: NotificationPolicyScope;
-  category?: string | null;
-  link?: NotificationLink | null;
-  action: string;
-  created_at: string;
-}
-
-export interface NotificationPolicyList {
-  items: NotificationPolicySummary[];
-}
-
-export interface UpsertNotificationPolicyRequest {
-  scope: NotificationPolicyScope;
-  category?: string;
-  link?: NotificationLink;
-}
+export type NotificationSummary = Wire["NotificationSummary"];
+export type NotificationPage = Wire["NotificationPage"];
+export type NotificationCategoryCount = Wire["NotificationCategoryCount"];
+export type NotificationCountsSummary = Wire["NotificationCountsSummary"];
+export type NotificationObjectGroup = Wire["NotificationObjectGroup"];
+export type NotificationObjectGroupPage = Wire["NotificationObjectGroupPage"];
+export type NotificationPolicySummary = Wire["NotificationPolicySummary"];
+export type NotificationPolicyScope = NotificationPolicySummary["scope"];
+export type NotificationPolicyList = Wire["NotificationPolicyList"];
+export type UpsertNotificationPolicyRequest = Wire["UpsertNotificationPolicyRequest"];
 
 export interface NotificationListQuery {
   unread?: boolean;
@@ -151,34 +104,6 @@ function decode<T>(
 
 // ─── transport ──────────────────────────────────────────────────────────────
 
-interface RawResult {
-  data?: unknown;
-  error?: unknown;
-  response: Response;
-}
-
-interface RawInit {
-  params?: { query?: Record<string, unknown> };
-  body?: unknown;
-  headers?: Record<string, string>;
-  signal?: AbortSignal;
-}
-
-/**
- * The five CAP-NOTIF-CONSOLE routes below are being added by the parallel
- * backend lane and are not yet in the generated client's path map, so they go
- * through this single structural view of the same authenticated client (same
- * middleware: bearer, refresh-retry, read-cache). The API contract in the lane
- * digest is the sync point; once `clients/ts` regenerates, these calls become
- * typed paths — captured in the integration manifest.
- */
-interface RawClient {
-  GET(path: string, init?: RawInit): Promise<RawResult>;
-  POST(path: string, init?: RawInit): Promise<RawResult>;
-  PUT(path: string, init?: RawInit): Promise<RawResult>;
-  DELETE(path: string, init?: RawInit): Promise<RawResult>;
-}
-
 /** Principal-scoped reads opt out of browser/client caching (comms-rail rule). */
 const NO_STORE = { "Cache-Control": "no-store, no-cache" } as const;
 
@@ -192,7 +117,6 @@ function pageQuery(query: NotificationListQuery): Record<string, unknown> {
 
 /** 알림 transport bound to the authenticated ConsoleApiClient. */
 export function createNotifApi(api: ConsoleApiClient) {
-  const raw = api as unknown as RawClient;
   return {
     list: async (query: NotificationListQuery = {}, signal?: AbortSignal): Promise<NotificationPage> => {
       const response = await api.GET("/api/v1/me/notifications", {
@@ -218,11 +142,11 @@ export function createNotifApi(api: ConsoleApiClient) {
       return requireData(response);
     },
     markUnread: async (id: string, signal?: AbortSignal): Promise<NotificationSummary> => {
-      const response = await raw.POST(`/api/v1/me/notifications/${encodeURIComponent(id)}/unread`, { signal });
+      const response = await api.POST("/api/v1/me/notifications/{id}/unread", { params: { path: { id } }, signal });
       return decode(response, isSummary);
     },
     listByObject: async (query: NotificationListQuery = {}, signal?: AbortSignal): Promise<NotificationObjectGroupPage> => {
-      const response = await raw.GET("/api/v1/me/notifications/by-object", {
+      const response = await api.GET("/api/v1/me/notifications/by-object", {
         params: { query: pageQuery(query) },
         headers: NO_STORE,
         signal,
@@ -230,15 +154,15 @@ export function createNotifApi(api: ConsoleApiClient) {
       return decode(response, isGroupPage);
     },
     listPolicies: async (signal?: AbortSignal): Promise<NotificationPolicyList> => {
-      const response = await raw.GET("/api/v1/me/notification-policies", { headers: NO_STORE, signal });
+      const response = await api.GET("/api/v1/me/notification-policies", { headers: NO_STORE, signal });
       return decode(response, isPolicyList);
     },
     upsertPolicy: async (body: UpsertNotificationPolicyRequest, signal?: AbortSignal): Promise<NotificationPolicySummary> => {
-      const response = await raw.PUT("/api/v1/me/notification-policies", { body, signal });
+      const response = await api.PUT("/api/v1/me/notification-policies", { body, signal });
       return decode(response, isPolicy);
     },
     deletePolicy: async (id: string, signal?: AbortSignal): Promise<void> => {
-      const response = await raw.DELETE(`/api/v1/me/notification-policies/${encodeURIComponent(id)}`, { signal });
+      const response = await api.DELETE("/api/v1/me/notification-policies/{id}", { params: { path: { id } }, signal });
       if (!response.response.ok) {
         throw new NotifApiError(envelopeMessage(response.error, response.response.status), response.response.status);
       }

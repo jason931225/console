@@ -75,7 +75,10 @@ describe("createNotifApi", () => {
     api.POST.mockResolvedValue(ok(summary({ unread: true, read_at: "2026-07-24T09:05:00Z" })));
     const row = await createNotifApi(api).markUnread("id/한");
     expect(row.read_at).toBe("2026-07-24T09:05:00Z");
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/me/notifications/id%2F%ED%95%9C/unread", expect.anything());
+    // openapi-fetch templates the path parameter and encodes it itself.
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/me/notifications/{id}/unread", expect.objectContaining({
+      params: { path: { id: "id/한" } },
+    }));
   });
 
   it("upserts and deletes mute policies over the contract routes", async () => {
@@ -89,7 +92,9 @@ describe("createNotifApi", () => {
       body: { scope: "object", link: group().link },
     }));
     await notifApi.deletePolicy("p-1");
-    expect(api.DELETE).toHaveBeenCalledWith("/api/v1/me/notification-policies/p-1", expect.anything());
+    expect(api.DELETE).toHaveBeenCalledWith("/api/v1/me/notification-policies/{id}", expect.objectContaining({
+      params: { path: { id: "p-1" } },
+    }));
   });
 
   it("surfaces the canonical error envelope message and status", async () => {
