@@ -32,10 +32,10 @@ Classification scheme:
 
 | Layer | PARITY | PARTIAL | MISSING | N/A (deferred) | Total |
 |---|---:|---:|---:|---:|---:|
-| Module surfaces (ROADMAP section 4 / nav keys) | 4 | 26 | 7 | 2 | 39 |
+| Module surfaces (ROADMAP section 4 / nav keys) | 4 | 27 | 6 | 2 | 39 |
 | Cross-cutting grammar (DESIGN §4.x) | 2 | 11 | 2 | 1 | 16 |
 
-**Bottom line:** with the bounded Support supersession, the matrix yields **4 PARITY / 26 PARTIAL / 7 MISSING / 2 N/A = 39** module rows. Cedar remains an accepted target baseline rather than a universal live authorization switch. Finance GL, notices, payroll-read, analytics-quant, C-chain seeding, 27-type tenant seeding, and one projected dispatch now exist in source, but their presence does not prove deployment or enterprise readiness. The largest deficits remain missing new-console bodies, incomplete closed loops, unverified durability/custody, the Support SLO authority split, and the absent ingest/recruiting/purchase/review/workforce product slices.
+**Bottom line:** with the bounded Support supersession, the matrix yields **4 PARITY / 27 PARTIAL / 6 MISSING / 2 N/A = 39** module rows. Cedar remains an accepted target baseline rather than a universal live authorization switch. Finance GL, notices, payroll-read, analytics-quant, C-chain seeding, 27-type tenant seeding, and one projected dispatch now exist in source, but their presence does not prove deployment or enterprise readiness. The largest deficits remain missing new-console bodies, incomplete closed loops, unverified durability/custody, the Support SLO authority split, and the absent ingest/recruiting/purchase/review/workforce product slices.
 
 ---
 
