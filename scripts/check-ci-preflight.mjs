@@ -27,6 +27,8 @@ const postgresWrapperContracts = [
   ["dispatch-p1-postgres", "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch"],
   ["attendance-cancel-substitution-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution"],
   ["attendance-concurrency-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
+  ["app-inline-postgres", "//backend/app:mnt-app-itest-inline-postgres"],
+  ["app-dev-auth-persona-guard-postgres", "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
 ];
 const postgresWrapperLoader = "run_test_with_postgres_env.sh";
 const postgresWrapperLabels = '["test.integration", "resource.postgres", "needs-postgres"]';
@@ -127,12 +129,19 @@ function requirePostgresWrapperContracts(buildFile, failures) {
       failures.push(`tools/buck/BUCK must define PostgreSQL wrapper ${name}`);
       continue;
     }
-    const expectedArgs = `args = ["$(location ${binary})"]`;
-    const expectedDeps = `deps = ["${binary}"]`;
-    if (!block.includes(`test = "${postgresWrapperLoader}"`)
-      || !block.includes(expectedArgs)
-      || !block.includes(expectedDeps)
-      || !block.includes(`labels = ${postgresWrapperLabels}`)) {
+    const expectedArgs = `args = ["$(location ${binary})"],`;
+    const expectedDeps = `deps = ["${binary}"],`;
+    const hasExactAttribute = (attribute) => (
+      [...block.matchAll(new RegExp(`^    ${attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "gm"))].length === 1
+    );
+    const hasExactlyOneField = (field) => (
+      [...block.matchAll(new RegExp(`^    ${field} = .+$`, "gm"))].length === 1
+    );
+    if (!hasExactAttribute(`test = "${postgresWrapperLoader}",`)
+      || !hasExactAttribute(expectedArgs)
+      || !hasExactAttribute(expectedDeps)
+      || !hasExactAttribute(`labels = ${postgresWrapperLabels},`)
+      || !["test", "args", "deps", "labels"].every(hasExactlyOneField)) {
       failures.push(`tools/buck/BUCK must bind PostgreSQL wrapper ${name} to the loader and exact Rust binary`);
     }
   }
@@ -428,9 +437,9 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
         {
           name: "Buck2 mnt-app inline PostgreSQL suites",
           run: [
-            "tools/buck/test_needs_postgres.sh \\",
-            "//backend/app:mnt-app-itest-inline-postgres \\",
-            "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature",
+            "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+            "//tools/buck:app-inline-postgres \\",
+            "//tools/buck:app-dev-auth-persona-guard-postgres",
           ].join("\n"),
           if: failFastIf,
         },

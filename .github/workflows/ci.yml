@@ -536,9 +536,9 @@ jobs:
       - name: Buck2 mnt-app inline PostgreSQL suites
         working-directory: .
         run: |
-          tools/buck/test_needs_postgres.sh \
-            //backend/app:mnt-app-itest-inline-postgres \
-            //backend/app:mnt-app-itest-dev_auth_persona_guard_feature
+          tools/buck/test_needs_postgres.sh --num-threads=1 \
+            //tools/buck:app-inline-postgres \
+            //tools/buck:app-dev-auth-persona-guard-postgres
 
   dev-up-smoke:
     name: dev-up.mjs smoke — compose deps + migrate + /readyz + dev-auth e2e

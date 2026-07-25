@@ -81,6 +81,26 @@ sh_test(
     labels = ["test.integration", "resource.postgres", "needs-postgres"],
 )
 
+# These non-generated adapters ensure the app PostgreSQL suites receive the
+# disposable harness environment only inside their test processes. Never call
+# the generated app test targets directly from CI: that would bypass the
+# credential-file loader and expose the runner to raw PostgreSQL target labels.
+sh_test(
+    name = "app-inline-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],
+    deps = ["//backend/app:mnt-app-itest-inline-postgres"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "app-dev-auth-persona-guard-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/app:mnt-app-itest-dev_auth_persona_guard_feature)"],
+    deps = ["//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
 sh_test(
     name = "dispatch-p1-postgres",
     test = "run_test_with_postgres_env.sh",

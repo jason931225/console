@@ -549,6 +549,44 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       ),
       "support-domain-unit must contain only the locked ordered Buck2 run steps",
     );
+    expectFailure(
+      workflow.replace(
+        "//tools/buck:app-inline-postgres",
+        "//backend/app:mnt-app-itest-inline-postgres",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "//tools/buck:app-dev-auth-persona-guard-postgres",
+        "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper app-inline-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "app-inline-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],\n    deps = ["//backend/app:mnt-app-itest-inline-postgres"],\n    labels = ["test.integration", "resource.postgres", "needs-postgres"],',
+        'name = "app-inline-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],\n    deps = ["//backend/app:mnt-app-itest-inline-postgres"],\n    labels = ["owner.backend.app", "domain.app", "test.integration", "resource.postgres", "needs-postgres"],',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper app-dev-auth-persona-guard-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "app-dev-auth-persona-guard-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "app-dev-auth-persona-guard-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:mnt-app-itest-inline-postgres)"],',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper app-dev-auth-persona-guard-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'deps = ["//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],',
+        'deps = ["//backend/app:mnt-app-itest-inline-postgres"],',
+      ),
+    );
   });
 
   it("preserves fail-fast backend and dev-up ordering", () => {
