@@ -288,20 +288,18 @@ function EvidenceLinkDisplay({
   label: string;
 }) {
   const policy = evidenceRoutePolicy(kind);
-  if (policy.kind === "non-drillable") {
-    return (
-      <span
-        className="evaluation__evidence-chip"
-        aria-label={`${text.evidenceKind[kind]} · ${text.notFound}`}
-      >
-        <span className={CHIP_CLASS.muted}>{text.evidenceKind[kind]}</span>
-        <span className="evaluation__code">{objectRef}</span>
-        <span>{label}</span>
-        <span className={CHIP_CLASS.muted}>{text.notFound}</span>
-      </span>
-    );
-  }
-  return null;
+  return (
+    <span
+      className="evaluation__evidence-chip"
+      aria-label={`${text.evidenceKind[kind]} · ${text.notFound}`}
+      data-evidence-route={policy.reason}
+    >
+      <span className={CHIP_CLASS.muted}>{text.evidenceKind[kind]}</span>
+      <span className="evaluation__code">{objectRef}</span>
+      <span>{label}</span>
+      <span className={CHIP_CLASS.muted}>{text.notFound}</span>
+    </span>
+  );
 }
 
 /**
