@@ -82,14 +82,14 @@ data class PayrollRunDetail (
 
     /* Latest stored calculation version; null until the run has been calculated. */
     @SerialName(value = "calculation")
-    val calculation: PayrollRunCalcSummary? = null,
+    val calculation: PayrollRunCalcSummary?,
 
     @SerialName(value = "disbursement")
-    val disbursement: PayrollDisbursement? = null,
+    val disbursement: PayrollDisbursement?,
 
     /* Unpaginated delivery summary; null until at least one payslip has been issued. */
     @SerialName(value = "payslip_delivery")
-    val payslipDelivery: PayrollPayslipDeliverySummary? = null
+    val payslipDelivery: PayrollPayslipDeliverySummary?
 
 ) {
 

@@ -191,23 +191,6 @@ function requireData<T>(response: { data?: T; error?: unknown; response: Respons
 // map, which does not yet carry the lifecycle routes. One structural view of
 // the same runtime client keeps bearer/refresh/caching middleware while the
 // contract routes remain client-generation pending (see header note).
-interface ContractInit {
-  params?: { path?: Record<string, string>; query?: Record<string, number> };
-  body?: unknown;
-  signal?: AbortSignal;
-}
-
-interface ContractResult {
-  data?: unknown;
-  error?: unknown;
-  response: Response;
-}
-
-interface ContractClient {
-  GET: (url: string, init?: ContractInit) => Promise<ContractResult>;
-  POST: (url: string, init?: ContractInit) => Promise<ContractResult>;
-}
-
 /**
  * Whole-collection page size. The workspace sorts, flags, and searches the
  * roster and exception list client-side, so a single truncated server page
@@ -218,26 +201,25 @@ const PAGE_LIMIT = 500;
 
 /** Payroll run-lifecycle transport bound to the authenticated ConsoleApiClient. */
 export function createPayrollApi(api: ConsoleApiClient) {
-  const raw = api as unknown as ContractClient;
   return {
     listRuns: async (signal?: AbortSignal) => {
       const response = await api.GET("/api/v1/payroll/runs", {
         params: { query: { limit: PAGE_LIMIT, offset: 0 } },
         signal,
       });
-      return requireData(response) as unknown as PayrollRunPage;
+      return requireData(response);
     },
     getRun: async (id: string, signal?: AbortSignal) => {
       const first = requireData(await api.GET("/api/v1/payroll/runs/{id}", {
         params: { path: { id }, query: { limit: PAGE_LIMIT, offset: 0 } },
         signal,
-      })) as unknown as PayrollRunDetail;
+      }));
       const lines = [...first.lines];
       while (lines.length < first.lines_total) {
         const next = requireData(await api.GET("/api/v1/payroll/runs/{id}", {
           params: { path: { id }, query: { limit: PAGE_LIMIT, offset: lines.length } },
           signal,
-        })) as unknown as PayrollRunDetail;
+        }));
         if (next.lines.length === 0) break;
         lines.push(...next.lines);
       }
@@ -248,30 +230,29 @@ export function createPayrollApi(api: ConsoleApiClient) {
       return requireData(response);
     },
     closePreflight: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.GET("/api/v1/payroll/runs/{id}/close-preflight", {
+      requireData(await api.GET("/api/v1/payroll/runs/{id}/close-preflight", {
         params: { path: { id } },
         signal,
       })) as ClosePreflight,
     closeAttendance: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/close-attendance", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/close-attendance", {
         params: { path: { id } },
         body: { attest: true },
         signal,
       })) as PayrollRunDetail,
     calculate: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/calculate", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/calculate", {
         params: { path: { id } },
-        body: {},
         signal,
       })) as PayrollRunDetail,
     listExceptions: async (id: string, signal?: AbortSignal) => {
-      const first = requireData(await raw.GET("/api/v1/payroll/runs/{id}/exceptions", {
+      const first = requireData(await api.GET("/api/v1/payroll/runs/{id}/exceptions", {
         params: { path: { id }, query: { limit: PAGE_LIMIT, offset: 0 } },
         signal,
       })) as ExceptionPage;
       const items = [...first.items];
       while (items.length < first.total) {
-        const next = requireData(await raw.GET("/api/v1/payroll/runs/{id}/exceptions", {
+        const next = requireData(await api.GET("/api/v1/payroll/runs/{id}/exceptions", {
           params: { path: { id }, query: { limit: PAGE_LIMIT, offset: items.length } },
           signal,
         })) as ExceptionPage;
@@ -286,15 +267,14 @@ export function createPayrollApi(api: ConsoleApiClient) {
       input: { action: ResolveExceptionAction; reason?: string },
       signal?: AbortSignal,
     ) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/exceptions/{exId}/resolve", {
-          params: { path: { id, exId } },
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/exceptions/{exceptionId}/resolve", {
+          params: { path: { id, exceptionId: exId } },
           body: input,
           signal,
         })) as PayrollException,
     submit: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/submit", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/submit", {
         params: { path: { id } },
-        body: {},
         signal,
       })) as PayrollRunDetail,
     decide: async (
@@ -302,19 +282,18 @@ export function createPayrollApi(api: ConsoleApiClient) {
       input: { decision: RunDecision; reason?: string },
       signal?: AbortSignal,
     ) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/decision", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/decision", {
         params: { path: { id } },
         body: input,
         signal,
       })) as PayrollRunDetail,
     withdraw: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/withdraw", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/withdraw", {
         params: { path: { id } },
-        body: {},
         signal,
       })) as PayrollRunDetail,
     scheduleDisbursement: async (id: string, scheduledAt: string, signal?: AbortSignal) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/schedule-disbursement", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/schedule-disbursement", {
           params: { path: { id } },
           body: { scheduled_at: scheduledAt },
           signal,
@@ -324,19 +303,18 @@ export function createPayrollApi(api: ConsoleApiClient) {
       input: { status: Exclude<DisbursementStatus, "SCHEDULED">; reason?: string },
       signal?: AbortSignal,
     ) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/disbursement/attest", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/disbursement/attest", {
         params: { path: { id } },
         body: input,
         signal,
       })) as Disbursement,
     issuePayslips: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.POST("/api/v1/payroll/runs/{id}/issue-payslips", {
+      requireData(await api.POST("/api/v1/payroll/runs/{id}/issue-payslips", {
           params: { path: { id } },
-          body: {},
           signal,
         })) as PayslipDeliverySummary,
     payslipDelivery: async (id: string, signal?: AbortSignal) =>
-      requireData(await raw.GET("/api/v1/payroll/runs/{id}/payslip-delivery", {
+      requireData(await api.GET("/api/v1/payroll/runs/{id}/payslip-delivery", {
           params: { path: { id } },
           signal,
         })) as PayslipDeliverySummary,

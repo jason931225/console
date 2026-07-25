@@ -50793,8 +50793,10 @@ public enum Components {
             public var summaryKo: Swift.String
             /// - Remark: Generated from `#/components/schemas/PayrollException/detail`.
             public var detail: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Traversal handles to the objects this exception is about. The column is untyped JSON server-side; the only writer emits payroll_line and employee refs in this shape.
+            ///
             /// - Remark: Generated from `#/components/schemas/PayrollException/linked_refs`.
-            public var linkedRefs: [OpenAPIRuntime.OpenAPIObjectContainer]
+            public var linkedRefs: [Components.Schemas.PayrollLinkedRef]
             /// - Remark: Generated from `#/components/schemas/PayrollException/status`.
             @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case open = "OPEN"
@@ -50828,7 +50830,7 @@ public enum Components {
             ///   - amountDeltaWon: Whole KRW won. null when the delta is not derivable from a verified source.
             ///   - summaryKo:
             ///   - detail:
-            ///   - linkedRefs:
+            ///   - linkedRefs: Traversal handles to the objects this exception is about. The column is untyped JSON server-side; the only writer emits payroll_line and employee refs in this shape.
             ///   - status:
             ///   - resolvedBy:
             ///   - resolvedAt:
@@ -50846,7 +50848,7 @@ public enum Components {
                 amountDeltaWon: Swift.Int64? = nil,
                 summaryKo: Swift.String,
                 detail: OpenAPIRuntime.OpenAPIObjectContainer,
-                linkedRefs: [OpenAPIRuntime.OpenAPIObjectContainer],
+                linkedRefs: [Components.Schemas.PayrollLinkedRef],
                 status: Components.Schemas.PayrollException.StatusPayload,
                 resolvedBy: Swift.String? = nil,
                 resolvedAt: Foundation.Date? = nil,
@@ -54144,6 +54146,39 @@ public enum Components {
                 case employeeId = "employee_id"
                 case applicant
                 case posting
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PayrollLinkedRef`.
+        public struct PayrollLinkedRef: Codable, Hashable, Sendable {
+            /// Object family the ref points at — payroll_line or employee today; extensible.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PayrollLinkedRef/kind`.
+            public var kind: Swift.String
+            /// Human-facing display code for the referenced object.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PayrollLinkedRef/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PayrollLinkedRef/id`.
+            public var id: Swift.String?
+            /// Creates a new `PayrollLinkedRef`.
+            ///
+            /// - Parameters:
+            ///   - kind: Object family the ref points at — payroll_line or employee today; extensible.
+            ///   - code: Human-facing display code for the referenced object.
+            ///   - id:
+            public init(
+                kind: Swift.String,
+                code: Swift.String,
+                id: Swift.String? = nil
+            ) {
+                self.kind = kind
+                self.code = code
+                self.id = id
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case code
+                case id
             }
         }
     }

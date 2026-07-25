@@ -231,8 +231,8 @@ describe("PayrollScreen", () => {
     expect(screen.queryByRole("button", { name: text.ctaSubmit })).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: text.exConfirm }));
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/payroll/runs/{id}/exceptions/{exId}/resolve", expect.objectContaining({
-      params: { path: { id: "run-1", exId: "ex-1" } },
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/payroll/runs/{id}/exceptions/{exceptionId}/resolve", expect.objectContaining({
+      params: { path: { id: "run-1", exceptionId: "ex-1" } },
       body: { action: "CONFIRM" },
     }));
     expect(await screen.findByText(text.exResolvedOk)).toBeVisible();

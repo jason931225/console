@@ -23,6 +23,7 @@
 
 package com.maintenance.api.client.model
 
+import com.maintenance.api.client.model.PayrollLinkedRef
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
@@ -41,7 +42,7 @@ import kotlinx.serialization.Contextual
  * @param amountDeltaWon Whole KRW won. null when the delta is not derivable from a verified source.
  * @param summaryKo
  * @param detail
- * @param linkedRefs
+ * @param linkedRefs Traversal handles to the objects this exception is about. The column is untyped JSON server-side; the only writer emits payroll_line and employee refs in this shape.
  * @param status
  * @param resolvedBy
  * @param resolvedAt
@@ -84,8 +85,9 @@ data class PayrollException (
     @Contextual @SerialName(value = "detail")
     val detail: kotlin.Any,
 
+    /* Traversal handles to the objects this exception is about. The column is untyped JSON server-side; the only writer emits payroll_line and employee refs in this shape. */
     @SerialName(value = "linked_refs")
-    val linkedRefs: kotlin.collections.List<@Contextual kotlin.Any>,
+    val linkedRefs: kotlin.collections.List<PayrollLinkedRef>,
 
     @SerialName(value = "status")
     val status: PayrollException.Status,

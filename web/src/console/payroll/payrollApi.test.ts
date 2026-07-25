@@ -25,8 +25,8 @@ describe("createPayrollApi", () => {
       POST: vi.fn().mockResolvedValue({ data: { id: "ex-1" }, response: new Response(null, { status: 200 }) }),
     } as unknown as ConsoleApiClient;
     await createPayrollApi(api).resolveException("run-1", "ex-1", { action: "HOLD", reason: "계좌 재확인" });
-    expect(api.POST).toHaveBeenCalledWith("/api/v1/payroll/runs/{id}/exceptions/{exId}/resolve", expect.objectContaining({
-      params: { path: { id: "run-1", exId: "ex-1" } },
+    expect(api.POST).toHaveBeenCalledWith("/api/v1/payroll/runs/{id}/exceptions/{exceptionId}/resolve", expect.objectContaining({
+      params: { path: { id: "run-1", exceptionId: "ex-1" } },
       body: { action: "HOLD", reason: "계좌 재확인" },
     }));
   });

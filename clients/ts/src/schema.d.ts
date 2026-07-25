@@ -16108,10 +16108,10 @@ export interface components {
             /** Format: int64 */
             exceptions_total: number;
             /** @description Latest stored calculation version; null until the run has been calculated. */
-            calculation?: components["schemas"]["PayrollRunCalcSummary"] | null;
-            disbursement?: components["schemas"]["PayrollDisbursement"] | null;
+            calculation: components["schemas"]["PayrollRunCalcSummary"] | null;
+            disbursement: components["schemas"]["PayrollDisbursement"] | null;
             /** @description Unpaginated delivery summary; null until at least one payslip has been issued. */
-            payslip_delivery?: components["schemas"]["PayrollPayslipDeliverySummary"] | null;
+            payslip_delivery: components["schemas"]["PayrollPayslipDeliverySummary"] | null;
         };
         MyPayrollLine: {
             run_id: components["schemas"]["Uuid"];
@@ -17362,7 +17362,8 @@ export interface components {
             amount_delta_won: number | null;
             summary_ko: string;
             detail: Record<string, never>;
-            linked_refs: Record<string, never>[];
+            /** @description Traversal handles to the objects this exception is about. The column is untyped JSON server-side; the only writer emits payroll_line and employee refs in this shape. */
+            linked_refs: components["schemas"]["PayrollLinkedRef"][];
             /** @enum {string} */
             status: "OPEN" | "CONFIRMED" | "HELD";
             /** Format: uuid */
@@ -17984,6 +17985,14 @@ export interface components {
             employee_id: components["schemas"]["Uuid"];
             applicant: components["schemas"]["RecruitApplicant"];
             posting: components["schemas"]["RecruitPosting"];
+        };
+        PayrollLinkedRef: {
+            /** @description Object family the ref points at — payroll_line or employee today; extensible. */
+            kind: string;
+            /** @description Human-facing display code for the referenced object. */
+            code: string;
+            /** Format: uuid */
+            id?: string | null;
         };
     };
     responses: {

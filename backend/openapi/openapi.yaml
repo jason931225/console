@@ -32183,6 +32183,9 @@ components:
       - lines_offset
       - exceptions_open
       - exceptions_total
+      - calculation
+      - disbursement
+      - payslip_delivery
       properties:
         run:
           $ref: '#/components/schemas/PayrollRunSummary'
@@ -33691,8 +33694,10 @@ components:
           type: object
         linked_refs:
           type: array
+          description: Traversal handles to the objects this exception is about. The column is untyped JSON server-side; the
+            only writer emits payroll_line and employee refs in this shape.
           items:
-            type: object
+            $ref: '#/components/schemas/PayrollLinkedRef'
         status:
           type: string
           enum: [OPEN, CONFIRMED, HELD]
@@ -35210,3 +35215,20 @@ components:
           $ref: '#/components/schemas/RecruitApplicant'
         posting:
           $ref: '#/components/schemas/RecruitPosting'
+    PayrollLinkedRef:
+      type: object
+      required:
+      - kind
+      - code
+      properties:
+        kind:
+          type: string
+          description: Object family the ref points at — payroll_line or employee today; extensible.
+        code:
+          type: string
+          description: Human-facing display code for the referenced object.
+        id:
+          type:
+          - string
+          - 'null'
+          format: uuid

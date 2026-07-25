@@ -744,6 +744,7 @@ src/main/kotlin/com/maintenance/api/client/model/PayrollDisbursement.kt
 src/main/kotlin/com/maintenance/api/client/model/PayrollException.kt
 src/main/kotlin/com/maintenance/api/client/model/PayrollExceptionPage.kt
 src/main/kotlin/com/maintenance/api/client/model/PayrollLineSummary.kt
+src/main/kotlin/com/maintenance/api/client/model/PayrollLinkedRef.kt
 src/main/kotlin/com/maintenance/api/client/model/PayrollPayslipDeliveryItem.kt
 src/main/kotlin/com/maintenance/api/client/model/PayrollPayslipDeliverySummary.kt
 src/main/kotlin/com/maintenance/api/client/model/PayrollPreflightCheck.kt
