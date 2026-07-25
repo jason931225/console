@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -11,7 +12,9 @@ const SHA = /^[0-9a-f]{40}$/;
 const STATES = new Set(['DECLARED', 'PLANNED', 'IMPLEMENTED', 'VERIFIED', 'EXPOSED', 'HOLD']);
 const VERDICTS = new Set(['MEET', 'EXCEED', 'HOLD']);
 const EDGE_TYPES = new Set(['requires', 'blocks', 'integrates_with', 'validates']);
-const validatedRegistries = new WeakSet();
+const validatedRegistries = new WeakMap();
+function stable(value) { if (Array.isArray(value)) return value.map(stable); if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).sort(([a],[b]) => a.localeCompare(b, 'en')).map(([k,v]) => [k,stable(v)])); return value; }
+function ledgerDigest(value) { return createHash('sha256').update(JSON.stringify(stable(value))).digest('hex'); }
 const RESOURCE_KEYS = ['writer', 'postgres', 'browser', 'ios', 'graph', 'cas'];
 
 function fail(message) { throw new Error(message); }
@@ -21,7 +24,7 @@ function nonempty(value, label) { if (typeof value !== 'string' || value.trim() 
 function sha(value, label) { if (!SHA.test(value ?? '')) fail(`${label} must be a full lowercase Git SHA`); return value; }
 function uniqueStrings(values, label) { const seen = new Set(); for (const value of values) { nonempty(value, label); if (seen.has(value)) fail(`duplicate ${label}: ${value}`); seen.add(value); } return seen; }
 
-export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true, resolveBuckTarget = () => true, resolveSource = () => true, expectedCandidateSha, routeFacts } = {}) {
+export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha = () => true, resolveBuckTarget = () => true, resolveSource = () => true, resolveBranch = null, resolveReceipt = () => true, expectedCandidateSha, routeFacts } = {}) {
   object(registry, 'registry'); object(jurisdiction, 'jurisdiction register');
   if (registry.schema_version !== 'console-capability-registry-v2') fail('unsupported console capability registry schema');
   if (jurisdiction.schema_version !== 'console-jurisdiction-register-v2') fail('unsupported console jurisdiction register schema');
@@ -29,6 +32,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
   sha(candidate.sha, 'candidate sha');
   if (!SHA.test(expectedCandidateSha ?? '') || candidate.sha !== expectedCandidateSha) fail('ledger candidate does not match externally supplied expected candidate SHA');
   if (!resolveSha(candidate.sha)) fail('candidate SHA is unresolvable');
+  if (!nonempty(candidate.branch, 'candidate branch') || (resolveBranch && resolveBranch(candidate.branch) !== candidate.sha)) fail('candidate branch does not resolve to exact candidate SHA');
   for (const key of ['authority_base_sha', 'historical_implementation_freeze_sha']) {
     sha(registry.provenance?.[key], key);
     if (!resolveSha(registry.provenance[key])) fail(`${key} SHA is unresolvable`);
@@ -62,7 +66,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     for (const key of ['category', 'non_goals', 'evidence_binding']) nonempty(benchmark[key], `${cap.id} benchmark ${key}`);
     const sources = array(benchmark.comparator_sources);
     if (!sources.length) fail(`${cap.id} per-module benchmark has no comparator sources`);
-    for (const source of sources) { object(source, `${cap.id} comparator source`); nonempty(source.source, `${cap.id} comparator source path`); nonempty(source.observation_as_of, `${cap.id} comparator observation date`); if (!/^\d{4}-\d{2}-\d{2}$/.test(source.observation_as_of) || Number.isNaN(Date.parse(`${source.observation_as_of}T00:00:00Z`))) fail(`${cap.id} comparator observation date must be ISO`); if (!resolveSource(source.source)) fail(`${cap.id} comparator source is not repository-resolvable`); nonempty(source.observation, `${cap.id} comparator observation`); }
+    for (const source of sources) { object(source, `${cap.id} comparator source`); nonempty(source.source, `${cap.id} comparator source path`); nonempty(source.observation_as_of, `${cap.id} comparator observation date`); if (!/^\d{4}-\d{2}-\d{2}$/.test(source.observation_as_of) || (() => { const [y,m,d]=source.observation_as_of.split('-').map(Number); const date=new Date(Date.UTC(y,m-1,d)); return date.getUTCFullYear()!==y || date.getUTCMonth()!==m-1 || date.getUTCDate()!==d; })()) fail(`${cap.id} comparator observation date must be ISO`); if (!resolveSource(source.source)) fail(`${cap.id} comparator source is not repository-resolvable`); nonempty(source.observation, `${cap.id} comparator observation`); }
     if (array(benchmark.native_outcomes).length < 3 || array(benchmark.native_outcomes).length > 7) fail(`${cap.id} benchmark requires 3-7 measurable native outcomes`);
     if (array(benchmark.omni_outcomes).length < 1 || array(benchmark.omni_outcomes).length > 3) fail(`${cap.id} benchmark requires 1-3 additive omni outcomes`);
     const outcomeIds = new Set(); const outcomeShapes = new Set();
@@ -70,7 +74,7 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     if (!['SOURCE_BOUNDED_STARTING_DOSSIER','HOLD_INSUFFICIENT_CATEGORY_DOSSIER'].includes(benchmark.dossier_status)) fail(`${cap.id} benchmark dossier status is invalid`);
     if (benchmark.dossier_status === 'HOLD_INSUFFICIENT_CATEGORY_DOSSIER') nonempty(benchmark.missing_dossier_reason, `${cap.id} missing dossier reason`);
     if (!VERDICTS.has(benchmark.verdict)) fail(`${cap.id} benchmark verdict is invalid`);
-    nonempty(benchmark.independent_outcome_review?.status, `${cap.id} independent outcome review status`); if (benchmark.independent_outcome_review.status !== 'HOLD') { const review=benchmark.independent_outcome_review; if (review.candidate_sha !== candidate.sha || !nonempty(review.receipt_path, `${cap.id} review receipt path`) || !nonempty(review.reviewer_id, `${cap.id} independent reviewer`) || review.reviewer_id === cap.owner) fail(`${cap.id} non-HOLD outcome review is not independent candidate-bound receipt-backed evidence`); }
+    nonempty(benchmark.independent_outcome_review?.status, `${cap.id} independent outcome review status`); if (benchmark.independent_outcome_review.status !== 'HOLD') { const review=benchmark.independent_outcome_review; if (review.candidate_sha !== candidate.sha || !nonempty(review.receipt_path, `${cap.id} review receipt path`) || !nonempty(review.reviewer_id, `${cap.id} independent reviewer`) || review.reviewer_id === cap.owner || !resolveReceipt(review, candidate.sha)) fail(`${cap.id} non-HOLD outcome review is not independent candidate-bound receipt-backed evidence`); }
     if (benchmark.verdict !== 'HOLD' && evidence.status !== 'VERIFIED') fail(`${cap.id} non-HOLD benchmark requires verified candidate evidence`);
     const delivery = object(cap.delivery_unit, `${cap.id} delivery unit`);
     nonempty(delivery.id, `${cap.id} delivery unit id`);
@@ -119,19 +123,22 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     if (binding.candidate_sha !== candidate.sha) fail(`${cap.id} jurisdiction binding is not candidate-bound`);
     if (!array(controls.get(binding.control_id).capability_traceability).some((trace) => trace.capability_id === cap.id && trace.candidate_sha === candidate.sha)) fail(`${cap.id} jurisdiction trace is not bidirectional`);
   }
-  validatedRegistries.add(registry);
+  if (routeFacts) { const declared = new Set(registry.capabilities.flatMap((cap) => cap.route_presentation.route_keys).concat(...['unmodeled_nav_keys','unmodeled_mounted_keys','unmodeled_exposed_keys'].map((key) => array(registry.source_inventory?.[key]).map((entry) => entry.key)))); const actual=new Set(Object.keys(routeFacts.facts ?? {})); if (declared.size !== actual.size || [...actual].some((key)=>!declared.has(key))) fail('source route inventory is not a complete bijection'); }
+  validatedRegistries.set(registry, ledgerDigest(registry));
   return { capability_count: registry.capabilities.length, candidate_sha: candidate.sha, verdict: 'STRUCTURALLY_VALID_HOLD_PRESERVED' };
 }
-export function isValidatedConsoleTruthLedger(registry) { return validatedRegistries.has(registry); }
+export function isValidatedConsoleTruthLedger(registry) { return validatedRegistries.get(registry) === ledgerDigest(registry); }
 
 function main() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const registry = parseImmutableJson(readFileSync(path.join(root, 'docs/program/console-capability-registry.json'), 'utf8'), 'console capability registry').value;
   const jurisdiction = parseImmutableJson(readFileSync(path.join(root, 'docs/program/console-jurisdiction-register.json'), 'utf8'), 'console jurisdiction register').value;
-  const resolveSource = (value) => typeof value === 'string' && !value.includes('..') && existsSync(path.join(root, value));
+  const resolveSource = (value) => { try { execFileSync('git', ['ls-files','--error-unmatch',value], { cwd: root, stdio: 'ignore' }); return typeof value === 'string' && !value.includes('..') && existsSync(path.join(root, value)); } catch { return false; } };
   const resolveBuckTarget = (target) => { try { execFileSync(path.join(root, 'tools/buck2'), ['targets', target], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
+  const resolveBranch = (branch) => { try { return execFileSync('git', ['rev-parse', `refs/remotes/origin/${branch}`], { cwd: root, encoding: 'utf8' }).trim(); } catch { return null; } };
+  const resolveReceipt = (review, sha) => { try { execFileSync('git', ['ls-files','--error-unmatch',review.receipt_path], { cwd: root, stdio: 'ignore' }); return typeof review.receipt_path === 'string' && review.candidate_sha === sha && existsSync(path.join(root, review.receipt_path)); } catch { return false; } };
   const resolveSha = (value) => { try { execFileSync('git', ['cat-file', '-e', `${value}^{commit}`], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
   const expectedCandidateSha = process.env.CONSOLE_EXPECTED_CANDIDATE_SHA ?? 'ebdf4c81d22502fac7a46192dd0b237fc0748241';
-  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha, resolveSource, resolveBuckTarget, expectedCandidateSha, routeFacts: extractConsoleRouteFacts(root) }), null, 2));
+  console.log(JSON.stringify(validateConsoleTruthLedger(registry, jurisdiction, { resolveSha, resolveSource, resolveBuckTarget, resolveBranch, resolveReceipt, expectedCandidateSha, routeFacts: extractConsoleRouteFacts(root) }), null, 2));
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

@@ -80,3 +80,19 @@ test('required Buck target fails closed when resolver rejects it', () => {
   const bad = structuredClone(registry); const equipment = bad.capabilities.find((capability) => capability.id === 'CAP-EQUIPMENT-3R-PILOT');
   assert.throws(() => validateConsoleTruthLedger(bad, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveBuckTarget: () => false }), /invalid\/nonexistent Buck target/);
 });
+
+test('attestation rejects TOCTOU mutation after validation', async () => {
+  const { isValidatedConsoleTruthLedger } = await import('./validate-console-truth-ledger.mjs');
+  const value = structuredClone(registry);
+  validateConsoleTruthLedger(value, jurisdiction, { expectedCandidateSha: registry.candidate.sha, routeFacts: (await import('./route-inventory.mjs')).extractConsoleRouteFacts(process.cwd()) });
+  assert.equal(isValidatedConsoleTruthLedger(value), true);
+  value.capabilities[0].truth.exposure = 'EXPOSED';
+  assert.equal(isValidatedConsoleTruthLedger(value), false);
+});
+
+test('branch and jurisdiction target bypasses reject', () => {
+  const branch = structuredClone(registry);
+  assert.throws(() => validateConsoleTruthLedger(branch, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveBranch: () => 'a'.repeat(40) }), /branch does not resolve/);
+  const empty = structuredClone(jurisdiction); empty.target_jurisdiction_set = [];
+  assert.throws(() => validateConsoleTruthLedger(registry, empty, { expectedCandidateSha: registry.candidate.sha }), /jurisdiction target/);
+});
