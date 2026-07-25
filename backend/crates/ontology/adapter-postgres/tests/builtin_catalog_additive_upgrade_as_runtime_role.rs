@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! RUNTIME proofs for the additive built-in-catalog upgrade path (migration
-//! 0211). Before it, `install_builtin_catalog` fail-closed on any tenant that
+//! 0204). Before it, `install_builtin_catalog` fail-closed on any tenant that
 //! had already installed a catalog version, so a 28th built-in object type
 //! could never reach a seeded environment.
 //!
@@ -115,7 +115,7 @@ fn probe_draft(backing_kind: BackingKind) -> CreateObjectTypeDraft {
             in_property_policy: false,
         }],
         // Targets a type that a seeded tenant already has from the EARLIER
-        // catalog version — the resolution case the pre-0211 installer never
+        // catalog version — the resolution case the pre-0204 installer never
         // had to handle.
         links: vec![LinkTypeInput {
             stable_key: "customer".to_owned(),
@@ -346,7 +346,7 @@ async fn additive_upgrade_adds_only_new_keys_and_is_idempotent_as_runtime_role(o
         SEEDED_CATALOG_SIZE
     );
 
-    // Pre-0211 this call raised ontology_builtin.different_catalog_already_installed.
+    // Pre-0204 this call raised ontology_builtin.different_catalog_already_installed.
     let (upgraded, upgraded_count) = install(
         &store,
         org,

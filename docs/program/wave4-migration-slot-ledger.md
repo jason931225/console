@@ -91,14 +91,14 @@ the lane is later dropped, the number is not recycled.
 |---|---|---|---|---|---|
 | 1 | 0201 | integrator | release the reserved gap (documented no-op; closes NonContiguousMigrationVersion for every lane) | spent | 2026-07-25 |
 | 2 | 0203 | hf-leaveapi-revoke | REVOKE PUBLIC on leave_api.assert_employee_directory_manager + restore the deny-by-default tripwire | assigned (swapped in 2026-07-25, see §5) | 2026-07-25 |
-| 3 | 0204 | L-X1 | deal aggregate — the CRM trunk | assigned | 2026-07-25 |
-| 4 | 0205 | L-X2 | deal stage transitions + per-stage evidence enum | assigned | 2026-07-25 |
-| 5 | 0206 | L-X3 | activity discipline + Closed-Lost reason enum + auto-Lost settings | assigned | 2026-07-25 |
-| 6 | 0207 | L-X4 | deterministic round-robin owner assignment + bulk reassignment | assigned | 2026-07-25 |
-| 7 | 0208 | L-X5 | Won → contract `C-` + large-deal threshold object | assigned | 2026-07-25 |
-| 8 | 0209 | L-X7 | ontology projections (deal / listing / inquiry) | assigned | 2026-07-25 |
-| 9 | 0210 | L-X8 | lead PII: consent, retention, masking, audited sensitive view | assigned | 2026-07-25 |
-| 10 | 0211 | L-A1 | ontology catalog additive-upgrade path (swapped from 0203, lane had written nothing) | assigned | 2026-07-25 |
+| 3 | — | L-X1 | deal aggregate — the CRM trunk | number assigned at merge (§5) | 2026-07-25 |
+| 4 | — | L-X2 | deal stage transitions + per-stage evidence enum | number assigned at merge (§5) | 2026-07-25 |
+| 5 | — | L-X3 | activity discipline + Closed-Lost reason enum + auto-Lost settings | number assigned at merge (§5) | 2026-07-25 |
+| 6 | — | L-X4 | deterministic round-robin owner assignment + bulk reassignment | number assigned at merge (§5) | 2026-07-25 |
+| 7 | — | L-X5 | Won → contract `C-` + large-deal threshold object | number assigned at merge (§5) | 2026-07-25 |
+| 8 | — | L-X7 | ontology projections (deal / listing / inquiry) | number assigned at merge (§5) | 2026-07-25 |
+| 9 | — | L-X8 | lead PII: consent, retention, masking, audited sensitive view | number assigned at merge (§5) | 2026-07-25 |
+| 10 | 0204 | L-A1 | ontology catalog additive-upgrade path — assigned AT MERGE per §5 (pre-assignment had said 0211; taking the next free number keeps the sequence contiguous) | landed | 2026-07-25 |
 | 11 | 0212 | hf-audit-guard | extend protected_audit_writer_guard to the two builtin-catalog audit actions (mnt_rt can currently forge them) | assigned | 2026-07-25 |
 
 Next free slot after the seeded assignments: **0211**.
