@@ -16591,6 +16591,715 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/recruiting/postings:
+    get:
+      tags:
+      - recruiting
+      operationId: listRecruitPostings
+      summary: List job postings with per-stage applicant counts (recruiting_read or recruiting_manage)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/RecruitPostingStatus'
+      - name: scope
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/RecruitPostingScope'
+      responses:
+        '200':
+          description: Postings in the caller's organization, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPostingListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      tags:
+      - recruiting
+      operationId: createRecruitPosting
+      summary: Create a draft job posting (JP- code); recruiting_manage only
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecruitPostingRequest'
+      responses:
+        '201':
+          description: The draft posting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPosting'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/postings/{postingId}:
+    get:
+      tags:
+      - recruiting
+      operationId: getRecruitPosting
+      summary: Posting detail with its non-PII applicant pipeline rows
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: postingId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Posting and applicant summaries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPostingDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+      - recruiting
+      operationId: updateRecruitPosting
+      summary: Edit a DRAFT posting in place (409 for any other status); CAS on expected_updated_at
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: postingId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRecruitPostingRequest'
+      responses:
+        '200':
+          description: The updated draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPosting'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/postings/{postingId}/preflight:
+    post:
+      tags:
+      - recruiting
+      operationId: preflightRecruitPosting
+      summary: Read-only publish checklist evaluation for a DRAFT posting (recruiting_manage)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: postingId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Check vector and the automatic-check verdict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPostingPreflightResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/recruiting/postings/{postingId}/publish:
+    post:
+      tags:
+      - recruiting
+      operationId: publishRecruitPosting
+      summary: Publish a draft (atomic preflight re-evaluation plus exposure attest; fail-closed)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: postingId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRecruitPostingRequest'
+      responses:
+        '200':
+          description: The published posting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPosting'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          description: Request validation failed, or the preflight gate is unmet (code PREFLIGHT_FAILED, which adds the full
+            check vector).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPublishFailedResponse'
+  /api/v1/recruiting/postings/{postingId}/close:
+    post:
+      tags:
+      - recruiting
+      operationId: closeRecruitPosting
+      summary: Close a PUBLISHED posting (archive-not-delete); CAS on expected_updated_at
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: postingId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseRecruitPostingRequest'
+      responses:
+        '200':
+          description: The closed posting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitPosting'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/postings/{postingId}/applicants:
+    post:
+      tags:
+      - recruiting
+      operationId: createRecruitApplicant
+      summary: Recruiter intake — register an applicant (APL- code) on a PUBLISHED posting
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: postingId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecruitApplicantRequest'
+      responses:
+        '201':
+          description: The applicant at APPLIED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/applicants/{applicantId}:
+    get:
+      tags:
+      - recruiting
+      operationId: getRecruitApplicant
+      summary: Applicant detail (audited PII read) with offer versions and the stage timeline
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Applicant, offer versions (newest first), and stage-event history (oldest first).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicantDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/recruiting/applicants/{applicantId}/advance:
+    post:
+      tags:
+      - recruiting
+      operationId: advanceRecruitApplicant
+      summary: Advance one stage (INTERVIEW→OFFER is offer-only and OFFER→HIRED hire-only — both 422)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdvanceRecruitApplicantRequest'
+      responses:
+        '200':
+          description: The advanced applicant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/applicants/{applicantId}/assess:
+    post:
+      tags:
+      - recruiting
+      operationId: assessRecruitApplicant
+      summary: Record the interview assessment at the INTERVIEW stage (offer prerequisite)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessRecruitApplicantRequest'
+      responses:
+        '200':
+          description: The assessed applicant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/applicants/{applicantId}/hold:
+    post:
+      tags:
+      - recruiting
+      operationId: holdRecruitApplicant
+      summary: Set or clear the hold flag
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldRecruitApplicantRequest'
+      responses:
+        '200':
+          description: The applicant with the new hold state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/recruiting/applicants/{applicantId}/request-documents:
+    post:
+      tags:
+      - recruiting
+      operationId: requestRecruitApplicantDocuments
+      summary: Flag supplementary documents as requested (no request body)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The applicant with doc_requested set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/recruiting/applicants/{applicantId}/reject:
+    post:
+      tags:
+      - recruiting
+      operationId: rejectRecruitApplicant
+      summary: Reject with an enum reason — archives the applicant into the talent pool
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRecruitApplicantRequest'
+      responses:
+        '200':
+          description: The rejected applicant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/applicants/{applicantId}/reinstate:
+    post:
+      tags:
+      - recruiting
+      operationId: reinstateRecruitApplicant
+      summary: Reinstate a rejected applicant to their prior stage (no request body)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The reinstated applicant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitApplicant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/recruiting/applicants/{applicantId}/offer:
+    post:
+      tags:
+      - recruiting
+      operationId: extendRecruitOffer
+      summary: Extend an offer (assessment-gated; one live offer per applicant)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendRecruitOfferRequest'
+      responses:
+        '201':
+          description: The extended offer; the applicant moves to OFFER.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitOffer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/applicants/{applicantId}/hire:
+    post:
+      tags:
+      - recruiting
+      operationId: hireRecruitApplicant
+      summary: Hire — one transaction through the HR-owned employee core
+      description: >-
+        Requires recruiting_manage AND employee_directory_manage. Creates the employee through the same idempotent core as
+        People & Workforce (idempotency key recruit-hire-{applicantId}), links the applicant (HIRED), and increments the
+        posting fill count. The latest offer must be ACCEPTED. POOL_DAILY postings return 422 POOL_REGISTRATION_UNAVAILABLE.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: applicantId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HireRecruitApplicantRequest'
+      responses:
+        '201':
+          description: Employee created and linked (also returned on an idempotent employee-core replay).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HireRecruitApplicantResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: State conflict; an already-hired replay additionally carries the linked employee_id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitHireConflictResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/offers/{offerId}/adjust:
+    post:
+      tags:
+      - recruiting
+      operationId: adjustRecruitOffer
+      summary: Adjust a live offer — writes an immutable v+1 row and SUPERSEDEs the prior one
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: offerId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustRecruitOfferRequest'
+      responses:
+        '201':
+          description: The new offer version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitOffer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/offers/{offerId}/withdraw:
+    post:
+      tags:
+      - recruiting
+      operationId: withdrawRecruitOffer
+      summary: Withdraw a live offer; the applicant returns to INTERVIEW
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: offerId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawRecruitOfferRequest'
+      responses:
+        '200':
+          description: The withdrawn offer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitOffer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/offers/{offerId}/record-reply:
+    post:
+      tags:
+      - recruiting
+      operationId: recordRecruitOfferReply
+      summary: Record the candidate's reply on a live offer (ACCEPTED or DECLINED)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: offerId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordRecruitOfferReplyRequest'
+      responses:
+        '200':
+          description: The resolved offer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitOffer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/recruiting/talent-pool:
+    get:
+      tags:
+      - recruiting
+      operationId: listRecruitTalentPool
+      summary: Rejected-applicant archive (talent pool)
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Talent-pool rows, newest rejection first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitTalentPoolListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 components:
   securitySchemes:
     basicAuth:
@@ -33808,3 +34517,696 @@ components:
         status:
           type: string
           description: Tenant status; ACTIVE, SUSPENDED, or ARCHIVED.
+    RecruitPostingStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, CLOSED]
+    RecruitPostingScope:
+      type: string
+      enum: [INTERNAL, EXTERNAL]
+    RecruitEmploymentType:
+      type: string
+      enum: [REGULAR, RESIDENT_SHIFT, PART_TIME, POOL_DAILY]
+    RecruitApplicantStage:
+      type: string
+      enum: [APPLIED, SCREENING, INTERVIEW, OFFER, HIRED]
+    RecruitRejectReason:
+      type: string
+      enum: [CAREER_SHORTFALL, ROLE_MISMATCH, COMP_MISMATCH, ACCEPTED_ELSEWHERE, OTHER]
+    RecruitAssessmentScore:
+      type: string
+      enum: [SUITABLE, NEUTRAL, UNSUITABLE]
+    RecruitOfferStatus:
+      type: string
+      enum: [EXTENDED, SUPERSEDED, WITHDRAWN, ACCEPTED, DECLINED]
+    RecruitAmountPeriod:
+      type: string
+      enum: [MONTHLY, DAILY]
+    RecruitStageEventAction:
+      type: string
+      enum: [APPLY, ADVANCE, ASSESS, HOLD, UNHOLD, REQUEST_DOCUMENTS, OFFER_EXTEND, OFFER_ADJUST, OFFER_WITHDRAW, OFFER_REPLY,
+        REJECT, REINSTATE, HIRE]
+    RecruitPreflightCheck:
+      type: object
+      required:
+      - key
+      - ok
+      - note
+      properties:
+        key:
+          type: string
+          enum: [role_defined, quota_defined, no_duplicate_open, exposure_attested]
+        ok:
+          type: boolean
+        note:
+          type: string
+    RecruitPostingPreflightResponse:
+      type: object
+      required:
+      - checks
+      - publishable
+      properties:
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitPreflightCheck'
+        publishable:
+          type: boolean
+          description: Verdict over the automatic checks only; the exposure attest is collected at publish.
+    RecruitStageCounts:
+      type: object
+      description: Non-rejected applicant counts per pipeline stage; HIRED is not counted.
+      required:
+      - applied
+      - screening
+      - interview
+      - offer
+      properties:
+        applied:
+          type: integer
+          format: int64
+        screening:
+          type: integer
+          format: int64
+        interview:
+          type: integer
+          format: int64
+        offer:
+          type: integer
+          format: int64
+    RecruitPosting:
+      type: object
+      required:
+      - id
+      - posting_no
+      - role_title
+      - company
+      - worksite
+      - employment_type
+      - scope
+      - headcount
+      - hired_count
+      - deadline
+      - requirements
+      - position_ref
+      - status
+      - published_at
+      - closed_at
+      - created_at
+      - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        posting_no:
+          type: string
+          description: Per-organization display code, JP-0001.
+        role_title:
+          type: string
+        company:
+          type: string
+        worksite:
+          type: string
+        employment_type:
+          $ref: '#/components/schemas/RecruitEmploymentType'
+        scope:
+          $ref: '#/components/schemas/RecruitPostingScope'
+        headcount:
+          type: integer
+          format: int32
+        hired_count:
+          type: integer
+          format: int32
+        deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Null = open-ended (상시).
+        requirements:
+          type: array
+          items:
+            type: string
+        position_ref:
+          type:
+          - string
+          - 'null'
+          description: Optional ontology position instance reference.
+        status:
+          $ref: '#/components/schemas/RecruitPostingStatus'
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    RecruitPostingSummary:
+      allOf:
+      - $ref: '#/components/schemas/RecruitPosting'
+      - type: object
+        required:
+        - stage_counts
+        properties:
+          stage_counts:
+            $ref: '#/components/schemas/RecruitStageCounts'
+    RecruitPostingListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitPostingSummary'
+    RecruitPostingDetailResponse:
+      type: object
+      required:
+      - posting
+      - applicants
+      properties:
+        posting:
+          $ref: '#/components/schemas/RecruitPosting'
+        applicants:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitApplicantSummary'
+    RecruitApplicantSummary:
+      type: object
+      description: Non-PII pipeline projection for posting detail. Profile lines, source document, reject note, and the assessment
+        signature are served only by the audited applicant detail read.
+      required:
+      - id
+      - posting_id
+      - applicant_no
+      - name
+      - stage
+      - hold
+      - doc_requested
+      - rejected_at
+      - reject_reason
+      - assessed
+      - hired_employee_id
+      - created_at
+      - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        posting_id:
+          $ref: '#/components/schemas/Uuid'
+        applicant_no:
+          type: string
+          description: Per-organization display code, APL-0001.
+        name:
+          type: string
+        stage:
+          $ref: '#/components/schemas/RecruitApplicantStage'
+        hold:
+          type: boolean
+        doc_requested:
+          type: boolean
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reject_reason:
+          oneOf:
+          - $ref: '#/components/schemas/RecruitRejectReason'
+          - type: 'null'
+        assessed:
+          type: boolean
+          description: Existence flag only; the score stays behind the audited applicant detail read.
+        hired_employee_id:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    RecruitAssessment:
+      type: object
+      required:
+      - score
+      - by
+      - at
+      properties:
+        score:
+          $ref: '#/components/schemas/RecruitAssessmentScore'
+        by:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    RecruitApplicant:
+      type: object
+      required:
+      - id
+      - posting_id
+      - applicant_no
+      - name
+      - profile_lines
+      - source_document
+      - stage
+      - hold
+      - doc_requested
+      - rejected_at
+      - reject_reason
+      - reject_note
+      - assessment
+      - hired_employee_id
+      - created_at
+      - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        posting_id:
+          $ref: '#/components/schemas/Uuid'
+        applicant_no:
+          type: string
+        name:
+          type: string
+        profile_lines:
+          type: array
+          items:
+            type: string
+        source_document:
+          type:
+          - string
+          - 'null'
+          description: Provenance filename only.
+        stage:
+          $ref: '#/components/schemas/RecruitApplicantStage'
+        hold:
+          type: boolean
+        doc_requested:
+          type: boolean
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reject_reason:
+          oneOf:
+          - $ref: '#/components/schemas/RecruitRejectReason'
+          - type: 'null'
+        reject_note:
+          type:
+          - string
+          - 'null'
+        assessment:
+          oneOf:
+          - $ref: '#/components/schemas/RecruitAssessment'
+          - type: 'null'
+        hired_employee_id:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    RecruitOffer:
+      type: object
+      required:
+      - id
+      - applicant_id
+      - version
+      - amount
+      - amount_period
+      - currency
+      - reply_deadline
+      - status
+      - withdraw_reason
+      - extended_by
+      - extended_at
+      - resolved_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        applicant_id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+          format: int32
+          minimum: 1
+        amount:
+          type: string
+          description: Canonical NUMERIC(14,2) decimal string.
+        amount_period:
+          $ref: '#/components/schemas/RecruitAmountPeriod'
+        currency:
+          type: string
+          enum: [KRW]
+        reply_deadline:
+          $ref: '#/components/schemas/Date'
+        status:
+          $ref: '#/components/schemas/RecruitOfferStatus'
+        withdraw_reason:
+          type:
+          - string
+          - 'null'
+        extended_by:
+          $ref: '#/components/schemas/Uuid'
+        extended_at:
+          $ref: '#/components/schemas/Timestamp'
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    RecruitStageEvent:
+      type: object
+      required:
+      - id
+      - action
+      - from_stage
+      - to_stage
+      - reason
+      - actor
+      - occurred_at
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        action:
+          $ref: '#/components/schemas/RecruitStageEventAction'
+        from_stage:
+          oneOf:
+          - $ref: '#/components/schemas/RecruitApplicantStage'
+          - type: 'null'
+        to_stage:
+          oneOf:
+          - $ref: '#/components/schemas/RecruitApplicantStage'
+          - type: 'null'
+        reason:
+          type:
+          - string
+          - 'null'
+          description: Free-text or enum payload for the action — reject reason, assessment score, offer decision, or withdraw
+            reason.
+        actor:
+          $ref: '#/components/schemas/Uuid'
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+    RecruitApplicantDetailResponse:
+      type: object
+      required:
+      - applicant
+      - offers
+      - events
+      properties:
+        applicant:
+          $ref: '#/components/schemas/RecruitApplicant'
+        offers:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitOffer'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitStageEvent'
+    RecruitTalentPoolEntry:
+      type: object
+      required:
+      - applicant_id
+      - applicant_no
+      - name
+      - role_title
+      - reason
+      - rejected_at
+      properties:
+        applicant_id:
+          $ref: '#/components/schemas/Uuid'
+        applicant_no:
+          type: string
+        name:
+          type: string
+        role_title:
+          type: string
+          description: Role title of the posting the applicant was rejected from.
+        reason:
+          oneOf:
+          - $ref: '#/components/schemas/RecruitRejectReason'
+          - type: 'null'
+        rejected_at:
+          $ref: '#/components/schemas/Timestamp'
+    RecruitTalentPoolListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitTalentPoolEntry'
+    RecruitPublishFailedResponse:
+      allOf:
+      - $ref: '#/components/schemas/ErrorBody'
+      - type: object
+        description: A plain validation failure carries the error envelope only; the PREFLIGHT_FAILED gate additionally carries
+          the full check vector with publishable false.
+        properties:
+          checks:
+            type: array
+            items:
+              $ref: '#/components/schemas/RecruitPreflightCheck'
+          publishable:
+            type: boolean
+    RecruitHireConflictResponse:
+      allOf:
+      - $ref: '#/components/schemas/ErrorBody'
+      - type: object
+        description: employee_id is present only on an already-hired replay, naming the employee the applicant is linked
+          to; every other conflict carries the error envelope alone.
+        properties:
+          employee_id:
+            $ref: '#/components/schemas/Uuid'
+    CreateRecruitPostingRequest:
+      type: object
+      required:
+      - role_title
+      - company
+      - worksite
+      - employment_type
+      - scope
+      - headcount
+      properties:
+        role_title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        company:
+          type: string
+          minLength: 1
+          maxLength: 200
+        worksite:
+          type: string
+          minLength: 1
+          maxLength: 200
+        employment_type:
+          $ref: '#/components/schemas/RecruitEmploymentType'
+        scope:
+          $ref: '#/components/schemas/RecruitPostingScope'
+        headcount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 999
+        deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Omit or null for an open-ended posting (상시).
+        requirements:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 300
+        position_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+    UpdateRecruitPostingRequest:
+      allOf:
+      - $ref: '#/components/schemas/CreateRecruitPostingRequest'
+      - type: object
+        description: Optimistic concurrency — expected_updated_at is the RFC 3339 updated_at read from the posting; a mismatch
+          is 409.
+        required:
+        - expected_updated_at
+        properties:
+          expected_updated_at:
+            $ref: '#/components/schemas/Timestamp'
+    PublishRecruitPostingRequest:
+      type: object
+      required:
+      - attest_exposure_scope
+      - expected_updated_at
+      properties:
+        attest_exposure_scope:
+          type: boolean
+          description: The publisher's exposure-scope attestation; false fails the preflight gate.
+        expected_updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    CloseRecruitPostingRequest:
+      type: object
+      required:
+      - expected_updated_at
+      properties:
+        expected_updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    CreateRecruitApplicantRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        profile_lines:
+          type: array
+          maxItems: 40
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+        source_document:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+    AdvanceRecruitApplicantRequest:
+      type: object
+      required:
+      - expected_updated_at
+      properties:
+        expected_updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    AssessRecruitApplicantRequest:
+      type: object
+      required:
+      - score
+      properties:
+        score:
+          $ref: '#/components/schemas/RecruitAssessmentScore'
+    HoldRecruitApplicantRequest:
+      type: object
+      required:
+      - hold
+      properties:
+        hold:
+          type: boolean
+    RejectRecruitApplicantRequest:
+      type: object
+      required:
+      - reason
+      properties:
+        reason:
+          $ref: '#/components/schemas/RecruitRejectReason'
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+    ExtendRecruitOfferRequest:
+      type: object
+      required:
+      - amount
+      - amount_period
+      - reply_deadline
+      properties:
+        amount:
+          type: string
+          description: Canonical NUMERIC(14,2) decimal string; at most 12 whole digits and 2 fraction digits, no exponent
+            or leading zeros.
+        amount_period:
+          $ref: '#/components/schemas/RecruitAmountPeriod'
+        reply_deadline:
+          $ref: '#/components/schemas/Date'
+    AdjustRecruitOfferRequest:
+      type: object
+      description: The amount_period is inherited from the offer being adjusted and cannot be changed.
+      required:
+      - amount
+      properties:
+        amount:
+          type: string
+          description: Canonical NUMERIC(14,2) decimal string.
+        reply_deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Omit or null to keep the prior offer's reply deadline.
+    WithdrawRecruitOfferRequest:
+      type: object
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 300
+    RecordRecruitOfferReplyRequest:
+      type: object
+      required:
+      - decision
+      properties:
+        decision:
+          type: string
+          enum: [ACCEPTED, DECLINED]
+    HireRecruitApplicantRequest:
+      type: object
+      required:
+      - employee_number
+      - phone
+      - org_unit
+      - position
+      - site
+      - home_branch_id
+      properties:
+        employee_number:
+          type: string
+        phone:
+          type: string
+        org_unit:
+          type: string
+        position:
+          type: string
+        site:
+          type: string
+        home_branch_id:
+          $ref: '#/components/schemas/Uuid'
+        base_pay:
+          type:
+          - string
+          - 'null'
+          description: Defaults to the accepted offer amount for MONTHLY offers; required explicitly for DAILY offers.
+    HireRecruitApplicantResponse:
+      type: object
+      required:
+      - employee_id
+      - applicant
+      - posting
+      properties:
+        employee_id:
+          $ref: '#/components/schemas/Uuid'
+        applicant:
+          $ref: '#/components/schemas/RecruitApplicant'
+        posting:
+          $ref: '#/components/schemas/RecruitPosting'
