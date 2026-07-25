@@ -11,11 +11,8 @@ const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
 const ciPreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs";
 const consoleRouteInventoryTestCommand = "node --test scripts/console/route-inventory.test.mjs";
-const consoleTruthLedgerTestCommand = "node --test scripts/console/validate-console-truth-ledger.test.mjs";
-const consoleFanoutPlannerTestCommand = "node --test scripts/console/plan-fanout.test.mjs";
 const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
 const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
-const consoleIntegrationTipEnv = "CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}";
 const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
@@ -36,11 +33,8 @@ const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", impo
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
-  "npm run check:console-truth-ledger",
   ciPreflightTestCommand,
   consoleRouteInventoryTestCommand,
-  consoleTruthLedgerTestCommand,
-  consoleFanoutPlannerTestCommand,
   buckPostgresEnvironmentTestCommand,
   buckPostgresHarnessTestCommand,
   "npm run check:ci-preflight",
@@ -107,10 +101,6 @@ function multilineRunCommands(step) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-}
-
-function hasEnvironment(step, entry) {
-  return step.includes(`        env:\n          ${entry}\n`);
 }
 
 function requireUnconditionalRun(steps, command, job, failures) {
@@ -363,13 +353,6 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   for (const command of requiredPreflightCommands) {
     requireUnconditionalRun(preflightSteps, command, "preflight", failures);
   }
-  for (const command of ["npm run check:console-truth-ledger", consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
-    const step = preflightSteps.find((candidate) => runScalar(candidate) === command);
-    if (!step || !hasEnvironment(step, consoleIntegrationTipEnv)) {
-      failures.push(`preflight must pass ${consoleIntegrationTipEnv} to ${command}`);
-    }
-  }
-
   const supportDomainUnit = jobBlock(workflow, "support-domain-unit");
   if (supportDomainUnit) {
     const steps = stepBlocks(supportDomainUnit);

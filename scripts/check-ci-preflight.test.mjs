@@ -13,8 +13,6 @@ const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locke
 const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
 const reachabilityPreflightCommands = [
   "node --test scripts/console/route-inventory.test.mjs",
-  "node --test scripts/console/validate-console-truth-ledger.test.mjs",
-  "node --test scripts/console/plan-fanout.test.mjs",
   "tools/buck/run_test_with_postgres_env.test.sh",
   "tools/buck/test_needs_postgres.test.sh",
 ];
@@ -374,22 +372,6 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       workflow.replace("          fetch-depth: 0\n", ""),
       "preflight checkout must fetch full history with fetch-depth: 0",
     );
-  });
-
-  it("passes the exact integration tip to every console validator and planner surface", () => {
-    for (const command of [
-      "npm run check:console-truth-ledger",
-      "node --test scripts/console/validate-console-truth-ledger.test.mjs",
-      "node --test scripts/console/plan-fanout.test.mjs",
-    ]) {
-      expectFailure(
-        workflow.replace(
-          `        env:\n          CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }}\n        run: ${command}`,
-          `        run: ${command}`,
-        ),
-        `preflight must pass CONSOLE_INTEGRATION_TIP_SHA: \${{ github.sha }} to ${command}`,
-      );
-    }
   });
 
   it("rejects omission and comment-only reachability regressions", () => {

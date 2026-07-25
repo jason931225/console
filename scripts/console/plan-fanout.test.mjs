@@ -169,7 +169,7 @@ test('hermetic signed-candidate smoke ignores an unsigned synthetic HEAD and glo
     return result.stdout.trim();
   };
   const isolatedHome = mkdtempSync(path.join(tmpdir(), 'fanout-candidate-home-'));
-  const originalHome = process.env.HOME; const originalTip = process.env.CONSOLE_INTEGRATION_TIP_SHA;
+  const originalHome = process.env.HOME;
   try {
     git(['init', '-b', 'main']); git(['config', 'user.name', 'Fixture Reviewer']); git(['config', 'user.email', 'fixture@example.test']);
     const signingKey = path.join(repo, 'signing_key');
@@ -183,13 +183,13 @@ test('hermetic signed-candidate smoke ignores an unsigned synthetic HEAD and glo
     mkdirSync(path.join(repo, '.github/trust'), { recursive: true }); writeFileSync(path.join(repo, '.github/trust/console.allowed_signers'), `${authority.principal} ${publicKey}\n`); writeFileSync(path.join(repo, 'candidate.txt'), 'candidate\n');
     git(['add', '.']); git(['commit', '-S', '-m', 'signed candidate']); const candidate = git(['rev-parse', 'HEAD']);
     git(['commit', '--allow-empty', '--no-gpg-sign', '-m', 'unsigned synthetic PR HEAD']); const syntheticHead = git(['rev-parse', 'HEAD']);
-    process.env.HOME = isolatedHome; process.env.CONSOLE_INTEGRATION_TIP_SHA = 'f'.repeat(40);
+    process.env.HOME = isolatedHome;
     const rawHead = spawnSync('git', ['verify-commit', '--raw', syntheticHead], { cwd: repo, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' } });
     assert.notEqual(rawHead.status, 0);
     const status = verifyCommitWithCandidateSshPolicy(repo, candidate, candidate, authority);
     assert.match(status, new RegExp(`^Good "git" signature for ${authority.principal.replace(/[.@]/g, '\\$&')} with ED25519 key ${authority.fingerprint.replace(/[+/]/g, '\\$&')}$`, 'm'));
   } finally {
-    process.env.HOME = originalHome; process.env.CONSOLE_INTEGRATION_TIP_SHA = originalTip;
+    process.env.HOME = originalHome;
     rmSync(repo, { recursive: true, force: true }); rmSync(isolatedHome, { recursive: true, force: true });
   }
 });
@@ -247,8 +247,8 @@ test('real SSH-signed admission train excludes reviewed leaves and caps cold Buc
     writeFileSync(path.join(repo, 'docs/evidence/console/fanout-admission.json'), JSON.stringify(admission)); git(['add', '.']); git(['commit', '-m', 'admission']); const admissionSha = git(['rev-parse', 'HEAD']);
     const runner = path.join(path.dirname(new URL(import.meta.url).pathname), 'plan-fanout.mjs');
     const isolatedHome = mkdtempSync(path.join(tmpdir(), 'fanout-home-'));
-    const { CONSOLE_INTEGRATION_TIP_SHA: _ignoredIntegrationTip, ...hostileOuterEnvironment } = process.env;
-    const result = spawnSync('node', [runner, '--epoch-base', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8', env: { ...hostileOuterEnvironment, HOME: isolatedHome } });
+    const { CONSOLE_CANDIDATE_SHA: _candidate, CONSOLE_AUTHORITY_TIP_SHA: _authorityTip, CONSOLE_SYNTHETIC_MERGE_SHA: _syntheticMerge, ...hostileOuterEnvironment } = process.env;
+    const result = spawnSync('node', [runner, '--candidate', anchor, '--admission', admissionSha], { cwd: repo, encoding: 'utf8', env: { ...hostileOuterEnvironment, HOME: isolatedHome } });
     rmSync(isolatedHome, { recursive: true, force: true });
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout);

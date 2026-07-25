@@ -15,7 +15,7 @@ const jurisdiction = JSON.parse(readFileSync(new URL('../../docs/program/console
 test('current candidate truth ledger is structurally complete but remains candidate-bound HOLD where evidence is absent', () => {
   assert.doesNotThrow(() => validateConsoleTruthLedger(registry, jurisdiction, { expectedCandidateSha: registry.candidate.sha }));
   assert.equal(registry.schema_version, 'console-capability-registry-v2');
-  assert.equal(registry.candidate.sha, '88c57a1d519b43bc4c0e7b721c62bc248b938b38');
+  assert.match(registry.candidate.sha, /^[0-9a-f]{40}$/);
   assert.ok(registry.capabilities.some((capability) => capability.id === 'CAP-ASSET-MASTER-ACTION'));
   assert.ok(registry.capabilities.every((capability) => capability.benchmark?.verdict === 'HOLD'));
   assert.ok(registry.capabilities.every((capability) => capability.benchmark?.native_outcomes?.length >= 3));

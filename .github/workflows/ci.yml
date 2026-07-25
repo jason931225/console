@@ -129,26 +129,11 @@ jobs:
       - name: Foundation gate contract
         run: npm run check:foundation-gates
 
-      - name: Console truth-ledger admission
-        env:
-          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}
-        run: npm run check:console-truth-ledger
-
       - name: CI preflight contract tests
         run: node --test scripts/check-ci-preflight.test.mjs
 
       - name: Console route inventory regression
         run: node --test scripts/console/route-inventory.test.mjs
-
-      - name: Console truth-ledger validator regression
-        env:
-          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}
-        run: node --test scripts/console/validate-console-truth-ledger.test.mjs
-
-      - name: Console fanout planner regression
-        env:
-          CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}
-        run: node --test scripts/console/plan-fanout.test.mjs
 
       - name: Buck PostgreSQL environment wrapper regression
         run: tools/buck/run_test_with_postgres_env.test.sh

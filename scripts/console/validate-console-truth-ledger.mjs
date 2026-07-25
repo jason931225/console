@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseImmutableJson } from './immutable-json.mjs';
 import { extractConsoleRouteFacts, extractConsoleRouteFactsFromTexts } from './route-inventory.mjs';
 import { CONSOLE_CANDIDATE_SIGNING_AUTHORITY, sshSignatureMatchesAuthority, verifyCommitWithCandidateSshPolicy } from './ssh-signature-policy.mjs';
+import { verifyConsoleAuthorityTrain } from './verify-console-authority-train.mjs';
 
 const SHA = /^[0-9a-f]{40}$/;
 const STATES = new Set(['DECLARED', 'PLANNED', 'IMPLEMENTED', 'VERIFIED', 'EXPOSED', 'HOLD']);
@@ -251,6 +252,7 @@ function main() {
   if (!SHA.test(candidateSha ?? '')) fail('CONSOLE_CANDIDATE_SHA must be a full lowercase Git SHA');
   if (!SHA.test(authorityTipSha ?? '')) fail('CONSOLE_AUTHORITY_TIP_SHA must be a full lowercase Git SHA');
   if (!SHA.test(syntheticMergeSha ?? '')) fail('CONSOLE_SYNTHETIC_MERGE_SHA must be a full lowercase Git SHA');
+  verifyConsoleAuthorityTrain(root, candidateSha, authorityTipSha, syntheticMergeSha);
   const registry = parseImmutableJson(git(root, ['show', `${authorityTipSha}:docs/program/console-capability-registry.json`]), 'console capability registry').value;
   const jurisdiction = parseImmutableJson(git(root, ['show', `${authorityTipSha}:docs/program/console-jurisdiction-register.json`]), 'console jurisdiction register').value;
   if (registry.candidate?.sha !== candidateSha) fail('CONSOLE_CANDIDATE_SHA must equal the authority-tip candidate SHA');
