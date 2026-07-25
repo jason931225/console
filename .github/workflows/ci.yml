@@ -353,51 +353,42 @@ jobs:
           workspaces: backend
 
       - name: rustfmt check
-        if: ${{ !cancelled() }}
         run: cargo fmt --all -- --check
 
       - name: clippy -D warnings
-        if: ${{ !cancelled() }}
         run: SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings
       - name: Layer-boundary gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-layer-boundary
 
       - name: Audit-coverage gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-audit-coverage
 
       - name: Migration-safety gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-migration-safety
 
       - name: Tenant-isolation gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-tenant-isolation
 
       - name: PII-no-logs gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-pii-no-logs
 
       - name: RLS-arming gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-rls-arming
 
       - name: Dev-auth-absence gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-dev-auth-absence
 
       - name: IaC tier-discipline gate
-        if: ${{ !cancelled() }}
         run: cargo run -p mnt-gate-iac-tier
-
-
       # Migration 0165 fails closed unless the portable seven-role topology
       # already exists. Reconcile it before any database test applies the
       # migration, using the distinct service administrator only for this
       # cluster-scoped bootstrap.
+      - name: PR 473 migration operational contract tests
+        working-directory: .
+        run: python3 scripts/check-pr473-migration-operational.test.py -v
+
       - name: Reconcile portable PostgreSQL role topology
-        if: ${{ !cancelled() }}
         run: |
           APP_PASSWORD="$(openssl rand -hex 32)"
           RT_PASSWORD="$(openssl rand -hex 32)"
@@ -437,7 +428,6 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: PR 473 migration operational gate
-        if: ${{ !cancelled() }}
         working-directory: .
         # SQLX_OFFLINE=true so the query! macros compile against the committed
         # .sqlx cache (the documented contract — see crates/platform/db/src/lib.rs)
@@ -458,7 +448,6 @@ jobs:
       # image-release.yml's release-probe job uses to boot the shipped image;
       # a throwaway keypair is fine, this only proves the app comes up.
       - name: Boot smoke — migrate + serve + /readyz
-        if: ${{ !cancelled() }}
         run: |
           set -e
           openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt -out /tmp/smoke-priv.pem
@@ -528,7 +517,6 @@ jobs:
           fi
 
       - name: Dev-auth feature build/tests
-        if: ${{ !cancelled() }}
         # `dev-auth` is NOT in default features (proven above) — build/test it
         # explicitly so its code path still compiles and its own tests
         # (including the route-present-under-the-feature session tests) run.
@@ -542,12 +530,10 @@ jobs:
           exit $rc
 
       - name: Buck2 mnt-app unit suite
-        if: ${{ !cancelled() }}
         working-directory: .
         run: env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit
 
       - name: Buck2 mnt-app inline PostgreSQL suites
-        if: ${{ !cancelled() }}
         working-directory: .
         run: |
           tools/buck/test_needs_postgres.sh \

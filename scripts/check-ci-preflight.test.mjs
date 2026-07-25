@@ -561,15 +561,15 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
     expectFailure(
       workflow.replace(
-        "      - name: Audit-coverage gate\n        if: ${{ !cancelled() }}",
-        "      - name: Audit-coverage gate\n        if: ${{ false }}",
+        "      - name: Audit-coverage gate\n",
+        "      - name: Audit-coverage gate\n        if: ${{ false }}\n",
       ),
       "backend must preserve the locked fail-fast step multiset and failure semantics",
     );
     expectFailure(
       workflow.replace(
-        "      - name: Migration-safety gate\n        if: ${{ !cancelled() }}",
-        "      - name: Migration-safety gate\n        if: ${{ !cancelled() }}\n        continue-on-error: true",
+        "      - name: Migration-safety gate\n",
+        "      - name: Migration-safety gate\n        continue-on-error: true\n",
       ),
       "backend must preserve the locked fail-fast step multiset and failure semantics",
     );
@@ -594,5 +594,26 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       ),
       "dev-up-smoke must preserve the locked fail-fast step multiset and failure semantics",
     );
+  });
+
+  it("keeps protected backend steps fail-fast and runs PR 473 contract tests before topology", () => {
+    expectFailure(
+      workflow.replace(
+        "      - name: rustfmt check\n",
+        "      - name: rustfmt check\n        if: ${{ !cancelled() }}\n",
+      ),
+      "backend must not use !cancelled() on protected fail-fast steps",
+    );
+    expectFailure(
+      workflow.replace(
+        "        run: python3 scripts/check-pr473-migration-operational.test.py -v",
+        "        # python3 scripts/check-pr473-migration-operational.test.py -v",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    const pr473ContractAfterTopology = workflow
+      .replace("      - name: PR 473 migration operational contract tests\n", "      - name: Deferred PR 473 contract tests\n")
+      .replace("      - name: Reconcile portable PostgreSQL role topology\n", "      - name: PR 473 migration operational contract tests\n");
+    expectFailure(pr473ContractAfterTopology, "backend must preserve the locked fail-fast step order");
   });
 });

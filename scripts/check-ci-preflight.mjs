@@ -362,7 +362,11 @@ export function evaluateCiPreflight(workflow) {
   const backend = jobBlock(workflow, "backend");
   if (backend) {
     const steps = stepBlocks(backend);
-    const failFastIf = "${{ !cancelled() }}";
+    const failFastIf = null;
+    const pr473ContractTestCommand = "python3 scripts/check-pr473-migration-operational.test.py -v";
+    if (steps.some((step) => step.includes("if: ${{ !cancelled() }}"))) {
+      failures.push("backend must not use !cancelled() on protected fail-fast steps");
+    }
     const sourceGateContracts = [
       ["Layer-boundary gate", "cargo run -p mnt-gate-layer-boundary"],
       ["Audit-coverage gate", "cargo run -p mnt-gate-audit-coverage"],
@@ -378,6 +382,7 @@ export function evaluateCiPreflight(workflow) {
       [
         ["clippy -D warnings", "SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings"],
         ...sourceGateContracts,
+        ["PR 473 migration operational contract tests", pr473ContractTestCommand],
         ["Reconcile portable PostgreSQL role topology", undefined],
         ["PR 473 migration operational gate", "npm run check:pr473-migration-operational"],
         ["Boot smoke — migrate + serve + /readyz", undefined],
