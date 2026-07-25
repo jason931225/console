@@ -4,7 +4,7 @@
 // call. Selection rides the `person` search param so it survives refresh/Back,
 // and 메시지 lands on the messenger screen's `thread` param.
 import { useCallback, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 
 import { useActiveBranchId, useAuth } from "../../context/auth";
 import { useConsoleAuthz } from "../shell/authz";

@@ -7,7 +7,7 @@ import { payrollStrings as text } from "../../i18n/payroll";
 import { AuthTestProvider } from "../../test/AuthTestProvider";
 import { PayrollConsoleRoute } from "./PayrollConsoleRoute";
 
-vi.mock("react-router-dom", () => ({
+vi.mock("react-router", () => ({
   useNavigate: () => vi.fn(),
 }));
 
