@@ -101,6 +101,42 @@ sh_test(
     labels = ["test.integration", "resource.postgres", "needs-postgres"],
 )
 
+# These adapters intentionally cover the exact four PostgreSQL binaries that
+# Cargo's former dev-auth/provisioning commands selected. Keeping the credential
+# handoff in the common wrapper preserves the reconciled seven-role topology
+# for every database connection made by those tests.
+sh_test(
+    name = "auth-rest-dev-auth-inline-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev-auth-postgres)"],
+    deps = ["//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev-auth-postgres"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "auth-rest-dev-auth-session-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev_auth_session)"],
+    deps = ["//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev_auth_session"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "auth-rest-dev-auth-group-admin-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-group_admin_tenant_context)"],
+    deps = ["//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-group_admin_tenant_context"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
+    name = "provisioning-dev-principal-upsert-race-postgres",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race)"],
+    deps = ["//backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
 sh_test(
     name = "app-evaluation-cycle-api-postgres",
     test = "run_test_with_postgres_env.sh",

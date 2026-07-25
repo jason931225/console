@@ -593,6 +593,50 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       "backend must preserve the locked fail-fast step multiset and failure semantics",
     );
     expectFailure(
+      workflow.replace(
+        "//tools/buck:auth-rest-dev-auth-group-admin-postgres",
+        "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-group_admin_tenant_context",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "//tools/buck:provisioning-dev-principal-upsert-race-postgres",
+        "//backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper auth-rest-dev-auth-inline-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "auth-rest-dev-auth-inline-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "auth-rest-dev-auth-inline-postgres",\n    test = "unexpected_loader.sh",',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper provisioning-dev-principal-upsert-race-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'deps = ["//backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race"],',
+        'deps = ["//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev_auth_session"],',
+      ),
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+        "      - name: Direct Cargo dev-auth suite\n        run: cargo test -p mnt-platform-auth-rest --features dev-auth\n\n      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+      ),
+      "backend must not run direct Cargo PostgreSQL command cargo test -p mnt-platform-auth-rest",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+        "      - name: Direct Cargo provisioning race\n        run: cargo test -p mnt-platform-provisioning --test dev_principal_upsert_race\n\n      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+      ),
+      "backend must not run direct Cargo PostgreSQL command cargo test -p mnt-platform-provisioning",
+    );
+    expectFailure(
       workflow,
       "tools/buck/BUCK must bind PostgreSQL wrapper app-inline-postgres to the loader and exact Rust binary",
       postgresWrapperBuildFile.replace(

@@ -216,6 +216,10 @@ class FirstPartyBuckGeneratorTests(unittest.TestCase):
         )
 
     def test_dev_auth_feature_variants_propagate_through_app_and_auth_rest(self) -> None:
+        auth_rest_variant = GENERATOR.INLINE_TEST_VARIANTS["mnt-platform-auth-rest"][0]
+        self.assertEqual("itest-dev-auth-postgres", auth_rest_variant["name"])
+        self.assertEqual("dev-auth", auth_rest_variant["feature"])
+        self.assertEqual("postgres", auth_rest_variant["resource"])
         self.assertEqual(
             ":mnt-app-lib-dev-auth",
             GENERATOR.integration_test_library_target(
@@ -226,6 +230,20 @@ class FirstPartyBuckGeneratorTests(unittest.TestCase):
             ":mnt-platform-auth-rest-dev-auth",
             GENERATOR.integration_test_library_target(
                 "mnt-platform-auth-rest", "tests/dev_auth_session.rs", ":mnt-platform-auth-rest"
+            ),
+        )
+        self.assertEqual(
+            ("dev-auth",),
+            GENERATOR.integration_test_features(
+                "mnt-platform-auth-rest", "tests/group_admin_tenant_context.rs"
+            ),
+        )
+        self.assertEqual(
+            ":mnt-platform-auth-rest-dev-auth",
+            GENERATOR.integration_test_library_target(
+                "mnt-platform-auth-rest",
+                "tests/group_admin_tenant_context.rs",
+                ":mnt-platform-auth-rest",
             ),
         )
 

@@ -533,18 +533,17 @@ jobs:
             exit 1
           fi
 
-      - name: Dev-auth feature build/tests
-        # `dev-auth` is NOT in default features (proven above) — build/test it
-        # explicitly so its code path still compiles and its own tests
-        # (including the route-present-under-the-feature session tests) run.
-        # The mnt-app dev-auth suite runs through its Buck feature variant below.
-        # Keep these two direct-Cargo commands until equivalent Buck feature
-        # variants exist for their non-app packages; aggregate failures here.
+      - name: Buck2 dev-auth feature PostgreSQL suites
+        # `dev-auth` is NOT in default features (proven above). These exact
+        # feature-sensitive auth-rest and provisioning binaries run through
+        # generator-owned Buck targets and the disposable role-topology harness;
+        # direct Cargo would bypass that contract.
         run: |
-          rc=0
-          SQLX_OFFLINE=true cargo test -p mnt-platform-auth-rest --features dev-auth --no-fail-fast -- --test-threads=1 || rc=1
-          SQLX_OFFLINE=true cargo test -p mnt-platform-provisioning --test dev_principal_upsert_race --no-fail-fast -- --test-threads=1 || rc=1
-          exit $rc
+          tools/buck/test_needs_postgres.sh --num-threads=1 \
+            //tools/buck:auth-rest-dev-auth-inline-postgres \
+            //tools/buck:auth-rest-dev-auth-session-postgres \
+            //tools/buck:auth-rest-dev-auth-group-admin-postgres \
+            //tools/buck:provisioning-dev-principal-upsert-race-postgres
 
       - name: Buck2 mnt-app unit suite
         working-directory: .

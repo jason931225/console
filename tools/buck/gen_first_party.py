@@ -914,6 +914,14 @@ INLINE_TEST_VARIANTS = {
         "feature": "test-postgres",
         "resource": "postgres",
     },),
+    # Cargo's dev-auth suite includes the auth-rest crate's inline PostgreSQL
+    # tests. Emit that feature graph explicitly so CI can run it through the
+    # disposable PostgreSQL harness instead of a direct Cargo invocation.
+    "mnt-platform-auth-rest": ({
+        "name": "itest-dev-auth-postgres",
+        "feature": "dev-auth",
+        "resource": "postgres",
+    },),
 }
 
 INTEGRATION_TEST_FEATURES = {
@@ -922,6 +930,7 @@ INTEGRATION_TEST_FEATURES = {
     },
     "mnt-platform-auth-rest": {
         "tests/dev_auth_session.rs": ("dev-auth",),
+        "tests/group_admin_tenant_context.rs": ("dev-auth",),
     },
 }
 

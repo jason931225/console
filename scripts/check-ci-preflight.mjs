@@ -44,6 +44,10 @@ const postgresWrapperContracts = [
   ["attendance-concurrency-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
   ["app-inline-postgres", "//backend/app:mnt-app-itest-inline-postgres"],
   ["app-dev-auth-persona-guard-postgres", "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
+  ["auth-rest-dev-auth-inline-postgres", "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev-auth-postgres"],
+  ["auth-rest-dev-auth-session-postgres", "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev_auth_session"],
+  ["auth-rest-dev-auth-group-admin-postgres", "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-group_admin_tenant_context"],
+  ["provisioning-dev-principal-upsert-race-postgres", "//backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race"],
   ["app-evaluation-cycle-api-postgres", "//backend/app:mnt-app-itest-evaluation_cycle_api"],
   ["ontology-builtin-catalog-additive-upgrade-postgres", "//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-builtin_catalog_additive_upgrade_as_runtime_role"],
   ["app-org-change-api-postgres", "//backend/app:mnt-app-itest-org_change_api"],
@@ -458,6 +462,17 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
     requireOrderedStepContracts(
       steps,
       [
+        {
+          name: "Buck2 dev-auth feature PostgreSQL suites",
+          run: [
+            "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+            "//tools/buck:auth-rest-dev-auth-inline-postgres \\",
+            "//tools/buck:auth-rest-dev-auth-session-postgres \\",
+            "//tools/buck:auth-rest-dev-auth-group-admin-postgres \\",
+            "//tools/buck:provisioning-dev-principal-upsert-race-postgres",
+          ].join("\n"),
+          if: failFastIf,
+        },
         { name: "Buck2 mnt-app unit suite", run: "env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit", if: failFastIf },
         {
           name: "Buck2 mnt-app inline PostgreSQL suites",
@@ -472,6 +487,14 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       "backend",
       failures,
     );
+    for (const command of [
+      "cargo test -p mnt-platform-auth-rest",
+      "cargo test -p mnt-platform-provisioning",
+    ]) {
+      if (backend.includes(command)) {
+        failures.push(`backend must not run direct Cargo PostgreSQL command ${command}`);
+      }
+    }
   }
 
   const devUpSmoke = jobBlock(workflow, "dev-up-smoke");
