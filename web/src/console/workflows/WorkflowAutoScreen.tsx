@@ -28,6 +28,8 @@ export interface WorkflowAutoScreenProps {
   selectedWorkflowId?: string;
   selectedScheduleId?: string;
   currentUserId?: string;
+  /** Definition id with an authenticated lifecycle/run request in flight. */
+  pendingWorkflowId?: string;
   readOnly?: boolean;
   onWorkflowSelect?: (id: string) => void;
   onScheduleSelect?: (id: string) => void;
@@ -358,9 +360,14 @@ function WorkflowDetail({ workflow, props }: { workflow: WorkflowSummary; props:
     Boolean(props.onStagePublish || props.onApprovePublish || props.onWithdrawPublish);
   const pendingRevision = workflow.pendingRevision;
   const selfApprovalBlocked = sameActor(props.currentUserId, pendingRevision?.stagedById);
+  const pending = props.pendingWorkflowId === workflow.id;
 
   return (
-    <section aria-labelledby="console-workflow-detail-title" style={cardStyle}>
+    <section
+      aria-labelledby="console-workflow-detail-title"
+      aria-busy={pending || undefined}
+      style={cardStyle}
+    >
       <div style={sectionHeaderStyle}>
         <h2 id="console-workflow-detail-title" style={sectionTitleStyle}>
           {workflow.name}
@@ -393,7 +400,8 @@ function WorkflowDetail({ workflow, props }: { workflow: WorkflowSummary; props:
                 onClick={() => {
                   runAction(() => props.onWorkflowToggle?.(workflow.id, !workflow.active));
                 }}
-                style={buttonStyle}
+                disabled={pending}
+                style={pending ? disabledButtonStyle : buttonStyle}
               >
                 {workflow.active ? T.actions.disable : T.actions.enable}
               </button>
@@ -406,7 +414,8 @@ function WorkflowDetail({ workflow, props }: { workflow: WorkflowSummary; props:
                 onClick={() => {
                   runAction(() => props.onWorkflowRun?.(workflow.id));
                 }}
-                style={buttonStyle}
+                disabled={pending}
+                style={pending ? disabledButtonStyle : buttonStyle}
               >
                 {T.actions.run}
               </button>
@@ -419,7 +428,8 @@ function WorkflowDetail({ workflow, props }: { workflow: WorkflowSummary; props:
                 onClick={() => {
                   runAction(() => props.onWorkflowSimulate?.(workflow.id));
                 }}
-                style={buttonStyle}
+                disabled={pending}
+                style={pending ? disabledButtonStyle : buttonStyle}
               >
                 {T.actions.simulate}
               </button>
@@ -460,7 +470,8 @@ function WorkflowDetail({ workflow, props }: { workflow: WorkflowSummary; props:
                   onClick={() => {
                     runAction(() => props.onStagePublish?.(workflow.id));
                   }}
-                  style={buttonStyle}
+                  disabled={pending}
+                  style={pending ? disabledButtonStyle : buttonStyle}
                 >
                   {T.actions.stagePublish}
                 </button>
@@ -470,13 +481,13 @@ function WorkflowDetail({ workflow, props }: { workflow: WorkflowSummary; props:
               <PolicyGated action={WORKFLOW_AUTO_ACTIONS.approvePublish} resource={{ kind: "workflow", id: workflow.id }}>
                 <button
                   type="button"
-                  disabled={selfApprovalBlocked}
+                  disabled={selfApprovalBlocked || pending}
                   onClick={() => {
                     if (!selfApprovalBlocked) {
                       runAction(() => props.onApprovePublish?.(workflow.id, pendingRevision.version));
                     }
                   }}
-                  style={selfApprovalBlocked ? disabledButtonStyle : buttonStyle}
+                  style={selfApprovalBlocked || pending ? disabledButtonStyle : buttonStyle}
                 >
                   {T.actions.approvePublish}
                 </button>
@@ -489,7 +500,8 @@ function WorkflowDetail({ workflow, props }: { workflow: WorkflowSummary; props:
                   onClick={() => {
                     runAction(() => props.onWithdrawPublish?.(workflow.id, pendingRevision.version));
                   }}
-                  style={buttonStyle}
+                  disabled={pending}
+                  style={pending ? disabledButtonStyle : buttonStyle}
                 >
                   {T.actions.withdrawPublish}
                 </button>

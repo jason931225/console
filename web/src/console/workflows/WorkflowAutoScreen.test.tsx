@@ -204,6 +204,52 @@ describe("WorkflowAutoScreen", () => {
     expect(screen.getByText("AP-184")).toBeTruthy();
   });
 
+  it("disables every workflow mutation while its authenticated action is pending", () => {
+    const pendingModel = {
+      workflows: [
+        {
+          id: "wf-pending",
+          name: "대기 중인 실행",
+          active: true,
+          version: 4,
+          runs: 0,
+          lastRun: "없음",
+          lastResult: "warn",
+          blocks: [],
+          runLog: [],
+          pendingRevision: {
+            version: 5,
+            stagedBy: "김관리",
+            stagedById: "other-user",
+            status: "pending_review",
+          },
+        },
+      ],
+      schedules: [],
+    } satisfies WorkflowAutoModel;
+
+    render(
+      <PolicyGateProvider gate={allowAll}>
+        <WorkflowAutoScreen
+          model={pendingModel}
+          pendingWorkflowId="wf-pending"
+          onWorkflowToggle={vi.fn()}
+          onWorkflowRun={vi.fn()}
+          onWorkflowSimulate={vi.fn()}
+          onApprovePublish={vi.fn()}
+          onWithdrawPublish={vi.fn()}
+        />
+      </PolicyGateProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "대기 중인 실행" }).closest("section")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "비활성화" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수동 실행" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "시뮬레이션" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "적용 승인" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "철회" })).toBeDisabled();
+  });
+
   it("invokes workflow, simulation, and schedule manual trigger handlers", async () => {
     const user = userEvent.setup();
     const model = {
