@@ -134,8 +134,11 @@ backend/crates/docs` is empty, so no orphaned
 cargo test -p mnt-app --test equipment_3r_api                            -> 5 passed; 0 failed
 cargo test -p mnt-equipment-{domain,application,rest,adapter-postgres}   -> 7 passed; 0 failed
 cargo fmt --all -- --check                                               -> clean
-cargo clippy -p mnt-equipment-{domain,application,adapter-postgres,rest} \
-             -p mnt-app --all-targets -- -D warnings                     -> clean
+SQLX_OFFLINE=true cargo clippy \
+  -p mnt-equipment-{domain,application,adapter-postgres,rest} \
+  --all-targets -- -D warnings                                           -> clean
+SQLX_OFFLINE=true cargo clippy -p mnt-app --test equipment_3r_api \
+  --no-deps -- -D warnings                                               -> no hits in the story test
 cargo run -p mnt-gate-layer-boundary     -> PASSED (166 crates, 0 violations)
 cargo run -p mnt-gate-audit-coverage     -> PASSED
 cargo run -p mnt-gate-rls-arming         -> PASSED
@@ -143,6 +146,12 @@ cargo run -p mnt-gate-tenant-isolation   -> PASSED
 cargo run -p mnt-gate-dev-auth-absence   -> PASSED
 cargo run -p mnt-gate-migration-safety   -> FAILED, PRE-EXISTING
 ```
+
+`SQLX_OFFLINE=true` is required for clippy (CI sets it,
+`.github/workflows/ci.yml:359`): with a live `DATABASE_URL` pointing at the
+disposable harness, `mnt-platform-db`'s compile-time `sqlx::query!` macro tries
+to prepare `INSERT INTO audit_events` against a database that has no migrations
+applied and fails to compile. That is a harness interaction, not a code defect.
 
 `migration-safety` is red for `[NonContiguousMigrationVersion] missing migration
 version 0201 before 0202`. Confirmed pre-existing and not attributable to this
