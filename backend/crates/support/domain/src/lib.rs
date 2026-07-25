@@ -877,18 +877,24 @@ mod tests {
         let evidence = EvidenceObjectId::new();
         let actor = UserId::new();
 
-        assert!(case
-            .request_dispatch_handoff(case.version(), actor, work_order, now)
-            .unwrap());
-        assert!(!case
-            .request_dispatch_handoff(case.version(), actor, work_order, now)
-            .unwrap());
-        assert!(case
-            .bind_evidence(case.version(), actor, evidence, now)
-            .unwrap());
-        assert!(!case
-            .bind_evidence(case.version(), actor, evidence, now)
-            .unwrap());
+        assert!(
+            case.request_dispatch_handoff(case.version(), actor, work_order, now)
+                .unwrap()
+        );
+        assert!(
+            !case
+                .request_dispatch_handoff(case.version(), actor, work_order, now)
+                .unwrap()
+        );
+        assert!(
+            case.bind_evidence(case.version(), actor, evidence, now)
+                .unwrap()
+        );
+        assert!(
+            !case
+                .bind_evidence(case.version(), actor, evidence, now)
+                .unwrap()
+        );
 
         case.transition(case.version(), actor, TicketStatus::InProgress, now)
             .unwrap();
@@ -896,9 +902,10 @@ mod tests {
             .unwrap();
         case.transition(case.version(), actor, TicketStatus::Closed, now)
             .unwrap();
-        assert!(case
-            .bind_evidence(case.version(), actor, EvidenceObjectId::new(), now)
-            .is_err());
+        assert!(
+            case.bind_evidence(case.version(), actor, EvidenceObjectId::new(), now)
+                .is_err()
+        );
     }
 
     #[test]
@@ -915,9 +922,10 @@ mod tests {
         let actor = UserId::new();
         case.transition(0, actor, TicketStatus::InProgress, now)
             .unwrap();
-        assert!(case
-            .transition(0, actor, TicketStatus::Resolved, now)
-            .is_err());
+        assert!(
+            case.transition(0, actor, TicketStatus::Resolved, now)
+                .is_err()
+        );
     }
 
     #[test]
