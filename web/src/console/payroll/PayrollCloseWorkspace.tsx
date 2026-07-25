@@ -22,11 +22,20 @@ type DetailState =
 const RUN_LIMIT = 50,
   LINE_LIMIT = 500;
 const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+// Every status the run FSM can write. This set gates `validRun`, so a status
+// missing here makes the workspace silently DROP that run from the list.
 const RUN_STATUSES = new Set([
   "STAGED",
   "BLOCKED_LEGAL_GATE",
   "READY_FOR_REVIEW",
+  "ATTENDANCE_CLOSED",
+  "CALCULATING",
+  "CALCULATED",
+  "SUBMITTED",
+  "REJECTED",
   "APPROVED",
+  "DISBURSEMENT_SCHEDULED",
+  "PAID",
   "ISSUED",
   "VOID",
 ]);

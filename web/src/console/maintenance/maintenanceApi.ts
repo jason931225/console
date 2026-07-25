@@ -12,27 +12,12 @@ export type AssignWorkOrder = components["schemas"]["AssignWorkOrderRequest"];
 export type SubmitReport = components["schemas"]["SubmitReportRequest"];
 export type EvidencePresign = components["schemas"]["EvidencePresignRequest"];
 
-// G2 gap-closure contract (workorder crates, parallel lane): optional on the
-// wire; regenerated clients replace these local declarations.
-export type MaintenanceType = "EMERGENCY" | "CORRECTIVE" | "PREVENTIVE" | "INSPECTION";
-export type MaintenanceCause = "BREAKDOWN" | "RETURN_PREP" | "SCHEDULED" | "INSPECTION_FINDING" | "OTHER";
+export type MaintenanceType = components["schemas"]["MaintenanceType"];
+export type MaintenanceCause = components["schemas"]["MaintenanceCause"];
 
-interface MaintenanceClassification {
-  maintenance_type?: MaintenanceType | null;
-  maintenance_cause?: MaintenanceCause | null;
-}
-
-export type WorkOrderRow = components["schemas"]["WorkOrderListItem"] & MaintenanceClassification;
-export type WorkOrderDetail = components["schemas"]["WorkOrderDetail"] & MaintenanceClassification;
-
-// G4 gap-closure contract: derived aggregates are optional until the backend
-// lane lands them; the screen renders those stats only when present.
-export type WorkOrderLens = components["schemas"]["WorkOrderObjectSetLens"] & {
-  aggregates: components["schemas"]["WorkOrderLensAggregates"] & {
-    preventive_on_time_rate?: number | null;
-    mttr_minutes?: number | null;
-  };
-};
+export type WorkOrderRow = components["schemas"]["WorkOrderListItem"];
+export type WorkOrderDetail = components["schemas"]["WorkOrderDetail"];
+export type WorkOrderLens = components["schemas"]["WorkOrderObjectSetLens"];
 
 export interface WorkOrderListPage {
   items: WorkOrderRow[];
@@ -42,34 +27,14 @@ export interface WorkOrderListPage {
   lens?: WorkOrderLens;
 }
 
-// G1 (`equipment_id`) + G2 (`maintenance_type`/`maintenance_cause`) list
-// filters — contract sync point with the backend lane.
-export type WorkOrderListQuery = NonNullable<operations["listWorkOrders"]["parameters"]["query"]> & {
-  equipment_id?: string;
-  maintenance_type?: MaintenanceType;
-  maintenance_cause?: MaintenanceCause;
-};
+export type WorkOrderListQuery = NonNullable<operations["listWorkOrders"]["parameters"]["query"]>;
 
-// G3 gap-closure contract: work_order_settlements FSM
-// DRAFT→SUBMITTED→APPROVED|RETURNED|VOID (four-eyes server-enforced).
-export type SettlementStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "RETURNED" | "VOID";
-export type SettlementLineKind = "LABOR" | "PART" | "OUTSOURCE" | "OTHER";
-
-export interface SettlementLine {
-  kind: SettlementLineKind;
-  amount_krw: number;
-  source_ref?: string | null;
-  voucher_ref?: string | null;
-}
-
-export interface WorkOrderSettlement {
-  id: string;
-  work_order_id: string;
-  status: SettlementStatus;
-  lines: SettlementLine[];
-  review_comment?: string | null;
-  void_reason?: string | null;
-}
+export type SettlementStatus = components["schemas"]["SettlementStatus"];
+export type SettlementLineKind = components["schemas"]["SettlementLineKind"];
+export type SettlementLine = components["schemas"]["SettlementLineRequest"];
+export type SettlementLineView = components["schemas"]["SettlementLineSummary"];
+export type WorkOrderSettlement = components["schemas"]["SettlementSummary"];
+export type ReviewSettlementInput = components["schemas"]["ReviewSettlementRequest"];
 
 export class MaintenanceApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -91,26 +56,8 @@ function requireData<T>(response: { data?: T; error?: unknown; response: Respons
   throw new MaintenanceApiError(message(response.error, response.response.status), response.response.status);
 }
 
-interface RawResult {
-  data?: unknown;
-  error?: unknown;
-  response: Response;
-}
-
-/**
- * G3 settlement routes are not in the generated client yet; openapi-fetch
- * templates unknown paths at runtime, so this narrow view keeps the calls on
- * the authenticated client (auth/refresh/cache middleware) until regen.
- */
-interface RawClient {
-  GET: (url: string, init?: { params?: { path?: Record<string, string> }; signal?: AbortSignal }) => Promise<RawResult>;
-  POST: (url: string, init?: { params?: { path?: Record<string, string> }; body?: unknown; signal?: AbortSignal }) => Promise<RawResult>;
-}
-
 /** Work-order transport bound to the authenticated ConsoleApiClient. */
 export function createMaintenanceApi(api: ConsoleApiClient) {
-  const raw = api as unknown as RawClient;
-  const requireSettlement = (result: RawResult) => requireData(result) as WorkOrderSettlement;
   return {
     list: async (query?: WorkOrderListQuery, signal?: AbortSignal): Promise<WorkOrderListPage> => {
       const response = await api.GET("/api/v1/work-orders", { params: { query: query ?? {} }, signal });
@@ -123,7 +70,7 @@ export function createMaintenanceApi(api: ConsoleApiClient) {
       });
       return requireData(response);
     },
-    create: async (input: CreateWorkOrder & MaintenanceClassification, signal?: AbortSignal) => {
+    create: async (input: CreateWorkOrder, signal?: AbortSignal) => {
       const response = await api.POST("/api/work-orders", { body: input, signal });
       return requireData(response);
     },
@@ -186,47 +133,46 @@ export function createMaintenanceApi(api: ConsoleApiClient) {
       return requireData(response);
     },
     settlement: async (workOrderId: string, signal?: AbortSignal): Promise<WorkOrderSettlement | undefined> => {
-      const result = await raw.GET("/api/v1/work-orders/{workOrderId}/settlement", {
+      const result = await api.GET("/api/v1/work-orders/{workOrderId}/settlement", {
         params: { path: { workOrderId } },
         signal,
       });
+      // A work order with no live settlement is a 404, not an error state.
       if (result.data === undefined && result.response.status === 404) return undefined;
-      return requireSettlement(result);
+      return requireData(result);
     },
     createSettlement: async (workOrderId: string, lines: SettlementLine[], signal?: AbortSignal) => {
-      const result = await raw.POST("/api/v1/work-orders/{workOrderId}/settlement", {
-        params: { path: { workOrderId } },
+      const result = await api.POST("/api/v1/work-orders/{workOrderId}/settlement", {
+        // The server dedupes on this key: a replay with an identical body
+        // returns the existing settlement instead of opening a second one.
+        params: { path: { workOrderId }, header: { "Idempotency-Key": crypto.randomUUID() } },
         body: { lines },
         signal,
       });
-      return requireSettlement(result);
+      return requireData(result);
     },
     submitSettlement: async (settlementId: string, signal?: AbortSignal) => {
-      const result = await raw.POST("/api/v1/settlements/{settlementId}/submit", {
+      const result = await api.POST("/api/v1/settlements/{settlementId}/submit", {
         params: { path: { settlementId } },
         signal,
       });
-      return requireSettlement(result);
+      return requireData(result);
     },
-    reviewSettlement: async (
-      settlementId: string,
-      input: { decision: "APPROVED" | "RETURNED"; comment?: string },
-      signal?: AbortSignal,
-    ) => {
-      const result = await raw.POST("/api/v1/settlements/{settlementId}/review", {
+    reviewSettlement: async (settlementId: string, input: ReviewSettlementInput, signal?: AbortSignal) => {
+      const result = await api.POST("/api/v1/settlements/{settlementId}/review", {
         params: { path: { settlementId } },
         body: input,
         signal,
       });
-      return requireSettlement(result);
+      return requireData(result);
     },
     voidSettlement: async (settlementId: string, reason: string, signal?: AbortSignal) => {
-      const result = await raw.POST("/api/v1/settlements/{settlementId}/void", {
+      const result = await api.POST("/api/v1/settlements/{settlementId}/void", {
         params: { path: { settlementId } },
         body: { reason },
         signal,
       });
-      return requireSettlement(result);
+      return requireData(result);
     },
   };
 }

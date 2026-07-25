@@ -318,8 +318,11 @@ describe("MaintenanceScreen", () => {
   it("drafts a settlement after report submission and reconciles the backend table", async () => {
     const submitted = row({ status: "REPORT_SUBMITTED" });
     const draft: WorkOrderSettlement = {
-      id: "st-1", work_order_id: "wo-1", status: "DRAFT",
-      lines: [{ kind: "LABOR", amount_krw: 120000, source_ref: null, voucher_ref: null }],
+      id: "st-1", work_order_id: "wo-1", branch_id: "br-1", status: "DRAFT",
+      total_amount_krw: 120000, voucher_ref: null, note: null,
+      lines: [{ id: "sl-1", kind: "LABOR", label: "정비 인건", amount_krw: 120000, source_ref: null, sort_order: 0 }],
+      created_by: "u-1", submitted_by: null, submitted_at: null, approved_by: null, approved_at: null,
+      created_at: "2026-07-24T11:00:00Z", updated_at: "2026-07-24T11:00:00Z",
     };
     const { api, post } = client(
       router({
@@ -332,10 +335,11 @@ describe("MaintenanceScreen", () => {
     renderScreen(settler, api);
     await userEvent.click(await findListRow(/20260724-001/));
     await userEvent.type(await screen.findByLabelText(text.settlement.amount), "120000");
+    await userEvent.type(await screen.findByLabelText(text.settlement.lineLabel), "정비 인건");
     await userEvent.click(screen.getByRole("button", { name: text.settlement.create }));
     await waitFor(() => {
       expect(post).toHaveBeenCalledWith("/api/v1/work-orders/{workOrderId}/settlement", expect.objectContaining({
-        body: { lines: [{ kind: "LABOR", amount_krw: 120000 }] },
+        body: { lines: [{ kind: "LABOR", label: "정비 인건", amount_krw: 120000, sort_order: 0 }] },
       }));
     });
     expect(await screen.findByText(text.settlement.status.DRAFT)).toBeVisible();

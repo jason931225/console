@@ -142,11 +142,12 @@ const PRIORITY_TONE: Partial<Record<PriorityLevel, string>> = {
   P2: "warn",
   OUTSOURCE: "info",
 };
+// RETURNED is a review DECISION, not a settlement status — returning a
+// settlement puts it back in DRAFT.
 const SETTLEMENT_TONE: Record<WorkOrderSettlement["status"], string> = {
   DRAFT: "neutral",
   SUBMITTED: "info",
   APPROVED: "ok",
-  RETURNED: "warn",
   VOID: "danger",
 };
 const WORM_TONE = { PENDING: "warn", VERIFIED: "ok", FAILED: "danger" } as const;
@@ -407,8 +408,8 @@ function MaintenanceScreenBody({ api, branchId, actorId, capabilities, sessionKe
       for (const [key, value] of Object.entries(filters)) {
         if (key === "status") next.status = [value as WorkOrderStatus];
         else if (key === "priority") next.priority = [value as PriorityLevel];
-        else if (key === "maintenance_type") next.maintenance_type = value as MaintenanceType;
-        else if (key === "maintenance_cause") next.maintenance_cause = value as MaintenanceCause;
+        else if (key === "maintenance_type") next.maintenance_type = [value as MaintenanceType];
+        else if (key === "maintenance_cause") next.maintenance_cause = [value as MaintenanceCause];
         else if (key === "equipment_id") next.equipment_id = value;
         else if (key === "customer_id") next.customer_id = value;
         else if (key === "site_id") next.site_id = value;
@@ -1239,32 +1240,34 @@ function SettlementSection({ detail, settlement, capabilities, actorId, busy, ma
   act: Act;
 }) {
   const id = useId();
-  const [lines, setLines] = useState<{ kind: SettlementLineKind; amount: string; source_ref: string; voucher_ref: string }[]>([
-    { kind: "LABOR", amount: "", source_ref: "", voucher_ref: "" },
+  const [lines, setLines] = useState<{ kind: SettlementLineKind; label: string; amount: string; source_ref: string }[]>([
+    { kind: "LABOR", label: "", amount: "", source_ref: "" },
   ]);
-  const [lineError, setLineError] = useState(false);
+  const [lineError, setLineError] = useState<"empty" | "label">();
   const [commentError, setCommentError] = useState<"return" | "void">();
   const commentRef = useRef<HTMLTextAreaElement>(null);
-  const total = settlement?.lines.reduce((sum, line) => sum + line.amount_krw, 0) ?? 0;
-  const vouchers = [...new Set((settlement?.lines ?? []).map((line) => line.voucher_ref).filter(
-    (ref): ref is string => Boolean(ref),
-  ))];
+  const total = settlement?.total_amount_krw ?? 0;
 
   const createSettlement = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const payload: SettlementLine[] = lines
-      .filter((line) => line.amount.trim() !== "" && Number.isFinite(Number(line.amount)))
-      .map((line) => ({
-        kind: line.kind,
-        amount_krw: Number(line.amount),
-        ...(line.source_ref.trim() ? { source_ref: line.source_ref.trim() } : {}),
-        ...(line.voucher_ref.trim() ? { voucher_ref: line.voucher_ref.trim() } : {}),
-      }));
-    if (!payload.length) {
-      setLineError(true);
+    const filled = lines.filter((line) => line.amount.trim() !== "" && Number.isFinite(Number(line.amount)));
+    if (!filled.length) {
+      setLineError("empty");
       return;
     }
-    setLineError(false);
+    // The server requires a non-empty label on every line (422 otherwise).
+    if (filled.some((line) => line.label.trim() === "")) {
+      setLineError("label");
+      return;
+    }
+    const payload: SettlementLine[] = filled.map((line, index) => ({
+      kind: line.kind,
+      label: line.label.trim(),
+      amount_krw: Number(line.amount),
+      sort_order: index,
+      ...(line.source_ref.trim() ? { source_ref: line.source_ref.trim() } : {}),
+    }));
+    setLineError(undefined);
     await act((signal) => maintenanceApi.createSettlement(detail.id, payload, signal));
   };
 
@@ -1303,40 +1306,39 @@ function SettlementSection({ detail, settlement, capabilities, actorId, busy, ma
             <span className={chipClass(SETTLEMENT_TONE[settlement.status])}>
               {text.settlement.status[settlement.status]}
             </span>
-            {vouchers.map((ref) => (
-              <span key={ref} className="maintenance__chip maintenance__chip--info">
-                {`${text.settlement.voucherRef} · ${ref}`}
+            {settlement.voucher_ref && (
+              <span className="maintenance__chip maintenance__chip--info">
+                {`${text.settlement.voucherRef} · ${settlement.voucher_ref}`}
               </span>
-            ))}
+            )}
           </div>
           <table className="maintenance__table">
             <thead>
               <tr>
                 <th scope="col">{text.settlement.lineKind}</th>
+                <th scope="col">{text.settlement.lineLabel}</th>
                 <th scope="col" className="maintenance__amount">{text.settlement.amount}</th>
                 <th scope="col">{text.settlement.sourceRef}</th>
-                <th scope="col">{text.settlement.voucherRef}</th>
               </tr>
             </thead>
             <tbody>
-              {settlement.lines.map((line, index) => (
-                <tr key={`${line.kind}-${String(index)}`}>
+              {settlement.lines.map((line) => (
+                <tr key={line.id}>
                   <td>{text.settlement.kind[line.kind]}</td>
+                  <td>{line.label}</td>
                   <td className="maintenance__amount">{krw.format(line.amount_krw)}</td>
                   <td>{line.source_ref ?? text.lanes.empty}</td>
-                  <td>{line.voucher_ref ?? text.lanes.empty}</td>
                 </tr>
               ))}
               <tr>
                 <td>{text.settlement.total}</td>
-                <td className="maintenance__amount">{krw.format(total)}</td>
                 <td />
+                <td className="maintenance__amount">{krw.format(total)}</td>
                 <td />
               </tr>
             </tbody>
           </table>
-          {settlement.review_comment && <p>{`${text.settlement.reviewComment} · ${settlement.review_comment}`}</p>}
-          {settlement.void_reason && <p>{`${text.settlement.voidReason} · ${settlement.void_reason}`}</p>}
+          {settlement.note && <p>{`${text.settlement.note} · ${settlement.note}`}</p>}
           <div className="maintenance__acts">
             {settlement.status === "DRAFT" && capabilities.canSettle && (
               <div>
@@ -1413,14 +1415,14 @@ function SettlementSection({ detail, settlement, capabilities, actorId, busy, ma
                   }}
                 />
               </label>
-              <label htmlFor={`${id}-voucher-${String(index)}`}>
-                {text.settlement.voucherRef}
+              <label htmlFor={`${id}-label-${String(index)}`}>
+                {text.settlement.lineLabel}
                 <input
-                  id={`${id}-voucher-${String(index)}`}
-                  value={line.voucher_ref}
+                  id={`${id}-label-${String(index)}`}
+                  value={line.label}
                   onChange={(event) => {
-                    const ref = event.currentTarget.value;
-                    setLines((current) => current.map((entry, i) => i === index ? { ...entry, voucher_ref: ref } : entry));
+                    const label = event.currentTarget.value;
+                    setLines((current) => current.map((entry, i) => i === index ? { ...entry, label } : entry));
                   }}
                 />
               </label>
@@ -1431,13 +1433,17 @@ function SettlementSection({ detail, settlement, capabilities, actorId, busy, ma
               <button
                 type="button"
                 className="maintenance__action maintenance__action--quiet"
-                onClick={() => { setLines((current) => [...current, { kind: "PART", amount: "", source_ref: "", voucher_ref: "" }]); }}
+                onClick={() => { setLines((current) => [...current, { kind: "PART", label: "", amount: "", source_ref: "" }]); }}
               >
                 {text.settlement.addLine}
               </button>
               <button type="submit" className="maintenance__action" disabled={busy}>{text.settlement.create}</button>
             </div>
-            {lineError && <span className="maintenance__field-error" role="alert">{text.settlement.lineRequired}</span>}
+            {lineError && (
+              <span className="maintenance__field-error" role="alert">
+                {lineError === "label" ? text.settlement.lineLabelRequired : text.settlement.lineRequired}
+              </span>
+            )}
           </div>
         </form>
       ) : <p role="status">{text.settlement.none}</p>}
