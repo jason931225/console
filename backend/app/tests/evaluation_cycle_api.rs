@@ -46,7 +46,7 @@ async fn evaluation_routes_are_mounted_by_the_authenticated_app_router(pool: PgP
         StatusCode::UNAUTHORIZED,
         "app router must authenticate evaluation routes: {body}"
     );
-    assert_eq!(body["error"]["code"], "unauthorized");
+    assert_eq!(body, json!("missing or malformed bearer token"));
 
     let (status, page) = send(&router, "GET", CYCLES, Some(&fixture.admin), None).await;
     assert_eq!(status, StatusCode::OK, "authorized evaluation read: {page}");
@@ -979,7 +979,8 @@ async fn send(
     let json = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+        serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()))
     };
     (status, json)
 }
