@@ -896,13 +896,31 @@ async fn leave_command_preprovision_and_privilege_matrix_are_fail_closed(owner_p
         command_functions,
         vec![
             "apply_employee_import_batch".to_owned(),
+            "create_employee".to_owned(),
             "create_request".to_owned(),
             "decide_request".to_owned(),
             "import_employee_leave_balance".to_owned(),
             "resolve_charge".to_owned(),
             "set_employee_home_branch".to_owned(),
         ],
-        "command role receives exactly six public entrypoints and no helpers"
+        "command role receives exactly seven public entrypoints and no helpers"
+    );
+    // Named, not counted: the directory-manager predicate is SECURITY DEFINER
+    // over users/role assignments and takes an arbitrary org, so it must stay
+    // reachable only to its owner. `fetch_one` also fails if the helper is
+    // renamed away rather than revoked.
+    let (helper_cmd_execute, helper_rt_execute): (bool, bool) = sqlx::query_as(
+        "SELECT has_function_privilege('mnt_leave_cmd',p.oid,'EXECUTE'), \
+                has_function_privilege('mnt_rt',p.oid,'EXECUTE') \
+         FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace \
+         WHERE n.nspname='leave_api' AND p.proname='assert_employee_directory_manager'",
+    )
+    .fetch_one(&owner_pool)
+    .await
+    .expect("the directory-manager predicate must exist to be proven unreachable");
+    assert!(
+        !helper_cmd_execute && !helper_rt_execute,
+        "the SECURITY DEFINER directory-manager predicate stays owner-only"
     );
     let runtime_execute_count: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace \
@@ -915,10 +933,16 @@ async fn leave_command_preprovision_and_privilege_matrix_are_fail_closed(owner_p
         runtime_execute_count, 0,
         "mnt_rt executes no leave command or helper"
     );
+    // A function that was never revoked from carries a NULL `proacl` and still
+    // holds PostgreSQL's implicit default EXECUTE TO PUBLIC, which `aclexplode`
+    // alone reports as an empty set. Counting the NULL case is what makes this
+    // a real deny-by-default check for every future leave_api function.
     let public_execute_count: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace, \
-                LATERAL aclexplode(p.proacl) acl \
-         WHERE n.nspname='leave_api' AND acl.grantee=0 AND acl.privilege_type='EXECUTE'",
+        "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace \
+         WHERE n.nspname='leave_api' \
+           AND (p.proacl IS NULL \
+                OR EXISTS (SELECT 1 FROM aclexplode(p.proacl) acl \
+                           WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE'))",
     )
     .fetch_one(&owner_pool)
     .await
