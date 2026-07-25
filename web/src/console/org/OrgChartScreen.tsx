@@ -258,7 +258,7 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
     return owner
       ? {
         kind: "ENTITY" as const,
-        ref: owner.entity?.org_id ?? owner.company,
+        ref: owner.entity?.orgId ?? owner.company,
         label: owner.company,
       }
       : { kind: "ENTITY" as const, ref: "", label: "" };
@@ -465,7 +465,7 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
                                   onBlur={(event) => {
                                     const value = event.target.value.trim();
                                     if (value && value !== site.branch.name) {
-                                      pushOp({ op: "RENAME_BRANCH", branch_id: site.branch.id, name: value });
+                                      pushOp({ op: "RENAME_BRANCH", branchId: site.branch.id, name: value });
                                     }
                                   }}
                                 />
@@ -475,7 +475,7 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
                                     className="org-remove-button"
                                     aria-label={`${text.removeSite} · ${site.branch.name}`}
                                     onClick={() => {
-                                      pushOp({ op: "DEACTIVATE_BRANCH", branch_id: site.branch.id });
+                                      pushOp({ op: "DEACTIVATE_BRANCH", branchId: site.branch.id });
                                     }}
                                   >
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18 M6 6l12 12" /></svg>
@@ -528,7 +528,7 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
                                     type="button"
                                     disabled={!addSiteRegion || !addSiteName.trim()}
                                     onClick={() => {
-                                      pushOp({ op: "CREATE_BRANCH", region_id: addSiteRegion, name: addSiteName.trim() });
+                                      pushOp({ op: "CREATE_BRANCH", regionId: addSiteRegion, name: addSiteName.trim() });
                                       setAddSiteName("");
                                       setAddSiteOpen(false);
                                     }}
@@ -605,8 +605,8 @@ function OrgChartScreenBodyInner({ api, actorId, capabilities, sessionKey, onNav
                                   if (value && value !== unit.name) {
                                     pushOp({
                                       op: "REASSIGN_ORG_UNIT",
-                                      from_org_unit: unit.name,
-                                      to_org_unit: value,
+                                      fromOrgUnit: unit.name,
+                                      toOrgUnit: value,
                                       scope: { company: column.company },
                                     });
                                   }

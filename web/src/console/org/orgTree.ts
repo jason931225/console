@@ -140,14 +140,14 @@ export function applyPendingOps(
       switch (op.op) {
         case "RENAME_BRANCH":
           sites = sites.map((site) =>
-            site.branch.id === op.branch_id && op.name
+            site.branch.id === op.branchId && op.name
               ? { ...site, branch: { ...site.branch, name: op.name } }
               : site,
           );
           break;
         case "DEACTIVATE_BRANCH":
           sites = sites.map((site) =>
-            site.branch.id === op.branch_id ? { ...site, pendingOff: true } : site,
+            site.branch.id === op.branchId ? { ...site, pendingOff: true } : site,
           );
           break;
         case "CREATE_BRANCH":
@@ -155,7 +155,7 @@ export function applyPendingOps(
             sites = [...sites, {
               branch: {
                 id: `pending:${op.name}`,
-                region_id: op.region_id,
+                region_id: op.regionId,
                 name: op.name,
                 deactivated_at: null,
                 created_at: "",
@@ -167,8 +167,8 @@ export function applyPendingOps(
           break;
         case "REASSIGN_ORG_UNIT":
           if (op.scope.company === column.company) {
-            const target = units.find((unit) => unit.name === op.to_org_unit);
-            const source = units.find((unit) => unit.name === op.from_org_unit);
+            const target = units.find((unit) => unit.name === op.toOrgUnit);
+            const source = units.find((unit) => unit.name === op.fromOrgUnit);
             if (source && target && source !== target) {
               target.total += source.total;
               // Merge by title so the projected card keeps one row per 직급.
@@ -185,7 +185,7 @@ export function applyPendingOps(
               target.positions = merged;
               units = units.filter((unit) => unit !== source);
             } else if (source) {
-              source.name = op.to_org_unit;
+              source.name = op.toOrgUnit;
             }
           }
           break;

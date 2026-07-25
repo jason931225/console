@@ -26,9 +26,9 @@ const chart = {
 };
 
 const regions = [{ id: "r1", name: "경남", deactivated_at: null, created_at: "2026-01-01T00:00:00Z" }];
-const branches = [{ id: "b1", region_id: "r1", name: "창원지점", deactivated_at: null, created_at: "2026-01-01T00:00:00Z" }];
+const branches = [{ id: "b1", regionId: "r1", name: "창원지점", deactivated_at: null, created_at: "2026-01-01T00:00:00Z" }];
 const me = { employee_company: "코스" };
-const entities = [{ org_id: "org-1", slug: "coss", name: "코스", status: "ACTIVE" }];
+const entities = [{ orgId: "org-1", slug: "coss", name: "코스", status: "ACTIVE" }];
 
 const changeSummary: OrgChangeSummary = {
   id: "oc-1",
@@ -36,34 +36,34 @@ const changeSummary: OrgChangeSummary = {
   kind: "REORG",
   status: "IN_APPROVAL",
   target: { kind: "ENTITY", ref: "org-1", label: "코스" },
-  effective_date: "2026-09-01",
+  effectiveDate: "2026-09-01",
   reason: "조직 개편",
   headcount: 10,
-  site_count: 1,
-  team_count: 1,
-  drafted_by: "actor-2",
+  siteCount: 1,
+  teamCount: 1,
+  draftedBy: "actor-2",
   created_at: "2026-07-01T00:00:00Z",
   updated_at: "2026-07-02T00:00:00Z",
 };
 
 const changeDetail: OrgChangeDetail = {
   ...changeSummary,
-  proposal: [{ op: "RENAME_BRANCH", branch_id: "b1", name: "창원제1지점" }],
+  proposal: [{ op: "RENAME_BRANCH", branchId: "b1", name: "창원제1지점" }],
   preflight: {
-    computed_at: "2026-07-02T00:00:00Z",
+    computedAt: "2026-07-02T00:00:00Z",
     stale: false,
     blockers: [],
     warnings: [{ code: "OPEN_DOCS", label: "진행 중 공고·결재 종결 필요" }],
     headcount: 10,
-    dependents_total: 2,
+    dependentsTotal: 2,
   },
-  approval_steps: [
-    { id: "s1", step_order: 1, role_key: "hr", decision: "APPROVED", decided_by: "hr-1", decided_at: "2026-07-02T00:00:00Z" },
-    { id: "s2", step_order: 2, role_key: "finance", decision: "PENDING" },
-    { id: "s3", step_order: 3, role_key: "legal", decision: "PENDING" },
-    { id: "s4", step_order: 4, role_key: "executive", decision: "PENDING" },
+  approvalSteps: [
+    { id: "s1", stepOrder: 1, roleKey: "hr", decision: "APPROVED", decidedBy: "hr-1", decidedAt: "2026-07-02T00:00:00Z" },
+    { id: "s2", stepOrder: 2, roleKey: "finance", decision: "PENDING" },
+    { id: "s3", stepOrder: 3, roleKey: "legal", decision: "PENDING" },
+    { id: "s4", stepOrder: 4, roleKey: "executive", decision: "PENDING" },
   ],
-  settlement_items: [],
+  settlementItems: [],
   events: [{ at: "2026-07-01T09:00:00Z", actor: "actor-2", action: "조직 변경 상신", reason: "사전점검 통과" }],
 };
 
@@ -204,7 +204,7 @@ describe("OrgChartScreen", () => {
   });
 
   it("collects sandbox edits into a proposal that survives a remount and drafts a real org change", async () => {
-    const detailAfterCreate: OrgChangeDetail = { ...changeDetail, id: "oc-2", code: "OC-2026-0002", status: "DRAFT", approval_steps: [], events: [] };
+    const detailAfterCreate: OrgChangeDetail = { ...changeDetail, id: "oc-2", code: "OC-2026-0002", status: "DRAFT", approvalSteps: [], events: [] };
     const createBody = vi.fn();
     const api = apiWith(happyRoutes);
     vi.mocked(api.POST).mockImplementation(((path: string, init: { body?: unknown }) => {
@@ -239,7 +239,7 @@ describe("OrgChartScreen", () => {
       expect(createBody).toHaveBeenCalledWith(expect.objectContaining({
         kind: "REORG",
         target: expect.objectContaining({ label: "코스" }),
-        proposal: [{ op: "RENAME_BRANCH", branch_id: "b1", name: "창원제1지점" }],
+        proposal: [{ op: "RENAME_BRANCH", branchId: "b1", name: "창원제1지점" }],
       }));
     });
     await waitFor(() => {
@@ -255,8 +255,8 @@ describe("OrgChartScreen", () => {
         decide(init.params?.path, init.body);
         return Promise.resolve(ok({
           ...changeDetail,
-          approval_steps: changeDetail.approval_steps.map((step) =>
-            step.id === "s2" ? { ...step, decision: "APPROVED" as const, decided_by: "actor-1" } : step),
+          approvalSteps: changeDetail.approvalSteps.map((step) =>
+            step.id === "s2" ? { ...step, decision: "APPROVED" as const, decidedBy: "actor-1" } : step),
         }));
       }
       return Promise.resolve(fail(404));
@@ -280,10 +280,10 @@ describe("OrgChartScreen", () => {
       ...changeDetail,
       kind: "DISSOLVE",
       status: "SETTLING",
-      approval_steps: changeDetail.approval_steps.map((step) => ({ ...step, decision: "APPROVED" as const, decided_by: "hr-1" })),
-      settlement_items: [
-        { id: "st1", item_key: "ASSETS", label: "자산 이관·반납", done: true },
-        { id: "st2", item_key: "PAYROLL_SOCIAL_FINAL", label: "급여·4대보험·퇴직 정산", done: false },
+      approvalSteps: changeDetail.approvalSteps.map((step) => ({ ...step, decision: "APPROVED" as const, decidedBy: "hr-1" })),
+      settlementItems: [
+        { id: "st1", itemKey: "ASSETS", label: "자산 이관·반납", done: true },
+        { id: "st2", itemKey: "PAYROLL_SOCIAL_FINAL", label: "급여·4대보험·퇴직 정산", done: false },
       ],
     };
     const complete = vi.fn();
@@ -293,7 +293,7 @@ describe("OrgChartScreen", () => {
         complete(init.params?.path);
         return Promise.resolve(ok({
           ...settling,
-          settlement_items: settling.settlement_items.map((item) => ({ ...item, done: true })),
+          settlementItems: settling.settlementItems.map((item) => ({ ...item, done: true })),
         }));
       }
       return Promise.resolve(fail(404));

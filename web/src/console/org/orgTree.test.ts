@@ -27,8 +27,8 @@ const chart: HrOrgChartResponse = {
 };
 
 const entities: OrgEntitySummary[] = [
-  { org_id: "org-1", slug: "coss", name: "코스", status: "ACTIVE" },
-  { org_id: "org-2", slug: "knl", name: "케이앤엘", status: "ACTIVE" },
+  { orgId: "org-1", slug: "coss", name: "코스", status: "ACTIVE" },
+  { orgId: "org-2", slug: "knl", name: "케이앤엘", status: "ACTIVE" },
 ];
 
 const regions: RegionSummary[] = [
@@ -74,9 +74,9 @@ describe("applyPendingOps", () => {
 
   it("projects branch rename, deactivate, and create onto the site owner column", () => {
     const next = applyPendingOps(base, [
-      { op: "RENAME_BRANCH", branch_id: "b1", name: "창원제1지점" },
-      { op: "DEACTIVATE_BRANCH", branch_id: "b1" },
-      { op: "CREATE_BRANCH", region_id: "r1", name: "부산지점" },
+      { op: "RENAME_BRANCH", branchId: "b1", name: "창원제1지점" },
+      { op: "DEACTIVATE_BRANCH", branchId: "b1" },
+      { op: "CREATE_BRANCH", regionId: "r1", name: "부산지점" },
     ], "코스");
     const sites = next[0].sites;
     expect(sites[0].branch.name).toBe("창원제1지점");
@@ -87,12 +87,12 @@ describe("applyPendingOps", () => {
 
   it("projects an org-unit reassign as rename, merging into an existing target unit", () => {
     const renamed = applyPendingOps(base, [
-      { op: "REASSIGN_ORG_UNIT", from_org_unit: "지원팀", to_org_unit: "경영지원팀", scope: { company: "코스" } },
+      { op: "REASSIGN_ORG_UNIT", fromOrgUnit: "지원팀", toOrgUnit: "경영지원팀", scope: { company: "코스" } },
     ], "코스");
     expect(renamed[0].units.map((unit) => unit.name)).toEqual(["운영팀", "경영지원팀"]);
 
     const merged = applyPendingOps(base, [
-      { op: "REASSIGN_ORG_UNIT", from_org_unit: "지원팀", to_org_unit: "운영팀", scope: { company: "코스" } },
+      { op: "REASSIGN_ORG_UNIT", fromOrgUnit: "지원팀", toOrgUnit: "운영팀", scope: { company: "코스" } },
     ], "코스");
     expect(merged[0].units).toHaveLength(1);
     expect(merged[0].units[0].total).toBe(10);
@@ -105,7 +105,7 @@ describe("applyPendingOps", () => {
   it("does not touch other companies and returns the same reference for empty ops", () => {
     expect(applyPendingOps(base, [], "코스")).toBe(base);
     const next = applyPendingOps(base, [
-      { op: "REASSIGN_ORG_UNIT", from_org_unit: "운영팀", to_org_unit: "다른팀", scope: { company: "케이앤엘" } },
+      { op: "REASSIGN_ORG_UNIT", fromOrgUnit: "운영팀", toOrgUnit: "다른팀", scope: { company: "케이앤엘" } },
     ], "코스");
     expect(next[0].units.map((unit) => unit.name)).toEqual(["운영팀", "지원팀"]);
   });

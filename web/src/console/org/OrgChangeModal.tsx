@@ -77,7 +77,7 @@ function opLabel(op: OrgProposalOp): string {
     case "UPDATE_SITE":
       return kind;
     case "REASSIGN_ORG_UNIT":
-      return `${kind} · ${op.from_org_unit} → ${op.to_org_unit}`;
+      return `${kind} · ${op.fromOrgUnit} → ${op.toOrgUnit}`;
   }
 }
 
@@ -106,7 +106,7 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
   const adopt = useCallback((next: OrgChangeDetail) => {
     setDetail(next);
     setKind(next.kind);
-    setEffectiveDate(next.effective_date);
+    setEffectiveDate(next.effectiveDate);
     setReason(next.reason);
     setDraftDirty(false);
     onChanged(next);
@@ -173,17 +173,17 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
   const report = detail?.preflight ?? undefined;
   const reportBlocked = !!report && report.blockers.length > 0;
   const reportUsable = !!report && !report.stale && !draftDirty;
-  const pendingSteps = detail?.approval_steps.filter((step) => step.decision === "PENDING") ?? [];
+  const pendingSteps = detail?.approvalSteps.filter((step) => step.decision === "PENDING") ?? [];
   const nextStep = pendingSteps.length
-    ? pendingSteps.reduce((low, step) => (step.step_order < low.step_order ? step : low))
+    ? pendingSteps.reduce((low, step) => (step.stepOrder < low.stepOrder ? step : low))
     : undefined;
-  const approvedCount = detail ? detail.approval_steps.length - pendingSteps.length : 0;
-  const unsettled = detail?.settlement_items.filter((item) => !item.done) ?? [];
+  const approvedCount = detail ? detail.approvalSteps.length - pendingSteps.length : 0;
+  const unsettled = detail?.settlementItems.filter((item) => !item.done) ?? [];
   const terminal = status === "APPLIED" || status === "ARCHIVED" || status === "REJECTED" || status === "CANCELLED";
 
   const saveDraftIfDirty = async (): Promise<boolean> => {
     if (!detail || !draftDirty) return true;
-    return run(() => api.updateDraft(detail.id, { kind, effective_date: effectiveDate, reason }));
+    return run(() => api.updateDraft(detail.id, { kind, effectiveDate: effectiveDate, reason }));
   };
 
   const create = async () => {
@@ -195,7 +195,7 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
     await run(() => api.createChange({
       kind,
       target: seed.target,
-      effective_date: effectiveDate,
+      effectiveDate: effectiveDate,
       reason: reason.trim(),
       proposal: seed.proposal,
     }));
@@ -218,7 +218,7 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
     ctaDisabled = busy || !capabilities.canDraft || reportBlocked;
   } else if (status === "IN_APPROVAL") {
     ctaKind = "waiting";
-    ctaLabel = `${text.ocWaiting} (${String(approvedCount)}/${String(detail.approval_steps.length)})`;
+    ctaLabel = `${text.ocWaiting} (${String(approvedCount)}/${String(detail.approvalSteps.length)})`;
   } else if (status === "APPROVED") {
     ctaKind = "effectuate";
     ctaLabel = text.ocEffectuate;
@@ -378,8 +378,8 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
               <div className="org-stat-strip">
                 <div className="org-stat"><span className="org-stat-label">{text.ocStatTarget}</span><span className="org-stat-value">{target ? text.ocTargetKind[target.kind] : "-"}</span></div>
                 <div className="org-stat"><span className="org-stat-label">{text.ocStatHeadcount}</span><span className="org-stat-value org-mono">{detail ? String(detail.headcount) : "-"}</span></div>
-                <div className="org-stat"><span className="org-stat-label">{text.ocStatSites}</span><span className="org-stat-value org-mono">{detail ? String(detail.site_count) : "-"}</span></div>
-                <div className="org-stat"><span className="org-stat-label">{text.ocStatTeams}</span><span className="org-stat-value org-mono">{detail ? String(detail.team_count) : "-"}</span></div>
+                <div className="org-stat"><span className="org-stat-label">{text.ocStatSites}</span><span className="org-stat-value org-mono">{detail ? String(detail.siteCount) : "-"}</span></div>
+                <div className="org-stat"><span className="org-stat-label">{text.ocStatTeams}</span><span className="org-stat-value org-mono">{detail ? String(detail.teamCount) : "-"}</span></div>
               </div>
 
               <div className="org-section">
@@ -409,18 +409,18 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
                   ))}
                   <div className="org-report-meta">
                     <span className="org-chip">{text.ocStatHeadcount}<span className="org-mono"> {String(report.headcount)}</span></span>
-                    <span className="org-chip">{text.ocDependents}<span className="org-mono"> {String(report.dependents_total)}</span></span>
+                    <span className="org-chip">{text.ocDependents}<span className="org-mono"> {String(report.dependentsTotal)}</span></span>
                   </div>
                 </div>
               )}
 
-              {detail && detail.approval_steps.length > 0 && (
+              {detail && detail.approvalSteps.length > 0 && (
                 <div className="org-section">
                   <span className="org-section-label">{text.ocApprovals}</span>
-                  {detail.approval_steps.map((step) => (
+                  {detail.approvalSteps.map((step) => (
                     <div key={step.id} className="org-approval-row">
-                      <span className="org-chip">{text.ocApprovalRole[step.role_key]}</span>
-                      <span className="org-approval-who">{step.decided_by ?? ""}</span>
+                      <span className="org-chip">{text.ocApprovalRole[step.roleKey]}</span>
+                      <span className="org-approval-who">{step.decidedBy ?? ""}</span>
                       {step.decision === "APPROVED" && (
                         <span className="org-decision org-decision--ok">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
@@ -482,12 +482,12 @@ export function OrgChangeModal({ api, capabilities, mode, onClose, onChanged, on
                 </div>
               )}
 
-              {detail && detail.settlement_items.length > 0 && (status === "SETTLING" || status === "ARCHIVED") && (
+              {detail && detail.settlementItems.length > 0 && (status === "SETTLING" || status === "ARCHIVED") && (
                 <div className="org-section">
                   <span className="org-section-label">{text.ocSettle}</span>
-                  {detail.settlement_items.map((item) => (
+                  {detail.settlementItems.map((item) => (
                     <div key={item.id} className="org-approval-row">
-                      <span className="org-settle-text">{text.ocSettleItems[item.item_key]}</span>
+                      <span className="org-settle-text">{text.ocSettleItems[item.itemKey]}</span>
                       {item.done ? (
                         <span className="org-decision org-decision--ok">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
