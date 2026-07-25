@@ -546,47 +546,54 @@ broadened.
 
 ## Truthful implementation snapshot
 
-As of 2026-07-23, local non-merged work includes:
+As of 2026-07-24, the active non-merged candidate is PR #488. Its last fully
+evaluated implementation source freeze is
+`78cb5197927a031ead30c6dc0426c23455d3cb16`; that freeze was clean and
+fast-forward synchronized with its remote head. It includes:
 
-- My Work and Messenger real-backend improvements in the development preview
-  train.
-- A dev-auth-only refresh fix reviewed for exact synthetic personas; default
-  production behavior remains unchanged.
-- Benefits frontend/backend completion and localization are on the development
-  preview train through integration commit `9f1c12ef`; the combined component,
-  UI-string, lint, and build gates are green, while Buck2 and restarted runtime
-  evidence remain open.
-- Responsive shell parity commit `38a53bdd` passed fresh
-  `I1_NON_INDEPENDENT` review and is on the development preview train as
-  `397e1e59`; its combined component, UI-string, lint, and build gates are
-  green and the dev-auth stack has been restarted. A new medium-width visual
-  review scores the total My Work experience 42/100 because the module remains
-  todo-only and the communication rail is compact at that viewport.
-- Mail responsive work was rejected and is being repaired around a true
-  shell-aware 3-to-2-to-1 interaction model; repair commit `fed869b4` is
-  awaiting fresh review.
-- Overview polish `3a04a2b4` passed fresh `I1_NON_INDEPENDENT` review and is on
-  the development preview train as `6381a1d2`.
-- My Work selected-item detail `656fbb85` passed fresh
-  `I1_NON_INDEPENDENT` review and is on the development preview train as
-  `3514b98b`; a live dev-auth browser replay verified the real nine-item action
-  inbox, exact selected-item fields, disclosure semantics, and the
-  communications rail.
-- Compliance backend tip `26b0db3f` and catalog contract tip `73359be1` passed
-  fresh `I1_NON_INDEPENDENT` review. Compliance frontend pagination, typed
-  generated-client use, request-race isolation, deterministic evidence
-  summaries, and shared retry recovery are still being repaired before
-  consolidation.
-- Procurement backend collection `3b87267c` was rejected in fresh review for
-  repeated-query parsing, canonical error-envelope, and N+1 query defects; its
-  repair is active. The frontend queue is also being aligned to the canonical
-  repeated `status` query contract before review.
-- Sales/CRM and Inspection/EHS have isolated full-stack module lanes in
-  progress. Their shared navigation, registry, localization, generated-client,
-  and roadmap roots remain reserved for consolidation.
-- Pipeline preflight/release-ordering repairs are locally reviewed but are not
-  production evidence.
+- real-backend Inventory/MRP, Dispatch, Finance ledger and period-lock,
+  Consulting, Facilities, Evidence, Compliance, Workflow schedule, Evaluation,
+  Support-case foundation, and Asset-lifecycle increments;
+- generated-client-bound Attendance self-service and manager composition on
+  the active `/attendance` route while retaining the existing punch and payroll
+  linkage workflow;
+- typed Reporting analytics domain/application contracts with generated Buck2
+  metadata classified at the generator authority rather than hand-edited;
+- dev-auth process management that launches the exact Buck2 output and fences
+  stale process identity without changing production authentication behavior;
+- cheap lockfile, audit, migration, topology, release-admission, and
+  image-authorization controls ahead of expensive downstream jobs; and
+- centralized Workflow and Asset user-facing copy with their focused component,
+  lint, UI-string, and production web-build gates passing.
 
-This snapshot is not a release claim. Production exposure, independent review,
-Buck2 Rust execution, combined user-story replay, deployment, and live
-production readback remain open.
+Fresh evidence at this candidate boundary includes:
+
+- Support case domain/application Buck2 tests passing after the asynchronous
+  transaction contract and tenant-scope admission repairs;
+- the production PostgreSQL topology integration story passing fresh,
+  idempotent, drift, secret-log, absent/canonical-conversion, and preflight
+  rejection checks;
+- 188 focused Attendance tests plus production dev-auth fencing, exact ESLint,
+  production web build, branch-bound manager transport, hidden-route no-read,
+  session replacement, and generated Week-52 request verification;
+- Security CI passing at the exact candidate revision; and
+- preflight generation tests, Reporting Buck2 tests, and the exact repository
+  Buck2 preflight passing after the Reporting test-face classification fix.
+
+Current parallel work is deliberately disjoint:
+
+- Registry Customer/Site migration and runtime-role persistence acceptance;
+- Reporting/Labor Cost actor-bound fact contracts and strict Attendance duration
+  evidence;
+- full Asset lifecycle UI-to-PostgreSQL verification;
+- Office document-lifecycle and Contracts/Procurement vertical architecture;
+- Support migration and PostgreSQL adapter work held until Registry migration
+  `0197` is frozen, after which migration `0198` and adapter lanes may proceed
+  concurrently; and
+- the exact dev-auth stack rebuild plus candidate CI/iOS execution.
+
+This snapshot is not a release claim. Registry review, Support and Reporting
+persistence, remaining vertical implementation, regenerated shared faces at a
+reviewed source freeze, complete browser/accessibility/iOS/user-story
+verification, production exposure, merge, deployment, and live production
+readback remain open.
