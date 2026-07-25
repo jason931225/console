@@ -1,7 +1,7 @@
 //! Tenant-scoped persistence for attendance.  All SQL is bind-parameterized;
 //! reads use RLS-bound connections and mutations write the domain audit event
 //! in the same transaction as their state transition.
-#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use std::collections::BTreeMap;
 

@@ -740,8 +740,8 @@ fn floor_to_window(now: OffsetDateTime) -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(floored).unwrap_or(now)
 }
 
-/// The process ingress resolves the peer and forwarding chain once; this rate
-/// limiter consumes only its [`TrustedClientIp`] extension.
+// The process ingress resolves the peer and forwarding chain once; this rate
+// limiter consumes only its [`TrustedClientIp`] extension.
 
 /// Optional, client-controlled `X-Device-Id`; bounded length + restricted
 /// charset. On rejection the caller falls back to per-IP limiting alone.

@@ -1295,12 +1295,6 @@ struct WorkOrderHead {
     priority: PriorityLevel,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct DispatchHead {
-    branch_id: BranchId,
-    accepted_count: i64,
-}
-
 struct AlertStatusUpdate {
     alert_id: P1DispatchAlertId,
     lease_token: Option<uuid::Uuid>,
@@ -1381,14 +1375,6 @@ async fn existing_dispatch_intent(
     .await
 }
 
-async fn forced_mechanic_if_resolved(
-    pool: &PgPool,
-    dispatch_id: P1DispatchId,
-) -> Result<Option<UserId>, PgDispatchError> {
-    let org = current_org().map_err(KernelError::from)?;
-    with_org_conn::<_,_,PgDispatchError>(pool,org,move|tx|Box::pin(async move { Ok(sqlx::query_scalar::<_,Option<uuid::Uuid>>("SELECT auto_assigned_mechanic_id FROM p1_dispatches WHERE id=$1 AND status='AUTO_ASSIGNED'").bind(*dispatch_id.as_uuid()).fetch_optional(tx.as_mut()).await?.flatten().map(UserId::from_uuid)) })).await
-}
-
 async fn target_declined(
     tx: &mut Transaction<'_, Postgres>,
     dispatch_id: P1DispatchId,
@@ -1411,35 +1397,6 @@ async fn work_order_head(
             .fetch_one(tx.as_mut())
             .await?;
             work_order_head_from_row(&row)
-        })
-    })
-    .await
-}
-
-async fn dispatch_head(
-    pool: &PgPool,
-    dispatch_id: P1DispatchId,
-) -> Result<DispatchHead, PgDispatchError> {
-    let org = current_org().map_err(KernelError::from)?;
-    with_org_conn::<_, _, PgDispatchError>(pool, org, move |tx| {
-        Box::pin(async move {
-            let row = sqlx::query(
-                r#"
-        SELECT d.branch_id,
-               COUNT(r.id) FILTER (WHERE r.response = 'ACCEPT') AS accepted_count
-        FROM p1_dispatches d
-        LEFT JOIN p1_dispatch_responses r ON r.dispatch_id = d.id
-        WHERE d.id = $1
-        GROUP BY d.branch_id
-        "#,
-            )
-            .bind(*dispatch_id.as_uuid())
-            .fetch_one(tx.as_mut())
-            .await?;
-            Ok(DispatchHead {
-                branch_id: BranchId::from_uuid(row.try_get("branch_id")?),
-                accepted_count: row.try_get::<i64, _>("accepted_count")?,
-            })
         })
     })
     .await

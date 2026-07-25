@@ -27,7 +27,7 @@ use mnt_kernel_core::{
 };
 use mnt_platform_db::{DbError, with_audit, with_audits, with_org_conn};
 use mnt_platform_request_context::current_org;
-use sqlx::{Connection, PgConnection, PgPool, Postgres, Row, Transaction};
+use sqlx::{PgConnection, PgPool, Postgres, Row, Transaction};
 use time::{Date, OffsetDateTime};
 
 #[derive(Debug, thiserror::Error)]

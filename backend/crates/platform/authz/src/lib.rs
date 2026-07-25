@@ -7,6 +7,7 @@
 //! Both gates default-deny. Repository adapters should use [`repository_filter`]
 //! when listing branch-scoped rows so missing scope checks are difficult to
 //! express accidentally.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
