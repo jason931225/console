@@ -895,6 +895,11 @@ struct MessengerTabView: View {
             }
         }
         .navigationTitle(Text("messenger_title"))
+        // Messenger contains long, changing operational conversations. Keep the
+        // navigation title and actions on an opaque semantic surface rather
+        // than allowing scrolling content to alter their contrast.
+        .toolbarBackground(Color.opaqueFieldNavigationBackground, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -927,26 +932,43 @@ struct MessengerTabView: View {
 struct MessengerThreadRow: View {
     let thread: MessengerThread
     let isSelected: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(messengerThreadDisplayTitle(thread))
                     .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
                 FieldChip(key: thread.kind.fieldLabelKey)
+                memberCount
+                selectionStatus
             }
-            Text(localizedString("messenger_member_count_format", thread.memberCount))
-                .font(.footnote)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(messengerThreadDisplayTitle(thread))
+                        .font(.headline)
+                    Spacer()
+                    FieldChip(key: thread.kind.fieldLabelKey)
+                }
+                memberCount
+                selectionStatus
+            }
+        }
+    }
+
+    private var memberCount: some View {
+        Text(localizedString("messenger_member_count_format", thread.memberCount))
+            .font(.footnote)
+            .foregroundStyle(.primary)
+    }
+
+    @ViewBuilder
+    private var selectionStatus: some View {
+        if isSelected {
+            Text("messenger_selected")
+                .font(.caption)
                 .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            if isSelected {
-                Text("messenger_selected")
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 }
@@ -1416,6 +1438,14 @@ private extension Color {
         Color(uiColor: .systemGroupedBackground)
         #else
         .gray
+        #endif
+    }
+
+    static var opaqueFieldNavigationBackground: Color {
+        #if os(iOS)
+        Color(uiColor: .systemBackground)
+        #else
+        .white
         #endif
     }
 }

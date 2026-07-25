@@ -598,6 +598,26 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".accessibilityAddTraits(.isHeader)", ""),
     }), "scalable semantic header");
   });
+  it("rejects Messenger AX5 content suppression, missing vertical geometry, and translucent navigation chrome", () => {
+    const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
+    const runtimeTests = validFiles["ios/UITests/DynamicTypeRuntimeUITests.swift"];
+    const ax5Gate = "complete adaptive thread content and an opaque visible navigation surface";
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, "struct MessengerThreadRow: View {\n    let thread: MessengerThread\n    let isSelected: Bool\n    @Environment(\\.dynamicTypeSize) private var dynamicTypeSize\n\n    var body: some View {\n        if dynamicTypeSize.isAccessibilitySize {", "struct MessengerThreadRow: View {\n    let thread: MessengerThread\n    let isSelected: Bool\n    @Environment(\\.dynamicTypeSize) private var dynamicTypeSize\n\n    var body: some View {\n        if dynamicTypeSize.isAccessibilitySize == false {"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, "Color.opaqueFieldNavigationBackground", "Color.clear"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".toolbarBackground(.visible, for: .navigationBar)", ".toolbarBackground(.automatic, for: .navigationBar)"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".font(.headline)\n                FieldChip(key: thread.kind.fieldLabelKey)", ".font(.headline)\n                    .lineLimit(1)\n                FieldChip(key: thread.kind.fieldLabelKey)"),
+    }), ax5Gate);
+    expectsFailure(evaluate({
+      "ios/UITests/DynamicTypeRuntimeUITests.swift": mutateFile(runtimeTests, "member.frame.minY", "member.frame.maxY"),
+    }), ax5Gate);
+  });
   it("rejects translucent or implicit-foreground status capsules", () => {
     const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
     const contrastGate = "contrast-stable adaptive backgrounds";

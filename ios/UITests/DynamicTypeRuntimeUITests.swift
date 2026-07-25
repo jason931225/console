@@ -54,6 +54,29 @@ final class DynamicTypeRuntimeUITests: FieldUITestCase {
 
         close.tap()
         XCTAssertTrue(close.waitForNonExistence(timeout: 10), "Consent sheet must dismiss before changing tabs.")
+
+        let messenger = app.collectionViews[AID.messengerTab]
+        XCTAssertTrue(tapTab(KO.messengerTitle, destination: messenger))
+        XCTAssertTrue(messenger.waitForExistence(timeout: 10))
+        let threadID = try UITestFixture.requiredID(UITestFixture.messengerThreadID)
+        let thread = app.buttons[AID.messengerThreadRow(threadID)]
+        XCTAssertTrue(thread.waitForExistence(timeout: 15))
+        let threadTexts = thread.descendants(matching: .staticText).allElementsBoundByIndex
+        XCTAssertGreaterThanOrEqual(threadTexts.count, 3, "Accessibility Dynamic Type must retain the full thread title, kind, and member count.")
+        let title = threadTexts[0]
+        let chip = threadTexts[1]
+        let member = threadTexts[2]
+        for text in [title, chip, member] {
+            XCTAssertTrue(text.isHittable, "Accessibility Dynamic Type thread content must remain hittable: \(text.label)")
+            XCTAssertTrue(visible(text.frame, in: messenger.frame), "Accessibility Dynamic Type thread content must remain visible: \(text.label)")
+            XCTAssertClearOfChrome(text.frame)
+        }
+        XCTAssertGreaterThan(
+            member.frame.minY,
+            max(title.frame.maxY, chip.frame.maxY),
+            "Accessibility Dynamic Type must place the complete member count below the title and kind chip."
+        )
+
         let (body, timestamp, container) = try await openSeededMessengerMessage()
         XCTAssertTrue(body.isHittable)
         XCTAssertTrue(timestamp.isHittable)

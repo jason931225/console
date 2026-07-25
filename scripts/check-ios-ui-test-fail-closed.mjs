@@ -812,6 +812,21 @@ function hasSemanticMessengerMessagesHeader(files) {
   return /Section\s*\{[\s\S]{0,180}Text\s*\(\s*"messenger_messages"\s*\)[\s\S]{0,300}accessibilityAddTraits\s*\(\s*\.isHeader\s*\)[\s\S]{0,2200}ForEach\s*\(\s*messages\s*\)/.test(messenger);
 }
 
+function hasAccessibleMessengerThreadAndNavigationContrast(files) {
+  const views = stripSwiftCommentsAndStrings(files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "", false);
+  const runtimeTests = files["ios/UITests/DynamicTypeRuntimeUITests.swift"] ?? "";
+  const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
+  const thread = extractFunctionBody(views, /struct\s+MessengerThreadRow:\s*View/) ?? "";
+  const semanticColors = extractFunctionBody(views, /private\s+extension\s+Color\b/) ?? "";
+  const accessibilityLayout = /@Environment\s*\(\s*\\\.dynamicTypeSize\s*\)\s+private\s+var\s+dynamicTypeSize[\s\S]{0,420}if\s+dynamicTypeSize\.isAccessibilitySize\s*\{[\s\S]{0,780}VStack\s*\(\s*alignment:\s*\.leading[\s\S]{0,520}Text\s*\(\s*messengerThreadDisplayTitle\(thread\)\s*\)[\s\S]{0,520}FieldChip\s*\(\s*key:\s*thread\.kind\.fieldLabelKey\s*\)[\s\S]{0,520}Text\s*\(\s*localizedString\(\s*"messenger_member_count_format"\s*,\s*thread\.memberCount\s*\)\s*\)/.test(thread);
+  const standardLayout = /else\s*\{[\s\S]{0,460}HStack\s*\(\s*alignment:\s*\.firstTextBaseline[\s\S]{0,360}Text\s*\(\s*messengerThreadDisplayTitle\(thread\)\s*\)[\s\S]{0,360}FieldChip\s*\(\s*key:\s*thread\.kind\.fieldLabelKey\s*\)/.test(thread);
+  const noContentSuppression = !/\.lineLimit\s*\(|\.minimumScaleFactor\s*\(|\.allowsTightening\s*\(|\.fixedSize\s*\(|\.textCase\s*\(|\.frame\s*\(\s*(?:width|maxWidth|minWidth)\s*:/.test(thread);
+  const opaqueNavigationSurface = /static\s+var\s+opaqueFieldNavigationBackground:\s*Color[\s\S]{0,180}Color\s*\(\s*uiColor:\s*\.systemBackground\s*\)/.test(semanticColors);
+  const scopedNavigationBackground = /\.toolbarBackground\s*\(\s*Color\.opaqueFieldNavigationBackground\s*,\s*for:\s*\.navigationBar\s*\)[\s\S]{0,180}\.toolbarBackground\s*\(\s*\.visible\s*,\s*for:\s*\.navigationBar\s*\)/.test(messenger);
+  const runtimeGeometry = /testAccessibilityExtraExtraExtraLargeRuntimeContract[\s\S]{0,5400}thread\.descendants\s*\(\s*matching:\s*\.staticText\s*\)[\s\S]{0,840}XCTAssertGreaterThan\s*\(\s*member\.frame\.minY\s*,\s*max\s*\(\s*title\.frame\.maxY\s*,\s*chip\.frame\.maxY\s*\)/.test(runtimeTests);
+  return accessibilityLayout && standardLayout && noContentSuppression && opaqueNavigationSurface && scopedNavigationBackground && runtimeGeometry;
+}
+
 function hasContrastStableCapsules(files) {
   const views = stripSwiftCommentsAndStrings(files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "");
   const messageRow = extractFunctionBody(views, /struct\s+MessengerMessageRow:\s*View/) ?? "";
@@ -1463,6 +1478,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasAccessibilityIDParity(files), "iOS UI CI must mirror every FieldAccessibilityID static and dynamic identifier in UITests AID"]);
   checks.push([hasSectionScopedMessengerMessageRows(files), "iOS messenger search results and selected-thread messages must use section-scoped dynamic accessibility IDs"]);
   checks.push([hasSemanticMessengerMessagesHeader(files), "iOS messenger messages must retain a scalable semantic header before selected-thread content"]);
+  checks.push([hasAccessibleMessengerThreadAndNavigationContrast(files), "iOS Messenger AX5 must preserve complete adaptive thread content and an opaque visible navigation surface"]);
   checks.push([hasContrastStableCapsules(files), "iOS detail actions, status, attachment, and read-progress capsules must use explicit primary foregrounds on contrast-stable adaptive backgrounds"]);
   checks.push([hasModernFullScreenLaunch(files), "iOS app and CI build must preserve a modern full-screen launch contract"]);
   checks.push([hasCiOnlyLocalAts(files), "iOS UI CI must confine local ATS to CI-only job-root loopback configuration while production Info.plist remains unchanged"]);
