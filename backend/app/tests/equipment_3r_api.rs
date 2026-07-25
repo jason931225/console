@@ -169,6 +169,52 @@ async fn repair_lifecycle_completes_with_audits_history_and_no_finance_posting(p
     assert_eq!(status, StatusCode::OK, "handover: {handed}");
     assert_eq!(handed["status"], "HANDED_OVER");
 
+    // The concealment story proves the four refusals; this is the other half of
+    // the pair — that a permitted handover actually writes the custody relation
+    // and that the read path surfaces the typed object instead of the retired
+    // `evidenceReference` string.
+    let (status, case_detail) = send(
+        &rt,
+        &keys,
+        "GET",
+        &format!("{CASES}/{case_id}"),
+        &token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "case detail: {case_detail}");
+    assert_eq!(
+        case_detail["handover"]["evidenceObjectId"],
+        json!(handover_evidence),
+        "the detail view must surface the bound evidence object: {case_detail}"
+    );
+    let original_copy: Uuid = sqlx::query_scalar(
+        "SELECT id FROM docs_evidence_copies WHERE evidence_object_id=$1 AND copy_kind='ORIGINAL'",
+    )
+    .bind(handover_evidence)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let custody: (Uuid, Uuid, Uuid, Uuid) = sqlx::query_as(
+        "SELECT evidence_object_id,original_copy_id,branch_id,created_by \
+         FROM docs_equipment_handover_custody WHERE equipment_case_id=$1",
+    )
+    .bind(case_id.parse::<Uuid>().unwrap())
+    .fetch_one(&pool)
+    .await
+    .expect("handover must bind exactly one immutable custody row");
+    assert_eq!(
+        custody,
+        (
+            handover_evidence,
+            original_copy,
+            *branch.as_uuid(),
+            *operator.as_uuid()
+        ),
+        "custody must record the object, its verified ORIGINAL copy, the case branch and the actor"
+    );
+
     let inspections_path = format!("{CASES}/{case_id}/inspections");
     let (status, pass) = send(
         &rt,
