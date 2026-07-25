@@ -34,4 +34,13 @@ STAT
 chmod 755 "${scratch}/bin/stat"
 chmod 600 "${valid}"
 PATH="${scratch}/bin:${PATH}" MNT_BUCK_POSTGRES_ENV_FILE="${valid}" "${wrapper}" /usr/bin/true
+exact_log="${scratch}/exact.log"
+cat >"${scratch}/test-binary" <<'BINARY'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"${EXACT_LOG}"
+BINARY
+chmod 755 "${scratch}/test-binary"
+MNT_BUCK_POSTGRES_ENV_FILE="${valid}" MNT_BUCK_RUST_TEST_EXACT=one_exact_test EXACT_LOG="${exact_log}" "${wrapper}" "${scratch}/test-binary"
+[[ "$(cat "${exact_log}")" == $'--exact\none_exact_test' ]]
+if MNT_BUCK_POSTGRES_ENV_FILE="${valid}" MNT_BUCK_RUST_TEST_EXACT='bad test' "${wrapper}" /usr/bin/true; then exit 1; fi
 echo 'run_test_with_postgres_env: PASS'

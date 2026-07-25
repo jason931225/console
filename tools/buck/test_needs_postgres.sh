@@ -18,6 +18,11 @@ database="mnt_buck_test_$$_contract"
 container_env_file=""
 test_env_file=""
 active_buck_pid=""
+exact_test="${MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT:-}"
+if [[ -n "${exact_test}" && ! "${exact_test}" =~ ^[[:alnum:]_:]+$ ]]; then
+  echo "buck-postgres: exact Rust test name contains unsupported characters" >&2
+  exit 1
+fi
 
 cleanup() {
   docker rm -f "${container_name}" >/dev/null 2>&1 || true
@@ -97,8 +102,12 @@ chmod 600 "${test_env_file}"
 
 # Only a mode-0600 path crosses Buck's test-executor argv. The wrapper parses
 # this fixed data file inside the test process without evaluating its contents.
+test_executor_args=(--env "MNT_BUCK_POSTGRES_ENV_FILE=${test_env_file}" --env RUST_TEST_THREADS=1)
+if [[ -n "${exact_test}" ]]; then
+  test_executor_args+=(--env "MNT_BUCK_RUST_TEST_EXACT=${exact_test}")
+fi
 BUCK_ISOLATION_DIR="${isolation_name}" "${buck_bin}" test --local-only "$@" \
-  -- --env "MNT_BUCK_POSTGRES_ENV_FILE=${test_env_file}" --env RUST_TEST_THREADS=1 &
+  -- "${test_executor_args[@]}" &
 active_buck_pid="$!"
 if wait "${active_buck_pid}"; then
   buck_status=0

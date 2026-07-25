@@ -67,6 +67,11 @@ POSTGRES_USER'
 [[ "$(cat "${log}.topology-env-keys")" == "${expected_topology_env_keys}" ]]
 ! grep -Fq 'MNT_PLATFORM_FORCE_COMMAND_PASSWORD' "${log}.topology-env-keys"
 while IFS= read -r envfile; do [[ ! -e "${envfile}" ]]; done <"${log}.envfiles"
+exact_log="${scratch}/exact.log"
+PATH="${fake_bin}:${PATH}" HARNESS_LOG="${exact_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT=one_exact_test "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
+grep -Fq 'MNT_BUCK_RUST_TEST_EXACT=one_exact_test' "${exact_log}"
+! grep -Fq -- 'secret-' "${exact_log}"
+if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${exact_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT='bad test' "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
 setup_failure_log="${scratch}/setup-failure.log"
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${setup_failure_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_DOCKER_EXEC_STATUS=23 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres; then exit 1; fi
 grep -Fq 'docker rm -f' "${setup_failure_log}"

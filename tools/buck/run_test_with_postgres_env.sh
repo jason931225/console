@@ -48,4 +48,13 @@ if [[ "${have_database_url}${have_owner_url}${have_runtime_url}${have_admin_url}
   echo "buck-postgres: incomplete environment file" >&2
   exit 1
 fi
+
+exact_test="${MNT_BUCK_RUST_TEST_EXACT:-}"
+if [[ -n "${exact_test}" ]]; then
+  [[ "${exact_test}" =~ ^[[:alnum:]_:]+$ ]] || {
+    echo "buck-postgres: exact Rust test name contains unsupported characters" >&2
+    exit 1
+  }
+  exec "$@" --exact "${exact_test}"
+fi
 exec "$@"

@@ -76,27 +76,34 @@ class CommandLineTests(unittest.TestCase):
 
 class ExecutionTests(unittest.TestCase):
     @staticmethod
-    def successful_output(target: str) -> str:
-        names = gate.guarded_tests_by_target(valid_manifest()).get(target, ())
-        return "\n".join(f"test {name} ... ok" for name in names) + "\n"
+    def successful_output(name: str) -> str:
+        return (
+            "running 1 test\n"
+            f"test {name} ... ok\n"
+            "\n"
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n"
+        )
+
+    @staticmethod
+    def completed_runs() -> list[subprocess.CompletedProcess[str]]:
+        specs = gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
+        return [
+            subprocess.CompletedProcess(["buck"], 0, "", "")
+            for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
+        ] + [
+            subprocess.CompletedProcess(["buck"], 0, ExecutionTests.successful_output(name), "")
+            for _, name in specs
+        ]
 
     def test_requires_the_buck_owned_disposable_postgres_harness(self) -> None:
-        completed = [
-            subprocess.CompletedProcess(
-                ["tools/buck/test_needs_postgres.sh"],
-                0,
-                self.successful_output(target),
-                "",
-            )
-            for target in gate.OPERATIONAL_SQLX_TARGETS
-        ]
+        completed = self.completed_runs()
 
         with patch.object(gate, "run", side_effect=completed) as run_mock:
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
 
-        self.assertEqual(run_mock.call_count, len(gate.OPERATIONAL_SQLX_TARGETS))
-        for target, call in zip(gate.OPERATIONAL_SQLX_TARGETS, run_mock.call_args_list):
+        self.assertEqual(run_mock.call_count, len(completed))
+        for target, call in zip(gate.OPERATIONAL_SQLX_TARGETS[2:], run_mock.call_args_list):
             command = call.args[0]
             self.assertEqual(
                 command,
@@ -108,12 +115,16 @@ class ExecutionTests(unittest.TestCase):
             )
             self.assertNotIn("cargo", command)
             self.assertNotIn("DATABASE_URL", call.kwargs["env"])
+        specs = gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
+        for (target, name), call in zip(specs, run_mock.call_args_list[2:]):
+            self.assertEqual(
+                call.args[0],
+                [str(SCRIPT.parents[1] / gate.BUCK_POSTGRES_HARNESS), target, "--test-executor-stdout=-"],
+            )
+            self.assertEqual(call.kwargs["env"]["MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT"], name)
 
     def test_rejects_reusable_ci_database_urls_before_harness_invocation(self) -> None:
-        completed = [
-            subprocess.CompletedProcess(["buck"], 0, self.successful_output(target), "")
-            for target in gate.OPERATIONAL_SQLX_TARGETS
-        ]
+        completed = self.completed_runs()
         inherited = {
             "DATABASE_URL": "postgres://superuser@ci/reusable",
             "MNT_APALIS_OWNER_DATABASE_URL": "postgres://owner@ci/reusable",
@@ -134,24 +145,52 @@ class ExecutionTests(unittest.TestCase):
             with self.assertRaisesRegex(gate.GateError, "Buck2 disposable PostgreSQL"):
                 gate.execute(SCRIPT.parents[1])
 
-    def test_fails_closed_when_a_declared_test_did_not_report_one_success(self) -> None:
-        incomplete = subprocess.CompletedProcess(
-            ["buck"],
-            0,
-            "test migration_0165_upgrades_legacy_sibling_versions_without_tenant_leakage ... ok\n",
-            "",
-        )
-        with patch.object(gate, "run", return_value=incomplete):
-            with self.assertRaisesRegex(gate.GateError, "exactly one successful Rust test result"):
-                gate.execute(SCRIPT.parents[1])
+    def test_rejects_a_bare_spoofed_test_line(self) -> None:
+        name = valid_manifest()["guarded_tests"][0]["name"]
+        with self.assertRaisesRegex(gate.GateError, "one exact libtest"):
+            gate.assert_exact_rust_test_result(f"test {name} ... ok\n", name, "//tools/buck:test")
 
-    def test_fails_closed_when_a_declared_test_reports_twice(self) -> None:
-        target = "//tools/buck:pr473-ontology-key-revision-postgres"
-        output = self.successful_output(target)
-        duplicate = subprocess.CompletedProcess(["buck"], 0, output + output, "")
-        with patch.object(gate, "run", return_value=duplicate):
-            with self.assertRaisesRegex(gate.GateError, "exactly one successful Rust test result"):
-                gate.execute(SCRIPT.parents[1])
+    def test_rejects_zero_or_multiple_selected_tests(self) -> None:
+        name = valid_manifest()["guarded_tests"][0]["name"]
+        for output in (
+            "running 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out;\n",
+            self.successful_output(name) + self.successful_output(name),
+        ):
+            with self.subTest(output=output):
+                with self.assertRaisesRegex(gate.GateError, "one exact libtest"):
+                    gate.assert_exact_rust_test_result(output, name, "//tools/buck:test")
+
+    def test_rejects_drifted_generated_rust_declaration(self) -> None:
+        target = gate.RUST_TARGET_BY_SOURCE_AND_BINARY[
+            ("backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs", "key_revision_migration_upgrade")
+        ]
+        actual = gate.load_buck_rule(SCRIPT.parents[1], target)
+        original = gate.load_buck_rule
+        with patch.object(
+            gate,
+            "load_buck_rule",
+            side_effect=lambda repo, label: actual.replace("crate_root", "wrong_root")
+            if label == target
+            else original(repo, label),
+        ):
+            with self.assertRaisesRegex(gate.GateError, "no longer binds"):
+                gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
+
+    def test_rejects_drifted_postgres_wrapper_declaration(self) -> None:
+        target = gate.TARGET_BY_SOURCE_AND_BINARY[
+            ("backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs", "key_revision_migration_upgrade")
+        ]
+        actual = gate.load_buck_rule(SCRIPT.parents[1], target)
+        original = gate.load_buck_rule
+        with patch.object(
+            gate,
+            "load_buck_rule",
+            side_effect=lambda repo, label: actual.replace("deps =", "other =")
+            if label == target
+            else original(repo, label),
+        ):
+            with self.assertRaisesRegex(gate.GateError, "no longer executes"):
+                gate.guarded_test_specs(SCRIPT.parents[1], valid_manifest())
 
 
 if __name__ == "__main__":

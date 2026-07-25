@@ -63,6 +63,16 @@ TARGET_BY_SOURCE_AND_BINARY = {
         "leave_migration_expand_contract",
     ): "//tools/buck:pr473-leave-expand-postgres",
 }
+RUST_TARGET_BY_SOURCE_AND_BINARY = {
+    (
+        "backend/crates/ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs",
+        "key_revision_migration_upgrade",
+    ): "//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-key_revision_migration_upgrade",
+    (
+        "backend/crates/leave/adapter-postgres/tests/leave_migration_expand_contract.rs",
+        "leave_migration_expand_contract",
+    ): "//backend/crates/leave/adapter-postgres:mnt-leave-adapter-postgres-itest-leave_migration_expand_contract",
+}
 
 
 class GateError(ValueError):
@@ -120,27 +130,65 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise GateError("manifest guarded_tests must equal the 11 exact expected tuples in canonical order")
 
 
-def guarded_tests_by_target(manifest: dict[str, Any]) -> dict[str, tuple[str, ...]]:
-    """Map each declared Rust test binary to its required named regressions."""
-    grouped: dict[str, list[str]] = {}
+def load_buck_rule(repo_root: Path, target: str) -> str:
+    """Read the exact top-level Buck rule body for an absolute target label."""
+    match = re.fullmatch(r"//(?P<package>[^:]+):(?P<name>[^:]+)", target)
+    if match is None:
+        raise GateError(f"invalid Buck target label {target!r}")
+    path = repo_root / match.group("package") / "BUCK"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise GateError(f"cannot read Buck declaration {path}: {error}") from error
+    name = re.escape(match.group("name"))
+    rule = re.search(
+        rf'^\s*(?:rust_test|sh_test)\(\n    name = "{name}",(?P<body>.*?)^\)\n',
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    if rule is None:
+        raise GateError(f"Buck target declaration is missing for {target}")
+    return rule.group(0)
+
+
+def guarded_test_specs(repo_root: Path, manifest: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Bind every manifest tuple to its wrapper and generated Rust test declaration."""
+    specs: list[tuple[str, str]] = []
     for test in manifest["guarded_tests"]:
-        target = TARGET_BY_SOURCE_AND_BINARY.get((test["source"], test["target"]))
-        if target is None:
-            raise GateError("guarded test does not map to a Buck2 PostgreSQL target")
-        grouped.setdefault(target, []).append(test["name"])
-    return {target: tuple(names) for target, names in grouped.items()}
+        key = (test["source"], test["target"])
+        wrapper_target = TARGET_BY_SOURCE_AND_BINARY.get(key)
+        rust_target = RUST_TARGET_BY_SOURCE_AND_BINARY.get(key)
+        if wrapper_target is None or rust_target is None:
+            raise GateError("guarded test does not map to an approved Buck2 PostgreSQL target")
+        rust_rule = load_buck_rule(repo_root, rust_target)
+        source = test["source"]
+        source_dir, source_file = source.rsplit("/tests/", 1)
+        expected_mapped_src = f'mapped_srcs = repo_mapped_srcs("{source_dir}", ["tests/{source_file}"]'
+        if expected_mapped_src not in rust_rule or f'crate_root = "{source}"' not in rust_rule:
+            raise GateError(f"generated Rust target {rust_target} no longer binds {source}")
+        wrapper_rule = load_buck_rule(repo_root, wrapper_target)
+        expected_location = f'args = ["$(location {rust_target})"]'
+        expected_deps = f'deps = ["{rust_target}"]'
+        if expected_location not in wrapper_rule or expected_deps not in wrapper_rule:
+            raise GateError(f"PostgreSQL wrapper {wrapper_target} no longer executes {rust_target}")
+        specs.append((wrapper_target, test["name"]))
+    return tuple(specs)
 
 
-def assert_rust_test_results(output: str, names: tuple[str, ...], target: str) -> None:
-    """Require libtest's one-and-only-one successful result for every name."""
-    for name in names:
-        result = re.compile(rf"^test {re.escape(name)} \.\.\. ok$", re.MULTILINE)
-        count = len(result.findall(output))
-        if count != 1:
-            raise GateError(
-                f"Buck2 target {target} must report exactly one successful Rust test result "
-                f"for {name!r}; found {count}"
-            )
+def assert_exact_rust_test_result(output: str, name: str, target: str) -> None:
+    """Require the libtest stream for precisely one selected, passing test."""
+    running = re.compile(r"^running 1 test$", re.MULTILINE)
+    result = re.compile(rf"^test {re.escape(name)} \.\.\. ok$", re.MULTILINE)
+    summary = re.compile(
+        r"^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;$",
+        re.MULTILINE,
+    )
+    counts = (len(running.findall(output)), len(result.findall(output)), len(summary.findall(output)))
+    if counts != (1, 1, 1):
+        raise GateError(
+            f"Buck2 target {target} must emit one exact libtest selection/result/summary "
+            f"for {name!r}; found {counts}"
+        )
 
 
 def run(
@@ -183,8 +231,7 @@ def execute(repo_root: Path) -> int:
     ):
         env.pop(variable, None)
 
-    guarded_by_target = guarded_tests_by_target(manifest)
-    for target in OPERATIONAL_SQLX_TARGETS:
+    for target in OPERATIONAL_SQLX_TARGETS[2:]:
         completed = run(
             [str(harness), target, "--test-executor-stdout=-"], cwd=repo_root, env=env
         )
@@ -192,8 +239,18 @@ def execute(repo_root: Path) -> int:
             raise GateError(
                 f"Buck2 disposable PostgreSQL target {target} exited {completed.returncode}"
             )
-        if target in guarded_by_target:
-            assert_rust_test_results(completed.stdout, guarded_by_target[target], target)
+    for target, name in guarded_test_specs(repo_root, manifest):
+        exact_env = dict(env, MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT=name)
+        completed = run(
+            [str(harness), target, "--test-executor-stdout=-"],
+            cwd=repo_root,
+            env=exact_env,
+        )
+        if completed.returncode != 0:
+            raise GateError(
+                f"Buck2 disposable PostgreSQL target {target} exited {completed.returncode}"
+            )
+        assert_exact_rust_test_result(completed.stdout, name, target)
     print(
         "PR 473 migration operational gate passed: "
         "Buck2 disposable PostgreSQL harness ran the 3 exact Apalis database tests "
