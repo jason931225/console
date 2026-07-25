@@ -52,7 +52,7 @@ jobs:
       - name: Checkout protected pre-merge base code only
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}^
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
           fetch-depth: 0
       - name: Bind merged squash tree to the authenticated authority train
@@ -62,7 +62,14 @@ jobs:
           SQUASH_SHA: ${{ github.event.pull_request.merge_commit_sha }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           RECEIPT_PATH: ${{ runner.temp }}/console-squash-binding.json
+          GIT_CONFIG_NOSYSTEM: '1'
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_SYSTEM: /dev/null
+          GIT_TERMINAL_PROMPT: '0'
+          GIT_ASKPASS: /bin/false
         run: |
+          test "$(git -c core.hooksPath=/dev/null rev-parse HEAD)" = "$SQUASH_SHA"
+          git -c core.hooksPath=/dev/null checkout --detach "$SQUASH_SHA^"
           node scripts/console/verify-console-pr-authority-bootstrap.mjs squash-binding \
           --head "$AUTHORITY_TIP_SHA" \
           --squash "$SQUASH_SHA" \

@@ -100,7 +100,7 @@ test('candidate compatibility fixture receives only C/T/M environment facts and 
     CONSOLE_AUTHORITY_TIP_SHA: T,
     CONSOLE_SYNTHETIC_MERGE_SHA: M,
   });
-  assert.deepEqual(plan.commands[1], ['node', ['scripts/console/plan-fanout.mjs', '--candidate-sha', C, '--authority-tip-sha', T, '--synthetic-merge-sha', M]]);
+  assert.deepEqual(plan.commands[1], ['node', ['scripts/console/plan-fanout.mjs', '--candidate', C, '--authority-tip', T, '--synthetic-merge', M]]);
   assert.deepEqual(plan.commands[2][1], ['--test', 'scripts/console/validate-console-truth-ledger.test.mjs', 'scripts/console/plan-fanout.test.mjs', 'scripts/console/verify-console-authority-train.test.mjs']);
 });
 test('workflow separates open PR authentication from closed merged squash binding', () => {
@@ -110,6 +110,25 @@ test('workflow separates open PR authentication from closed merged squash bindin
   assert.match(workflow, /github\.event\.action == 'closed'/);
   assert.match(workflow, /pull_request\.merged == true/);
   assert.match(workflow, /squash-binding/);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}/);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}\^/);
+  assert.match(workflow, /test "\$\(git -c core\.hooksPath=\/dev\/null rev-parse HEAD\)" = "\$SQUASH_SHA"\n\s+git -c core\.hooksPath=\/dev\/null checkout --detach "\$SQUASH_SHA\^"\n\s+node scripts\/console\/verify-console-pr-authority-bootstrap\.mjs squash-binding/);
+});
+test('candidate compatibility fixture executes the actual planner CLI flag contract', () => {
+  const candidate = spawnSync('git', ['rev-parse', '28642975^{commit}'], { encoding: 'utf8' }).stdout.trim();
+  const directory = mkdtempSync(path.join(tmpdir(), 'console-candidate-planner-'));
+  try {
+    assert.equal(spawnSync('git', ['worktree', 'add', '--detach', '--no-checkout', directory], { encoding: 'utf8' }).status, 0);
+    assert.equal(spawnSync('git', ['-C', directory, 'checkout', '--detach', candidate], { encoding: 'utf8' }).status, 0);
+    const accepted = spawnSync('node', ['scripts/console/plan-fanout.mjs', '--candidate', candidate, '--authority-tip', T, '--synthetic-merge', M], { cwd: directory, encoding: 'utf8' });
+    assert.doesNotMatch(`${accepted.stdout}${accepted.stderr}`, /unknown argument/);
+    const rejected = spawnSync('node', ['scripts/console/plan-fanout.mjs', '--candidate-sha', candidate, '--authority-tip-sha', T, '--synthetic-merge-sha', M], { cwd: directory, encoding: 'utf8' });
+    assert.notEqual(rejected.status, 0);
+    assert.match(`${rejected.stdout}${rejected.stderr}`, /unknown argument: --candidate-sha/);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', directory], { encoding: 'utf8' });
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 test('hostile global Git config cannot replace the pinned verifier or execute its marker', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'console-hostile-git-config-'));

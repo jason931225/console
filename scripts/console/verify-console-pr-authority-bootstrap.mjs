@@ -146,7 +146,7 @@ export function candidateCheckPlan(C, T, M) {
     environment: Object.freeze({ CONSOLE_CANDIDATE_SHA: C, CONSOLE_AUTHORITY_TIP_SHA: T, CONSOLE_SYNTHETIC_MERGE_SHA: M }),
     commands: Object.freeze([
       ['node', ['scripts/console/validate-console-truth-ledger.mjs']],
-      ['node', ['scripts/console/plan-fanout.mjs', '--candidate-sha', C, '--authority-tip-sha', T, '--synthetic-merge-sha', M]],
+      ['node', ['scripts/console/plan-fanout.mjs', '--candidate', C, '--authority-tip', T, '--synthetic-merge', M]],
       ['node', ['--test', 'scripts/console/validate-console-truth-ledger.test.mjs', 'scripts/console/plan-fanout.test.mjs', 'scripts/console/verify-console-authority-train.test.mjs']],
     ]),
   });
