@@ -15,6 +15,18 @@ story evidence, and CI jobs for the touched surfaces are green.
 
 ## Review evidence gate
 
+## Console authority bootstrap
+
+`Console authority bootstrap` is a protected-default-branch `pull_request_target`
+gate for console authority trains.  It intentionally checks out only default-branch
+code, fetches PR Git objects without checking them out, verifies signed candidate
+`C` and direct authority tip `T` against the pinned SSH signer, and treats the
+GitHub synthetic merge `M` only as an unsigned structural object.  Only after that
+does it create a detached `C` worktree to run the candidate validator, planner, and
+their unit tests.  It has no secrets, cache restore, npm install, or PR executable
+step before authentication.  This bootstrap must be merged to `main` before PR 488
+is rerun; a workflow supplied by the PR cannot establish its own trust root.
+
 For user-facing features, PR/review evidence must prove the shipped workflow, not
 just the transport seam. API endpoint tests, handler tests, or generated-client
 round trips are necessary contract evidence, but they are **not sufficient** for
