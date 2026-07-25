@@ -374,6 +374,21 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
   });
 
+  it("requires explicit exact-M C/T derivation before every normal-PR console admission", () => {
+    expectFailure(
+      workflow.replace('          CONSOLE_AUTHORITY_TIP_SHA="$(git rev-parse "$CONSOLE_SYNTHETIC_MERGE_SHA^2")"\n', ''),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('          CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"\n', '          CONSOLE_CANDIDATE_SHA="$GITHUB_SHA"\n'),
+      "derive exact C/T/M",
+    );
+    expectFailure(
+      workflow.replace('        if: ${{ github.event_name == \'pull_request\' }}\n        run: npm run check:console-truth-ledger', '        run: npm run check:console-truth-ledger'),
+      "exact C/T/M derivation",
+    );
+  });
+
   it("rejects omission and comment-only reachability regressions", () => {
     for (const command of reachabilityPreflightCommands) {
       expectFailure(workflow.replace(`        run: ${command}\n`, ""), command);

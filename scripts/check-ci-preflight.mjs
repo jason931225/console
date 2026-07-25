@@ -11,6 +11,19 @@ const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
 const ciPreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs";
 const consoleRouteInventoryTestCommand = "node --test scripts/console/route-inventory.test.mjs";
+const consoleTruthLedgerCommand = "npm run check:console-truth-ledger";
+const consoleTruthLedgerTestCommand = "node --test scripts/console/validate-console-truth-ledger.test.mjs";
+const consoleFanoutPlannerTestCommand = "node --test scripts/console/plan-fanout.test.mjs";
+const consolePrCondition = "${{ github.event_name == 'pull_request' }}";
+const consoleTrainDerivation = [
+  "set -euo pipefail",
+  'CONSOLE_SYNTHETIC_MERGE_SHA="$(git rev-parse "$GITHUB_SHA^{commit}")"',
+  'CONSOLE_AUTHORITY_TIP_SHA="$(git rev-parse "$CONSOLE_SYNTHETIC_MERGE_SHA^2")"',
+  'CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"',
+  "printf 'CONSOLE_CANDIDATE_SHA=%s\\n' \"$CONSOLE_CANDIDATE_SHA\" >> \"$GITHUB_ENV\"",
+  "printf 'CONSOLE_AUTHORITY_TIP_SHA=%s\\n' \"$CONSOLE_AUTHORITY_TIP_SHA\" >> \"$GITHUB_ENV\"",
+  "printf 'CONSOLE_SYNTHETIC_MERGE_SHA=%s\\n' \"$CONSOLE_SYNTHETIC_MERGE_SHA\" >> \"$GITHUB_ENV\"",
+];
 const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
 const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
 const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
@@ -109,6 +122,17 @@ function requireUnconditionalRun(steps, command, job, failures) {
     failures.push(`${job} must run ${command}`);
   } else if (matchingSteps.some((step) => !isUnconditional(step))) {
     failures.push(`${job} must run ${command} unconditionally without if or continue-on-error`);
+  }
+}
+
+function requireConsoleExactMergeProof(steps, failures) {
+  const derive = steps.filter((step) => stepName(step) === "Derive exact console C/T/M train");
+  if (derive.length !== 1 || !hasOnlyExpectedCondition(derive[0], consolePrCondition) || multilineRunCommands(derive[0]).join("\n") !== consoleTrainDerivation.join("\n")) {
+    failures.push("preflight must derive exact C/T/M from the pull-request synthetic merge");
+  }
+  for (const command of [consoleTruthLedgerCommand, consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
+    const matching = steps.filter((step) => runScalar(step) === command);
+    if (matching.length !== 1 || !hasOnlyExpectedCondition(matching[0], consolePrCondition)) failures.push(`preflight must run ${command} only after exact C/T/M derivation on pull requests`);
   }
 }
 
@@ -353,6 +377,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   for (const command of requiredPreflightCommands) {
     requireUnconditionalRun(preflightSteps, command, "preflight", failures);
   }
+  requireConsoleExactMergeProof(preflightSteps, failures);
   const supportDomainUnit = jobBlock(workflow, "support-domain-unit");
   if (supportDomainUnit) {
     const steps = stepBlocks(supportDomainUnit);
