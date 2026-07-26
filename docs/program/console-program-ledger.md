@@ -324,3 +324,6 @@ Candidate advanced to the commit running the dev-auth suites as `mnt_buck_admin`
 
 ## CANDIDATE REBIND (2026-07-25, local CI mirror)
 Candidate advanced to the commit adding `npm run verify`, a local mirror of the preflight, backend and kubernetes-manifests jobs, checked against `ci.yml` on every run so it fails closed when it drifts. It also carries the `check:production-hardening` constant update: that gate pins the exact text of the backend topology step, so the `mnt_buck_admin` provisioning added in the previous candidate turned the kubernetes-manifests and Trivy IaC jobs red. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, hardening fixture)
+Candidate advanced to the commit updating the production-hardening regression fixture. The backend topology step is pinned in three places — ci.yml, the checker constant, and the checker's own test fixture — so the `mnt_buck_admin` provisioning needed all three updated; missing the third turned the kubernetes-manifests job red. All records re-bind and remain HOLD.
