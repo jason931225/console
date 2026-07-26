@@ -306,3 +306,6 @@ Candidate advanced to the commit fixing `tools/buck/run_test_with_postgres_env.s
 
 ## CANDIDATE REBIND (2026-07-25, migration contiguity)
 Candidate advanced to the commit renumbering the ontology catalog migration 0211 → 0204. The migration-safety gate was the only failing step in the backend job — fmt, clippy and the test suites passed — because 0203 jumped to 0211 while 0204–0210 sat pre-assigned to CRM lanes that have not landed. Fixed by the policy already in §5: the integrator assigns at merge, taking the next free number. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, four red jobs closed)
+Candidate advanced to the commit repairing the Android and e2e test call sites. This rebind covers four fixes, none of which relaxes a check: the evidence register no longer lets a late `/api/v1/users` response re-seed rows from the list endpoint and redraw a held object as unheld; the PR 473 operational gate now reads the stream Buck2 actually writes its receipts to (its summary pattern could not match any real libtest run, so the gate as shipped could never pass); two Kotlin fixtures gained the required-but-nullable `maintenanceType`/`maintenanceCause`; and the ATTENDANCE-31 exception locator is scoped to the `근태 예외` region instead of matching the monthly board row as well. All records re-bind and remain HOLD; nothing is promoted.
