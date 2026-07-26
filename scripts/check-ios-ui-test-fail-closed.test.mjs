@@ -54,6 +54,17 @@ const mutateFileAll = (source, search, replacement) => {
   assert.notEqual(mutated, source, `File mutation source was not found: ${String(search)}`);
   return mutated;
 };
+const moveReportFeedbackAfterCamera = (source) => {
+  const feedbackStart = source.indexOf("                        if let messageKey = viewModel.messageKey {");
+  const feedbackEnd = source.indexOf("\n                    }", feedbackStart);
+  assert.ok(feedbackStart >= 0 && feedbackEnd > feedbackStart, "report feedback block must exist");
+  const feedback = source.slice(feedbackStart, feedbackEnd);
+  const withoutFeedback = source.slice(0, feedbackStart) + source.slice(feedbackEnd);
+  const camera = withoutFeedback.indexOf("FieldAccessibilityID.detailCaptureEvidenceButton");
+  const cameraSectionEnd = withoutFeedback.indexOf("\n                    }", camera);
+  assert.ok(camera >= 0 && cameraSectionEnd > camera, "camera section must exist");
+  return withoutFeedback.slice(0, cameraSectionEnd) + `\n\n${feedback}` + withoutFeedback.slice(cameraSectionEnd);
+};
 
 describe("iOS hermetic UI CI contract", () => {
   it("accepts the hosted, sharded hermetic workflow", () => assert.deepEqual(evaluate().failures, []));
@@ -116,8 +127,8 @@ describe("iOS hermetic UI CI contract", () => {
       "          TEST_STATUS=0\n          timing_start xctest-prewarm",
     ) }), coldStartGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      'shards: "preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"',
-      'shards: "preflight-session preflight-restore preflight-fixtures login-validation accessibility-id-parity"',
+      'shards: "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"',
+      'shards: "preflight-restore authenticated-shell preflight-session preflight-fixtures login-validation accessibility-id-parity"',
     ) }), coldStartGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       'shards: "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"',
@@ -476,6 +487,10 @@ class FieldUITestCase: XCTestCase {
   });
   it("rejects incomplete or fail-open cross-worker result aggregation", () => {
     const aggregateGate = "exactly one structured summary and tests JSON";
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
+      '" = 21',
+      '" = 20',
+    ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("needs: ios-ui-tests", "needs: []") }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       `ios-ui-results:
@@ -494,16 +509,16 @@ class FieldUITestCase: XCTestCase {
       "EXPECTED_BATCHES=(core critical-core critical-report messenger-dynamic audit-standard)",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
+      "EXPECTED_SHARDS=(authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
       "EXPECTED_SHARDS=(login-validation accessibility-id-parity",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "core) expected_manifest='preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity'",
-      "core) expected_manifest='preflight-session preflight-restore preflight-fixtures login-validation accessibility-id-parity'",
+      "core) expected_manifest='authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity'",
+      "core) expected_manifest='preflight-restore authenticated-shell preflight-session preflight-fixtures login-validation accessibility-id-parity'",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
-      "EXPECTED_SHARDS=(preflight-session preflight-restore preflight-fixtures login-validation accessibility-id-parity",
+      "EXPECTED_SHARDS=(authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
+      "EXPECTED_SHARDS=(preflight-restore authenticated-shell preflight-session preflight-fixtures login-validation accessibility-id-parity",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("((${#summaries[@]} == 1))", "true") }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('node scripts/verify-xcresult-test-results.mjs "${VERIFY_ARGS[@]}" --swift-tests ios/UITests', "true") }), aggregateGate);
@@ -981,6 +996,11 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
     expectsFailure(evaluate({
       "ios/UITests/CameraCaptureUITests.swift": validFiles["ios/UITests/CameraCaptureUITests.swift"].replace("scrollToDetailElement(app.buttons[AID.detailCaptureEvidenceButton])", "app.buttons[AID.detailCaptureEvidenceButton]"),
     }), lazyScroll);
+  });
+  it("rejects report feedback placed after the unrelated camera controls", () => {
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": moveReportFeedbackAfterCamera(validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"]),
+    }), "live report response feedback adjacent to submit-report controls");
   });
   it("rejects messenger rows that share a cross-section message identifier", () => {
     expectsFailure(evaluate({ "ios/Sources/MaintenanceFieldApp/FieldViews.swift": validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"].replace("messengerSearchResultRow", "messengerMessageRow") }), "section-scoped dynamic accessibility IDs");

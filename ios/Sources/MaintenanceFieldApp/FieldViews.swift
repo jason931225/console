@@ -1176,6 +1176,11 @@ struct WorkOrderDetailView: View {
                             Label("submit_report", systemImage: "paperplane.fill")
                         }
                         .accessibilityIdentifier(FieldAccessibilityID.detailSubmitReportButton)
+
+                        if let messageKey = viewModel.messageKey {
+                            Text(LocalizedStringKey(messageKey))
+                                .accessibilityIdentifier(FieldAccessibilityID.detailMessage)
+                        }
                     }
 
                     Section {
@@ -1187,10 +1192,6 @@ struct WorkOrderDetailView: View {
                         .accessibilityIdentifier(FieldAccessibilityID.detailCaptureEvidenceButton)
                     }
 
-                    if let messageKey = viewModel.messageKey {
-                        Text(LocalizedStringKey(messageKey))
-                            .accessibilityIdentifier(FieldAccessibilityID.detailMessage)
-                    }
                 }
                 .scrollDismissesKeyboard(.immediately)
                 // Keep the audited detail text on an opaque semantic surface in

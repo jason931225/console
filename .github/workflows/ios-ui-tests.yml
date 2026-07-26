@@ -26,7 +26,7 @@ jobs:
       matrix:
         include:
           - batch: core
-            shards: "preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
+            shards: "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
           - batch: critical-core
             shards: "critical-today camera-capture"
           - batch: critical-report
@@ -277,6 +277,10 @@ jobs:
             SHARD_TIMEOUT_SECONDS=''
             SHARD_SELECTORS=()
             case "$shard_name" in
+              authenticated-shell)
+                SHARD_TIMEOUT_SECONDS=150
+                SHARD_SELECTORS=(MaintenanceFieldUITests/FieldCriticalPathUITests/testAuthenticatedLaunchShowsTodayTabInKorean)
+                ;;
               preflight-session)
                 SHARD_TIMEOUT_SECONDS=60
                 SHARD_SELECTORS=(MaintenanceFieldUITests/PreflightUITests/testWorkflowMintedSessionAndLocalBackendAreConfigured)
@@ -300,7 +304,6 @@ jobs:
               critical-today)
                 SHARD_TIMEOUT_SECONDS=150
                 SHARD_SELECTORS=(
-                  MaintenanceFieldUITests/FieldCriticalPathUITests/testAuthenticatedLaunchShowsTodayTabInKorean
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testDispatchListRendersDeterministicMechanicWorkOrder
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testFullFixtureRowsRemainReachableAboveTabBar
                 )
@@ -623,13 +626,13 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           EXPECTED_BATCHES=(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive)
-          EXPECTED_SHARDS=(preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
+          EXPECTED_SHARDS=(authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
           for batch_name in "${EXPECTED_BATCHES[@]}"; do
             batch_dir="$RESULTS_ROOT/ios-ui-test-results-$batch_name"
             test -d "$batch_dir"
             test "$(cat "$batch_dir/batch-name.txt")" = "$batch_name"
             case "$batch_name" in
-              core) expected_manifest='preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity' ;;
+              core) expected_manifest='authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity' ;;
               critical-core) expected_manifest='critical-today camera-capture' ;;
               critical-report) expected_manifest='critical-report' ;;
               critical-location) expected_manifest='critical-location' ;;
@@ -641,8 +644,8 @@ jobs:
             test "$(paste -sd' ' "$batch_dir/shard-manifest.txt")" = "$expected_manifest"
           done
           test "$(find "$RESULTS_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'ios-ui-test-results-*' | wc -l | tr -d ' ')" = 7
-          test "$(find "$RESULTS_ROOT" -type f -name '*-summary.json' | wc -l | tr -d ' ')" = 20
-          test "$(find "$RESULTS_ROOT" -type f -name '*-tests.json' | wc -l | tr -d ' ')" = 20
+          test "$(find "$RESULTS_ROOT" -type f -name '*-summary.json' | wc -l | tr -d ' ')" = 21
+          test "$(find "$RESULTS_ROOT" -type f -name '*-tests.json' | wc -l | tr -d ' ')" = 21
           VERIFY_ARGS=()
           for shard_name in "${EXPECTED_SHARDS[@]}"; do
             mapfile -t summaries < <(find "$RESULTS_ROOT" -type f -name "$shard_name-summary.json" -print)
