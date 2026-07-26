@@ -454,6 +454,88 @@ describe("EvaluationScreen", () => {
     });
   });
 
+  it("lets a linked employee draft and submit only their SELF task through the typed self review route", async () => {
+    const selfTask: EvaluationTaskSummary = {
+      ...task(),
+      kind: "SELF",
+      employee_id: "emp-linked",
+      employee_name: "이연결",
+    };
+    const selfSubject: EvaluationSubjectDetail = {
+      ...subjectDetail(),
+      employee_id: selfTask.employee_id,
+      employee_name: selfTask.employee_name,
+    };
+    const routes = defaultRoutes();
+    routes["/api/v1/evaluation/my-tasks"] = () => ok({ items: [selfTask] });
+    routes["/api/v1/evaluation/subjects/{subject_id}"] = () => ok(selfSubject);
+    const { impl, api } = client(routes);
+    impl.PUT.mockResolvedValue(
+      ok({
+        id: "review-self",
+        subject_id: selfTask.subject_id,
+        kind: "SELF",
+        status: "DRAFT",
+        evaluator_user_id: "user-linked",
+        grade: "A",
+        note: "목표를 달성했습니다.",
+        evidence_links: [],
+        submitted_at: null,
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    impl.POST.mockResolvedValue(
+      ok({
+        id: "review-self",
+        subject_id: selfTask.subject_id,
+        kind: "SELF",
+        status: "SUBMITTED",
+        grade: "A",
+        note: "목표를 달성했습니다.",
+        evaluator_user_id: "user-linked",
+        evidence_links: [],
+        submitted_at: "2026-07-25T00:00:00Z",
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    renderScreen(submitOnly, api);
+
+    const tasks = await screen.findByRole("list", { name: text.myTasks });
+    expect(within(tasks).getByText(/이연결 · 자기평가/)).toBeVisible();
+    await userEvent.click(within(tasks).getByRole("button", { name: text.write }));
+
+    const dialog = await screen.findByRole("dialog", { name: text.scorecard });
+    expect(dialog).toHaveTextContent(text.reviewKind.SELF);
+    await userEvent.click(within(dialog).getByRole("button", { name: "A" }));
+    await userEvent.type(screen.getByLabelText(text.notePlaceholder), "목표를 달성했습니다.");
+    await userEvent.click(screen.getByRole("button", { name: text.saveDraft }));
+    expect(impl.PUT).toHaveBeenCalledWith(
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}",
+      expect.objectContaining({
+        params: { path: { subject_id: selfTask.subject_id, kind: "self" } },
+        body: {
+          grade: "A",
+          note: "목표를 달성했습니다.",
+          evidence_links: [],
+        },
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: text.submit }));
+    expect(impl.POST).toHaveBeenCalledWith(
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit",
+      expect.objectContaining({
+        params: { path: { subject_id: selfTask.subject_id, kind: "self" } },
+      }),
+    );
+    expect(impl.POST).not.toHaveBeenCalledWith(
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit",
+      expect.objectContaining({
+        params: { path: expect.objectContaining({ kind: "manager" }) },
+      }),
+    );
+  });
+
   it("keeps the selected cycle gate bound to that cycle when a task from another cycle is submitted", async () => {
     const cycleA = { ...cycle("DRAFT"), id: "cycle-a" };
     const cycleB = {
