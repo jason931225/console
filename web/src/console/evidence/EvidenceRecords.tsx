@@ -201,7 +201,9 @@ export function EvidenceRecords({ api, currentUserId, sessionIncarnation }: Evid
 }
 
 function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProps, "sessionIncarnation">) {
-  const [rows, setRows] = useState<EvidenceObjectDetail[]>([]);
+  // Wire truth, undecorated. Display-name resolution is a render concern and
+  // must never become an input to fetching — see the `rows` memo below.
+  const [wireRows, setWireRows] = useState<EvidenceObjectDetail[]>([]);
   const [listState, setListState] = useState<ListState>("loading");
   const [users, setUsers] = useState<Map<string, string>>(new Map());
   const [filter, setFilter] = useState<RecordsFilter>("ALL");
@@ -229,6 +231,15 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
     [resolveName],
   );
 
+  // Names resolve here, not at fetch time. Decorating inside `loadList` made the
+  // user directory an input to the list effect: when `/api/v1/users` resolved it
+  // changed `resolveNames` -> `loadList` -> the effect re-fired and re-seeded the
+  // rows from the *list* endpoint, replacing an opened object's authoritative
+  // detail with a list row that carries no holds, custody or copies. A held
+  // object then rendered as unheld — the exact falsehood the sibling
+  // "does not synthesize a hold from a list-row flag" test forbids.
+  const rows = useMemo(() => wireRows.map(resolveNames), [wireRows, resolveNames]);
+
   const loadList = useCallback(async () => {
     listController.current?.abort();
     const controller = new AbortController();
@@ -238,13 +249,13 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
     try {
       const page = await listEvidenceObjectPage(api, 200, 0, controller.signal);
       if (controller.signal.aborted || request !== listRequest.current) return;
-      setRows(page.items.map(resolveNames));
+      setWireRows(page.items);
       setListState("ready");
     } catch {
       if (controller.signal.aborted || request !== listRequest.current) return;
       setListState("error");
     }
-  }, [api, resolveNames]);
+  }, [api]);
 
   useEffect(() => {
     void Promise.resolve().then(loadList);
@@ -289,9 +300,9 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
   // declaration hoisting instead of fighting the hooks lint's forward-
   // reference rule.
   async function refreshDetail(id: string): Promise<void> {
-    const fresh = resolveNames(await getEvidenceObjectDetail(api, id));
-    setRows((current) => current.map((row) => (row.id === id ? fresh : row)));
-    mountEntry(fresh);
+    const fresh = await getEvidenceObjectDetail(api, id);
+    setWireRows((current) => current.map((row) => (row.id === id ? fresh : row)));
+    mountEntry(resolveNames(fresh));
   }
 
   async function refreshAfterMutation(id: string): Promise<void> {
@@ -332,9 +343,9 @@ function EvidenceRecordsContent({ api, currentUserId }: Omit<EvidenceRecordsProp
     setOpenError(null);
     setOpeningId(row.id);
     try {
-      const fresh = resolveNames(await getEvidenceObjectDetail(api, row.id));
-      setRows((current) => current.map((r) => (r.id === row.id ? fresh : r)));
-      mountEntry(fresh);
+      const fresh = await getEvidenceObjectDetail(api, row.id);
+      setWireRows((current) => current.map((r) => (r.id === row.id ? fresh : r)));
+      mountEntry(resolveNames(fresh));
     } catch {
       setOpenError(T.records.openFailed);
     } finally {
