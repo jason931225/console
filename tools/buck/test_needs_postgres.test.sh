@@ -17,7 +17,24 @@ case "$1" in
     fi
     exit 0 ;;
   exec)
+    if [[ " $* " == *" /proc/1/comm "* ]]; then
+      if [[ -n "${FAKE_DOCKER_PID1_COMM_SEQUENCE:-}" ]]; then
+        attempt_file="${HARNESS_LOG}.pid1-attempt"
+        attempt=0; [[ -f "${attempt_file}" ]] && attempt="$(cat "${attempt_file}")"
+        attempt=$((attempt + 1)); printf '%s' "${attempt}" >"${attempt_file}"
+        IFS=, read -r -a pid1_comms <<<"${FAKE_DOCKER_PID1_COMM_SEQUENCE}"
+        index=$((attempt - 1)); (( index < ${#pid1_comms[@]} )) || index=$((${#pid1_comms[@]} - 1))
+        printf '%s\n' "${pid1_comms[index]}"
+      else
+        printf '%s\n' "${FAKE_DOCKER_PID1_COMM:-postgres}"
+      fi
+      exit 0
+    fi
+    if [[ " $* " == *" pg_isready "* ]]; then
+      exit "${FAKE_DOCKER_READINESS_STATUS:-0}"
+    fi
     if [[ " $* " == *" /topology.sh "* ]]; then
+      printf 'topology\n' >>"${HARNESS_LOG}"
       exit "${FAKE_DOCKER_EXEC_STATUS:-0}"
     fi
     exit 0 ;;
@@ -44,11 +61,23 @@ printf '%s\n' "${env_file}" >>"${HARNESS_LOG}.envfiles"
 if [[ "${FAKE_BUCK_SLEEP:-0}" == 1 ]]; then printf "%s\n" "$$" >"${HARNESS_LOG}.childpid"; exec sleep 30; fi
 exit "${FAKE_BUCK_STATUS:-0}"
 BUCK
-chmod +x "${fake_bin}/docker" "${fake_bin}/openssl" "${scratch}/buck"
+cat >"${fake_bin}/sleep" <<'SLEEP'
+#!/usr/bin/env bash
+if [[ "${FAKE_SLEEP_INSTANT:-0}" == 1 ]]; then exit 0; fi
+exec /bin/sleep "$@"
+SLEEP
+chmod +x "${fake_bin}/docker" "${fake_bin}/openssl" "${fake_bin}/sleep" "${scratch}/buck"
 raw_target_log="${scratch}/raw-target.log"
 if PATH="${fake_bin}:${PATH}" HARNESS_LOG="${raw_target_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" "${harness}" //backend/app:mnt-app-itest-org_change_api; then exit 1; fi
 ! grep -q '^docker' "${raw_target_log}" 2>/dev/null
 ! grep -q '^buck' "${raw_target_log}" 2>/dev/null
+entrypoint_ready_log="${scratch}/entrypoint-ready.log"
+PATH="${fake_bin}:${PATH}" HARNESS_LOG="${entrypoint_ready_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_DOCKER_PID1_COMM_SEQUENCE=docker-entrypoint.sh,postgres FAKE_DOCKER_READINESS_STATUS=0 FAKE_SLEEP_INSTANT=1 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
+[[ "$(grep -c 'cat /proc/1/comm' "${entrypoint_ready_log}")" == 2 ]]
+[[ "$(grep -c 'pg_isready -h 127.0.0.1 -U mnt_buck_admin -d ' "${entrypoint_ready_log}")" == 1 ]]
+topology_line="$(grep -n '^topology$' "${entrypoint_ready_log}" | cut -d: -f1)"
+readiness_line="$(grep -n 'pg_isready -h 127.0.0.1 -U mnt_buck_admin -d ' "${entrypoint_ready_log}" | cut -d: -f1)"
+[[ "${topology_line}" -gt "${readiness_line}" ]]
 PATH="${fake_bin}:${PATH}" HARNESS_LOG="${log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
 calls="$(cat "${log}")"; buck_calls="$(grep '^buck' "${log}")"
 grep -Fxq 'buck-isolation <unset>' "${log}"

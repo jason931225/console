@@ -83,7 +83,8 @@ docker cp "${repo_root}/ops/postgres-reconcile-topology.sh" "${container_name}:/
 docker cp "${container_env_file}" "${container_name}:/topology.env"
 
 for attempt in {1..30}; do
-  if docker exec "${container_name}" pg_isready -U mnt_buck_admin -d "${database}" >/dev/null 2>&1; then break; fi
+  pid1_comm="$(docker exec "${container_name}" cat /proc/1/comm 2>/dev/null || true)"
+  if [[ "${pid1_comm}" == "postgres" ]] && docker exec "${container_name}" pg_isready -h 127.0.0.1 -U mnt_buck_admin -d "${database}" >/dev/null 2>&1; then break; fi
   if [[ "${attempt}" == 30 ]]; then echo "buck-postgres: disposable PostgreSQL did not become healthy" >&2; exit 1; fi
   sleep 1
 done
