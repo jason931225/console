@@ -135,66 +135,85 @@ re-seedable from a lossier endpoint. Derive display concerns at render; keep
 fetched wire truth in state untouched. When a test in an authoritative surface
 "flakes," suspect the surface before the test.
 
-## H-8 · A migration guard silently narrowed what CI can execute
+## H-8 · A migration guard silently took most of CI's tests offline
 
 Found while checking whether a known-red test had ever been caught. It had not,
-and the reason is structural.
+and the reason reached much further than that one test.
 
-`main`'s PR 473 gate runs `cargo test --workspace` alongside its exact
-regressions; main's green backend job executes **1,548 tests across 491
-binaries**. On this branch that invocation is gone, and the complete set of Rust
-test executions across all six workflows is:
+`0196_platform_force_command_and_fk_closure.sql` — which does not exist on
+`main` — guards the force-role topology. Applying migrations now requires a
+superuser named **exactly** `mnt_buck_admin`, with `SESSION_USER = CURRENT_USER`,
+`mnt.sqlx_test_bootstrap = 'buck-sqlx-superuser-v1'`, a database matching
+`^_sqlx_test_[A-Za-z0-9_]{52}$`, and ownership by the applier. The
+non-superuser path admits only `mnt_app`, which cannot create test databases.
+
+CI's service database runs as `postgres`. Under 0196 it therefore cannot apply
+a single migration, so **every** `#[sqlx::test]` reached through it dies with
+`platform_force_role_topology.superuser_test_bootstrap_required` before
+asserting anything. This is not a property of one suite; it is a property of the
+account.
+
+**Two casualties, found one CI run apart.** The PR 473 gate's
+`cargo test --workspace` was removed in `77768668` — forced, not careless, though
+recorded with an empty commit body. The `Dev-auth feature build/tests` step's two
+direct-Cargo commands were *not* removed and simply broke; nobody saw it because
+the job had always died earlier, at the gate. Fixing the gate exposed it on the
+very next run.
+
+After the removal, CI's Rust test execution is:
 
 | | |
 |---|---|
 | `//backend/crates/support/domain:mnt-support-domain-unit` | one crate's unit tests |
-| `//backend/app:mnt-app-unit` | the app's `src` unit tests |
+| `//backend/app:mnt-app-unit` | app `src` tests, `resource.none` half |
+| `//tools/buck:app-inline-postgres` | app `src` tests, `test-postgres` half |
+| `//tools/buck:app-dev-auth-persona-guard-postgres` | 1 of 63 story-test files |
 | `mnt-gate-tenant-isolation --test owner_only_acl_postgres18` | one file |
-| `mnt-platform-auth-rest --features dev-auth` | one package |
-| `mnt-platform-provisioning --test dev_principal_upsert_race` | one file |
+| the Dev-auth step | 2 packages (only after the fix below) |
 | the PR 473 gate | 4 disposable-PostgreSQL targets + 11 named regressions |
 
-Roughly fifteen tests, against a workspace of **156 crates**, **148
-integration-test files**, **124** `#[cfg(test)]` modules and **63** app story
-tests under `backend/app/tests/`.
+The two `mnt-app` targets share `crate_root = backend/app/src/lib.rs` and
+partition on the `test-postgres` feature, so the app crate's **170 inline test
+functions do run**. Measured against that:
 
-**The cause is not carelessness.** Migration
-`0196_platform_force_command_and_fk_closure.sql` — which does not exist on
-`main` — guards the force-role topology. Its superuser path demands *all* of:
-`SESSION_USER = CURRENT_USER`, `CURRENT_USER = 'mnt_buck_admin'`,
-`mnt.sqlx_test_bootstrap = 'buck-sqlx-superuser-v1'`, a database name matching
-`^_sqlx_test_[A-Za-z0-9_]{52}$`, and database ownership by the applier. Its
-non-superuser path demands `mnt_app`, which cannot create test databases.
+| test functions | count | executed |
+|---|---|---|
+| `backend/app/src` (inline) | 170 | yes |
+| `backend/app/tests` (story) | 254 | 1 file of 63 |
+| `backend/crates/**` | 1,491 | essentially none |
 
-CI's service database runs as `postgres`. Under 0196, therefore, **no
-migration-applying test can run against it at all** — every `#[sqlx::test]`
-fails with `platform_force_role_topology.superuser_test_bootstrap_required`.
-`cargo test --workspace` did not become undesirable; it became impossible. Its
-removal in `77768668` was a forced consequence.
+So roughly **1,491 domain-crate and ~250 app story test functions execute
+nowhere** on any push or PR, across 156 crates and 148 integration-test files.
 
-**What remains a defect is the silence.** The commit body was empty, and four
-artifacts still described the run that had left: the script docstring
-("without weakening workspace tests"), two `ci.yml` step comments ("preserves
-the full workspace run", "the rest of the serial workspace suite"), and the
-job's timeout comment ("enough headroom for the full workspace"). A reader of
-any of them would conclude the suite still runs. The coverage did not move
-anywhere — only the 11 guarded regressions and the Apalis contract tests were
-carried over to the harness.
+**The remedy is cheap, and is now proven.** 0196 does not demand a separate
+container — only the identity. Creating `mnt_buck_admin` as a superuser in the
+existing CI service and putting
+`options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1` on `DATABASE_URL`
+satisfies the guard: sqlx then creates each `_sqlx_test_*` database owned by
+that role. Verified against the exact suites 0196 had broken —
+`mnt-platform-auth-rest --features dev-auth` went 0-passing to 15/15, and
+`mnt-platform-provisioning --test dev_principal_upsert_race` to 1/1. That fix is
+in this branch's `ci.yml`.
 
-**The gap is recoverable, and the recipe is verified.** A disposable container
-whose superuser *is* `mnt_buck_admin`, plus `ops/postgres-reconcile-topology.sh`
-and a `DATABASE_URL` carrying
-`options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1`, satisfies 0196.
-Confirmed here against `-p mnt-app --test console_kill_switch`: red with the
-plain `postgres` service, green under the harness identity. Restoring workspace
-coverage means running it through such a container — never against the CI
-service DB. That is its own charter, not a rider on a merge.
+The same lever restores workspace-wide coverage: `cargo test --workspace` under
+that URL is no longer impossible, merely un-run. It stays a separate charter
+only because switching it on will surface a genuine backlog (two failures in
+`mnt-ontology-rest object_type_cas_as_runtime_role` are already known), not
+because anything blocks it.
 
-**Rule.** A guard that narrows *who may apply migrations* silently narrows *what
-CI can execute*. The two are the same lever. Any change to bootstrap authority
-must state, in its own commit message, which test surfaces it takes offline and
-where they are re-run — otherwise coverage leaves without a single gate turning
-red, which is exactly what happened here.
+**Rule.** A guard that narrows *who may apply migrations* narrows *what CI can
+execute* — the two are one lever. Any change to bootstrap authority must name,
+in its own commit message, every suite it takes offline and where each is re-run.
+Otherwise coverage leaves without a single gate turning red, and the loss is
+discovered only when some unrelated fix lets the job run far enough to notice.
+
+**Correction history — kept, because it is the point.** This section has been
+wrong twice. It first called the workspace deletion careless, when 0196 had made
+it impossible. It then put CI's total at "roughly fifteen tests", having grepped
+only for `cargo test`/`buck2 test` and so missed everything routed through
+`tools/buck/test_needs_postgres.sh` — which is how the app's 170 inline tests
+run. Both errors flattered the finding. A document whose thesis is *confirm the
+gate ran before citing it* has no standing to estimate its own numbers.
 
 ## The meta-finding
 
