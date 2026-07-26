@@ -35,6 +35,41 @@ This document does not claim that every required mechanism is implemented.
 Where repository code or CI differs from this contract, the difference is a
 pipeline defect or explicit `HOLD`, not permission to weaken the contract.
 
+### Current implementation holds
+
+The following typed holds record repository reality on 2026-07-25. They remain
+open until an immutable later candidate supplies the named implementation and
+verification evidence.
+
+- **`HOLD-CI-BUCK2-001` — Cargo remains in required CI.**
+  `.github/workflows/ci.yml:372-399` directly runs `cargo fmt`, `cargo clippy`,
+  and eight `cargo run -p mnt-gate-*` binaries.
+  `scripts/check-ci-preflight.mjs` and its tests currently require those Cargo
+  steps. Buck targets already exist for the gate crates, including
+  `//backend/ci/gates/layer-boundary:mnt-gate-layer-boundary`,
+  `//backend/ci/gates/audit-coverage:mnt-gate-audit-coverage`,
+  `//backend/ci/gates/migration-safety:mnt-gate-migration-safety`,
+  `//backend/ci/gates/tenant-isolation:mnt-gate-tenant-isolation`,
+  `//backend/ci/gates/pii-no-logs:mnt-gate-pii-no-logs`,
+  `//backend/ci/gates/rls-arming:mnt-gate-rls-arming`,
+  `//backend/ci/gates/dev-auth-absence:mnt-gate-dev-auth-absence`, and
+  `//backend/ci/gates/iac-tier:mnt-gate-iac-tier`; their generated BUCK files
+  also declare applicable unit/integration targets. The workflow and checker
+  must migrate to Buck2-owned fmt, clippy, and gate execution, with equivalent
+  fail-closed tests, before any Buck2-only Rust completion or release claim.
+- **`HOLD-DOC-LINK-001` — no executable repository link gate was found.**
+  A local relative-link scan can support review of a documentation commit, but
+  it is not an enforced development-pipeline gate. An owned checker, regression
+  tests, and cheap-preflight/CI wiring are required before documentation-link
+  checking may be reported as enforced.
+- **`HOLD-ROUTING-LEDGER-001` — adaptive routing telemetry is not persisted.**
+  The quality-weighted routing rule below is desired policy. No
+  repository-native route-outcome ledger currently binds task shape, selected
+  role/model, estimates, cost, latency, review findings, retries, and terminal
+  outcome to immutable revisions. Until that ledger, validator, and reporting
+  path exist, do not claim statistical calibration or adaptive-routing
+  improvement.
+
 ## Target outcome
 
 The pipeline must maximize sustained delivery of complete Console modules while
@@ -163,7 +198,9 @@ mobile, or image resources. At minimum, preflight checks:
 - Buck2 manifest, cell map, target resolution, and affected-target planning;
 - ownership and writable-root collisions;
 - schema and OpenAPI source consistency;
-- formatting, lintable metadata, and documentation links;
+- formatting and lintable metadata;
+- documentation links only after `HOLD-DOC-LINK-001` is resolved by an
+  executable repository checker;
 - dev-auth production-exclusion declarations; and
 - resource-budget admission.
 
@@ -354,12 +391,16 @@ Do not admit more writers than review, integration, and verification can drain.
 Excess work in progress increases stale-base rework and lowers completed-module
 throughput.
 
-## Execution-role and model routing
+## Desired execution-role and model routing
 
 Automation is an execution mechanism, never work-item or completion authority.
 The capability registry, immutable Git objects, executable gates, and signed
 receipts remain authoritative regardless of which human or agent performs the
 work.
+
+This section defines the target routing policy. `HOLD-ROUTING-LEDGER-001`
+prevents any claim that the estimates are currently persisted, calibrated, or
+improving statistically.
 
 Route bounded tasks by their dominant need:
 
@@ -393,8 +434,9 @@ for authorization, data integrity, Korea controls, migrations, authority
 trains, release, and rollback work. Use a lower-cost route only when its
 observed quality remains inside the task's loss budget. Record the chosen role,
 model family, reasoning class, estimate basis, exact input, result, review
-findings, retries, and terminal disposition. Update estimates from observed
-outcomes; do not treat external benchmark rankings as repository evidence.
+findings, retries, and terminal disposition after the persisted route-outcome
+ledger is implemented. Then update estimates from observed outcomes; do not
+treat external benchmark rankings as repository evidence.
 
 ## Worktree and write-collision rules
 
