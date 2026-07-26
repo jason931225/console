@@ -1,6 +1,6 @@
-# False-green gate holes — eight confirmed, one shape
+# False-green gate holes — nine confirmed, one shape
 
-Recorded 2026-07-25 during the wave-4 hotfix pass. Every item below was a
+Recorded 2026-07-25 during the wave-4 hotfix pass; H-9 added 2026-07-26. Every item below was a
 **confident green over a broken reality**, and not one was caught by a gate —
 each was found by a person or agent reading code and checking a claim.
 
@@ -197,9 +197,10 @@ in this branch's `ci.yml`.
 
 The same lever restores workspace-wide coverage: `cargo test --workspace` under
 that URL is no longer impossible, merely un-run. It stays a separate charter
-only because switching it on will surface a genuine backlog (two failures in
-`mnt-ontology-rest object_type_cas_as_runtime_role` are already known), not
-because anything blocks it.
+only because switching it on will surface a genuine backlog, not because
+anything blocks it. The two known failures in `mnt-ontology-rest
+object_type_cas_as_runtime_role` have since been fixed — and fixing them
+uncovered H-9, which is what a backlog of un-run tests actually costs.
 
 **Rule.** A guard that narrows *who may apply migrations* narrows *what CI can
 execute* — the two are one lever. Any change to bootstrap authority must name,
@@ -214,6 +215,53 @@ only for `cargo test`/`buck2 test` and so missed everything routed through
 `tools/buck/test_needs_postgres.sh` — which is how the app's 170 inline tests
 run. Both errors flattered the finding. A document whose thesis is *confirm the
 gate ran before citing it* has no standing to estimate its own numbers.
+
+## H-9 · A tenancy test that never armed the tenant
+
+Found by fixing an unrelated 500, which let a test reach assertions that had
+never run.
+
+`object_type_cas_as_runtime_role` proves that the Cedar normalization-blocker
+queue is tenant-scoped. It seeds one blocker for each of two organizations,
+then reads the table as the real `mnt_rt` role and asserts each tenant sees
+exactly its own row. The reads were wrapped in `scope_org(org, …)`, which reads
+as arming the tenant.
+
+It does not. `scope_org` sets a **task-local** that adapter code consults when
+it opens a connection; the assertions issued raw `sqlx` queries straight at a
+pooled connection, which consults nothing. So `current_setting('app.current_org',
+true)` returned the empty string, `NULLIF(…)::uuid` returned `NULL`, and the
+policy predicate `org_id = NULL` matched nothing. **Both tenants read zero
+rows.**
+
+Zero rows satisfies "tenant A does not see tenant B's row". The assertion that
+tenant A *does* see its own row is what caught it — and only because a separate
+fix let execution reach it. Had the test been written with just the negative
+half, it would pass today against a table with **no row-level security at all**,
+against a dropped policy, against a revoked grant.
+
+The neighbouring tests are not wrong: they call adapters, which arm the GUC
+internally. This table has no Rust read path — it is written by migrations and
+read by operators — so there was no adapter to inherit the arming from, and
+nothing in the test made that absence visible.
+
+**Swept for siblings; none confirmed.** All 76 test files using `scope_org`
+were checked for the same shape — a `scope_org` block issuing raw `sqlx` at a
+non-owner pool with nothing arming the GUC. Every candidate resolved as either
+the `#[sqlx::test]` owner fixture (superuser, RLS bypassed, so the GUC is not
+what makes the read work) or an adapter call that arms the GUC itself.
+`policy/adapter-postgres/tests/draft_storage.rs` is the pattern done right: it
+runs a store against an `mnt_rt` pool and asserts *both* that org A sees its row
+and that org B does not. So this is one instance, not a class — but the
+assertion asymmetry that hid it is a class.
+
+**Rule.** A tenancy proof must be able to fail in the *permissive* direction. An
+isolation test whose assertions are all of the form "X cannot see Y" is
+satisfied by a read path that returns nothing to anyone; pair every one with a
+positive assertion that the legitimate tenant *does* see its own data. And where
+a test reaches past the adapters to raw SQL, the arming that production performs
+must be performed explicitly — a scope helper that only sets a task-local looks
+identical at the call site whether or not anything downstream reads it.
 
 ## The meta-finding
 
