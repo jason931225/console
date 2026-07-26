@@ -204,12 +204,24 @@ def guarded_test_specs(repo_root: Path, manifest: dict[str, Any]) -> tuple[tuple
     return tuple(specs)
 
 
+# Buck2's simple console — every non-TTY, i.e. every CI run — replays a test's
+# captured stdout inside its own event stream on **stderr**, stamping one
+# `[<ISO8601>] ` prefix onto each replayed line.  The receipts are therefore
+# searched across both streams and tolerate exactly that prefix.  It stays a
+# strict timestamp rather than `.*` so a test's own printed output cannot
+# accidentally spoof a receipt line.
+BUCK_CONSOLE_PREFIX = r"(?:\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(?:Z|[+-]\d{2}:\d{2})\] )?"
+
+
 def assert_exact_rust_test_result(output: str, name: str, target: str) -> None:
     """Require the libtest stream for precisely one selected, passing test."""
-    running = re.compile(r"^running 1 test$", re.MULTILINE)
-    result = re.compile(rf"^test {re.escape(name)} \.\.\. ok$", re.MULTILINE)
+    running = re.compile(rf"^{BUCK_CONSOLE_PREFIX}running 1 test$", re.MULTILINE)
+    result = re.compile(rf"^{BUCK_CONSOLE_PREFIX}test {re.escape(name)} \.\.\. ok$", re.MULTILINE)
+    # libtest closes the summary with ` finished in <n>s`; requiring the line to
+    # END at `filtered out;` could never match a real run.
     summary = re.compile(
-        r"^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;$",
+        rf"^{BUCK_CONSOLE_PREFIX}test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; "
+        r"[0-9]+ filtered out;(?: finished in [0-9.]+s)?$",
         re.MULTILINE,
     )
     counts = (len(running.findall(output)), len(result.findall(output)), len(summary.findall(output)))
@@ -279,7 +291,9 @@ def execute(repo_root: Path) -> int:
             raise GateError(
                 f"Buck2 disposable PostgreSQL target {target} exited {completed.returncode}"
             )
-        assert_exact_rust_test_result(completed.stdout, name, target)
+        # Both streams: the receipts land on stderr whenever Buck2 replays them
+        # through its console, and on stdout when it does not.
+        assert_exact_rust_test_result("\n".join((completed.stdout, completed.stderr)), name, target)
     print(
         "PR 473 migration operational gate passed: "
         "Buck2 disposable PostgreSQL harness ran the 3 exact Apalis database tests "

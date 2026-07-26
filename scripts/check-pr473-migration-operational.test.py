@@ -77,12 +77,32 @@ class CommandLineTests(unittest.TestCase):
 class ExecutionTests(unittest.TestCase):
     @staticmethod
     def successful_output(name: str) -> str:
+        # The shape libtest actually emits, ` finished in` tail included.  A
+        # hand-written literal that stopped at `filtered out;` made this gate
+        # unfalsifiable: the summary pattern could not match any real run.
         return (
             "running 1 test\n"
             f"test {name} ... ok\n"
             "\n"
-            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n"
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s\n"
         )
+
+    @staticmethod
+    def buck_console_replay(name: str) -> str:
+        """Byte-shape of how Buck2's non-TTY console replays a passing test."""
+        stamp = "[2026-07-25T19:38:11.116+00:00]"
+        lines = (
+            "✓ Pass: root//tools/buck:pr473-ontology-key-revision-postgres (2.1s)",
+            "---- STDOUT ----",
+            "",
+            "running 1 test",
+            f"test {name} ... ok",
+            "",
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.06s",
+            "",
+            "---- STDERR ----",
+        )
+        return "".join(f"{stamp} {line}\n" if line else f"{stamp}\n" for line in lines)
 
     @staticmethod
     def completed_runs() -> list[subprocess.CompletedProcess[str]]:
@@ -173,6 +193,27 @@ class ExecutionTests(unittest.TestCase):
         with patch.object(gate, "run", return_value=completed):
             with self.assertRaisesRegex(gate.GateError, "Buck2 disposable PostgreSQL"):
                 gate.execute(SCRIPT.parents[1])
+
+    def test_accepts_receipts_replayed_by_the_buck_console_on_stderr(self) -> None:
+        """CI's real delivery path: stdout empty, receipts on Buck2's stderr."""
+        specs = self.specs()
+        completed = [
+            subprocess.CompletedProcess(["buck"], 0, "", "")
+            for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
+        ] + [
+            subprocess.CompletedProcess(["buck"], 0, "", self.buck_console_replay(name))
+            for _, name in specs
+        ]
+        with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=completed):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
+
+    def test_rejects_a_non_timestamp_line_prefix(self) -> None:
+        """The tolerated prefix is a timestamp, not arbitrary leading text."""
+        name = valid_manifest()["guarded_tests"][0]["name"]
+        spoofed = self.buck_console_replay(name).replace("[2026-07-25T19:38:11.116+00:00]", "[log]")
+        with self.assertRaisesRegex(gate.GateError, "one exact libtest"):
+            gate.assert_exact_rust_test_result(spoofed, name, "//tools/buck:test")
 
     def test_rejects_a_bare_spoofed_test_line(self) -> None:
         name = valid_manifest()["guarded_tests"][0]["name"]
