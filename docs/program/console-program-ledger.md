@@ -312,3 +312,6 @@ Candidate advanced to the commit repairing the Android and e2e test call sites. 
 
 ## CANDIDATE REBIND (2026-07-25, workspace test run restored)
 Candidate advanced to the commit restoring `cargo test --workspace` to the PR 473 operational gate. Commit `77768668` had removed it with an empty commit body and no replacement anywhere in CI, taking the backend job from ~1,548 executed tests to roughly fifteen while the script docstring and two ci.yml comments still described the run that had left. This rebind therefore *widens* what the candidate is measured against rather than relaxing anything. All records re-bind and remain HOLD; nothing is promoted, and the wider suite has not yet reported.
+
+## CANDIDATE REBIND (2026-07-25, backend timeout fitted to the restored suite)
+Candidate advanced to the commit raising the backend job timeout from 45 to 90 minutes. The 45 was sized for main's job shape before the disposable-PostgreSQL harness added 13 per-invocation Docker bring-ups ahead of the workspace suite; with the suite restored this branch extrapolates to roughly 70 minutes, so 45 would have reported a timeout instead of a test result. Nothing about what is executed changes. All records re-bind and remain HOLD.
