@@ -23,7 +23,6 @@ use p256::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
-use std::time::Duration as StdDuration;
 use time::{Duration, OffsetDateTime};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -989,6 +988,10 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
         .fetch_one(&mut *relink)
         .await
         .unwrap();
+    let relink_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *relink)
+        .await
+        .unwrap();
     let detail_router = router.clone();
     let detail_token = f.subject.clone();
     let detail_path = format!("{SUBJECTS}/{subject_id}");
@@ -1002,22 +1005,14 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
         )
         .await
     });
-    assert!(
-        tokio::time::timeout(StdDuration::from_millis(100), &mut detail)
-            .await
-            .is_err(),
-        "submit-only detail read must wait for the concurrent identity relink"
-    );
+    await_actor_identity_lock_wait(&pool, relink_pid).await;
     sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
         .bind(*f.subject_user_id.as_uuid())
         .execute(&mut *relink)
         .await
         .unwrap();
     relink.commit().await.unwrap();
-    let (status, _) = tokio::time::timeout(StdDuration::from_secs(5), detail)
-        .await
-        .expect("detail request completes after relink")
-        .unwrap();
+    let (status, _) = detail.await.unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
 
     // Restore the canonical link, then prove the same serialization protects
@@ -1027,6 +1022,10 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
     let mut unlink = pool.begin().await.unwrap();
     sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
         .bind(*f.subject_user_id.as_uuid())
+        .fetch_one(&mut *unlink)
+        .await
+        .unwrap();
+    let unlink_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
         .fetch_one(&mut *unlink)
         .await
         .unwrap();
@@ -1043,22 +1042,14 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
         )
         .await
     });
-    assert!(
-        tokio::time::timeout(StdDuration::from_millis(100), &mut write)
-            .await
-            .is_err(),
-        "review write must wait for the concurrent identity relink"
-    );
+    await_actor_identity_lock_wait(&pool, unlink_pid).await;
     sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
         .bind(*f.subject_user_id.as_uuid())
         .execute(&mut *unlink)
         .await
         .unwrap();
     unlink.commit().await.unwrap();
-    let (status, _) = tokio::time::timeout(StdDuration::from_secs(5), write)
-        .await
-        .expect("review write completes after relink")
-        .unwrap();
+    let (status, _) = write.await.unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
     let authored: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM evaluation_reviews WHERE subject_id = $1 AND kind = 'SELF'",
@@ -1068,6 +1059,32 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
     .await
     .unwrap();
     assert_eq!(authored, 0, "unlinked actor must not author a review");
+}
+
+/// Synchronize on PostgreSQL's actual lock graph, not scheduler timing. The
+/// spawned HTTP request must be waiting at the adapter's update-conflicting
+/// canonical-identity lock and be blocked by this exact relink transaction
+/// before the test commits the unlink.
+async fn await_actor_identity_lock_wait(pool: &PgPool, relink_pid: i32) {
+    for _ in 0..512 {
+        let waiting: bool = sqlx::query_scalar(
+            "SELECT EXISTS ( \
+               SELECT 1 \
+               FROM pg_stat_activity a \
+               WHERE $1 = ANY(pg_blocking_pids(a.pid)) \
+                 AND a.query LIKE '%SELECT employee_id FROM users WHERE id = $1 FOR NO KEY UPDATE%' \
+             )",
+        )
+        .bind(relink_pid)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiting {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+    panic!("request did not reach the canonical actor identity lock");
 }
 
 // ---------------------------------------------------------------------------
