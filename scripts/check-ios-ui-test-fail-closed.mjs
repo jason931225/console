@@ -23,12 +23,18 @@ const expectedShardBudgets = new Map([
   ["authenticated-shell", 150],
   ["login-validation", 90],
   ["accessibility-id-parity", 45],
-  ["critical-today", 150],
+  // Measured 117s and 117s passing against 160s, 163s and 161s killed at the
+  // old 150s budget — bimodal on runner speed, with nothing in the tests
+  // changing between those runs.
+  ["critical-today", 240],
   ["critical-report", 240],
   ["critical-location", 240],
   ["camera-capture", 150],
   ["messenger-render", 90],
-  ["messenger-mutation", 180],
+  // Measured 134s, 149s, 151s and 183s passing, then 193s killed, against the
+  // old 180s budget: it was already grazing the ceiling before the thread
+  // selection became explicit, which added a tap and a message load per launch.
+  ["messenger-mutation", 240],
   ["audit-dynamic-today", 150],
   ["audit-dynamic-detail", 150],
   ["audit-dynamic-messenger", 150],
@@ -137,15 +143,23 @@ function hasFunctionalColdStartProof(files) {
   const prewarm = files["ios/UITests/XCTestPrewarmUITests.swift"] ?? "";
   const coreShards = matrixShardBatches(activeJob).get("core") ?? [];
   const messengerShards = matrixShardBatches(activeJob).get("messenger-dynamic") ?? [];
+  // What this pins is the SHAPE: each cold-sensitive worker opens with a real
+  // functional user story, never a prewarm shim or a result substitute, and the
+  // focused render proof stays behind that warm-up. The budgets are measured
+  // quantities, not constants — `critical-today` 150 -> 240 and
+  // `messenger-mutation` 180 -> 240 record what these shards actually cost (see
+  // `expectedShardBudgets` for the measurements). Raising a watchdog to
+  // accommodate a prewarm substitute is what this check exists to reject, and
+  // that remains rejected above.
   return prewarm.trim() === ""
     && !/xctest-prewarm|XCTestPrewarmUITests|testRunnerAndHostLaunch/.test(activeJob)
     && coreShards.join(" ") === "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
     && messengerShards.join(" ") === "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"
     && /authenticated-shell\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/FieldCriticalPathUITests\/testAuthenticatedLaunchShowsTodayTabInKorean\)/.test(activeJob)
     && /preflight-restore\)\s*\n\s*SHARD_TIMEOUT_SECONDS=90\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/PreflightUITests\/testSeederRestoresThenClearsRealSession\)/.test(activeJob)
-    && /critical-today\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testDispatchListRendersDeterministicMechanicWorkOrder[\s\S]{0,160}testFullFixtureRowsRemainReachableAboveTabBar[\s\S]{0,80}\)/.test(activeJob)
+    && /critical-today\)\s*\n\s*SHARD_TIMEOUT_SECONDS=240\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testDispatchListRendersDeterministicMechanicWorkOrder[\s\S]{0,160}testFullFixtureRowsRemainReachableAboveTabBar[\s\S]{0,80}\)/.test(activeJob)
     && !/critical-today\)[\s\S]{0,360}testAuthenticatedLaunchShowsTodayTabInKorean/.test(activeJob)
-    && /messenger-mutation\)\s*\n\s*SHARD_TIMEOUT_SECONDS=180\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testMessengerSendSurvivesBackendRefresh[\s\S]{0,160}testMessengerSearchUnmatchedQueryShowsRealNoResults[\s\S]{0,80}\)/.test(activeJob)
+    && /messenger-mutation\)\s*\n\s*SHARD_TIMEOUT_SECONDS=240\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testMessengerSendSurvivesBackendRefresh[\s\S]{0,160}testMessengerSearchUnmatchedQueryShowsRealNoResults[\s\S]{0,80}\)/.test(activeJob)
     && /run_xcode_with_timeout\s+"\$shard_name"\s+"\$result"\s+"\$SHARD_TIMEOUT_SECONDS"\s+"\$\{SHARD_SELECTORS\[@\]\}"\s+\|\|\s+\{\s*shard_status=\$\?;\s*TEST_STATUS=1;\s*\}/.test(activeJob);
 }
 
@@ -376,7 +390,7 @@ function hasValidLoopbackWebauthnPolicy(job, launcher) {
   // Reseal whenever the backend step legitimately changes; the pin exists to
   // force that change through review, not to freeze the step. Last resealed to
   // raise the critical-location shard budget 150 -> 240 seconds.
-  const approvedBackendStepSha256 = "f095d2b31d6671e9ac0f9b7006c5d7c56a034adca9ab509079fed391d15b06c8";
+  const approvedBackendStepSha256 = "20d670aadb52a427d067698341c05f6cc18a8e37d7a625b4d97fac6bae1c9c5e";
   const approvedLauncherSha256 = "a153fab32c9f4ca597605ec126d40e3bfc106c0ce17c368078e22c265ca9f1ad";
   const backendStepSha256 = createHash("sha256").update(backendStep).digest("hex");
   const launcherSha256 = createHash("sha256").update(launcher).digest("hex");

@@ -309,7 +309,7 @@ jobs:
                 SHARD_SELECTORS=(MaintenanceFieldUITests/FieldAccessibilityIDParityTests)
                 ;;
               critical-today)
-                SHARD_TIMEOUT_SECONDS=150
+                SHARD_TIMEOUT_SECONDS=240
                 SHARD_SELECTORS=(
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testDispatchListRendersDeterministicMechanicWorkOrder
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testFullFixtureRowsRemainReachableAboveTabBar
@@ -334,7 +334,7 @@ jobs:
                 SHARD_SELECTORS=(MaintenanceFieldUITests/MessengerUITests/testExactSeededMessengerThreadAndMessageRender)
                 ;;
               messenger-mutation)
-                SHARD_TIMEOUT_SECONDS=180
+                SHARD_TIMEOUT_SECONDS=240
                 SHARD_SELECTORS=(
                   MaintenanceFieldUITests/MessengerUITests/testMessengerSendSurvivesBackendRefresh
                   MaintenanceFieldUITests/MessengerUITests/testMessengerSearchUnmatchedQueryShowsRealNoResults
