@@ -686,6 +686,7 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
                                 Text("messenger_composer")
                                     .foregroundStyle(.primary)
                                     .accessibilityHidden(true)
+                                    .allowsHitTesting(false)
                             }
                             TextField("", text: $viewModel.messengerDraft, axis: .vertical)`,
         `TextField(
@@ -722,6 +723,20 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
         fieldViews,
         "if viewModel.messengerDraft.isEmpty {",
         "if viewModel.messengerDraft.isEmpty == false {",
+      ),
+    }), composerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `.accessibilityHidden(true)\n                                    .allowsHitTesting(false)`,
+        `.accessibilityHidden(true)\n                                    .allowsHitTesting(true)`,
+      ),
+    }), composerGate);
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        `.accessibilityHidden(true)\n                                    .allowsHitTesting(false)`,
+        `.accessibilityHidden(true)`,
       ),
     }), composerGate);
   });

@@ -838,7 +838,7 @@ function hasScalableInlineMessengerSectionHeaders(files) {
 function hasContrastSafeMessengerComposerPlaceholder(files) {
   const views = files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "";
   const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
-  return /ZStack\s*\(\s*alignment:\s*\.leading\s*\)\s*\{[\s\S]{0,180}if\s+viewModel\.messengerDraft\.isEmpty\s*\{[\s\S]{0,140}Text\s*\(\s*"messenger_composer"\s*\)[\s\S]{0,120}\.foregroundStyle\s*\(\s*\.primary\s*\)[\s\S]{0,120}\.accessibilityHidden\s*\(\s*true\s*\)[\s\S]{0,180}TextField\s*\(\s*""\s*,\s*text:\s*\$viewModel\.messengerDraft\s*,\s*axis:\s*\.vertical\s*\)[\s\S]{0,180}\.accessibilityLabel\s*\(\s*Text\s*\(\s*"messenger_composer"\s*\)\s*\)[\s\S]{0,180}\.accessibilityIdentifier\s*\(\s*FieldAccessibilityID\.messengerComposerField\s*\)/.test(messenger)
+  return /ZStack\s*\(\s*alignment:\s*\.leading\s*\)\s*\{[\s\S]{0,180}if\s+viewModel\.messengerDraft\.isEmpty\s*\{[\s\S]{0,140}Text\s*\(\s*"messenger_composer"\s*\)[\s\S]{0,120}\.foregroundStyle\s*\(\s*\.primary\s*\)[\s\S]{0,120}\.accessibilityHidden\s*\(\s*true\s*\)[\s\S]{0,120}\.allowsHitTesting\s*\(\s*false\s*\)[\s\S]{0,180}TextField\s*\(\s*""\s*,\s*text:\s*\$viewModel\.messengerDraft\s*,\s*axis:\s*\.vertical\s*\)[\s\S]{0,180}\.accessibilityLabel\s*\(\s*Text\s*\(\s*"messenger_composer"\s*\)\s*\)[\s\S]{0,180}\.accessibilityIdentifier\s*\(\s*FieldAccessibilityID\.messengerComposerField\s*\)/.test(messenger)
     && !/TextField\s*\([\s\S]{0,180}text:\s*\$viewModel\.messengerDraft[\s\S]{0,180}prompt:\s*Text\s*\(\s*"messenger_composer"\s*\)/.test(messenger);
 }
 

@@ -876,6 +876,7 @@ struct MessengerTabView: View {
                                 Text("messenger_composer")
                                     .foregroundStyle(.primary)
                                     .accessibilityHidden(true)
+                                    .allowsHitTesting(false)
                             }
                             TextField("", text: $viewModel.messengerDraft, axis: .vertical)
                                 .lineLimit(2...5)
