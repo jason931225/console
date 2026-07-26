@@ -823,7 +823,15 @@ test("ATTENDANCE-31 admin resolves a persisted exception, assigns and cancels co
   await expect(
     page.getByText(`${closeYear}년 ${closeMonthNumber}월`),
   ).toBeVisible();
-  const exceptionRow = page
+  // Scope to the exceptions card. The monthly board legitimately lists the same
+  // employee (with a 0/1 count for this very exception), so a page-wide button
+  // filter on the name resolves to both rows and trips strict mode.
+  const exceptionBoard = page.getByRole("region", {
+    name: "근태 예외",
+    exact: true,
+  });
+  await expect(exceptionBoard).toHaveCount(1);
+  const exceptionRow = exceptionBoard
     .getByRole("button")
     .filter({ hasText: blockedEmployeeName });
   await expect(exceptionRow).toBeVisible({ timeout: 15_000 });
