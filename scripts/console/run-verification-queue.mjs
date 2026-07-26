@@ -40,6 +40,14 @@ function canonicalizeReceiptRoot(candidate) {
   // operator leaf; no attacker-controlled existing leaf is ever followed.
   return path.join(realpathSync(parent), path.basename(resolved));
 }
+function prepareReceiptParent(receiptRoot) {
+  const parent = path.dirname(receiptRoot);
+  mkdirSync(parent, { recursive: true, mode: 0o700 });
+  const parentStat = lstatSync(parent);
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) fail('receipt staging parent is not a real directory');
+  if (canonicalizeReceiptRoot(receiptRoot) !== receiptRoot) fail('receipt staging parent changed while being prepared');
+  return parent;
+}
 function isPlainObject(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 function isCanonicalBuckLabel(target) {
   if (typeof target !== 'string' || target.startsWith('root//') || !BUCK_LABEL.test(target)) return false;
@@ -258,7 +266,7 @@ export async function executeVerificationQueue(plan, supplied = {}) {
   const maxCohorts = supplied.maxCohorts ?? declaredCapacity ?? 1;
   if (!Number.isInteger(maxCohorts) || maxCohorts < 1 || (declaredCapacity !== undefined && (!Number.isInteger(declaredCapacity) || maxCohorts > declaredCapacity))) fail('max cohorts exceeds declared cold-Rust capacity');
   if (existsSync(receiptRoot)) fail('local receipt root already exists; refusing to mix or overwrite evidence');
-  const stagingRoot = mkdtempSync(path.join(path.dirname(receiptRoot), `.console-verification-staging-${process.pid}-`));
+  const stagingRoot = mkdtempSync(path.join(prepareReceiptParent(receiptRoot), `.console-verification-staging-${process.pid}-`));
   if (lstatSync(stagingRoot).isSymbolicLink()) { rmSync(stagingRoot, { recursive: true, force: true }); fail('local receipt staging root is a symbolic link'); }
   let promoted = false;
   const activeChildren = new Set(); let interrupted = null;

@@ -67,6 +67,22 @@ test('singleton worktree listings still use canonical selection rather than bypa
   }), /no clean exact-HEAD/);
 });
 
+test('receipt staging creates a missing local parent before worktree admission', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'queue-missing-parent-'));
+  const receiptRoot = path.join(root, 'missing', 'nested', 'reports');
+  try {
+    await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, {
+      receiptRoot,
+      listWorktrees: () => [{ path: '/only', head: SHA }],
+      inspectWorktree: () => ({ clean: false, head: SHA }),
+    }), /no clean exact-HEAD/);
+    assert.equal(existsSync(path.dirname(receiptRoot)), true);
+    assert.equal(existsSync(receiptRoot), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('active children receive SIGTERM and are awaited during interruption cleanup', async () => {
   const { terminateActiveChildren } = await import('./run-verification-queue.mjs');
   let killed = 0; let waited = 0;
