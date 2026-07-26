@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Run the PR 473 migration regressions once each, without weakening workspace tests."""
+"""Run the PR 473 migration regressions once each through the Buck harness.
+
+This gate does NOT run `cargo test --workspace`; the docstring that claimed it
+did outlived the code by many commits.  Migration 0196 requires `mnt_buck_admin`
+plus an armed `mnt.sqlx_test_bootstrap` before any migration may be applied, and
+the CI service account (`postgres`) cannot satisfy it -- so a workspace-wide
+cargo run against that database cannot execute a single migration-applying test.
+Only the tests named below are carried here.
+
+Restoring workspace-wide coverage needs a harness-identity container, not a
+change to this file.  See H-8 in docs/program/false-green-gate-holes.md.
+"""
 
 from __future__ import annotations
 
@@ -44,13 +55,6 @@ EXPECTED_TESTS = (
     ("leave", "mnt-leave-adapter-postgres", "leave_migration_expand_contract", "backend/crates/leave/adapter-postgres/tests/leave_migration_expand_contract.rs", "staged_employee_import_rejects_payload_not_equal_to_immutable_ledger"),
 )
 BUCK_POSTGRES_HARNESS = Path("tools/buck/test_needs_postgres.sh")
-# Driven individually through the disposable-PostgreSQL harness, so the
-# workspace run skips them rather than executing them a second time.
-HARNESS_OWNED_TESTS = (
-    "apalis_adapter_dedupes_repeated_idempotency_keys",
-    "apalis_worker_retention_prunes_only_stale_unreferenced_workers",
-    "owner_and_runtime_apalis_schema_contract_is_fail_closed",
-)
 # Generated target labels are the execution boundary for this operational gate.
 # The disposable harness, not a job-level service database, supplies SQLx's
 # bootstrap authority and per-invocation database lifecycle.
@@ -267,11 +271,6 @@ def execute(repo_root: Path) -> int:
             f"Buck2 disposable PostgreSQL harness is not executable: {BUCK_POSTGRES_HARNESS}"
         )
 
-    # Captured BEFORE the isolation strip below.  The workspace suite needs the
-    # job's service URLs -- `#[sqlx::test]` derives its per-test databases from
-    # DATABASE_URL -- while the Buck harness must not see them.
-    workspace_env = dict(os.environ)
-
     env = dict(os.environ)
     # CI can export reusable service URLs.  Do not allow them to cross into
     # this gate: the harness supplies bounded URLs after bootstrapping its own
@@ -306,36 +305,10 @@ def execute(repo_root: Path) -> int:
         # Both streams: the receipts land on stderr whenever Buck2 replays them
         # through its console, and on stdout when it does not.
         assert_exact_rust_test_result("\n".join((completed.stdout, completed.stderr)), name, target)
-    # The workspace suite. This is the bulk of the backend's test coverage --
-    # ~1,548 tests across 491 binaries -- and it is the reason this gate can
-    # claim to run "without weakening workspace tests". The exact tests driven
-    # through the Buck harness are skipped so they run once, not twice.
-    workspace_command = [
-        "cargo",
-        "test",
-        "--locked",
-        "--manifest-path",
-        "backend/Cargo.toml",
-        "--workspace",
-        "--no-fail-fast",
-        "--",
-        # Topology upgrade tests intentionally mutate cluster-global roles, so
-        # every binary stays serial.
-        "--test-threads=1",
-        "--exact",
-    ]
-    for name in HARNESS_OWNED_TESTS:
-        workspace_command.extend(("--skip", name))
-    for test in manifest["guarded_tests"]:
-        workspace_command.extend(("--skip", test["name"]))
-    workspace = run(workspace_command, cwd=repo_root, env=workspace_env)
-    if workspace.returncode != 0:
-        raise GateError(f"workspace tests exited {workspace.returncode}")
-
     print(
         "PR 473 migration operational gate passed: "
         "Buck2 disposable PostgreSQL harness ran the 3 exact Apalis database tests "
-        "and the 11 guarded migration regressions, plus the full workspace suite"
+        "and the 11 guarded migration regressions"
     )
     return 0
 

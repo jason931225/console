@@ -135,31 +135,15 @@ re-seedable from a lossier endpoint. Derive display concerns at render; keep
 fetched wire truth in state untouched. When a test in an authoritative surface
 "flakes," suspect the surface before the test.
 
-## H-8 · A CI rewrite silently deleted the workspace test run
+## H-8 · A migration guard silently narrowed what CI can execute
 
-The largest hole, found while checking whether a *different* known-red test had
-been caught. It had not — and the reason turned out to be a regression on this
-very branch.
+Found while checking whether a known-red test had ever been caught. It had not,
+and the reason is structural.
 
-On `main`, `scripts/check-pr473-migration-operational.py` runs three things: the
-exact Apalis database tests, **`cargo test --workspace`** (with `--skip` for the
-guarded names so they are not run twice), and the 11 guarded regressions. Main's
-green backend job reports **491 libtest result lines totalling 1,548 tests**, and
-the gate prints `…3 exact Apalis database tests, workspace, plus 11 exact
-guarded tests`.
-
-Commit `77768668 fix(ci): run PR473 SQLx gate through Buck harness` — **empty
-body, no stated rationale** — rewrote that gate to drive the new Buck2
-disposable-PostgreSQL harness and, in the same 418-deletion diff, removed the
-`--workspace` invocation. Nothing anywhere in CI replaced it. The backend job
-went from executing ~1,548 tests to executing roughly fifteen.
-
-The file's own docstring still reads *"Run the PR 473 migration regressions once
-each, **without weakening workspace tests**."* The sentence survived the change
-that falsified it.
-
-After the removal, the complete set of Rust test executions across all six
-workflows is:
+`main`'s PR 473 gate runs `cargo test --workspace` alongside its exact
+regressions; main's green backend job executes **1,548 tests across 491
+binaries**. On this branch that invocation is gone, and the complete set of Rust
+test executions across all six workflows is:
 
 | | |
 |---|---|
@@ -170,38 +154,47 @@ workflows is:
 | `mnt-platform-provisioning --test dev_principal_upsert_race` | one file |
 | the PR 473 gate | 4 disposable-PostgreSQL targets + 11 named regressions |
 
-There is **no workspace-wide `cargo test` anywhere in CI**. Against that, the
-workspace holds **156 crates**, **148 integration-test files** across 62 crates,
-**124** `#[cfg(test)]` modules, and **63** app story tests under
-`backend/app/tests/`. Essentially none of it executes on any push or PR.
+Roughly fifteen tests, against a workspace of **156 crates**, **148
+integration-test files**, **124** `#[cfg(test)]` modules and **63** app story
+tests under `backend/app/tests/`.
 
-What CI does guarantee is that all of it *compiles*: `clippy --all-targets -D
-warnings` builds every test target. Compiling is not running. A test can be
-green in the author's terminal, compile forever after, and never assert again.
+**The cause is not carelessness.** Migration
+`0196_platform_force_command_and_fk_closure.sql` — which does not exist on
+`main` — guards the force-role topology. Its superuser path demands *all* of:
+`SESSION_USER = CURRENT_USER`, `CURRENT_USER = 'mnt_buck_admin'`,
+`mnt.sqlx_test_bootstrap = 'buck-sqlx-superuser-v1'`, a database name matching
+`^_sqlx_test_[A-Za-z0-9_]{52}$`, and database ownership by the applier. Its
+non-superuser path demands `mnt_app`, which cannot create test databases.
 
-The sharpest illustration is in the preflight itself. `tools/buck/preflight.sh`
-runs `buck2 uquery "kind('rust_test', '//backend/...')"` and prints
-`buck-preflight: enumerated 318 Rust test target(s)`. It **counts** them. It
-never runs one. A line that reads like coverage, in the job that gates the
-pipeline, asserting only that 318 test targets can be named.
+CI's service database runs as `postgres`. Under 0196, therefore, **no
+migration-applying test can run against it at all** — every `#[sqlx::test]`
+fails with `platform_force_role_topology.superuser_test_bootstrap_required`.
+`cargo test --workspace` did not become undesirable; it became impossible. Its
+removal in `77768668` was a forced consequence.
 
-Two distinct failures compounded here, and they should not be conflated. The
-defects this branch fixed — a self-approval hole at the lifecycle chokepoint, a
-`SECURITY DEFINER` function shipped `EXECUTE TO PUBLIC`, a fabricated statutory
-rule, a migration that dropped a column its handler still read — shipped because
-**CI never ran at all** on this lineage (preflight was red, so every downstream
-job reported `skipping`). The workspace deletion is the *second* failure: it
-means that once preflight was repaired, the restored job would still not have
-caught them.
+**What remains a defect is the silence.** The commit body was empty, and four
+artifacts still described the run that had left: the script docstring
+("without weakening workspace tests"), two `ci.yml` step comments ("preserves
+the full workspace run", "the rest of the serial workspace suite"), and the
+job's timeout comment ("enough headroom for the full workspace"). A reader of
+any of them would conclude the suite still runs. The coverage did not move
+anywhere — only the 11 guarded regressions and the Apalis contract tests were
+carried over to the harness.
 
-**Rule.** A CI change that reduces what executes must say so in its commit
-message and name the replacement. `77768668` said only "run PR473 SQLx gate
-through Buck harness" — true, and silent about the 1,548 tests leaving with it.
-Deletions of coverage are not implementation details of a refactor.
+**The gap is recoverable, and the recipe is verified.** A disposable container
+whose superuser *is* `mnt_buck_admin`, plus `ops/postgres-reconcile-topology.sh`
+and a `DATABASE_URL` carrying
+`options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1`, satisfies 0196.
+Confirmed here against `-p mnt-app --test console_kill_switch`: red with the
+plain `postgres` service, green under the harness identity. Restoring workspace
+coverage means running it through such a container — never against the CI
+service DB. That is its own charter, not a rider on a merge.
 
-**Corollary.** The job name is a claim. "Backend — fmt / clippy / test / gates"
-must either run the workspace suite or be renamed to what it does; a reviewer
-reading the check list has no other signal.
+**Rule.** A guard that narrows *who may apply migrations* silently narrows *what
+CI can execute*. The two are the same lever. Any change to bootstrap authority
+must state, in its own commit message, which test surfaces it takes offline and
+where they are re-run — otherwise coverage leaves without a single gate turning
+red, which is exactly what happened here.
 
 ## The meta-finding
 
@@ -214,8 +207,9 @@ H-6 sharpens that into something worse than a blind spot. A gate can be *worse
 than absent*: an absent gate is visibly absent, while a gate that cannot pass —
 or that has simply never executed, because an earlier job failed and everything
 downstream reported `skipping` — occupies its slot in the job list and reads as
-coverage. Four of the five defects fixed on this branch were only reachable
-after CI preflight went green for the first time on this lineage.
+coverage. Every defect fixed on this branch was only reachable after CI
+preflight went green for the first time on this lineage — and H-8 was only
+reachable after that, by reading a gate that had just started passing.
 
 Until H-1…H-4 have checks, "green" here means *green on what we thought to look
 at* — and any claim of readiness should say so explicitly rather than cite a
