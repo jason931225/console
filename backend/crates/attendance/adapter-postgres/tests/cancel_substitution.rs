@@ -637,6 +637,169 @@ async fn no_show_resolution_commit_releases_single_connection_adapter(owner_pool
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn confirm_resolution_persists_without_overtime_hours(owner_pool: PgPool) {
+    scope_org(OrgId::knl(), async move {
+        let branch = seed_branch(
+            &owner_pool,
+            "attendance-resolution-without-overtime",
+            "operations",
+        )
+        .await;
+        let provisioner = seed_user(
+            &owner_pool,
+            "Employee Directory Provisioner",
+            "SUPER_ADMIN",
+            branch,
+        )
+        .await;
+        let actor = seed_user(&owner_pool, "Attendance Manager", "ADMIN", branch).await;
+        let employee =
+            seed_employee(&owner_pool, branch, provisioner, "Resolution employee").await;
+        let exception_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO attendance_exceptions \
+             (id,org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) \
+             VALUES ($1,$2,$3,'NO_SHOW',$4,$5,$6,'unavailable',$7,$8,$9)",
+        )
+        .bind(exception_id)
+        .bind(*OrgId::knl().as_uuid())
+        .bind(format!("AT-{employee}"))
+        .bind(employee)
+        .bind(*branch.as_uuid())
+        .bind(OffsetDateTime::now_utc().date() + Duration::days(12))
+        .bind(*actor.as_uuid())
+        .bind(format!("resolution-without-overtime-{employee}"))
+        .bind("a".repeat(64))
+        .execute(&owner_pool)
+        .await
+        .unwrap();
+
+        let store = PgAttendanceStore::new(runtime_role_pool(&owner_pool).await);
+        let caller = CallerScope {
+            org_id: *OrgId::knl().as_uuid(),
+            user_id: *actor.as_uuid(),
+            branch_ids: vec![*branch.as_uuid()],
+            org_wide: false,
+        };
+        let resolved = store
+            .resolve_exception(
+                &caller,
+                ResolveException {
+                    exception_id,
+                    action: ResolutionAction::Confirm,
+                    reason: "verified attendance exception".to_owned(),
+                    linked_work_ref: None,
+                    overtime_minutes: None,
+                },
+            )
+            .await
+            .expect("CONFIRM without overtime hours must persist through the runtime adapter");
+
+        assert_eq!(resolved.status, "RESOLVED");
+        assert_eq!(
+            resolved
+                .resolution
+                .as_ref()
+                .and_then(|resolution| resolution.ot_hours.as_deref()),
+            None,
+        );
+        let persisted: (String, Option<String>, i64) = sqlx::query_as(
+            "SELECT e.status,r.ot_hours::text, \
+                    (SELECT count(*) FROM audit_events \
+                     WHERE action='attendance.exception.resolve' AND target_id=e.id::text) \
+             FROM attendance_exceptions e \
+             JOIN attendance_exception_resolutions r \
+               ON r.exception_id=e.id AND r.org_id=e.org_id \
+             WHERE e.id=$1",
+        )
+        .bind(exception_id)
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(persisted, ("RESOLVED".to_owned(), None, 1));
+    })
+    .await;
+}
+
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn overtime_resolution_round_trips_numeric_hours(owner_pool: PgPool) {
+    scope_org(OrgId::knl(), async move {
+        let branch = seed_branch(
+            &owner_pool,
+            "attendance-overtime-resolution",
+            "operations",
+        )
+        .await;
+        let provisioner = seed_user(
+            &owner_pool,
+            "Employee Directory Provisioner",
+            "SUPER_ADMIN",
+            branch,
+        )
+        .await;
+        let actor = seed_user(&owner_pool, "Attendance Manager", "ADMIN", branch).await;
+        let employee =
+            seed_employee(&owner_pool, branch, provisioner, "Overtime employee").await;
+        let exception_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO attendance_exceptions \
+             (id,org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) \
+             VALUES ($1,$2,$3,'UNAPPROVED_OVERTIME',$4,$5,$6,'unapproved overtime',$7,$8,$9)",
+        )
+        .bind(exception_id)
+        .bind(*OrgId::knl().as_uuid())
+        .bind(format!("AT-{employee}"))
+        .bind(employee)
+        .bind(*branch.as_uuid())
+        .bind(OffsetDateTime::now_utc().date() + Duration::days(13))
+        .bind(*actor.as_uuid())
+        .bind(format!("overtime-resolution-{employee}"))
+        .bind("a".repeat(64))
+        .execute(&owner_pool)
+        .await
+        .unwrap();
+
+        let store = PgAttendanceStore::new(runtime_role_pool(&owner_pool).await);
+        let caller = CallerScope {
+            org_id: *OrgId::knl().as_uuid(),
+            user_id: *actor.as_uuid(),
+            branch_ids: vec![*branch.as_uuid()],
+            org_wide: false,
+        };
+        let resolved = store
+            .resolve_exception(
+                &caller,
+                ResolveException {
+                    exception_id,
+                    action: ResolutionAction::ApproveOvertime,
+                    reason: "verified work order".to_owned(),
+                    linked_work_ref: Some("WO-ATTENDANCE-001".to_owned()),
+                    overtime_minutes: Some(90),
+                },
+            )
+            .await
+            .expect("approved overtime must round-trip the persisted NUMERIC hours");
+
+        assert_eq!(
+            resolved
+                .resolution
+                .as_ref()
+                .and_then(|resolution| resolution.ot_hours.as_deref()),
+            Some("1.50"),
+        );
+        let persisted: String = sqlx::query_scalar(
+            "SELECT ot_hours::text FROM attendance_exception_resolutions WHERE exception_id=$1",
+        )
+        .bind(exception_id)
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(persisted, "1.50");
+    })
+    .await;
+}
+
+#[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn legacy_assignment_rechecks_after_leave_commit(owner_pool: PgPool) {
     scope_org(OrgId::knl(), async move {
         let branch = seed_branch(&owner_pool, "attendance-legacy-race", "operations").await;

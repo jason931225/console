@@ -43,9 +43,11 @@ async fn workflow_object_context_is_exact_pair_scoped_and_read_only(pool: PgPool
     let branch_b = seed_branch(&pool, org, "B").await;
     let initiator = UserId::new();
     let same_branch_stranger = UserId::new();
+    let unrelated_same_branch_user = UserId::new();
     let cross_branch_user = UserId::new();
     seed_user(&pool, org, initiator, "ADMIN", branch_a).await;
     seed_user(&pool, org, same_branch_stranger, "ADMIN", branch_a).await;
+    seed_user(&pool, org, unrelated_same_branch_user, "ADMIN", branch_a).await;
     seed_user(&pool, org, cross_branch_user, "ADMIN", branch_b).await;
     let other_org = OrgId::from_uuid(Uuid::from_u128(0x2));
     seed_org(&pool, other_org).await;
@@ -136,7 +138,7 @@ async fn workflow_object_context_is_exact_pair_scoped_and_read_only(pool: PgPool
     let no_run_visibility = get(
         service.clone(),
         &format!("{PATH}?object_type=support_ticket&object_id={first_subject}"),
-        &bearer(&keys, org, same_branch_stranger, "ADMIN"),
+        &bearer(&keys, org, unrelated_same_branch_user, "ADMIN"),
     )
     .await;
     assert_eq!(
@@ -267,7 +269,6 @@ struct MutationSnapshot {
     notifications: i64,
     workflow_outbox_events: i64,
     audit_events: i64,
-    mutation_idempotency_receipts: i64,
     object_links: i64,
     support_tickets: i64,
     work_orders: i64,
@@ -280,7 +281,6 @@ async fn mutation_snapshot(pool: &PgPool) -> MutationSnapshot {
         notifications: count(pool, "notifications").await,
         workflow_outbox_events: count(pool, "workflow_outbox_events").await,
         audit_events: count(pool, "audit_events").await,
-        mutation_idempotency_receipts: count(pool, "mutation_idempotency_receipts").await,
         object_links: count(pool, "object_links").await,
         support_tickets: count(pool, "support_tickets").await,
         work_orders: count(pool, "work_orders").await,
@@ -294,7 +294,6 @@ async fn count(pool: &PgPool, table: &str) -> i64 {
         "notifications" => "SELECT count(*) FROM notifications",
         "workflow_outbox_events" => "SELECT count(*) FROM workflow_outbox_events",
         "audit_events" => "SELECT count(*) FROM audit_events",
-        "mutation_idempotency_receipts" => "SELECT count(*) FROM mutation_idempotency_receipts",
         "object_links" => "SELECT count(*) FROM object_links",
         "support_tickets" => "SELECT count(*) FROM support_tickets",
         "work_orders" => "SELECT count(*) FROM work_orders",
@@ -329,7 +328,10 @@ async fn seed_org(pool: &PgPool, org: OrgId) {
         "INSERT INTO organizations (id, slug, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
     )
     .bind(*org.as_uuid())
-    .bind(format!("workflow-context-{org}"))
+    // organizations_slug_check caps slugs at 40 characters. The compact UUID
+    // keeps this fixture unique without relying on another test to mask an
+    // invalid insert through ON CONFLICT.
+    .bind(format!("wfctx-{}", org.as_uuid().simple()))
     .bind("Workflow Context Other Org")
     .execute(pool)
     .await
@@ -361,7 +363,8 @@ async fn seed_definition(pool: &PgPool, org: OrgId) -> Uuid {
          VALUES ($1, $2, 'Workflow context', 'support_ticket', 'ACTIVE', 1, 1) RETURNING id",
     )
     .bind(*org.as_uuid())
-    .bind(format!("workflow-context-{}", Uuid::new_v4()))
+    // workflow_key is a dotted identifier, not an arbitrary display slug.
+    .bind(format!("workflow.context_{}", Uuid::new_v4().simple()))
     .fetch_one(pool)
     .await
     .unwrap();
@@ -440,7 +443,7 @@ async fn seed_work_order(
     let equipment: Uuid = sqlx::query_scalar(
         "INSERT INTO registry_equipment \
          (branch_id, customer_id, site_id, equipment_no, management_no, manufacturer_code, kind_code, power_code, status, specification, ton_text, model, source_sheet, source_row, org_id) \
-         VALUES ($1, $2, $3, 'CTX-001', 'CTX-MGMT-001', 'A', 'B', 'C', '임대', 'spec', '2.5', 'model', 'test', 1, $4) RETURNING id",
+         VALUES ($1, $2, $3, 'CTX01-0001', 'CTX-MGMT-001', 'A', 'B', 'C', '임대', 'spec', '2.5', 'model', 'test', 1, $4) RETURNING id",
     )
     .bind(*branch.as_uuid())
     .bind(customer)

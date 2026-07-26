@@ -117,6 +117,22 @@ describe("CI preflight contract", () => {
     );
   });
 
+  it("requires backend Buck2 commands to run from the repository root", () => {
+    for (const stepName of [
+      "Buck2 dev-auth feature PostgreSQL suites",
+      "Buck2 mnt-app unit suite",
+      "Buck2 mnt-app inline PostgreSQL suites",
+    ]) {
+      expectFailure(
+        workflow.replace(
+          `      - name: ${stepName}\n        working-directory: .\n`,
+          `      - name: ${stepName}\n`,
+        ),
+        "backend must preserve the locked fail-fast step multiset and failure semantics",
+      );
+    }
+  });
+
   it("requires dev-up smoke to install pinned DotSlash before its indirect Buck2 build", () => {
     const devUp = workflow.indexOf("  dev-up-smoke:\n");
     const installStep =
@@ -591,6 +607,135 @@ ${preflightRustToolchainSetup.trimEnd()}`,
         "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature",
       ),
       "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "//tools/buck:auth-rest-dev-auth-group-admin-postgres",
+        "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-group_admin_tenant_context",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "//tools/buck:provisioning-dev-principal-upsert-race-postgres",
+        "//backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race",
+      ),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper auth-rest-dev-auth-inline-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'name = "auth-rest-dev-auth-inline-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "auth-rest-dev-auth-inline-postgres",\n    test = "unexpected_loader.sh",',
+      ),
+    );
+    expectFailure(
+      workflow,
+      "tools/buck/BUCK must bind PostgreSQL wrapper provisioning-dev-principal-upsert-race-postgres to the loader and exact Rust binary",
+      postgresWrapperBuildFile.replace(
+        'deps = ["//backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race"],',
+        'deps = ["//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev_auth_session"],',
+      ),
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+        "      - name: Direct Cargo dev-auth suite\n        run: cargo test -p mnt-platform-auth-rest --features dev-auth\n\n      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+      ),
+      "backend must not run direct Cargo PostgreSQL tests for mnt-platform-auth-rest",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+        "      - name: Direct Cargo provisioning race\n        run: cargo test -p mnt-platform-provisioning --test dev_principal_upsert_race\n\n      - name: Buck2 dev-auth feature PostgreSQL suites\n",
+      ),
+      "backend must not run direct Cargo PostgreSQL tests for mnt-platform-provisioning",
+    );
+    const cargo = ["car", "go"].join("");
+    const test = ["te", "st"].join("");
+    const backendMarker = "      - name: Buck2 dev-auth feature PostgreSQL suites\n";
+    const insertBackendRun = (command) => workflow.replace(
+      backendMarker,
+      "      - name: Adversarial direct Cargo target\n        run: |\n          "
+        + command
+        + "\n\n"
+        + backendMarker,
+    );
+    for (const packageName of ["mnt-platform-auth-rest", "mnt-platform-provisioning"]) {
+      for (const runner of [cargo + " " + test, cargo + " nextest run"]) {
+        for (const packageArgument of [
+          "-p " + packageName,
+          "-p=" + packageName,
+          "--package " + packageName,
+          "--package=" + packageName,
+        ]) {
+          expectFailure(
+            insertBackendRun(runner + " " + packageArgument),
+            "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+          );
+          for (const prefix of [
+            "command env SQLX_OFFLINE=true ",
+            "command -- env -- ",
+            "command -p env SQLX_OFFLINE=true ",
+            "command -p -- env -- ",
+            "env -i command -- ",
+          ]) {
+            expectFailure(
+              insertBackendRun(prefix + runner + " " + packageArgument),
+              "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+            );
+          }
+          expectFailure(
+            insertBackendRun("env -S 'command env " + runner + " " + packageArgument + "'"),
+            "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+          );
+          expectFailure(
+            insertBackendRun("env -S 'command -p env " + runner + " " + packageArgument + "'"),
+            "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+          );
+          expectFailure(
+            insertBackendRun("env -S 'command -p -- env -- " + runner + " " + packageArgument + "'"),
+            "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+          );
+        }
+      }
+    }
+    for (const [packageName, command] of [
+      ["mnt-platform-provisioning", cargo + " \\\n          " + test + " \\\n          --package \\\n          mnt-platform-provisioning"],
+      ["mnt-platform-auth-rest", "env SQLX_OFFLINE=true " + cargo + " nextest run \\\n          -p=mnt-platform-auth-rest"],
+      ["mnt-platform-auth-rest", "env -u DATABASE_URL -- " + cargo + " nextest \\\n          run --package=mnt-platform-auth-rest"],
+      ["mnt-platform-provisioning", "command " + cargo + " " + test + " --package mnt-platform-provisioning"],
+    ]) {
+      expectFailure(
+        insertBackendRun(command),
+        "backend must not run direct Cargo PostgreSQL tests for " + packageName,
+      );
+    }
+    for (const command of [
+      "# " + cargo + " " + test + " -p mnt-platform-auth-rest",
+      cargo + " run -p mnt-platform-auth-rest",
+      "echo " + cargo + " " + test + " -p mnt-platform-provisioning",
+      "command -v " + cargo + " " + test + " -p mnt-platform-auth-rest",
+      "command -V " + cargo + " " + test + " -p mnt-platform-provisioning",
+    ]) {
+      const failures = evaluateCiPreflight(insertBackendRun(command)).failures;
+      assert.ok(
+        !failures.some((failure) => failure.startsWith("backend must not run direct Cargo PostgreSQL tests")),
+        failures.join("\n"),
+      );
+    }
+    for (const command of ["command --", "env -S", "env -S 'command --'"]) {
+      expectFailure(
+        insertBackendRun(command),
+        "backend must not contain a malformed executable shell surface",
+      );
+    }
+    expectFailure(
+      insertBackendRun(
+        "command -p " + cargo + " " + test + " -p mnt-platform-auth-rest \\",
+      ),
+      "backend must not contain a malformed executable shell surface",
     );
     expectFailure(
       workflow,

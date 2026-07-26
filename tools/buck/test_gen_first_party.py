@@ -127,6 +127,44 @@ class FirstPartyBuckGeneratorTests(unittest.TestCase):
             "backend/crates/equipment/rest/src",
         )
 
+    def test_openapi_drift_maps_every_compile_time_resource(self) -> None:
+        test_path = Path(GENERATOR.REPO) / "backend/app/tests/openapi_drift.rs"
+        source = test_path.read_text(encoding="utf-8")
+        include_paths = re.findall(r'include_str!\(\s*"([^"]+)"', source)
+        config = GENERATOR.integration_resource_config(
+            "mnt-app",
+            "tests/openapi_drift.rs",
+        )
+        mapped_roots = [
+            Path(GENERATOR.REPO) / destination
+            for destination in config["external"].values()
+        ]
+        app_source_root = Path(GENERATOR.REPO) / "backend/app/src"
+
+        unmapped = []
+        for include_path in include_paths:
+            resource = (test_path.parent / include_path).resolve()
+            self.assertTrue(resource.exists(), f"missing include_str resource: {resource}")
+            if resource.is_relative_to(app_source_root):
+                continue
+            if any(
+                resource == mapped_root
+                or (mapped_root.is_dir() and resource.is_relative_to(mapped_root))
+                for mapped_root in mapped_roots
+            ):
+                continue
+            unmapped.append(str(resource.relative_to(GENERATOR.REPO)))
+
+        self.assertEqual([], unmapped, "openapi_drift has unmapped include_str resources")
+
+    def test_workbench_integration_test_maps_its_path_module(self) -> None:
+        config = GENERATOR.integration_resource_config(
+            "mnt-app",
+            "tests/workbench_api.rs",
+        )
+
+        self.assertIn("src/workbench.rs", config["srcs"])
+
     def test_manifest_env_is_hermetic_and_repo_relative(self) -> None:
         env = GENERATOR.base_env("backend/crates/example", uses_sqlx=True)
 
@@ -178,6 +216,10 @@ class FirstPartyBuckGeneratorTests(unittest.TestCase):
         )
 
     def test_dev_auth_feature_variants_propagate_through_app_and_auth_rest(self) -> None:
+        auth_rest_variant = GENERATOR.INLINE_TEST_VARIANTS["mnt-platform-auth-rest"][0]
+        self.assertEqual("itest-dev-auth-postgres", auth_rest_variant["name"])
+        self.assertEqual("dev-auth", auth_rest_variant["feature"])
+        self.assertEqual("postgres", auth_rest_variant["resource"])
         self.assertEqual(
             ":mnt-app-lib-dev-auth",
             GENERATOR.integration_test_library_target(
@@ -188,6 +230,20 @@ class FirstPartyBuckGeneratorTests(unittest.TestCase):
             ":mnt-platform-auth-rest-dev-auth",
             GENERATOR.integration_test_library_target(
                 "mnt-platform-auth-rest", "tests/dev_auth_session.rs", ":mnt-platform-auth-rest"
+            ),
+        )
+        self.assertEqual(
+            ("dev-auth",),
+            GENERATOR.integration_test_features(
+                "mnt-platform-auth-rest", "tests/group_admin_tenant_context.rs"
+            ),
+        )
+        self.assertEqual(
+            ":mnt-platform-auth-rest-dev-auth",
+            GENERATOR.integration_test_library_target(
+                "mnt-platform-auth-rest",
+                "tests/group_admin_tenant_context.rs",
+                ":mnt-platform-auth-rest",
             ),
         )
 

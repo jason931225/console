@@ -34,7 +34,7 @@ const LIST_EXCEPTIONS_SQL: &str = "\
     SELECT e.id,e.code,e.kind,e.status,e.employee_id,employee.name AS employee_name,\
            employee.org_unit AS team,e.branch_id,e.work_date,e.created_at AS occurred_at,\
            e.detail,e.evidence,e.links,e.created_at,r.action AS resolution_action,\
-           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours,r.actor_user_id,\
+           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours::text AS ot_hours,r.actor_user_id,\
            r.resolved_at AS resolved_at \
     FROM attendance_exceptions e \
     JOIN employees employee ON employee.id=e.employee_id AND employee.org_id=e.org_id \
@@ -50,7 +50,7 @@ const EXCEPTION_BY_ID_SQL: &str = "\
     SELECT e.id,e.code,e.kind,e.status,e.employee_id,employee.name AS employee_name,\
            employee.org_unit AS team,e.branch_id,e.work_date,e.created_at AS occurred_at,\
            e.detail,e.evidence,e.links,e.created_at,r.action AS resolution_action,\
-           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours,r.actor_user_id,\
+           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours::text AS ot_hours,r.actor_user_id,\
            r.resolved_at AS resolved_at \
     FROM attendance_exceptions e \
     JOIN employees employee ON employee.id=e.employee_id AND employee.org_id=e.org_id \
@@ -541,7 +541,7 @@ impl PgAttendanceStore {
         let caller = caller.clone();
         with_audits::<_, _, AttendanceStoreError>(&self.pool, org, move |tx| Box::pin(async move {
             idempotency_lock(tx, caller.org_id, &key).await?;
-            let branch: Option<Uuid> = sqlx::query_scalar("SELECT branch_id FROM attendance_month_closes WHERE id=$1 FOR UPDATE").bind(command.close_id).fetch_optional(tx.as_mut()).await?.ok_or(AttendanceStoreError::NotFound)?;
+            let branch: Option<Uuid> = sqlx::query_scalar("SELECT branch_id FROM attendance_month_closes WHERE id=$1").bind(command.close_id).fetch_optional(tx.as_mut()).await?.ok_or(AttendanceStoreError::NotFound)?;
             app::ensure_scope(&caller, branch)?;
             let fingerprint_value = fingerprint(&json!({"close_id":command.close_id,"reason":reason,"detail":detail,"ref":reference}));
             let existing: Option<(Uuid, String)> = sqlx::query_as("SELECT id,request_fingerprint FROM attendance_close_amendments WHERE org_id=$1 AND idempotency_key=$2").bind(caller.org_id).bind(&key).fetch_optional(tx.as_mut()).await?;

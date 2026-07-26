@@ -21,6 +21,7 @@ import {
   type EvaluationCycleDetail,
   type EvaluationCycleStage,
   type EvaluationCycleSummary,
+  type EvaluationCycleTransition,
   type EvaluationEvidenceKind,
   type EvaluationEvidenceLinkInput,
   type EvaluationGoalInput,
@@ -34,6 +35,14 @@ import {
   type SaveEvaluationReviewRequest,
 } from "./evaluationApi";
 import type { EvaluationCapabilities } from "./evaluationCapabilities";
+import {
+  evidenceRoutePolicy,
+  parseEvaluationEvidenceKind,
+  parseEvaluationMetricKind,
+  restoreEvaluationState,
+  type EvaluationStoredState,
+  type EvaluationView,
+} from "./evaluationUiPolicy";
 import "./evaluation.css";
 
 type Props = {
@@ -45,15 +54,14 @@ type Props = {
   sessionKey: string | undefined;
 };
 
-const apiFenceIds = new WeakMap<object, number>();
+const apiFenceIds = new WeakMap<ConsoleApiClient, number>();
 let nextApiFenceId = 1;
 
 function apiFenceKey(api: ConsoleApiClient): number {
-  const reference = api as object;
-  const existing = apiFenceIds.get(reference);
+  const existing = apiFenceIds.get(api);
   if (existing) return existing;
   const id = nextApiFenceId++;
-  apiFenceIds.set(reference, id);
+  apiFenceIds.set(api, id);
   return id;
 }
 
@@ -121,6 +129,52 @@ function useFenced<T>() {
   return { data, loading, error, run, reset, reconcile };
 }
 
+/** Fenced async resources keyed by backend identity; stale results stay per-key. */
+function useKeyedFenced<T>() {
+  const [data, setData] = useState<Readonly<Record<string, T>>>({});
+  const generations = useRef(new Map<string, number>());
+  const operations = useRef(new Map<string, AbortController>());
+  const run = useCallback(async (key: string, work: (signal: AbortSignal) => Promise<T>) => {
+    operations.current.get(key)?.abort();
+    const controller = new AbortController();
+    operations.current.set(key, controller);
+    const token = (generations.current.get(key) ?? 0) + 1;
+    generations.current.set(key, token);
+    try {
+      const next = await work(controller.signal);
+      if (generations.current.get(key) === token) {
+        setData((current) => ({ ...current, [key]: next }));
+      }
+    } catch {
+      // Detail gates remain fail-closed when the authoritative report cannot load.
+    }
+  }, []);
+  const reset = useCallback((key?: string) => {
+    if (key) {
+      generations.current.set(key, (generations.current.get(key) ?? 0) + 1);
+      operations.current.get(key)?.abort();
+      operations.current.delete(key);
+      setData((current) =>
+        Object.fromEntries(Object.entries(current).filter(([entryKey]) => entryKey !== key)),
+      );
+      return;
+    }
+    for (const operation of operations.current.values()) operation.abort();
+    operations.current.clear();
+    generations.current.clear();
+    setData({});
+  }, []);
+  useEffect(
+    () => () => {
+      for (const operation of operations.current.values()) operation.abort();
+      operations.current.clear();
+      generations.current.clear();
+    },
+    [],
+  );
+  return { data, run, reset };
+}
+
 type Tone = "ok" | "warn" | "danger" | "info" | "purple" | "muted" | "teal";
 
 const CHIP_CLASS: Record<Tone, string> = {
@@ -163,25 +217,32 @@ const STAGES: EvaluationCycleStage[] = [
   "ARCHIVED",
 ];
 
+function transitionTarget(
+  transition: EvaluationCycleTransition,
+): Exclude<EvaluationCycleStage, "DRAFT"> {
+  switch (transition) {
+    case "open":
+      return "OPEN";
+    case "start_calibration":
+      return "CALIBRATION";
+    case "finalize":
+      return "FINALIZED";
+    case "archive":
+      return "ARCHIVED";
+  }
+}
+
 const GRADES: EvaluationGrade[] = ["S", "A", "B", "C", "D"];
 
-/** Cross-module drill target per evidence kind; unmapped kinds render as data chips. */
-const EVIDENCE_SCREEN: Partial<Record<EvaluationEvidenceKind, string>> = {
-  WORK_ORDER: "mywork",
-  APPROVAL: "appr",
-  KPI: "dashboard",
-};
-
 function stageLabel(stage: string): string {
-  return stage in text.stage
-    ? text.stage[stage as keyof typeof text.stage]
-    : text.stage.unknown;
+  return Object.entries(text.stage).find(([key]) => key === stage)?.[1] ?? text.stage.unknown;
 }
 
 function stateLabel(state: string): string {
-  return state in text.subjectState
-    ? text.subjectState[state as keyof typeof text.subjectState]
-    : text.subjectState.unknown;
+  return (
+    Object.entries(text.subjectState).find(([key]) => key === state)?.[1] ??
+    text.subjectState.unknown
+  );
 }
 
 function dueChip(dueDate: string): { label: string; tone: Tone } {
@@ -263,43 +324,28 @@ async function listManagerOptions(
     .map((user) => ({ id: user.id, display_name: user.display_name }));
 }
 
-type EvaluationView =
-  | { kind: "cycle" }
-  | { kind: "subject"; subjectId: string }
-  | { kind: "person"; employeeId: string; employeeName: string };
-
-interface StoredState {
-  cycleId?: string;
-  view?: EvaluationView;
-}
-
-function restoreState(key: string): StoredState {
-  try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as {
-      cycleId?: unknown;
-      view?: { kind?: unknown; subjectId?: unknown; employeeId?: unknown; employeeName?: unknown };
-    };
-    const cycleId = typeof parsed.cycleId === "string" ? parsed.cycleId : undefined;
-    const view = parsed.view;
-    if (view?.kind === "subject" && typeof view.subjectId === "string") {
-      return { cycleId, view: { kind: "subject", subjectId: view.subjectId } };
-    }
-    if (
-      view?.kind === "person" &&
-      typeof view.employeeId === "string" &&
-      typeof view.employeeName === "string"
-    ) {
-      return {
-        cycleId,
-        view: { kind: "person", employeeId: view.employeeId, employeeName: view.employeeName },
-      };
-    }
-    return { cycleId, view: { kind: "cycle" } };
-  } catch {
-    return {};
-  }
+function EvidenceLinkDisplay({
+  kind,
+  objectRef,
+  label,
+}: {
+  kind: EvaluationEvidenceKind;
+  objectRef: string;
+  label: string;
+}) {
+  const policy = evidenceRoutePolicy(kind);
+  return (
+    <span
+      className="evaluation__evidence-chip"
+      aria-label={`${text.evidenceKind[kind]} · ${text.notFound}`}
+      data-evidence-route={policy.reason}
+    >
+      <span className={CHIP_CLASS.muted}>{text.evidenceKind[kind]}</span>
+      <span className="evaluation__code">{objectRef}</span>
+      <span>{label}</span>
+      <span className={CHIP_CLASS.muted}>{text.notFound}</span>
+    </span>
+  );
 }
 
 /**
@@ -322,13 +368,17 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
   const evaluationApi = useMemo(() => createEvaluationApi(api), [api]);
   const navigate = useNavigate();
   const storageKey = `evaluation:view:${actorId ?? "anon"}`;
-  const restored = useMemo(() => restoreState(storageKey), [storageKey]);
+  const restored: EvaluationStoredState = useMemo(
+    () => restoreEvaluationState(sessionStorage.getItem(storageKey)),
+    [storageKey],
+  );
 
   const [stageFilter, setStageFilter] = useState<EvaluationCycleStage>();
   const [selectedCycleId, setSelectedCycleId] = useState(restored.cycleId);
   const [view, setView] = useState<EvaluationView>(restored.view ?? { kind: "cycle" });
   const [scorecard, setScorecard] = useState<{
     subjectId: string;
+    cycleId: string;
     kind: EvaluationReviewKind;
     employeeName: string;
     cycleName: string;
@@ -337,7 +387,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
   const cycles = useFenced<EvaluationCycleSummary[]>();
   const tasks = useFenced<EvaluationTaskSummary[]>();
   const detail = useFenced<EvaluationCycleDetail>();
-  const preflight = useFenced<EvaluationPreflightReport>();
+  const preflight = useKeyedFenced<EvaluationPreflightReport>();
   const subject = useFenced<EvaluationSubjectDetail>();
   const ledger = useFenced<EvaluationLedgerEntry[]>();
   const card = useFenced<EvaluationSubjectDetail>();
@@ -417,7 +467,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     (cycleId: string) => {
       void runDetail((signal) => evaluationApi.getCycle(cycleId, signal));
       if (capabilities.canManage) {
-        void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+        void runPreflight(cycleId, (signal) => evaluationApi.getPreflight(cycleId, signal));
       }
     },
     [runDetail, runPreflight, evaluationApi, capabilities.canManage],
@@ -469,6 +519,17 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     void runCard((signal) => evaluationApi.getSubject(scorecard.subjectId, signal));
   }, [scorecard, runCard, resetCard, evaluationApi]);
 
+  const reconcilePreflightFromServer = useCallback(
+    (cycleId: string) => {
+      // A committed mutation invalidates this cycle's local blocker/ready decision.
+      // Keep its gate hidden until the server returns a fresh preflight report.
+      resetPreflight(cycleId);
+      if (!capabilities.canManage) return;
+      void runPreflight(cycleId, (signal) => evaluationApi.getPreflight(cycleId, signal));
+    },
+    [capabilities.canManage, evaluationApi, resetPreflight, runPreflight],
+  );
+
   const runTransition = async (target: EvaluationCycleStage) => {
     const cycleId = selectedCycleId;
     if (!cycleId || !capabilities.canManage) return;
@@ -486,7 +547,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     reconcileCycles((current) =>
       current?.map((cycle) => (cycle.id === next.id ? next : cycle)),
     );
-    void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+    reconcilePreflightFromServer(cycleId);
   };
 
   const createCycle = async (event: SyntheticEvent<HTMLFormElement>) => {
@@ -531,7 +592,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
           }
         : current,
     );
-    void runPreflight((signal) => evaluationApi.getPreflight(cycleId, signal));
+    reconcilePreflightFromServer(cycleId);
     return true;
   };
 
@@ -539,7 +600,9 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     const next = await mutate((signal) =>
       evaluationApi.replaceGoals(subjectId, { goals }, signal),
     );
-    if (next) reconcileSubject(() => next);
+    if (!next) return;
+    reconcileSubject(() => next);
+    reconcilePreflightFromServer(next.cycle_id);
   };
 
   const calibrate = async (
@@ -565,6 +628,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
           }
         : current,
     );
+    reconcilePreflightFromServer(next.cycle_id);
   };
 
   const saveScorecardDraft = async (fields: SaveEvaluationReviewRequest) => {
@@ -588,17 +652,11 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
     });
     if (!submitted) return;
     setScorecard(undefined);
+    reconcilePreflightFromServer(open.cycleId);
     loadTasks();
     if (view.kind === "subject" && view.subjectId === open.subjectId) {
       loadSubject(open.subjectId);
     }
-  };
-
-  const drillEvidence = (kind: EvaluationEvidenceKind) => {
-    const screen = EVIDENCE_SCREEN[kind];
-    if (!screen) return;
-    setScorecard(undefined);
-    void navigate(consoleScreenPath(screen));
   };
 
   if (!capabilities.canRead && !capabilities.canSubmit) {
@@ -779,6 +837,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                             onClick={() => {
                               setScorecard({
                                 subjectId: task.subject_id,
+                                cycleId: task.cycle_id,
                                 kind: task.kind,
                                 employeeName: task.employee_name,
                                 cycleName: task.cycle_name,
@@ -809,7 +868,7 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                 data={detail.data}
                 loading={detail.loading}
                 error={detail.error}
-                preflightReport={preflight.data}
+                preflightReport={selectedCycleId ? preflight.data[selectedCycleId] : undefined}
                 onRetry={() => {
                   if (selectedCycleId) loadDetail(selectedCycleId);
                 }}
@@ -845,15 +904,15 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
                 onCalibrate={(subjectId, grade, reason) =>
                   void calibrate(subjectId, grade, reason)
                 }
-                onWriteManager={(subjectId, employeeName, cycleName) => {
+                onWriteManager={(subjectId, cycleId, employeeName, cycleName) => {
                   setScorecard({
                     subjectId,
+                    cycleId,
                     kind: "MANAGER",
                     employeeName,
                     cycleName,
                   });
                 }}
-                onDrillEvidence={drillEvidence}
               />
             )}
             {view.kind === "person" && (
@@ -953,7 +1012,6 @@ function EvaluationBody({ api, actorId, capabilities }: Props) {
           }}
           onSaveDraft={(fields) => void saveScorecardDraft(fields)}
           onSubmit={(fields) => void submitScorecard(fields)}
-          onDrillEvidence={drillEvidence}
         />
       )}
     </main>
@@ -1067,10 +1125,8 @@ function CycleDetailZone({
   const nextTransition = capabilities.canManage
     ? (preflightReport?.next_transition ?? null)
     : null;
-  const transitionLabel =
-    nextTransition && nextTransition !== "DRAFT"
-      ? text.transition[nextTransition]
-      : undefined;
+  const transitionStage = nextTransition ? transitionTarget(nextTransition) : undefined;
+  const transitionLabel = transitionStage ? text.transition[transitionStage] : undefined;
   return (
     <section className="evaluation__card" aria-label={data.name}>
       <div className="evaluation__zone-head">
@@ -1110,8 +1166,8 @@ function CycleDetailZone({
               ? Math.round((unit.manager_submitted / unit.total) * 100)
               : 0;
             return (
-              <li key={unit.org_unit}>
-                <span className="evaluation__team-name">{unit.org_unit}</span>
+              <li key={unit.org_unit ?? "unassigned"}>
+                <span className="evaluation__team-name">{unit.org_unit ?? "—"}</span>
                 <span className="evaluation__bar">
                   <span
                     className={BAR_CLASS[progressTone(pct)]}
@@ -1126,14 +1182,14 @@ function CycleDetailZone({
       ) : (
         <p role="status">{text.teamProgressEmpty}</p>
       )}
-      {nextTransition && transitionLabel && preflightReport && (
+      {nextTransition && transitionStage && transitionLabel && preflightReport && (
         <div className="evaluation__preflight">
           <button
             type="button"
             className="evaluation__solid"
             disabled={busy || preflightReport.blockers.length > 0}
             onClick={() => {
-              onTransition(nextTransition);
+              onTransition(transitionStage);
             }}
           >
             {transitionLabel}
@@ -1141,8 +1197,8 @@ function CycleDetailZone({
           {preflightReport.blockers.length > 0 && (
             <ul className="evaluation__gate-list" aria-label={text.blockers}>
               {preflightReport.blockers.map((blocker) => (
-                <li key={blocker}>
-                  <span className={CHIP_CLASS.danger}>{blocker}</span>
+                <li key={`${blocker.code}:${blocker.subject_id ?? "cycle"}`}>
+                  <span className={CHIP_CLASS.danger}>{blocker.message}</span>
                 </li>
               ))}
             </ul>
@@ -1150,8 +1206,8 @@ function CycleDetailZone({
           {preflightReport.advisories.length > 0 && (
             <ul className="evaluation__gate-list" aria-label={text.advisories}>
               {preflightReport.advisories.map((advisory) => (
-                <li key={advisory}>
-                  <span className={CHIP_CLASS.warn}>{advisory}</span>
+                <li key={`${advisory.code}:${advisory.subject_id ?? "cycle"}`}>
+                  <span className={CHIP_CLASS.warn}>{advisory.message}</span>
                 </li>
               ))}
             </ul>
@@ -1344,7 +1400,6 @@ function SubjectZone({
   onSaveGoals,
   onCalibrate,
   onWriteManager,
-  onDrillEvidence,
 }: {
   actorId: string | undefined;
   capabilities: EvaluationCapabilities;
@@ -1358,8 +1413,12 @@ function SubjectZone({
   onOpenPerson: (employeeId: string, employeeName: string) => void;
   onSaveGoals: (subjectId: string, goals: EvaluationGoalInput[]) => void;
   onCalibrate: (subjectId: string, grade: EvaluationGrade, reason: string) => void;
-  onWriteManager: (subjectId: string, employeeName: string, cycleName: string) => void;
-  onDrillEvidence: (kind: EvaluationEvidenceKind) => void;
+  onWriteManager: (
+    subjectId: string,
+    cycleId: string,
+    employeeName: string,
+    cycleName: string,
+  ) => void;
 }) {
   const [calGrade, setCalGrade] = useState<EvaluationGrade>();
   const [calReason, setCalReason] = useState("");
@@ -1489,7 +1548,7 @@ function SubjectZone({
                   className="evaluation__solid"
                   disabled={busy}
                   onClick={() => {
-                    onWriteManager(data.id, data.employee_name, cycleName ?? "");
+                    onWriteManager(data.id, data.cycle_id, data.employee_name, cycleName ?? "");
                   }}
                 >
                   {text.write}
@@ -1503,29 +1562,11 @@ function SubjectZone({
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((link) => (
                     <li key={link.id}>
-                      {EVIDENCE_SCREEN[link.object_kind] ? (
-                        <button
-                          type="button"
-                          className="evaluation__evidence-chip"
-                          onClick={() => {
-                            onDrillEvidence(link.object_kind);
-                          }}
-                        >
-                          <span className={CHIP_CLASS.muted}>
-                            {text.evidenceKind[link.object_kind]}
-                          </span>
-                          <span className="evaluation__code">{link.object_ref}</span>
-                          <span>{link.label}</span>
-                        </button>
-                      ) : (
-                        <span className="evaluation__evidence-chip">
-                          <span className={CHIP_CLASS.muted}>
-                            {text.evidenceKind[link.object_kind]}
-                          </span>
-                          <span className="evaluation__code">{link.object_ref}</span>
-                          <span>{link.label}</span>
-                        </span>
-                      )}
+                      <EvidenceLinkDisplay
+                        kind={link.object_kind}
+                        objectRef={link.object_ref}
+                        label={link.label}
+                      />
                     </li>
                   ))}
               </ul>
@@ -1649,9 +1690,8 @@ function GoalsEditor({
             value={row.metric_kind}
             aria-label={text.metric}
             onChange={(event) => {
-              update(index, {
-                metric_kind: event.currentTarget.value as EvaluationGoalInput["metric_kind"],
-              });
+              const metricKind = parseEvaluationMetricKind(event.currentTarget.value);
+              if (metricKind) update(index, { metric_kind: metricKind });
             }}
           >
             <option value="KPI">{text.metricKind.KPI}</option>
@@ -1728,7 +1768,6 @@ function ScorecardDialog({
   onClose,
   onSaveDraft,
   onSubmit,
-  onDrillEvidence,
 }: {
   open: { subjectId: string; kind: EvaluationReviewKind; employeeName: string; cycleName: string };
   detail: EvaluationSubjectDetail | undefined;
@@ -1740,14 +1779,13 @@ function ScorecardDialog({
   onClose: () => void;
   onSaveDraft: (fields: SaveEvaluationReviewRequest) => void;
   onSubmit: (fields: SaveEvaluationReviewRequest) => void;
-  onDrillEvidence: (kind: EvaluationEvidenceKind) => void;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    const previous = document.activeElement;
     dialogRef.current?.focus();
     return () => {
-      previous?.focus();
+      if (previous instanceof HTMLElement) previous.focus();
     };
   }, []);
   const title = open.cycleName
@@ -1800,7 +1838,6 @@ function ScorecardDialog({
             onClose={onClose}
             onSaveDraft={onSaveDraft}
             onSubmit={onSubmit}
-            onDrillEvidence={onDrillEvidence}
           />
         )}
       </div>
@@ -1815,7 +1852,6 @@ function ScorecardForm({
   onClose,
   onSaveDraft,
   onSubmit,
-  onDrillEvidence,
 }: {
   kind: EvaluationReviewKind;
   detail: EvaluationSubjectDetail;
@@ -1823,12 +1859,11 @@ function ScorecardForm({
   onClose: () => void;
   onSaveDraft: (fields: SaveEvaluationReviewRequest) => void;
   onSubmit: (fields: SaveEvaluationReviewRequest) => void;
-  onDrillEvidence: (kind: EvaluationEvidenceKind) => void;
 }) {
   const existing = detail.reviews.find((review) => review.kind === kind);
   const [grade, setGrade] = useState<EvaluationGrade | undefined>(existing?.grade ?? undefined);
   const [note, setNote] = useState(existing?.note ?? "");
-  const [evidence, setEvidence] = useState<Omit<EvaluationEvidenceLinkInput, "sort_order">[]>(
+  const [evidence, setEvidence] = useState<EvaluationEvidenceLinkInput[]>(
     () =>
       [...(existing?.evidence_links ?? [])]
         .sort((a, b) => a.sort_order - b.sort_order)
@@ -1842,9 +1877,9 @@ function ScorecardForm({
   const [draftRef, setDraftRef] = useState("");
   const [draftLabel, setDraftLabel] = useState("");
   const fields = (): SaveEvaluationReviewRequest => ({
-    grade: grade ?? null,
+    ...(grade === undefined ? {} : { grade }),
     note: note.trim() ? note.trim() : null,
-    evidence_links: evidence.map((link, index) => ({ ...link, sort_order: index + 1 })),
+    evidence_links: evidence,
   });
   const submitDisabled =
     busy || !grade || (kind === "MANAGER" && evidence.length === 0);
@@ -1872,29 +1907,11 @@ function ScorecardForm({
           <ul className="evaluation__evidence" aria-label={text.evidence}>
             {evidence.map((link, index) => (
               <li key={`${link.object_ref}:${String(index)}`}>
-                {EVIDENCE_SCREEN[link.object_kind] ? (
-                  <button
-                    type="button"
-                    className="evaluation__evidence-chip"
-                    onClick={() => {
-                      onDrillEvidence(link.object_kind);
-                    }}
-                  >
-                    <span className={CHIP_CLASS.muted}>
-                      {text.evidenceKind[link.object_kind]}
-                    </span>
-                    <span className="evaluation__code">{link.object_ref}</span>
-                    <span>{link.label}</span>
-                  </button>
-                ) : (
-                  <span className="evaluation__evidence-chip">
-                    <span className={CHIP_CLASS.muted}>
-                      {text.evidenceKind[link.object_kind]}
-                    </span>
-                    <span className="evaluation__code">{link.object_ref}</span>
-                    <span>{link.label}</span>
-                  </span>
-                )}
+                <EvidenceLinkDisplay
+                  kind={link.object_kind}
+                  objectRef={link.object_ref}
+                  label={link.label}
+                />
                 <button
                   type="button"
                   onClick={() => {
@@ -1914,7 +1931,8 @@ function ScorecardForm({
             value={draftKind}
             aria-label={text.evidence}
             onChange={(event) => {
-              setDraftKind(event.currentTarget.value as EvaluationEvidenceKind);
+              const evidenceKind = parseEvaluationEvidenceKind(event.currentTarget.value);
+              if (evidenceKind) setDraftKind(evidenceKind);
             }}
           >
             <option value="ATTENDANCE">{text.evidenceKind.ATTENDANCE}</option>

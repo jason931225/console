@@ -39,7 +39,6 @@ export const FEATURES = {
   INTEGRITY_FINDINGS_READ: "integrity_findings_read",
   ROLE_MANAGE: "role_manage",
   SALES_MANAGE: "sales_manage",
-  PAYROLL_RUN_READ: "payroll_run_read",
 } as const;
 
 const ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN];
@@ -57,6 +56,13 @@ const OPERATIONAL_ROLES = [
 const ROLE_MANAGE_ROLES = [ROLES.SUPER_ADMIN];
 /** HR directory read (ADMIN/EXECUTIVE/SUPER_ADMIN). */
 const DIRECTORY_ROLES = MANAGEMENT_ROLES;
+/**
+ * Payroll run surfaces are org-wide: the backend's `authorize_org_wide`
+ * built-in path admits EXECUTIVE/SUPER_ADMIN only. `ConsoleGrants` flattens
+ * feature capabilities without their branch scope, so a feature hint cannot
+ * safely prove the custom all-branch grant required by payroll.
+ */
+const PAYROLL_ORG_WIDE_ROLES = [ROLES.EXECUTIVE, ROLES.SUPER_ADMIN];
 /** Integrity/compliance findings (EXECUTIVE/SUPER_ADMIN — ADMIN excluded by design). */
 const INTEGRITY_ROLES = [ROLES.EXECUTIVE, ROLES.SUPER_ADMIN];
 
@@ -210,11 +216,7 @@ export const NAV_GROUPS: readonly ConsoleNavGroup[] = [
         screen: "payroll",
         labelKey: "console.shell.nav.payroll",
         icon: "calc",
-        // Grant-only, mirroring the server: payroll_run_read is gated by
-        // `authorize_org_wide`, whose built-in path never grants ADMIN, so a
-        // role-bearing gate would advertise a screen the API denies. Listing
-        // the feature alone means only a real org-wide grant reveals it.
-        gate: g(undefined, [FEATURES.PAYROLL_RUN_READ]),
+        gate: g(PAYROLL_ORG_WIDE_ROLES),
       },
       // Personal attendance self-service is available to every authenticated
       // principal in the mounted inventory. Manager workspace access remains

@@ -130,7 +130,7 @@ describe("structured xcresult verifier", () => {
     }), ["ExampleUITests/testFailurePath", "ExampleUITests/testHappyPath"]);
   });
 
-  it("excludes only the documented infrastructure-only XCTest prewarm from functional aggregate discovery", () => {
+  it("never excludes a synthetic XCTest prewarm from functional aggregate discovery", () => {
     assert.deepEqual(discoverExpectedSwiftTests({
       "XCTestPrewarmUITests.swift": `/// Bounded infrastructure-only warmup for XCTest and the app host.
 final class XCTestPrewarmUITests: XCTestCase {
@@ -143,6 +143,7 @@ final class XCTestPrewarmUITests: XCTestCase {
       "ExampleUITests/testFunctionalPath",
       "PretenderUITests/testRunnerAndHostLaunch",
       "XCTestPrewarmUITests/testAdditionalWarmupMustRemainFunctional",
+      "XCTestPrewarmUITests/testRunnerAndHostLaunch",
     ]);
   });
 

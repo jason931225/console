@@ -8,11 +8,36 @@
 > Current authority is
 > [`console-enterprise-roadmap.md`](console-enterprise-roadmap.md), its
 > machine-readable capability and jurisdiction registers, current repository
-> contracts, and exact-candidate evidence.
+> contracts, the
+> [`console-development-pipeline.md`](console-development-pipeline.md)
+> plan-to-deployment pipeline, and exact-candidate evidence.
 > The current Buck2 execution policy is
 > [`console-buck2-scale-playbook.md`](console-buck2-scale-playbook.md). The
 > older Buck2-CI charter below is historical context and cannot authorize Cargo
 > product-test completion evidence.
+
+## Phase 0 Support SLO truth-down (2026-07-25)
+
+This Support-only source overlay is anchored to exact revision
+`55d00f8aacaf8d1ba4db87b2f5345605af856a27` and supersedes the historical
+Support SLO parity/completion language later in this ledger. Status is
+**PARTIAL**:
+
+- six local `SupportTicketCategory` defaults currently drive timers, breach
+  counts, and alert targets;
+- ticket `due_at` is derived SLA state and is not SLO policy authority;
+- the separately seeded `support_slo_setting` ontology type uses the legacy
+  three-bucket `incident`/`request`/`change` taxonomy, is incompatible with the
+  six ticket categories, and does not serve the timer/alert computations;
+- settings approval is a client-only staging-actor check followed by independent
+  browser-issued writes, not one backend-atomic approval; and
+- the approved next architecture is one Support-owned immutable six-category
+  elapsed-only policy aggregate with backend atomic approval.
+
+The approved architecture is not implementation evidence. This ledger does not
+claim its migration identifier, backend route, parity, deployment, or
+completion. The machine-readable capability registry still controls admission;
+this historical ledger cannot promote Support exposure.
 
 Authority model (2026-07-09 directive):
 
@@ -307,6 +332,24 @@ Candidate advanced to the commit fixing `tools/buck/run_test_with_postgres_env.s
 ## CANDIDATE REBIND (2026-07-25, migration contiguity)
 Candidate advanced to the commit renumbering the ontology catalog migration 0211 → 0204. The migration-safety gate was the only failing step in the backend job — fmt, clippy and the test suites passed — because 0203 jumped to 0211 while 0204–0210 sat pre-assigned to CRM lanes that have not landed. Fixed by the policy already in §5: the integrator assigns at merge, taking the next free number. All records re-bind and remain HOLD.
 
+## CANDIDATE REBIND (2026-07-25, frozen PR491/base reconciliation)
+Candidate advanced to signed merge `008e20dca426dc41c7444a39ccf85edce135b220` with first parent the frozen PR491 consolidation and second parent the signed operational-runtime authority base. The merge carries the contiguous ontology catalog migration at 0204 and preserves the credential-loader PostgreSQL Buck wrapper targets. Every capability, evidence contract, jurisdiction binding, control trace, review disposition, and exposure state remains `HOLD`; no completion, legal qualification, deployment, or production-exposure claim is promoted by this authority-only child.
+
+## CANDIDATE REBIND (2026-07-25, Evaluation Buck runtime dependencies)
+Candidate advanced to signed commit `719893cab80fe163ca8af25b74a86cd6ff2bae22`, a direct child of the prior authority tip, to wire the Evaluation application runtime dependencies and declare the credential-loader PostgreSQL wrapper `//tools/buck:app-evaluation-cycle-api-postgres`. The wrapper target is candidate-resolvable, but its credentialed execution receipt is still unadmitted. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, or production-exposure claim.
+
+## CANDIDATE REBIND (2026-07-25, PR491 stabilization train)
+Candidate advanced to signed commit `b4b9d67206ba86fdbb1727d6bf2ab70d3e2e5ad3`, the frozen PR491 product candidate after independently reviewed dev-auth locator, generated-client, Android fixture, Evaluation request-context, Buck receipt, and hosted-iOS shard repairs. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and exposure state remains `HOLD`; no completion, legal qualification, deployment, or production-exposure claim is promoted by this authority-only child.
+
+## CANDIDATE REBIND (2026-07-25, PR491 T4 repaired integration rehearsal)
+Candidate advanced to signed source candidate `04ef8258398bb0c3ec995754434ae9b71b6377e7`, which consolidates independently reviewed Evaluation identity/authorization changes and deterministic PostgreSQL lock-graph proof together with independently reviewed disposable-PostgreSQL CI topology, Attendance persistence, Evaluation preflight, communications continuity, Buck snapshot invalidation, and iOS critical-report and Messenger accessibility repairs. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and exposure state remains `HOLD`; this authority-only child makes no completion, legal qualification, deployment, release, or production-exposure claim.
+
+## CANDIDATE REBIND (2026-07-25, PR491 forward-only topology recovery)
+Candidate advanced to signed source candidate `bf9f2e12f87b5ba38508469a88e967ee7b9d2df7`, integrating the P0.2 single-candidate archive impact probe and the P0.3 one-archive/two-extract preflight. This forward-only authority topology recovery preserves every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state at `HOLD`; it makes no completion, deployment, release, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-25, PR491 T7 approved integration)
+Candidate advanced to signed source candidate `bdc52d46e6cd6edd962ae6a6a4b1c04152fb9011`, consolidating the T6 resource-aware verification queue and Evaluation repairs, the Attendance runtime-role amendment repair, the iOS cold-shard and report-feedback repair, and the clean-worktree receipt-parent and promotion-integrity repairs. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
 ## CANDIDATE REBIND (2026-07-25, four red jobs closed)
 Candidate advanced to the commit repairing the Android and e2e test call sites. This rebind covers four fixes, none of which relaxes a check: the evidence register no longer lets a late `/api/v1/users` response re-seed rows from the list endpoint and redraw a held object as unheld; the PR 473 operational gate now reads the stream Buck2 actually writes its receipts to (its summary pattern could not match any real libtest run, so the gate as shipped could never pass); two Kotlin fixtures gained the required-but-nullable `maintenanceType`/`maintenanceCause`; and the ATTENDANCE-31 exception locator is scoped to the `근태 예외` region instead of matching the monthly board row as well. All records re-bind and remain HOLD; nothing is promoted.
 
@@ -316,8 +359,14 @@ Candidate advanced to the commit restoring `cargo test --workspace` to the PR 47
 ## CANDIDATE REBIND (2026-07-25, backend timeout fitted to the restored suite)
 Candidate advanced to the commit raising the backend job timeout from 45 to 90 minutes. The 45 was sized for main's job shape before the disposable-PostgreSQL harness added 13 per-invocation Docker bring-ups ahead of the workspace suite; with the suite restored this branch extrapolates to roughly 70 minutes, so 45 would have reported a timeout instead of a test result. Nothing about what is executed changes. All records re-bind and remain HOLD.
 
+## CANDIDATE REBIND (2026-07-25, PR491 T8 forward base integration)
+Candidate advanced to signed merge `b01461c21b52e51eb00decef9110f09a9a1b3a32`, forward-integrating the advanced operational base into the T7 authority lineage and preserving the independently approved conflict resolutions across the authority ledger, CI, test, evidence, and attendance seams. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
 ## CANDIDATE REBIND (2026-07-25, workspace restoration withdrawn)
 Candidate advanced to the commit withdrawing the previous rebind's workspace restoration. Migration 0196 restricts migration application to the `mnt_buck_admin` harness identity with an armed `mnt.sqlx_test_bootstrap`; CI's `postgres` service account cannot satisfy it, so `cargo test --workspace` against that database cannot execute a single migration-applying test. The earlier claim that the run had been deleted carelessly was wrong — the deletion was forced. What stands is the silence around it, now corrected in four places, and the coverage gap itself, recorded as H-8 with a verified restoration recipe and left as its own charter. Nothing is promoted; all records remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, PR491 T9 latest-base integration)
+Candidate advanced to signed merge `e9b923bcd17ce706131d7664d387fa7914a1ade5`, forward-integrating the latest operational base into the T8 authority lineage and preserving the independently approved conflict resolutions across the authority ledger and pipeline-correction seams. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
 
 ## CANDIDATE REBIND (2026-07-25, dev-auth suites re-identified)
 Candidate advanced to the commit running the dev-auth suites as `mnt_buck_admin`. Fixing the PR 473 gate exposed the next casualty of migration 0196 one run later: two direct-Cargo commands were still connecting as the `postgres` service account, which 0196 forbids from applying migrations, so every test there died before asserting. CI now provisions the required superuser identity and exports `MNT_BUCK_ADMIN_DATABASE_URL`; verified locally at 15/15 and 1/1 against the exact suites CI failed. This also corrects the previous rebind's claim that the workspace sweep was impossible — it is merely un-run, and now cheap to restore. All records re-bind and remain HOLD.
@@ -333,3 +382,12 @@ Candidate advanced to signed commit `6d8dcb6c06bc4e8ed94db977c4e872e62ebf827a`, 
 
 ## CANDIDATE REBIND (2026-07-25, PR492 hosted rustfmt normalization)
 Candidate advanced to signed commit `d8db5ff40724f321a234deef0ee6216e7124205c`, a formatting-only import normalization after exact hosted `cargo fmt` evidence. Runtime semantics are unchanged, so the prior credential-safe Buck2 PostgreSQL receipt of 10/10 tests remains applicable; no new runtime evidence is claimed. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-26, PR491 forward stabilization consolidation)
+Candidate advanced to signed merge `708af46a5324109aca1b0c566026a8a9b53e8b68`, a forward-base consolidation carrying reviewed f02/backend-root and the Messenger pointer guard. The Attendance and iOS leaves are patch-equivalent in this combined head; the combined-head Attendance PostgreSQL run remains a required hosted receipt and is not claimed here. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-26, PR491 PostgreSQL durable-readiness repair)
+Candidate advanced to signed commit `c6e09a257d77acd53b006fc6b973d51ff4d3676d`, carrying the reviewed three-commit PostgreSQL durable-readiness repair: the targeted harness and exact-image predicate, with independent approval. Hosted exact-head PR473, PostgreSQL, and combined-head verification remain required; no completion claim is made here. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-26, PR491 detail-scoped report evidence)
+Candidate advanced to signed commit `051d1eafa124b5590aeab85a8898d66c47021d9f`, which repairs the deterministic critical-report XCUITest false red by resolving live feedback and terminal status through stable identifiers owned by the presented detail, then separately asserting their rendered Korean labels. Targeted mutation tests, the fail-closed checker, Swift parsing, diff validation, and independent review pass; hosted exact-head critical-report and aggregate verification remain required and are not claimed here. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.

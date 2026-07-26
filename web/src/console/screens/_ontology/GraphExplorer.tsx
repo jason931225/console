@@ -9,15 +9,10 @@ import {
   type ObjectExplorerModel,
   type ObjectExplorerNode,
 } from "../../explore";
-import { ObjectCard } from "../../objectcard";
 import { GovernedObjectCard } from "../../objectcard";
+import { ontologyEntityRef } from "../../runtime/entityRef";
+import type { ObjectRuntimePort } from "../../runtime/objectRuntime";
 import type { ConsoleApiClient } from "../../../api/client";
-import type {
-  ObjectCardDescriptor,
-  ObjectCardHandlers,
-  ObjectCardLifecycleStep,
-  ObjectLifecycleState,
-} from "../../objectcard";
 import { objDrag } from "../../window";
 import "../../tokens.css";
 
@@ -47,57 +42,6 @@ function typeColor(key: string): string {
     hash = (hash * 31 + key.charCodeAt(i)) | 0;
   }
   return TYPE_PALETTE[Math.abs(hash) % TYPE_PALETTE.length];
-}
-
-// Explorer lifecycle phase → ObjectCard instance FSM (mirrors ObjectExplorerScreen:
-// review/undefined ⇒ active, revision ⇒ locked). Kept local so the graph pane owns
-// its own honest degrade path without reaching into the screen module.
-function cardLifecycleState(node: ObjectExplorerNode): ObjectLifecycleState {
-  switch (node.lifecycle?.phase) {
-    case "draft":
-      return "draft";
-    case "revision":
-      return "locked";
-    case "archived":
-      return "archived";
-    case "disposed":
-      return "disposed";
-    default:
-      return "active";
-  }
-}
-
-function lifecycleSteps(state: ObjectLifecycleState): ObjectCardLifecycleStep[] {
-  const order: ObjectLifecycleState[] =
-    state === "locked"
-      ? ["draft", "active", "locked", "archived", "disposed"]
-      : ["draft", "active", "archived", "disposed"];
-  const currentIndex = order.indexOf(state);
-  return order.map((step, index) => ({
-    state: step,
-    reached: index <= currentIndex,
-    current: index === currentIndex,
-  }));
-}
-
-// Degraded inspector payload built from the node's own graph fields — no
-// fabricated properties/relations/actions/history. Used before a resolve, and
-// as the honest fallback for projected instances (S23: not get/traverse-able)
-// and for any resolve failure. The graph pane itself carries UPSTREAM/DOWNSTREAM.
-function degradedDescriptor(node: ObjectExplorerNode): ObjectCardDescriptor {
-  const state = cardLifecycleState(node);
-  return {
-    id: node.id,
-    code: node.code,
-    title: node.label,
-    objectType: { key: node.type_id ?? node.type, title: node.type },
-    lifecycleState: state,
-    properties: [],
-    relations: [],
-    lifecycle: lifecycleSteps(state),
-    history: [],
-    actions: [],
-  };
 }
 
 const wrapStyle: CSSProperties = {
@@ -322,47 +266,56 @@ interface LegendEntry {
   count: number;
 }
 
-export interface GraphExplorerProps {
-  /** Enables the governed preflight → execute card for real workspace reads. */
-  api?: ConsoleApiClient;
+interface GraphExplorerBaseProps {
   model: ObjectExplorerModel;
   /** Parent hook loads the search-around neighbourhood for the new center. */
   onFocusChange?: (id: string) => void;
   /** Host-selected exact instance to focus after its governed graph is present. */
   requestedFocusId?: string;
-  /**
-   * GET /ontology/instances/{id} (+history/traverse) → the full inspector card.
-   * Throws/404s for projected instances (S23) and transient failures → the pane
-   * degrades to the node's graph fields, never fabricates.
-   */
-  resolveNodeDescriptor?: (node: ObjectExplorerNode) => Promise<ObjectCardDescriptor | undefined>;
   /** Object-type *version* ids whose backing_kind is projected (honest 조회 전용). */
   projectedTypeIds?: ReadonlySet<string>;
-  /** Optional inspector action/lifecycle wiring (read-only explore omits it). */
-  cardHandlers?: ObjectCardHandlers;
 }
+
+interface GovernedGraphExplorerProps extends GraphExplorerBaseProps {
+  /** Real authenticated API used by the governed card's dynamic/action reads. */
+  api: ConsoleApiClient;
+  /** Scope-bound port for the docked inspector. */
+  runtime: ObjectRuntimePort;
+  /** Opaque tenant partition used only for EntityRef fencing. */
+  tenantScopeKey: string;
+  /** Opaque effective-session authority used only for EntityRef fencing. */
+  authorityKey: string;
+}
+
+interface ReadOnlyGraphExplorerProps extends GraphExplorerBaseProps {
+  api?: never;
+  runtime?: undefined;
+  tenantScopeKey?: never;
+  authorityKey?: never;
+}
+
+export type GraphExplorerProps =
+  | GovernedGraphExplorerProps
+  | ReadOnlyGraphExplorerProps;
 
 /**
  * The object-graph explorer: a typed node graph (code chips, type-coloured dots,
  * relation-labelled edges, zoom/pan, 범례 legend) beside a docked ObjectCard
  * inspector. Clicking a node recenters the graph AND selects it (drill =
- * navigate); the inspector resolves the full 3-layer card, degrading honestly
- * for projected instances. Pure model layer (buildObjectExplorerView +
+ * navigate); the inspector resolves through the scope-bound runtime while
+ * projected instances remain explicitly read-only. Pure model layer (buildObjectExplorerView +
  * layoutObjectExplorerNodes) is reused; only the rendering is new.
  */
-export function GraphExplorer({
-  api,
-  model,
-  onFocusChange,
-  requestedFocusId,
-  resolveNodeDescriptor,
-  projectedTypeIds,
-  cardHandlers,
-}: GraphExplorerProps) {
+export function GraphExplorer(props: GraphExplorerProps) {
+  const {
+    model,
+    onFocusChange,
+    requestedFocusId,
+    projectedTypeIds,
+  } = props;
+  const governed = props.runtime === undefined ? undefined : props;
   const [focusId, setFocusId] = useState<string | undefined>(model.nodes[0]?.id);
   const [selectedId, setSelectedId] = useState<string | undefined>();
-  const [resolved, setResolved] = useState<Map<string, ObjectCardDescriptor>>(new Map());
-  const [failed, setFailed] = useState<Set<string>>(new Set());
   const [cardRefreshEpoch, setCardRefreshEpoch] = useState(0);
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -371,10 +324,6 @@ export function GraphExplorer({
   );
   const panDrag = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
   const nodeButtons = useRef(new Map<string, HTMLButtonElement>());
-  const resolverEpochRef = useRef(0);
-  useEffect(() => {
-    resolverEpochRef.current += 1;
-  }, [resolveNodeDescriptor]);
   useEffect(() => {
     const onResize = () => {
       setNarrow(window.innerWidth < 960);
@@ -410,38 +359,6 @@ export function GraphExplorer({
     [projectedTypeIds],
   );
 
-  const resolve = useCallback(
-    (node: ObjectExplorerNode, force = false): void => {
-      if (!resolveNodeDescriptor || isProjected(node)) return;
-      if (!force && (resolved.has(node.id) || failed.has(node.id))) return;
-      const resolverEpoch = resolverEpochRef.current;
-      void resolveNodeDescriptor(node)
-        .then((descriptor) => {
-          if (!descriptor || resolverEpoch !== resolverEpochRef.current) return;
-          setResolved((current) => new Map(current).set(node.id, descriptor));
-        })
-        .catch(() => {
-          if (resolverEpoch !== resolverEpochRef.current) return;
-          setFailed((current) => new Set(current).add(node.id));
-        });
-    },
-    [resolveNodeDescriptor, isProjected, resolved, failed],
-  );
-
-  // Resolve the currently-selected node (the focus on first mount) so the docked
-  // inspector opens with its real relations/properties instead of the degraded
-  // 관계 0개 card — the summary already claims the relation count, so the card
-  // must not read empty before the user clicks. Guarded (projected/resolved/
-  // failed) inside `resolve`, so this is a no-op once a node is loaded.
-  useEffect(() => {
-    if (!view) return;
-    const target =
-      view.nodes.find(
-        (node) => node.id === (effectiveSelectedId ?? effectiveFocusId),
-      ) ?? view.focus;
-    resolve(target);
-  }, [effectiveFocusId, effectiveSelectedId, resolve, view]);
-
   const onNodeActivate = useCallback(
     (node: ObjectExplorerNode): void => {
       setSelectedId(node.id);
@@ -449,9 +366,8 @@ export function GraphExplorer({
         setFocusId(node.id);
         onFocusChange?.(node.id);
       }
-      resolve(node);
     },
-    [effectiveFocusId, onFocusChange, resolve],
+    [effectiveFocusId, onFocusChange],
   );
 
   const onNodeKeyDown = useCallback(
@@ -485,21 +401,23 @@ export function GraphExplorer({
 
   const selectedNode =
     view.nodes.find((node) => node.id === effectiveSelectedId) ?? view.focus;
-  const descriptor = resolved.get(selectedNode.id) ?? degradedDescriptor(selectedNode);
   const showProjected = isProjected(selectedNode);
+  const reference =
+    governed && selectedNode.type_id
+      ? ontologyEntityRef({
+          tenantScopeKey: governed.tenantScopeKey,
+          authorityKey: governed.authorityKey,
+          objectTypeId: selectedNode.type_id,
+          id: selectedNode.id,
+          codeHint: selectedNode.code,
+          titleHint: selectedNode.label,
+        })
+      : undefined;
   const zoomPct = Math.round(scale * 100);
 
   function refreshSelectedCard(): void {
-    // Keep the committed card mounted while the server-fresh descriptor resolves;
-    // its receipt and local history must remain visible through this refresh.
     setCardRefreshEpoch((current) => current + 1);
-    setFailed((current) => {
-      const next = new Set(current);
-      next.delete(selectedNode.id);
-      return next;
-    });
     onFocusChange?.(selectedNode.id);
-    resolve(selectedNode, true);
   }
 
   function zoomBy(delta: number): void {
@@ -658,17 +576,15 @@ export function GraphExplorer({
             {G.projectedNotice}
           </div>
         ) : null}
-        {api && !showProjected ? (
+        {!showProjected && reference && governed ? (
           <GovernedObjectCard
-            api={api}
-            descriptor={descriptor}
-            handlers={cardHandlers}
+            api={governed.api}
+            reference={reference}
+            runtime={governed.runtime}
             onInstanceChange={refreshSelectedCard}
             refreshEpoch={cardRefreshEpoch}
           />
-        ) : (
-          <ObjectCard descriptor={descriptor} handlers={cardHandlers} />
-        )}
+        ) : null}
         <ul aria-label={G.relationList} style={relationListStyle}>
           {view.links.map((link) => {
             const from = view.nodes.find((node) => node.id === link.source_id);

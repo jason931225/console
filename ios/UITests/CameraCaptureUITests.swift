@@ -13,32 +13,31 @@ final class CameraCaptureUITests: FieldUITestCase {
             return
         }
 
-        // Resolve the one-time system prompt into the same explicit denied
-        // terminal state asserted below. The monitor is only input handling;
-        // it is never counted as a successful camera outcome.
-        let permissionMonitor = addUIInterruptionMonitor(withDescription: "Camera permission") { alert in
-            for label in ["Don’t Allow", "Don't Allow", "허용 안 함", "허용하지 않음"] {
-                let deny = alert.buttons[label]
-                if deny.exists {
-                    deny.tap()
-                    return true
-                }
-            }
-            return false
-        }
-        defer { removeUIInterruptionMonitor(permissionMonitor) }
-
+        // Camera privacy is owned by SpringBoard, not the app process. Resolve
+        // the reset-on-every-shard prompt through the owning process before
+        // asserting any app-owned camera state; a missing prompt is a failure,
+        // never an implicit pass into a pre-authorized simulator state.
         capture.tap()
-        app.tap()
 
-        let systemPermissionAlert = app.alerts.firstMatch
-        let permissionResolutionDeadline = Date().addingTimeInterval(5)
-        while systemPermissionAlert.exists && Date() < permissionResolutionDeadline {
-            try await Task.sleep(for: .milliseconds(100))
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let systemPermissionAlert = springboard.alerts.firstMatch
+        guard systemPermissionAlert.waitForExistence(timeout: 5) else {
+            XCTFail("The reset camera-permission prompt must be presented by SpringBoard.")
+            return
         }
-        XCTAssertFalse(
-            systemPermissionAlert.exists,
-            "The system camera permission alert must resolve before the app-owned camera controls are used."
+
+        let deny = ["Don’t Allow", "Don't Allow", "허용 안 함", "허용하지 않음"]
+            .lazy
+            .map { systemPermissionAlert.buttons[$0] }
+            .first { $0.exists }
+        guard let deny else {
+            XCTFail("The SpringBoard camera-permission prompt must expose an explicit denial control.")
+            return
+        }
+        deny.tap()
+        XCTAssertTrue(
+            systemPermissionAlert.waitForNonExistence(timeout: 5),
+            "The SpringBoard camera-permission alert must resolve before app-owned controls are used."
         )
 
         // The Simulator can deterministically reach a preview, a denied or
@@ -47,7 +46,7 @@ final class CameraCaptureUITests: FieldUITestCase {
         let requesting = app.activityIndicators[AID.cameraPermissionRequesting]
         let denied = app.staticTexts[AID.cameraPermissionDenied]
         let shutter = app.buttons[AID.cameraShutterButton]
-        let cancel = app.buttons[AID.cameraCancelButton]
+        var cancel = app.buttons[AID.cameraCancelButton]
         let unavailable = app.staticTexts[AID.cameraUnavailable]
 
         var reachedTerminalState = false
@@ -75,7 +74,11 @@ final class CameraCaptureUITests: FieldUITestCase {
             return
         }
 
+        // Reacquire after SpringBoard relinquishes focus: the app-owned sheet
+        // must expose a hittable escape rather than relying on a stale query.
+        cancel = app.buttons[AID.cameraCancelButton]
         XCTAssertTrue(cancel.exists, "Every camera terminal state must retain the Cancel escape.")
+        XCTAssertTrue(cancel.isHittable, "The app-owned Cancel escape must be tappable after permission resolution.")
         cancel.tap()
         XCTAssertTrue(
             cancel.waitForNonExistence(timeout: 5),

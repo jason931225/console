@@ -169,6 +169,63 @@ describe("ObjectCard acting chips (dynamic layer)", () => {
   });
 });
 
+describe("ObjectCard actionable controls", () => {
+  it("does not render mutation controls when no real handler is wired", () => {
+    renderCard(allowGate);
+    expect(screen.queryByRole("button", { name: T.actionAria(T.samples.actions.reassign) })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.edit.override })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.relations.add })).toBeNull();
+  });
+
+  it("can add real relation and edit handlers after mount without changing hook order", () => {
+    const descriptor = createObjectCardStub({ lifecycleState: "active" });
+    const view = renderCard(allowGate, undefined, descriptor);
+
+    view.rerender(
+      <PolicyGateProvider gate={allowGate}>
+        <ObjectCard
+          descriptor={descriptor}
+          handlers={{ onRelationAdd: vi.fn(), onEdit: vi.fn() }}
+        />
+      </PolicyGateProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: T.relations.add })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: T.edit.override })).toBeInTheDocument();
+  });
+
+  it("can retire relation and edit handlers after mount without changing hook order", () => {
+    const descriptor = createObjectCardStub({ lifecycleState: "active" });
+    const handlers = { onRelationAdd: vi.fn(), onEdit: vi.fn() };
+    const view = renderCard(
+      allowGate,
+      handlers,
+      descriptor,
+    );
+    fireEvent.change(screen.getByLabelText(T.relations.codeLabel), {
+      target: { value: "EQ-118" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: T.edit.override }));
+
+    view.rerender(
+      <PolicyGateProvider gate={allowGate}>
+        <ObjectCard descriptor={descriptor} />
+      </PolicyGateProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: T.relations.add })).toBeNull();
+    expect(screen.queryByRole("button", { name: T.edit.override })).toBeNull();
+
+    view.rerender(
+      <PolicyGateProvider gate={allowGate}>
+        <ObjectCard descriptor={descriptor} handlers={handlers} />
+      </PolicyGateProvider>,
+    );
+    expect(screen.getByLabelText(T.relations.codeLabel)).toHaveValue("");
+    expect(screen.queryByLabelText(T.edit.reasonLabel)).toBeNull();
+  });
+});
+
 // ── L-F2 · shared-card a11y ───────────────────────────────────────────────
 // The drag hosts were bare `<span {...objDrag(...)}>`: no role, no tab stop, no
 // keyboard path to the reference they carry. 13 module lanes were poised to

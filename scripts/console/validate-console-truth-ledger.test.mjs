@@ -96,6 +96,20 @@ test('required Buck target fails closed when resolver rejects it', () => {
   assert.throws(() => validateConsoleTruthLedger(bad, jurisdiction, { expectedCandidateSha: registry.candidate.sha, resolveBuckTarget: () => false }), /invalid\/nonexistent Buck target/);
 });
 
+test('delivery-unit Buck authority cannot diverge from declared verification targets', () => {
+  const bad = structuredClone(registry);
+  const equipment = bad.capabilities.find((capability) => capability.id === 'CAP-EQUIPMENT-3R-PILOT');
+  equipment.delivery_unit.buck2_targets = [
+    '//backend/crates/equipment/domain:mnt-equipment-domain-unit',
+    '//backend/crates/equipment/rest:mnt-equipment-rest',
+    '//backend/app:mnt-app-itest-equipment_3r_api',
+  ];
+  assert.throws(
+    () => validateConsoleTruthLedger(bad, jurisdiction, { expectedCandidateSha: registry.candidate.sha }),
+    /delivery Buck targets must match declared verification targets/,
+  );
+});
+
 test('attestation rejects TOCTOU mutation after candidate-bound validation', async () => {
   const { isValidatedConsoleTruthLedger } = await import('./validate-console-truth-ledger.mjs');
   const value = structuredClone(registry);

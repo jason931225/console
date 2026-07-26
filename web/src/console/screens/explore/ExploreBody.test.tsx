@@ -99,9 +99,10 @@ describe("ExploreBody", () => {
           : { instance: instanceFixture, gates },
         response: { status: 200 },
       }));
+    const get = vi.fn(() => ({ data: readback, response: { status: 200 } }));
     const actionApi = {
       POST: post,
-      GET: vi.fn(() => ({ data: readback, response: { status: 200 } })),
+      GET: get,
     } as unknown as ConsoleApiClient;
     const readback = [
       {
@@ -123,8 +124,6 @@ describe("ExploreBody", () => {
     await screen.findByRole("button", {
       name: ko.console.objectcard.actionAria(detailFixture.actions[0].title),
     });
-    mocked.getInstanceHistory.mockClear();
-    mocked.getInstanceHistory.mockResolvedValue(readback);
     fireEvent.click(
       screen.getByRole("button", {
         name: ko.console.objectcard.actionAria(detailFixture.actions[0].title),
@@ -138,9 +137,11 @@ describe("ExploreBody", () => {
 
     await waitFor(() => {
       expect(post).toHaveBeenCalledTimes(2);
-      expect(mocked.getInstanceHistory).toHaveBeenCalledWith(
-        actionApi,
-        instanceFixture.instance.id,
+      expect(get).toHaveBeenCalledWith(
+        "/api/v1/ontology/instances/{id}/history",
+        {
+          params: { path: { id: instanceFixture.instance.id } },
+        },
       );
     });
     const [, preflightOptions] = post.mock.calls[0] ?? [];

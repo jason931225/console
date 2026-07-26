@@ -15,16 +15,20 @@ import { StatusChip } from "../../components";
 import "../../tokens.css";
 import { screenHeaderStyle, screenTitleStyle } from "../screenHeader";
 import { MyWorkDetailPanel } from "./MyWorkDetailPanel";
-import type { MyWorkApi, TodoSummary } from "./myWorkApi";
+import type { CalendarEventResponse, MyWorkApi, TodoSummary, MyWorkbenchResponse } from "./myWorkApi";
 import {
   actionInboxDue,
   actionInboxDoneTone,
   actionInboxTone,
   actionStatusLabel,
   actionInboxLinkRoute,
+  createdCalendarRoute,
+  calendarTargetRoute,
+  calendarWorkbenchState,
   dueCountOn,
   filterAssigned,
   kindLabel,
+  kstLocalDateTimeToIso,
   myWorkStrings,
   urgencyLabel,
   weekDays,
@@ -54,23 +58,29 @@ export interface MyWorkBodyProps {
   now?: Date;
   /** Assigned-item drill; invoked only when a canonical source-object link resolves. */
   onOpen?: (item: ActionInboxItem) => void;
+  /** Mirrors the collaboration route guard; receipt navigation is omitted when
+   * the authenticated session cannot enter the owner surface. */
+  canOpenCalendarOwner?: boolean;
 }
 
-export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
+export function MyWorkBody({ api, now, onOpen, canOpenCalendarOwner = false }: MyWorkBodyProps) {
   const S = useMemo(() => myWorkStrings(), []);
   const navigate = useNavigate();
   const today = useMemo(() => now ?? new Date(), [now]);
   const currentApiRef = useRef<MyWorkApi | undefined>(api);
   const todosRequest = useRef(0);
+  const workbenchRequest = useRef(0);
   const inboxCursors = useRef(new Set<string>());
 
   useLayoutEffect(() => {
     currentApiRef.current = api;
     inboxCursors.current = new Set();
     todosRequest.current += 1;
+    workbenchRequest.current += 1;
     return () => {
       if (currentApiRef.current === api) currentApiRef.current = undefined;
       todosRequest.current += 1;
+      workbenchRequest.current += 1;
     };
   }, [api]);
 
@@ -103,6 +113,23 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
   const [todoErrorOwned, setTodoErrorOwned] = useState<ApiOwned<string | undefined>>(() =>
     ownedBy(api, undefined),
   );
+  const [workbenchOwned, setWorkbenchOwned] = useState<ApiOwned<MyWorkbenchResponse | undefined>>(() =>
+    ownedBy(api, undefined),
+  );
+  const [workbenchLoadStateOwned, setWorkbenchLoadStateOwned] = useState<ApiOwned<LoadState>>(() =>
+    ownedBy(api, "loading"),
+  );
+  const [workbenchReloadKey, setWorkbenchReloadKey] = useState(0);
+  const [calendarTitleOwned, setCalendarTitleOwned] = useState<ApiOwned<string>>(() => ownedBy(api, ""));
+  const [calendarStartsOwned, setCalendarStartsOwned] = useState<ApiOwned<string>>(() => ownedBy(api, ""));
+  const [calendarEndsOwned, setCalendarEndsOwned] = useState<ApiOwned<string>>(() => ownedBy(api, ""));
+  const [calendarBusyOwned, setCalendarBusyOwned] = useState<ApiOwned<boolean>>(() => ownedBy(api, false));
+  const [calendarMessageOwned, setCalendarMessageOwned] = useState<ApiOwned<string | undefined>>(() =>
+    ownedBy(api, undefined),
+  );
+  const [createdCalendarEventOwned, setCreatedCalendarEventOwned] = useState<
+    ApiOwned<CalendarEventResponse | undefined>
+  >(() => ownedBy(api, undefined));
   const showDoneRef = useRef(showDone);
 
   const inboxState = inboxStateOwned.api === api ? inboxStateOwned.value : "loading";
@@ -114,6 +141,16 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
   const text = textOwned.api === api ? textOwned.value : "";
   const busy = busyOwned.api === api ? busyOwned.value : false;
   const todoError = todoErrorOwned.api === api ? todoErrorOwned.value : undefined;
+  const workbench = workbenchOwned.api === api ? workbenchOwned.value : undefined;
+  const workbenchLoadState = workbenchLoadStateOwned.api === api ? workbenchLoadStateOwned.value : "loading";
+  const calendarTitle = calendarTitleOwned.api === api ? calendarTitleOwned.value : "";
+  const calendarStarts = calendarStartsOwned.api === api ? calendarStartsOwned.value : "";
+  const calendarEnds = calendarEndsOwned.api === api ? calendarEndsOwned.value : "";
+  const calendarBusy = calendarBusyOwned.api === api && calendarBusyOwned.value;
+  const calendarMessage = calendarMessageOwned.api === api ? calendarMessageOwned.value : undefined;
+  const createdCalendarEvent = createdCalendarEventOwned.api === api
+    ? createdCalendarEventOwned.value
+    : undefined;
 
   const dueFmt = useMemo(
     () =>
@@ -138,9 +175,9 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
       .then((res) => {
         if (!live || currentApiRef.current !== api) return;
         setItemsOwned(ownedBy(api, res.items));
-        setSelectedItemId((current) =>
-          current && res.items.some((item) => item.id === current) ? current : undefined,
-        );
+        setSelectedItemId((current) => {
+          return current && res.items.some((item) => item.id === current) ? current : undefined;
+        });
         const next = res.next_cursor ?? null;
         inboxCursors.current = new Set(next ? [next] : []);
         setNextCursorOwned(ownedBy(api, next));
@@ -155,6 +192,27 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
       live = false;
     };
   }, [api, reloadKey]);
+
+  useEffect(() => {
+    let live = true;
+    const request = workbenchRequest.current + 1;
+    workbenchRequest.current = request;
+    api
+      .loadWorkbench()
+      .then((snapshot) => {
+        if (!live || currentApiRef.current !== api || workbenchRequest.current !== request) return;
+        setWorkbenchOwned(ownedBy(api, snapshot));
+        setWorkbenchLoadStateOwned(ownedBy(api, "ready"));
+      })
+      .catch(() => {
+        if (live && currentApiRef.current === api && workbenchRequest.current === request) {
+          setWorkbenchLoadStateOwned(ownedBy(api, "error"));
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [api, workbenchReloadKey]);
 
   const loadMoreInbox = useCallback(() => {
     if (!nextCursor || loadingMore || currentApiRef.current !== api) return;
@@ -290,6 +348,38 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
     },
     [api, loadTodos, S],
   );
+
+  const calendarState = calendarWorkbenchState(workbench);
+  const scheduleFocusBlock = useCallback(() => {
+    const title = calendarTitle.trim();
+    const startsAt = kstLocalDateTimeToIso(calendarStarts);
+    const endsAt = kstLocalDateTimeToIso(calendarEnds);
+    if (calendarBusy || currentApiRef.current !== api) return;
+    if (!startsAt || !endsAt || new Date(endsAt) <= new Date(startsAt)) {
+      setCalendarMessageOwned(ownedBy(api, S.calendar.invalidRange));
+      return;
+    }
+    if (!title) return;
+    setCalendarBusyOwned(ownedBy(api, true));
+    setCalendarMessageOwned(ownedBy(api, undefined));
+    setCreatedCalendarEventOwned(ownedBy(api, undefined));
+    api
+      .createPersonalCalendarEvent({ title, startsAt, endsAt })
+      .then((created) => {
+        if (currentApiRef.current !== api) return;
+        setCalendarTitleOwned(ownedBy(api, ""));
+        setCalendarMessageOwned(ownedBy(api, S.calendar.scheduled));
+        setCreatedCalendarEventOwned(ownedBy(api, created));
+      })
+      .catch(() => {
+        if (currentApiRef.current === api) {
+          setCalendarMessageOwned(ownedBy(api, S.calendar.scheduleFailed));
+        }
+      })
+      .finally(() => {
+        if (currentApiRef.current === api) setCalendarBusyOwned(ownedBy(api, false));
+      });
+  }, [api, calendarBusy, calendarEnds, calendarStarts, calendarTitle, S]);
 
   const days = useMemo(() => weekDays(today), [today]);
   const sameDay = (a: Date, b: Date) =>
@@ -521,7 +611,9 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
                 onClick={() => {
                   if (currentApiRef.current !== api) return;
                   setInboxStateOwned(ownedBy(api, "loading"));
-                  setReloadKey((k) => k + 1);
+                  setReloadKey((k) => {
+                    return k + 1;
+                  });
                 }}
               >
                 {S.retry}
@@ -626,6 +718,161 @@ export function MyWorkBody({ api, now, onOpen }: MyWorkBodyProps) {
                 </button>
               ) : null}
             </div>
+          )}
+        </section>
+
+        <section style={panelStyle} aria-label={S.calendar.title}>
+          <div style={panelHeadStyle}>
+            <h2 style={panelTitleStyle}>{S.calendar.title}</h2>
+            {calendarState.kind === "ready" ? (
+              <span style={countBadgeStyle}>{calendarState.total}</span>
+            ) : null}
+          </div>
+
+          {workbenchLoadState === "error" ? (
+            <div role="alert" style={{ display: "grid", gap: "var(--sp-2)" }}>
+              <p style={{ margin: 0, color: "var(--steel)" }}>{S.calendar.loadFailed}</p>
+              <button
+                type="button"
+                data-window-control="true"
+                style={ghostButtonStyle}
+                onClick={() => {
+                  if (currentApiRef.current !== api) return;
+                  setWorkbenchLoadStateOwned(ownedBy(api, "loading"));
+                  setWorkbenchReloadKey((key) => {
+                    return key + 1;
+                  });
+                }}
+              >
+                {S.retry}
+              </button>
+            </div>
+          ) : calendarState.kind === "loading" ? (
+            <StatusChip role="status">{S.loading}</StatusChip>
+          ) : calendarState.kind !== "ready" ? (
+            <p style={emptyStyle}>{S.calendar.unavailable}</p>
+          ) : (
+            <>
+              <time dateTime={calendarState.range.from} style={rowMetaStyle}>
+                {S.calendar.range(
+                  dueFmt.format(new Date(calendarState.range.from)),
+                  dueFmt.format(new Date(calendarState.range.to)),
+                )}
+              </time>
+              {calendarState.partial ? <p style={calendarNoticeStyle}>{S.calendar.partial}</p> : null}
+              {calendarState.truncated ? <p style={calendarNoticeStyle}>{S.calendar.truncated}</p> : null}
+              {calendarState.items.length === 0 ? (
+                <p style={emptyStyle}>{S.calendar.empty}</p>
+              ) : (
+                <ul style={listStyle}>
+                  {calendarState.items.map((event) => {
+                    const route = calendarTargetRoute(event);
+                    return (
+                      <li key={event.id} style={calendarRowStyle}>
+                        <div style={assignedContentStyle}>
+                          <strong style={titleTextStyle}>{event.title}</strong>
+                          <time dateTime={event.starts_at} style={rowMetaStyle}>
+                            {dueFmt.format(new Date(event.starts_at))} – {dueFmt.format(new Date(event.ends_at))}
+                          </time>
+                        </div>
+                        <button
+                          type="button"
+                          data-window-control="true"
+                          style={ghostButtonStyle}
+                          disabled={!route}
+                          onClick={() => {
+                            if (route) void navigate(route);
+                          }}
+                        >
+                          {S.calendar.open}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <form
+                style={calendarFormStyle}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  scheduleFocusBlock();
+                }}
+              >
+                <label style={calendarLabelStyle}>
+                  {S.calendar.focusTitle}
+                  <input
+                    type="text"
+                    required
+                    maxLength={160}
+                    value={calendarTitle}
+                    aria-label={S.calendar.focusTitle}
+                    onChange={(event) => {
+                      setCalendarTitleOwned(ownedBy(api, event.currentTarget.value));
+                    }}
+                    style={inputStyle}
+                  />
+                </label>
+                <label style={calendarLabelStyle}>
+                  {S.calendar.startsAt}
+                  <input
+                    type="datetime-local"
+                    required
+                    value={calendarStarts}
+                    aria-label={S.calendar.startsAt}
+                    onChange={(event) => {
+                      setCalendarStartsOwned(ownedBy(api, event.currentTarget.value));
+                    }}
+                    style={inputStyle}
+                  />
+                </label>
+                <label style={calendarLabelStyle}>
+                  {S.calendar.endsAt}
+                  <input
+                    type="datetime-local"
+                    required
+                    value={calendarEnds}
+                    aria-label={S.calendar.endsAt}
+                    onChange={(event) => {
+                      setCalendarEndsOwned(ownedBy(api, event.currentTarget.value));
+                    }}
+                    style={inputStyle}
+                  />
+                </label>
+                <button
+                  type="submit"
+                  data-window-control="true"
+                  disabled={calendarBusy || calendarTitle.trim().length === 0}
+                  style={addButtonStyle}
+                >
+                  {S.calendar.schedule}
+                </button>
+              </form>
+              {calendarMessage ? <p role="status" style={{ margin: 0, color: "var(--steel)" }}>{calendarMessage}</p> : null}
+              {createdCalendarEvent ? (
+                <div style={createdCalendarStyle} role="status">
+                  <div style={assignedContentStyle}>
+                    <strong style={titleTextStyle}>{S.calendar.created}: {createdCalendarEvent.title}</strong>
+                    <time dateTime={createdCalendarEvent.starts_at} style={rowMetaStyle}>
+                      {dueFmt.format(new Date(createdCalendarEvent.starts_at))} – {dueFmt.format(new Date(createdCalendarEvent.ends_at))}
+                    </time>
+                  </div>
+                  {canOpenCalendarOwner && createdCalendarRoute(createdCalendarEvent) ? (
+                    <button
+                      type="button"
+                      data-window-control="true"
+                      style={ghostButtonStyle}
+                      onClick={() => {
+                        const route = createdCalendarRoute(createdCalendarEvent);
+                        if (route) void navigate(route);
+                      }}
+                    >
+                      {S.calendar.openCreated}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
           )}
         </section>
       </div>
@@ -847,6 +1094,48 @@ const assignedWorkspaceStyle: CSSProperties = {
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))",
   alignItems: "start",
   gap: "var(--sp-4)",
+};
+
+const calendarRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "var(--sp-3)",
+  padding: "var(--sp-3) 0",
+  borderTop: "1px solid var(--border-soft)",
+};
+
+const calendarFormStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 11rem), 1fr))",
+  alignItems: "end",
+  gap: "var(--sp-3)",
+  paddingTop: "var(--sp-2)",
+  borderTop: "1px solid var(--border-soft)",
+};
+
+const calendarLabelStyle: CSSProperties = {
+  display: "grid",
+  gap: "var(--sp-1)",
+  color: "var(--steel)",
+  fontSize: "var(--text-sm)",
+};
+
+const calendarNoticeStyle: CSSProperties = {
+  margin: 0,
+  color: "var(--steel)",
+  fontSize: "var(--text-sm)",
+};
+
+const createdCalendarStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "var(--sp-3)",
+  padding: "var(--sp-3)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius-sm)",
+  background: "var(--muted)",
 };
 
 const assignedContentStyle: CSSProperties = {

@@ -188,6 +188,31 @@ class ExecutionTests(unittest.TestCase):
         for key in inherited:
             self.assertNotIn(key, environment)
 
+    def test_accepts_timestamp_prefixed_buck_receipts_on_stderr(self) -> None:
+        """Keep accepting the compact stderr replay emitted by the CI console."""
+        prefix = "[2026-07-25T21:38:32.088+00:00] "
+        completed = [
+            subprocess.CompletedProcess(["buck"], 0, "", "")
+            for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
+        ] + [
+            subprocess.CompletedProcess(
+                ["buck"],
+                0,
+                "",
+                "".join(
+                    prefix + line
+                    for line in self.successful_output(name).splitlines(keepends=True)
+                ),
+            )
+            for _, name in self.specs()
+        ] + [subprocess.CompletedProcess(["cargo"], 0, "", "")]
+
+        with patch.object(
+            gate, "resolved_target_metadata", return_value=self.metadata()
+        ), patch.object(gate, "run", side_effect=completed):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
+
     def test_fails_when_buck_harness_fails(self) -> None:
         completed = subprocess.CompletedProcess(["buck"], 19, "", "")
         with patch.object(gate, "run", return_value=completed):

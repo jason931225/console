@@ -89,6 +89,9 @@ export function ConsoleShell({
   const navigate = useNavigate();
   const { grants, source: authzSource, ready: authzReady } = useConsoleAuthz();
   const groups = useMemo(() => visibleConsoleNav(grants, screenKeys), [grants, screenKeys]);
+  const canPromoteRailTo = useCallback((screen: MountedScreenKey): boolean => (
+    screenKeys.includes(screen) && groups.some((group) => group.items.some((item) => item.screen === screen))
+  ), [groups, screenKeys]);
   const { options: scopeOptions } = useConsoleScopes(S.scope.all);
 
   const [drawer, setDrawer] = useState<"left" | "right" | null>(null);
@@ -571,6 +574,34 @@ export function ConsoleShell({
                     search: `?thread=${encodeURIComponent(threadId)}`,
                   });
                 }}
+                onOpenMailThread={(threadId) => {
+                  if (activeDrawer) {
+                    focusMainAfterDrawerCloseRef.current = true;
+                    closeDrawer(false);
+                  }
+                  void navigate({
+                    pathname: consoleScreenPath("mail"),
+                    search: `?mail_thread=${encodeURIComponent(threadId)}&mail_view=detail`,
+                  });
+                }}
+                {...(canPromoteRailTo("notif") ? {
+                  onOpenNotificationCenter: () => {
+                    if (activeDrawer) {
+                      focusMainAfterDrawerCloseRef.current = true;
+                      closeDrawer(false);
+                    }
+                    void navigate({ pathname: consoleScreenPath("notif") });
+                  },
+                } : {})}
+                {...(canPromoteRailTo("board") ? {
+                  onOpenNoticeBoard: () => {
+                    if (activeDrawer) {
+                      focusMainAfterDrawerCloseRef.current = true;
+                      closeDrawer(false);
+                    }
+                    void navigate({ pathname: consoleScreenPath("board") });
+                  },
+                } : {})}
               />
             </ErrorBoundary>
           </>

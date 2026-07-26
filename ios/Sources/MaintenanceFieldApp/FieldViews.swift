@@ -752,6 +752,7 @@ struct TodayListView: View {
 
 struct MessengerTabView: View {
     @ObservedObject var viewModel: FieldViewModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         List {
@@ -799,6 +800,14 @@ struct MessengerTabView: View {
             }
 
             Section {
+                Text("messenger_threads")
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
                 if viewModel.messengerState.threads.isEmpty {
                     Text("messenger_empty_threads")
                         .accessibilityIdentifier(FieldAccessibilityID.messengerEmptyThreads)
@@ -817,11 +826,7 @@ struct MessengerTabView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(FieldAccessibilityID.messengerThreadRow(thread.id))
                 }
-            } header: {
-                Text("messenger_threads")
-                    .foregroundStyle(.primary)
             }
-            .headerProminence(.increased)
 
             Section {
                 Text("messenger_messages")
@@ -863,16 +868,22 @@ struct MessengerTabView: View {
                         )
                     }
                     HStack(alignment: .bottom) {
-                        TextField(
-                            "",
-                            text: $viewModel.messengerDraft,
-                            prompt: Text("messenger_composer").foregroundStyle(.primary),
-                            axis: .vertical
-                        )
-                            .lineLimit(2...5)
+                        // Native TextField prompts retain placeholder opacity
+                        // even with a primary foreground, which falls below
+                        // contrast requirements at accessibility text sizes.
+                        ZStack(alignment: .leading) {
+                            if viewModel.messengerDraft.isEmpty {
+                                Text("messenger_composer")
+                                    .foregroundStyle(.primary)
+                                    .accessibilityHidden(true)
+                                    .allowsHitTesting(false)
+                            }
+                            TextField("", text: $viewModel.messengerDraft, axis: .vertical)
+                                .lineLimit(2...5)
+                                .accessibilityLabel(Text("messenger_composer"))
+                                .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
+                        }
                             .layoutPriority(1)
-                            .accessibilityLabel(Text("messenger_composer"))
-                            .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
                         Button {
                             Task { await viewModel.sendMessengerMessage() }
                         } label: {
@@ -895,6 +906,20 @@ struct MessengerTabView: View {
             }
         }
         .navigationTitle(Text("messenger_title"))
+        // Messenger contains long, changing operational conversations. Keep the
+        // navigation title and actions on an opaque semantic surface rather
+        // than allowing scrolling content to alter their contrast.
+        .messengerNavigationBarBackground()
+        // iOS 26 can otherwise settle a selected AX5 List row underneath the
+        // persistent navigation surface. Reserve a real scroll-safe viewport;
+        // this preserves the complete thread rather than hiding or truncating it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if dynamicTypeSize == .accessibility5 {
+                Color.clear
+                    .frame(height: 56)
+                    .accessibilityHidden(true)
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -927,26 +952,43 @@ struct MessengerTabView: View {
 struct MessengerThreadRow: View {
     let thread: MessengerThread
     let isSelected: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(messengerThreadDisplayTitle(thread))
                     .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
                 FieldChip(key: thread.kind.fieldLabelKey)
+                memberCount
+                selectionStatus
             }
-            Text(localizedString("messenger_member_count_format", thread.memberCount))
-                .font(.footnote)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(messengerThreadDisplayTitle(thread))
+                        .font(.headline)
+                    Spacer()
+                    FieldChip(key: thread.kind.fieldLabelKey)
+                }
+                memberCount
+                selectionStatus
+            }
+        }
+    }
+
+    private var memberCount: some View {
+        Text(localizedString("messenger_member_count_format", thread.memberCount))
+            .font(.footnote)
+            .foregroundStyle(.primary)
+    }
+
+    @ViewBuilder
+    private var selectionStatus: some View {
+        if isSelected {
+            Text("messenger_selected")
+                .font(.caption)
                 .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            if isSelected {
-                Text("messenger_selected")
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 }
@@ -1135,6 +1177,11 @@ struct WorkOrderDetailView: View {
                             Label("submit_report", systemImage: "paperplane.fill")
                         }
                         .accessibilityIdentifier(FieldAccessibilityID.detailSubmitReportButton)
+
+                        if let messageKey = viewModel.messageKey {
+                            Text(LocalizedStringKey(messageKey))
+                                .accessibilityIdentifier(FieldAccessibilityID.detailMessage)
+                        }
                     }
 
                     Section {
@@ -1146,10 +1193,6 @@ struct WorkOrderDetailView: View {
                         .accessibilityIdentifier(FieldAccessibilityID.detailCaptureEvidenceButton)
                     }
 
-                    if let messageKey = viewModel.messageKey {
-                        Text(LocalizedStringKey(messageKey))
-                            .accessibilityIdentifier(FieldAccessibilityID.detailMessage)
-                    }
                 }
                 .scrollDismissesKeyboard(.immediately)
                 // Keep the audited detail text on an opaque semantic surface in
@@ -1377,6 +1420,17 @@ struct FieldChip: View {
 
 private extension View {
     @ViewBuilder
+    func messengerNavigationBarBackground() -> some View {
+        #if os(iOS)
+        self
+            .toolbarBackground(Color.opaqueFieldNavigationBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
     func inlineNavigationTitle() -> some View {
         #if os(iOS)
         navigationBarTitleDisplayMode(.inline)
@@ -1416,6 +1470,14 @@ private extension Color {
         Color(uiColor: .systemGroupedBackground)
         #else
         .gray
+        #endif
+    }
+
+    static var opaqueFieldNavigationBackground: Color {
+        #if os(iOS)
+        Color(uiColor: .systemBackground)
+        #else
+        .white
         #endif
     }
 }

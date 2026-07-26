@@ -9,6 +9,7 @@ export type CommsRailSource = "messenger" | "mail" | "notifications" | "notices"
 
 export type CommsRailTarget =
   | { kind: "inline"; source: "messenger" | "mail" | "notices"; id: string }
+  | { kind: "messenger-thread"; source: "notifications"; id: string }
   | { kind: "full-screen"; route: string; source: CommsRailSource; id?: string };
 
 export type CommsRailAction =

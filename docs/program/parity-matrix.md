@@ -6,6 +6,18 @@
 >
 > **Source revision audited = `origin/main@86a97771a76b7e770dfcf8c6c7d83fd9d70a98bf`.** Every current-state statement below is revision-bound to that tree. No deployment, database, browser, or production-runtime verification was performed, so source presence is never presented as live or enterprise-readiness proof.
 >
+> **Phase 0 Support-only supersession (2026-07-25).** The `support` module row,
+> the `SLO ≠ SLA` cross-cutting row, and their summary counts were re-audited at
+> exact source `55d00f8aacaf8d1ba4db87b2f5345605af856a27`. That bounded overlay
+> supersedes the older Support parity claims only; all other rows retain the
+> earlier fixed-revision ceiling. Support is **PARTIAL**: local six-category
+> defaults drive timers and alerts, approval is client-only and non-atomic, the
+> three-bucket ontology schema is legacy/non-serving and taxonomy-incompatible,
+> and `due_at` remains SLA rather than SLO authority. The approved next shape is
+> one Support-owned immutable six-category elapsed-only policy aggregate with
+> backend atomic approval. It is not implemented, and this matrix claims no
+> migration, backend route, parity, deployment, or completion for it.
+>
 > **THE headline finding.** At the audited revision, the new `ConsoleShell` renders the main content area from `web/src/console/screens/registry.ts`. Structural extraction finds **36 literal nav entries, 11 registry bodies, and 25 chrome-only entries**. The 36 denominator deliberately excludes the `screen: string` type declaration that a raw text count would misclassify as navigation.
 
 ---
@@ -20,10 +32,10 @@ Classification scheme:
 
 | Layer | PARITY | PARTIAL | MISSING | N/A (deferred) | Total |
 |---|---:|---:|---:|---:|---:|
-| Module surfaces (ROADMAP section 4 / nav keys) | 5 | 25 | 7 | 2 | 39 |
-| Cross-cutting grammar (DESIGN §4.x) | 3 | 10 | 2 | 1 | 16 |
+| Module surfaces (ROADMAP section 4 / nav keys) | 4 | 27 | 6 | 2 | 39 |
+| Cross-cutting grammar (DESIGN §4.x) | 2 | 11 | 2 | 1 | 16 |
 
-**Bottom line:** the source re-audit yields **5 PARITY / 25 PARTIAL / 7 MISSING / 2 N/A = 39** module rows. Cedar remains an accepted target baseline rather than a universal live authorization switch. Finance GL, notices, payroll-read, analytics-quant, C-chain seeding, 27-type tenant seeding, and one projected dispatch now exist in source, but their presence does not prove deployment or enterprise readiness. The largest deficits remain missing new-console bodies, incomplete closed loops, unverified durability/custody, and the absent ingest/recruiting/purchase/review/workforce product slices.
+**Bottom line:** with the bounded Support supersession, the matrix yields **4 PARITY / 27 PARTIAL / 6 MISSING / 2 N/A = 39** module rows. Cedar remains an accepted target baseline rather than a universal live authorization switch. Finance GL, notices, payroll-read, analytics-quant, C-chain seeding, 27-type tenant seeding, and one projected dispatch now exist in source, but their presence does not prove deployment or enterprise readiness. The largest deficits remain missing new-console bodies, incomplete closed loops, unverified durability/custody, the Support SLO authority split, and the absent ingest/recruiting/purchase/review/workforce product slices.
 
 ---
 
@@ -112,7 +124,7 @@ Each row: intended capability (one line) · verdict · evidence (path/tag). "REG
 | contract (국가지원·조달·계약) | SAM.gov/나라장터/Icertis: Contract C-·Grant·Bid | **PARTIAL** | tenant seeding publishes the C-chain `contract`→`position`→`posting` ontology types; no contract console body, domain-owned contract workflow, grant, or bid product slice |
 | ingest (데이터 인제스트) | Foundry Pipeline/Rossum: IngestJob DX-·Source·Template | **MISSING** | **no ingest crate, no DX- pipeline, no REST** anywhere; whole P1 pillar absent from build |
 | workforce (인력풀) | WFM: WorkforcePool·대근 | **MISSING** | not in nav; backend `equipment-substitutions` partial; no console surface |
-| support (지원센터) | Zendesk: SUP-·SLO(≠SLA) | **PARITY** | REGISTRY `support`→`screens/support/SupportBody.tsx`; backend `support(7)` + `support_slo_setting` engine object |
+| support (지원센터) | Zendesk: SUP-·SLO(≠SLA) | **PARTIAL** | Support surface and ticket backend are source-present, but local six-category defaults drive timers/alerts. The separate three-bucket `support_slo_setting` is legacy, non-serving, and incompatible with the ticket taxonomy; settings approval is client-only and emits non-atomic writes. SLA `due_at` is not SLO policy authority. The approved backend-atomic six-category aggregate remains unimplemented. |
 | editor (오피스 편집기) | ONLYOFFICE/Euro-Office fork | **N/A** (P3 deferred) | backend `office(4)` = governance shell (`app/src/office.rs`); real iframe editor deferred (HANDOFF §12) |
 
 ---
@@ -132,7 +144,7 @@ Each row: intended capability (one line) · verdict · evidence (path/tag). "REG
 | Cedar PBAC deny-by-omission | §4.5 screen/card/row/action/aggregate | **PARTIAL** | target/shadow primitives exist in `console/shell/authz.ts`, `policy/PolicyGate`, `api/policyCedar.ts`, and residual lowering, but ADR-0021 explicitly leaves live authorization unchanged until per-action enrollment, shadow evidence, and promotion |
 | Audit backbone | §7 tamper-evident hash chain | **PARTIAL (DARK)** | seal/verify/gap-detection plumbing and integrity routes exist, but production sealing defaults OFF, the in-memory signer is not a trust root, NULL-org rows are excluded, and real tamper evidence requires an external signer plus out-of-band anchor |
 | No-explanatory-UI / stat-strip | §4-11/§4-12 | **PARITY** | mechanically enforced by `check-ui-strings` gate |
-| SLO ≠ SLA | §4-26 configurable setting objects | **PARITY** (support) | `support_slo_setting` engine object; **relabel sweep to other surfaces = partial** |
+| SLO ≠ SLA | §4-26 configurable setting objects | **PARTIAL** (support) | SLA `due_at` and internal SLO policy are not cleanly separated in serving source. Six local category defaults drive Support timers/alerts; the legacy three-bucket ontology object does not. Client-only, multi-write approval is not backend-atomic governance. The approved Support-owned immutable six-category elapsed-only aggregate is architecture only. |
 | Comms rail↔main promotion | §4.8 | **PARTIAL** | `CommsRailPanel` (rail summary) wired; **main full-view promotion for mail/messenger MISSING** |
 | DLP client layer-1 | §13.1 copy/ctx/devtools/print/watermark | **MISSING** (in console) | shipped in `.dc.html` prototype (AGENTS 87/89/90); **not ported to React console** (post-replica backlog). Layer-3 = deployment req (N/A) |
 | Mobile employee app | §4.8 <768 app + bottom tab bar | **MISSING** | no `console/mobile/` dir; post-replica backlog |
@@ -185,7 +197,7 @@ These are the **latest shipped state in the `.dc.html` design prototype** — ea
 | (95) 기안 §68 투영 + fail-closed | structured 기안 + projection panel | **PARTIAL** — ApprovalCompose built, not in new shell |
 | (96) 대시보드 실데이터 파생 | source-computed stats | **PARITY** — DashboardBody real-API |
 | (97)(98) 급여·공고·월간 J/K/Enter | keyboard nav | **MISSING** — pay/recruit/att have no console bodies |
-| (99) 미편성 결원 SLO 알림 시드 | SLO notif seed | **PARTIAL** — SupportBody SLO wired; cross-surface seed partial |
+| (99) 미편성 결원 SLO 알림 시드 | SLO notif seed | **PARTIAL** — SupportBody renders alerts from local six-category defaults; no serving governed Support SLO aggregate or cross-surface seed is proved |
 | (100) 증거 WORM 뷰어 | media pane + ZIP tree | **PARTIAL** — EvidenceScreenBody wired; media/ZIP viewer depth partial |
 | (101) 인제스트 TP- 템플릿·hrSep·체크인·§18.2·커버플래너 | mapping templates, 퇴사/휴직 FSM, geofence check-in, sunset, cover planner | **MISSING** — ingest/att/hr bodies absent; §18.2 sunset partial (backend lifecycle only) |
 
@@ -196,11 +208,12 @@ These are the **latest shipped state in the `.dc.html` design prototype** — ea
 ### (a) Existing source slices that still need bounded completion
 
 This is a revision-bound backlog, not a claim about any live workstream or person. At `origin/main@86a97771…`:
-1. **§18 projected-type dispatch breadth** — `registry.update_equipment` is real; every unregistered target must remain fail-closed until separately wired and verified. *(HIGH — engine correctness)*
-2. **finance module depth** — source-wired GL exists; period lock, close/reporting, and runtime/database/browser evidence remain. *(HIGH)*
-3. **Window-model retrofit breadth + popout/split/persistence** — §4.7 is confined to 3 of 11 wired bodies (ontology/explore/support); the full engine is otherwise harness-only. *(HIGH — dedicated retrofit candidate)*
-4. **objDrag registry-derived prefixes** (drop the triplicated hardcoded regex). *(MED)*
-5. **Evidence media/ZIP viewer depth**, **dashboard generic widget-add**, **SLO relabel sweep** — polish on wired screens. *(LOW-MED)*
+1. **Support SLO authority convergence** — replace the local six-category defaults plus legacy non-serving three-bucket schema with the approved one Support-owned immutable six-category elapsed-only policy aggregate and backend-atomic approval. Keep SLA `due_at` separate. No implementation or migration is claimed. *(HIGH — policy/governance correctness)*
+2. **§18 projected-type dispatch breadth** — `registry.update_equipment` is real; every unregistered target must remain fail-closed until separately wired and verified. *(HIGH — engine correctness)*
+3. **finance module depth** — source-wired GL exists; period lock, close/reporting, and runtime/database/browser evidence remain. *(HIGH)*
+4. **Window-model retrofit breadth + popout/split/persistence** — §4.7 is confined to 3 of 11 wired bodies (ontology/explore/support); the full engine is otherwise harness-only. *(HIGH — dedicated retrofit candidate)*
+5. **objDrag registry-derived prefixes** (drop the triplicated hardcoded regex). *(MED)*
+6. **Evidence media/ZIP viewer depth**, **dashboard generic widget-add**, **SLO relabel sweep** — polish on wired screens. *(LOW-MED)*
 
 > New bodies may be added only where their backing source contract is real and the complete slice can meet ADR-0025; incomplete navigation stays DARK rather than fixture-fed.
 

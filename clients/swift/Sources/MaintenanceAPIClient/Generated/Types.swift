@@ -3357,6 +3357,92 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/recruiting/offers/{offerId}/record-reply`.
     /// - Remark: Generated from `#/paths//api/v1/recruiting/offers/{offerId}/record-reply/post(recordRecruitOfferReply)`.
     func recordRecruitOfferReply(_ input: Operations.RecordRecruitOfferReply.Input) async throws -> Operations.RecordRecruitOfferReply.Output
+    /// List evaluation cycles
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)`.
+    func listEvaluationCycles(_ input: Operations.ListEvaluationCycles.Input) async throws -> Operations.ListEvaluationCycles.Output
+    /// Create a draft evaluation cycle
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)`.
+    func createEvaluationCycle(_ input: Operations.CreateEvaluationCycle.Input) async throws -> Operations.CreateEvaluationCycle.Output
+    /// Get an evaluation cycle with enrolled subjects
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles/{cycle_id}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)`.
+    func getEvaluationCycle(_ input: Operations.GetEvaluationCycle.Input) async throws -> Operations.GetEvaluationCycle.Output
+    /// Read the next transition's blocking and advisory conditions
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles/{cycle_id}/preflight`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)`.
+    func getEvaluationCyclePreflight(_ input: Operations.GetEvaluationCyclePreflight.Input) async throws -> Operations.GetEvaluationCyclePreflight.Output
+    /// Open a draft cycle after its server-side preflight passes
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/open`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)`.
+    func openEvaluationCycle(_ input: Operations.OpenEvaluationCycle.Input) async throws -> Operations.OpenEvaluationCycle.Output
+    /// Move an open cycle into calibration after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/start-calibration`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)`.
+    func startEvaluationCalibration(_ input: Operations.StartEvaluationCalibration.Input) async throws -> Operations.StartEvaluationCalibration.Output
+    /// Finalize a calibrated cycle after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/finalize`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)`.
+    func finalizeEvaluationCycle(_ input: Operations.FinalizeEvaluationCycle.Input) async throws -> Operations.FinalizeEvaluationCycle.Output
+    /// Archive a finalized cycle after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/archive`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)`.
+    func archiveEvaluationCycle(_ input: Operations.ArchiveEvaluationCycle.Input) async throws -> Operations.ArchiveEvaluationCycle.Output
+    /// Enroll an employee in a draft evaluation cycle
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)`.
+    func addEvaluationSubject(_ input: Operations.AddEvaluationSubject.Input) async throws -> Operations.AddEvaluationSubject.Output
+    /// Get an evaluation subject
+    ///
+    /// Submit-only callers receive 404 for subjects not assigned to them; read-capable callers can read visible subjects.
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/subjects/{subject_id}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)`.
+    func getEvaluationSubject(_ input: Operations.GetEvaluationSubject.Input) async throws -> Operations.GetEvaluationSubject.Output
+    /// Replace all typed goals for an assigned or managed subject
+    ///
+    /// - Remark: HTTP `PUT /api/v1/evaluation/subjects/{subject_id}/goals`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)`.
+    func replaceEvaluationGoals(_ input: Operations.ReplaceEvaluationGoals.Input) async throws -> Operations.ReplaceEvaluationGoals.Output
+    /// Save a draft self or manager review
+    ///
+    /// Review kind is lowercase `self` or `manager`; unassigned submitters receive 404.
+    ///
+    /// - Remark: HTTP `PUT /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)`.
+    func saveEvaluationReview(_ input: Operations.SaveEvaluationReview.Input) async throws -> Operations.SaveEvaluationReview.Output
+    /// Submit a saved self or manager review
+    ///
+    /// Submission is terminal; the backend enforces grade/evidence gates and returns conflicts for unmet gates or replays.
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)`.
+    func submitEvaluationReview(_ input: Operations.SubmitEvaluationReview.Input) async throws -> Operations.SubmitEvaluationReview.Output
+    /// Record a calibrated grade for an evaluation subject
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects/{subject_id}/calibrate`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)`.
+    func calibrateEvaluationSubject(_ input: Operations.CalibrateEvaluationSubject.Input) async throws -> Operations.CalibrateEvaluationSubject.Output
+    /// List the authenticated submitter's evaluation tasks
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/my-tasks`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)`.
+    func listMyEvaluationTasks(_ input: Operations.ListMyEvaluationTasks.Input) async throws -> Operations.ListMyEvaluationTasks.Output
+    /// List a managed employee's finalized evaluation ledger
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/employees/{employee_id}/reviews`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)`.
+    func listEmployeeEvaluationReviews(_ input: Operations.ListEmployeeEvaluationReviews.Input) async throws -> Operations.ListEmployeeEvaluationReviews.Output
     /// Rejected-applicant archive (talent pool)
     ///
     /// - Remark: HTTP `GET /api/v1/recruiting/talent-pool`.
@@ -11242,6 +11328,220 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// List evaluation cycles
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)`.
+    public func listEvaluationCycles(
+        query: Operations.ListEvaluationCycles.Input.Query = .init(),
+        headers: Operations.ListEvaluationCycles.Input.Headers = .init()
+    ) async throws -> Operations.ListEvaluationCycles.Output {
+        try await listEvaluationCycles(Operations.ListEvaluationCycles.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Create a draft evaluation cycle
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)`.
+    public func createEvaluationCycle(
+        headers: Operations.CreateEvaluationCycle.Input.Headers = .init(),
+        body: Operations.CreateEvaluationCycle.Input.Body
+    ) async throws -> Operations.CreateEvaluationCycle.Output {
+        try await createEvaluationCycle(Operations.CreateEvaluationCycle.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get an evaluation cycle with enrolled subjects
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles/{cycle_id}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)`.
+    public func getEvaluationCycle(
+        path: Operations.GetEvaluationCycle.Input.Path,
+        headers: Operations.GetEvaluationCycle.Input.Headers = .init()
+    ) async throws -> Operations.GetEvaluationCycle.Output {
+        try await getEvaluationCycle(Operations.GetEvaluationCycle.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Read the next transition's blocking and advisory conditions
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles/{cycle_id}/preflight`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)`.
+    public func getEvaluationCyclePreflight(
+        path: Operations.GetEvaluationCyclePreflight.Input.Path,
+        headers: Operations.GetEvaluationCyclePreflight.Input.Headers = .init()
+    ) async throws -> Operations.GetEvaluationCyclePreflight.Output {
+        try await getEvaluationCyclePreflight(Operations.GetEvaluationCyclePreflight.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Open a draft cycle after its server-side preflight passes
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/open`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)`.
+    public func openEvaluationCycle(
+        path: Operations.OpenEvaluationCycle.Input.Path,
+        headers: Operations.OpenEvaluationCycle.Input.Headers = .init()
+    ) async throws -> Operations.OpenEvaluationCycle.Output {
+        try await openEvaluationCycle(Operations.OpenEvaluationCycle.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Move an open cycle into calibration after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/start-calibration`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)`.
+    public func startEvaluationCalibration(
+        path: Operations.StartEvaluationCalibration.Input.Path,
+        headers: Operations.StartEvaluationCalibration.Input.Headers = .init()
+    ) async throws -> Operations.StartEvaluationCalibration.Output {
+        try await startEvaluationCalibration(Operations.StartEvaluationCalibration.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Finalize a calibrated cycle after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/finalize`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)`.
+    public func finalizeEvaluationCycle(
+        path: Operations.FinalizeEvaluationCycle.Input.Path,
+        headers: Operations.FinalizeEvaluationCycle.Input.Headers = .init()
+    ) async throws -> Operations.FinalizeEvaluationCycle.Output {
+        try await finalizeEvaluationCycle(Operations.FinalizeEvaluationCycle.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Archive a finalized cycle after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/archive`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)`.
+    public func archiveEvaluationCycle(
+        path: Operations.ArchiveEvaluationCycle.Input.Path,
+        headers: Operations.ArchiveEvaluationCycle.Input.Headers = .init()
+    ) async throws -> Operations.ArchiveEvaluationCycle.Output {
+        try await archiveEvaluationCycle(Operations.ArchiveEvaluationCycle.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Enroll an employee in a draft evaluation cycle
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)`.
+    public func addEvaluationSubject(
+        headers: Operations.AddEvaluationSubject.Input.Headers = .init(),
+        body: Operations.AddEvaluationSubject.Input.Body
+    ) async throws -> Operations.AddEvaluationSubject.Output {
+        try await addEvaluationSubject(Operations.AddEvaluationSubject.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get an evaluation subject
+    ///
+    /// Submit-only callers receive 404 for subjects not assigned to them; read-capable callers can read visible subjects.
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/subjects/{subject_id}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)`.
+    public func getEvaluationSubject(
+        path: Operations.GetEvaluationSubject.Input.Path,
+        headers: Operations.GetEvaluationSubject.Input.Headers = .init()
+    ) async throws -> Operations.GetEvaluationSubject.Output {
+        try await getEvaluationSubject(Operations.GetEvaluationSubject.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Replace all typed goals for an assigned or managed subject
+    ///
+    /// - Remark: HTTP `PUT /api/v1/evaluation/subjects/{subject_id}/goals`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)`.
+    public func replaceEvaluationGoals(
+        path: Operations.ReplaceEvaluationGoals.Input.Path,
+        headers: Operations.ReplaceEvaluationGoals.Input.Headers = .init(),
+        body: Operations.ReplaceEvaluationGoals.Input.Body
+    ) async throws -> Operations.ReplaceEvaluationGoals.Output {
+        try await replaceEvaluationGoals(Operations.ReplaceEvaluationGoals.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Save a draft self or manager review
+    ///
+    /// Review kind is lowercase `self` or `manager`; unassigned submitters receive 404.
+    ///
+    /// - Remark: HTTP `PUT /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)`.
+    public func saveEvaluationReview(
+        path: Operations.SaveEvaluationReview.Input.Path,
+        headers: Operations.SaveEvaluationReview.Input.Headers = .init(),
+        body: Operations.SaveEvaluationReview.Input.Body
+    ) async throws -> Operations.SaveEvaluationReview.Output {
+        try await saveEvaluationReview(Operations.SaveEvaluationReview.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Submit a saved self or manager review
+    ///
+    /// Submission is terminal; the backend enforces grade/evidence gates and returns conflicts for unmet gates or replays.
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)`.
+    public func submitEvaluationReview(
+        path: Operations.SubmitEvaluationReview.Input.Path,
+        headers: Operations.SubmitEvaluationReview.Input.Headers = .init()
+    ) async throws -> Operations.SubmitEvaluationReview.Output {
+        try await submitEvaluationReview(Operations.SubmitEvaluationReview.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Record a calibrated grade for an evaluation subject
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects/{subject_id}/calibrate`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)`.
+    public func calibrateEvaluationSubject(
+        path: Operations.CalibrateEvaluationSubject.Input.Path,
+        headers: Operations.CalibrateEvaluationSubject.Input.Headers = .init(),
+        body: Operations.CalibrateEvaluationSubject.Input.Body
+    ) async throws -> Operations.CalibrateEvaluationSubject.Output {
+        try await calibrateEvaluationSubject(Operations.CalibrateEvaluationSubject.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// List the authenticated submitter's evaluation tasks
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/my-tasks`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)`.
+    public func listMyEvaluationTasks(headers: Operations.ListMyEvaluationTasks.Input.Headers = .init()) async throws -> Operations.ListMyEvaluationTasks.Output {
+        try await listMyEvaluationTasks(Operations.ListMyEvaluationTasks.Input(headers: headers))
+    }
+    /// List a managed employee's finalized evaluation ledger
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/employees/{employee_id}/reviews`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)`.
+    public func listEmployeeEvaluationReviews(
+        path: Operations.ListEmployeeEvaluationReviews.Input.Path,
+        headers: Operations.ListEmployeeEvaluationReviews.Input.Headers = .init()
+    ) async throws -> Operations.ListEmployeeEvaluationReviews.Output {
+        try await listEmployeeEvaluationReviews(Operations.ListEmployeeEvaluationReviews.Input(
+            path: path,
+            headers: headers
+        ))
+    }
     /// Rejected-applicant archive (talent pool)
     ///
     /// - Remark: HTTP `GET /api/v1/recruiting/talent-pool`.
@@ -11275,6 +11575,1777 @@ public enum Components {
                 } else {
                     try container.encodeNil()
                 }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationCycleKind`.
+        @frozen public enum EvaluationCycleKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case regular = "REGULAR"
+            case probation = "PROBATION"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationCycleStage`.
+        @frozen public enum EvaluationCycleStage: String, Codable, Hashable, Sendable, CaseIterable {
+            case draft = "DRAFT"
+            case open = "OPEN"
+            case calibration = "CALIBRATION"
+            case finalized = "FINALIZED"
+            case archived = "ARCHIVED"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationCycleTransition`.
+        @frozen public enum EvaluationCycleTransition: String, Codable, Hashable, Sendable, CaseIterable {
+            case open = "open"
+            case startCalibration = "start_calibration"
+            case finalize = "finalize"
+            case archive = "archive"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationGrade`.
+        @frozen public enum EvaluationGrade: String, Codable, Hashable, Sendable, CaseIterable {
+            case s = "S"
+            case a = "A"
+            case b = "B"
+            case c = "C"
+            case d = "D"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationReviewKind`.
+        @frozen public enum EvaluationReviewKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case _self = "SELF"
+            case manager = "MANAGER"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationReviewStatus`.
+        @frozen public enum EvaluationReviewStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case draft = "DRAFT"
+            case submitted = "SUBMITTED"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationMetricKind`.
+        @frozen public enum EvaluationMetricKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case kpi = "KPI"
+            case attendance = "ATTENDANCE"
+            case task = "TASK"
+            case custom = "CUSTOM"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceKind`.
+        @frozen public enum EvaluationEvidenceKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case attendance = "ATTENDANCE"
+            case workOrder = "WORK_ORDER"
+            case approval = "APPROVAL"
+            case kpi = "KPI"
+            case other = "OTHER"
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationSubjectState`.
+        @frozen public enum EvaluationSubjectState: String, Codable, Hashable, Sendable, CaseIterable {
+            case enrolled = "ENROLLED"
+            case inReview = "IN_REVIEW"
+            case reviewed = "REVIEWED"
+            case calibrated = "CALIBRATED"
+            case finalized = "FINALIZED"
+        }
+        /// - Remark: Generated from `#/components/schemas/CreateEvaluationCycleRequest`.
+        public struct CreateEvaluationCycleRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CreateEvaluationCycleRequest/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CreateEvaluationCycleRequest/kind`.
+            public var kind: Components.Schemas.EvaluationCycleKind
+            /// - Remark: Generated from `#/components/schemas/CreateEvaluationCycleRequest/period_label`.
+            public var periodLabel: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CreateEvaluationCycleRequest/due_date`.
+            public var dueDate: Components.Schemas.Date
+            /// Creates a new `CreateEvaluationCycleRequest`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - kind:
+            ///   - periodLabel:
+            ///   - dueDate:
+            public init(
+                name: Swift.String,
+                kind: Components.Schemas.EvaluationCycleKind,
+                periodLabel: Swift.String,
+                dueDate: Components.Schemas.Date
+            ) {
+                self.name = name
+                self.kind = kind
+                self.periodLabel = periodLabel
+                self.dueDate = dueDate
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case kind
+                case periodLabel = "period_label"
+                case dueDate = "due_date"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.EvaluationCycleKind.self,
+                    forKey: .kind
+                )
+                self.periodLabel = try container.decode(
+                    Swift.String.self,
+                    forKey: .periodLabel
+                )
+                self.dueDate = try container.decode(
+                    Components.Schemas.Date.self,
+                    forKey: .dueDate
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "name",
+                    "kind",
+                    "period_label",
+                    "due_date"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AddEvaluationSubjectRequest`.
+        public struct AddEvaluationSubjectRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AddEvaluationSubjectRequest/cycle_id`.
+            public var cycleId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/AddEvaluationSubjectRequest/employee_id`.
+            public var employeeId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/AddEvaluationSubjectRequest/manager_user_id`.
+            public var managerUserId: Components.Schemas.Uuid
+            /// Creates a new `AddEvaluationSubjectRequest`.
+            ///
+            /// - Parameters:
+            ///   - cycleId:
+            ///   - employeeId:
+            ///   - managerUserId:
+            public init(
+                cycleId: Components.Schemas.Uuid,
+                employeeId: Components.Schemas.Uuid,
+                managerUserId: Components.Schemas.Uuid
+            ) {
+                self.cycleId = cycleId
+                self.employeeId = employeeId
+                self.managerUserId = managerUserId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cycleId = "cycle_id"
+                case employeeId = "employee_id"
+                case managerUserId = "manager_user_id"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.cycleId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .cycleId
+                )
+                self.employeeId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .employeeId
+                )
+                self.managerUserId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .managerUserId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "cycle_id",
+                    "employee_id",
+                    "manager_user_id"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationGoalInput`.
+        public struct EvaluationGoalInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoalInput/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoalInput/metric_kind`.
+            public var metricKind: Components.Schemas.EvaluationMetricKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoalInput/target_label`.
+            public var targetLabel: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoalInput/weight_pct`.
+            public var weightPct: Swift.Int
+            /// Creates a new `EvaluationGoalInput`.
+            ///
+            /// - Parameters:
+            ///   - title:
+            ///   - metricKind:
+            ///   - targetLabel:
+            ///   - weightPct:
+            public init(
+                title: Swift.String,
+                metricKind: Components.Schemas.EvaluationMetricKind,
+                targetLabel: Swift.String,
+                weightPct: Swift.Int
+            ) {
+                self.title = title
+                self.metricKind = metricKind
+                self.targetLabel = targetLabel
+                self.weightPct = weightPct
+            }
+            public enum CodingKeys: String, CodingKey {
+                case title
+                case metricKind = "metric_kind"
+                case targetLabel = "target_label"
+                case weightPct = "weight_pct"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.title = try container.decode(
+                    Swift.String.self,
+                    forKey: .title
+                )
+                self.metricKind = try container.decode(
+                    Components.Schemas.EvaluationMetricKind.self,
+                    forKey: .metricKind
+                )
+                self.targetLabel = try container.decode(
+                    Swift.String.self,
+                    forKey: .targetLabel
+                )
+                self.weightPct = try container.decode(
+                    Swift.Int.self,
+                    forKey: .weightPct
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "title",
+                    "metric_kind",
+                    "target_label",
+                    "weight_pct"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ReplaceEvaluationGoalsRequest`.
+        public struct ReplaceEvaluationGoalsRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ReplaceEvaluationGoalsRequest/goals`.
+            public var goals: [Components.Schemas.EvaluationGoalInput]
+            /// Creates a new `ReplaceEvaluationGoalsRequest`.
+            ///
+            /// - Parameters:
+            ///   - goals:
+            public init(goals: [Components.Schemas.EvaluationGoalInput]) {
+                self.goals = goals
+            }
+            public enum CodingKeys: String, CodingKey {
+                case goals
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.goals = try container.decode(
+                    [Components.Schemas.EvaluationGoalInput].self,
+                    forKey: .goals
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "goals"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLinkInput`.
+        public struct EvaluationEvidenceLinkInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLinkInput/object_kind`.
+            public var objectKind: Components.Schemas.EvaluationEvidenceKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLinkInput/object_ref`.
+            public var objectRef: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLinkInput/label`.
+            public var label: Swift.String
+            /// Creates a new `EvaluationEvidenceLinkInput`.
+            ///
+            /// - Parameters:
+            ///   - objectKind:
+            ///   - objectRef:
+            ///   - label:
+            public init(
+                objectKind: Components.Schemas.EvaluationEvidenceKind,
+                objectRef: Swift.String,
+                label: Swift.String
+            ) {
+                self.objectKind = objectKind
+                self.objectRef = objectRef
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case objectKind = "object_kind"
+                case objectRef = "object_ref"
+                case label
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.objectKind = try container.decode(
+                    Components.Schemas.EvaluationEvidenceKind.self,
+                    forKey: .objectKind
+                )
+                self.objectRef = try container.decode(
+                    Swift.String.self,
+                    forKey: .objectRef
+                )
+                self.label = try container.decode(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "object_kind",
+                    "object_ref",
+                    "label"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SaveEvaluationReviewRequest`.
+        public struct SaveEvaluationReviewRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaveEvaluationReviewRequest/note`.
+            public var note: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaveEvaluationReviewRequest/evidence_links`.
+            public var evidenceLinks: [Components.Schemas.EvaluationEvidenceLinkInput]?
+            /// Creates a new `SaveEvaluationReviewRequest`.
+            ///
+            /// - Parameters:
+            ///   - note:
+            ///   - evidenceLinks:
+            public init(
+                note: Swift.String? = nil,
+                evidenceLinks: [Components.Schemas.EvaluationEvidenceLinkInput]? = nil
+            ) {
+                self.note = note
+                self.evidenceLinks = evidenceLinks
+            }
+            public enum CodingKeys: String, CodingKey {
+                case note
+                case evidenceLinks = "evidence_links"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.note = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .note
+                )
+                self.evidenceLinks = try container.decodeIfPresent(
+                    [Components.Schemas.EvaluationEvidenceLinkInput].self,
+                    forKey: .evidenceLinks
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "note",
+                    "evidence_links"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalibrateEvaluationSubjectRequest`.
+        public struct CalibrateEvaluationSubjectRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalibrateEvaluationSubjectRequest/final_grade`.
+            public var finalGrade: Components.Schemas.EvaluationGrade
+            /// - Remark: Generated from `#/components/schemas/CalibrateEvaluationSubjectRequest/reason`.
+            public var reason: Swift.String?
+            /// Creates a new `CalibrateEvaluationSubjectRequest`.
+            ///
+            /// - Parameters:
+            ///   - finalGrade:
+            ///   - reason:
+            public init(
+                finalGrade: Components.Schemas.EvaluationGrade,
+                reason: Swift.String? = nil
+            ) {
+                self.finalGrade = finalGrade
+                self.reason = reason
+            }
+            public enum CodingKeys: String, CodingKey {
+                case finalGrade = "final_grade"
+                case reason
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.finalGrade = try container.decode(
+                    Components.Schemas.EvaluationGrade.self,
+                    forKey: .finalGrade
+                )
+                self.reason = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .reason
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "final_grade",
+                    "reason"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary`.
+        public struct EvaluationCycleSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/id`.
+            public var id: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/kind`.
+            public var kind: Components.Schemas.EvaluationCycleKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/period_label`.
+            public var periodLabel: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/due_date`.
+            public var dueDate: Components.Schemas.Date
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/stage`.
+            public var stage: Components.Schemas.EvaluationCycleStage
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/subjects_total`.
+            public var subjectsTotal: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/manager_submitted`.
+            public var managerSubmitted: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/self_submitted`.
+            public var selfSubmitted: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/calibrated`.
+            public var calibrated: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/finalized`.
+            public var finalized: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleSummary/created_at`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// Creates a new `EvaluationCycleSummary`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - kind:
+            ///   - periodLabel:
+            ///   - dueDate:
+            ///   - stage:
+            ///   - subjectsTotal:
+            ///   - managerSubmitted:
+            ///   - selfSubmitted:
+            ///   - calibrated:
+            ///   - finalized:
+            ///   - createdAt:
+            public init(
+                id: Components.Schemas.Uuid,
+                name: Swift.String,
+                kind: Components.Schemas.EvaluationCycleKind,
+                periodLabel: Swift.String,
+                dueDate: Components.Schemas.Date,
+                stage: Components.Schemas.EvaluationCycleStage,
+                subjectsTotal: Swift.Int64,
+                managerSubmitted: Swift.Int64,
+                selfSubmitted: Swift.Int64,
+                calibrated: Swift.Int64,
+                finalized: Swift.Int64,
+                createdAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.name = name
+                self.kind = kind
+                self.periodLabel = periodLabel
+                self.dueDate = dueDate
+                self.stage = stage
+                self.subjectsTotal = subjectsTotal
+                self.managerSubmitted = managerSubmitted
+                self.selfSubmitted = selfSubmitted
+                self.calibrated = calibrated
+                self.finalized = finalized
+                self.createdAt = createdAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case kind
+                case periodLabel = "period_label"
+                case dueDate = "due_date"
+                case stage
+                case subjectsTotal = "subjects_total"
+                case managerSubmitted = "manager_submitted"
+                case selfSubmitted = "self_submitted"
+                case calibrated
+                case finalized
+                case createdAt = "created_at"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.EvaluationCycleKind.self,
+                    forKey: .kind
+                )
+                self.periodLabel = try container.decode(
+                    Swift.String.self,
+                    forKey: .periodLabel
+                )
+                self.dueDate = try container.decode(
+                    Components.Schemas.Date.self,
+                    forKey: .dueDate
+                )
+                self.stage = try container.decode(
+                    Components.Schemas.EvaluationCycleStage.self,
+                    forKey: .stage
+                )
+                self.subjectsTotal = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .subjectsTotal
+                )
+                self.managerSubmitted = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .managerSubmitted
+                )
+                self.selfSubmitted = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .selfSubmitted
+                )
+                self.calibrated = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .calibrated
+                )
+                self.finalized = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .finalized
+                )
+                self.createdAt = try container.decode(
+                    Components.Schemas.Timestamp.self,
+                    forKey: .createdAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name",
+                    "kind",
+                    "period_label",
+                    "due_date",
+                    "stage",
+                    "subjects_total",
+                    "manager_submitted",
+                    "self_submitted",
+                    "calibrated",
+                    "finalized",
+                    "created_at"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationCyclePage`.
+        public struct EvaluationCyclePage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationCyclePage/items`.
+            public var items: [Components.Schemas.EvaluationCycleSummary]
+            /// - Remark: Generated from `#/components/schemas/EvaluationCyclePage/total`.
+            public var total: Swift.Int64
+            /// Creates a new `EvaluationCyclePage`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - total:
+            public init(
+                items: [Components.Schemas.EvaluationCycleSummary],
+                total: Swift.Int64
+            ) {
+                self.items = items
+                self.total = total
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+                case total
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    [Components.Schemas.EvaluationCycleSummary].self,
+                    forKey: .items
+                )
+                self.total = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .total
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items",
+                    "total"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationUnitProgress`.
+        public struct EvaluationUnitProgress: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationUnitProgress/org_unit`.
+            @RequiredNullable public var orgUnit: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EvaluationUnitProgress/total`.
+            public var total: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationUnitProgress/manager_submitted`.
+            public var managerSubmitted: Swift.Int64
+            /// Creates a new `EvaluationUnitProgress`.
+            ///
+            /// - Parameters:
+            ///   - orgUnit:
+            ///   - total:
+            ///   - managerSubmitted:
+            public init(
+                orgUnit: Swift.String?,
+                total: Swift.Int64,
+                managerSubmitted: Swift.Int64
+            ) {
+                self.orgUnit = orgUnit
+                self.total = total
+                self.managerSubmitted = managerSubmitted
+            }
+            public enum CodingKeys: String, CodingKey {
+                case orgUnit = "org_unit"
+                case total
+                case managerSubmitted = "manager_submitted"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._orgUnit = try container.decode(
+                    RequiredNullable<Swift.String>.self,
+                    forKey: .orgUnit
+                )
+                self.total = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .total
+                )
+                self.managerSubmitted = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .managerSubmitted
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "org_unit",
+                    "total",
+                    "manager_submitted"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary`.
+        public struct EvaluationSubjectSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/id`.
+            public var id: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/cycle_id`.
+            public var cycleId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/employee_id`.
+            public var employeeId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/employee_name`.
+            public var employeeName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/org_unit`.
+            @RequiredNullable public var orgUnit: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/manager_user_id`.
+            public var managerUserId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/state`.
+            public var state: Components.Schemas.EvaluationSubjectState
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/rv_code`.
+            @RequiredNullable public var rvCode: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectSummary/final_grade`.
+            @RequiredNullable public var finalGrade: Components.Schemas.EvaluationGrade?
+            /// Creates a new `EvaluationSubjectSummary`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - cycleId:
+            ///   - employeeId:
+            ///   - employeeName:
+            ///   - orgUnit:
+            ///   - managerUserId:
+            ///   - state:
+            ///   - rvCode:
+            ///   - finalGrade:
+            public init(
+                finalGrade: Components.Schemas.EvaluationGrade?,
+                id: Components.Schemas.Uuid,
+                cycleId: Components.Schemas.Uuid,
+                employeeId: Components.Schemas.Uuid,
+                employeeName: Swift.String,
+                orgUnit: Swift.String?,
+                managerUserId: Components.Schemas.Uuid,
+                state: Components.Schemas.EvaluationSubjectState,
+                rvCode: Swift.String?
+            ) {
+                self.finalGrade = finalGrade
+                self.id = id
+                self.cycleId = cycleId
+                self.employeeId = employeeId
+                self.employeeName = employeeName
+                self.orgUnit = orgUnit
+                self.managerUserId = managerUserId
+                self.state = state
+                self.rvCode = rvCode
+            }
+            public enum CodingKeys: String, CodingKey {
+                case finalGrade = "final_grade"
+                case id
+                case cycleId = "cycle_id"
+                case employeeId = "employee_id"
+                case employeeName = "employee_name"
+                case orgUnit = "org_unit"
+                case managerUserId = "manager_user_id"
+                case state
+                case rvCode = "rv_code"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._finalGrade = try container.decode(
+                    RequiredNullable<Components.Schemas.EvaluationGrade>.self,
+                    forKey: .finalGrade
+                )
+                self.id = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .id
+                )
+                self.cycleId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .cycleId
+                )
+                self.employeeId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .employeeId
+                )
+                self.employeeName = try container.decode(
+                    Swift.String.self,
+                    forKey: .employeeName
+                )
+                self._orgUnit = try container.decode(
+                    RequiredNullable<Swift.String>.self,
+                    forKey: .orgUnit
+                )
+                self.managerUserId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .managerUserId
+                )
+                self.state = try container.decode(
+                    Components.Schemas.EvaluationSubjectState.self,
+                    forKey: .state
+                )
+                self._rvCode = try container.decode(
+                    RequiredNullable<Swift.String>.self,
+                    forKey: .rvCode
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "final_grade",
+                    "id",
+                    "cycle_id",
+                    "employee_id",
+                    "employee_name",
+                    "org_unit",
+                    "manager_user_id",
+                    "state",
+                    "rv_code"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail`.
+        public struct EvaluationCycleDetail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/id`.
+            public var id: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/kind`.
+            public var kind: Components.Schemas.EvaluationCycleKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/period_label`.
+            public var periodLabel: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/due_date`.
+            public var dueDate: Components.Schemas.Date
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/stage`.
+            public var stage: Components.Schemas.EvaluationCycleStage
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/subjects_total`.
+            public var subjectsTotal: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/manager_submitted`.
+            public var managerSubmitted: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/self_submitted`.
+            public var selfSubmitted: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/calibrated`.
+            public var calibrated: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/finalized`.
+            public var finalized: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/created_at`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/created_by`.
+            public var createdBy: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/progress_by_unit`.
+            public var progressByUnit: [Components.Schemas.EvaluationUnitProgress]
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/subjects`.
+            public var subjects: [Components.Schemas.EvaluationSubjectSummary]
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/opened_at`.
+            @RequiredNullable public var openedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/calibration_started_at`.
+            @RequiredNullable public var calibrationStartedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/finalized_at`.
+            @RequiredNullable public var finalizedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/EvaluationCycleDetail/archived_at`.
+            @RequiredNullable public var archivedAt: Components.Schemas.Timestamp?
+            /// Creates a new `EvaluationCycleDetail`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - kind:
+            ///   - periodLabel:
+            ///   - dueDate:
+            ///   - stage:
+            ///   - subjectsTotal:
+            ///   - managerSubmitted:
+            ///   - selfSubmitted:
+            ///   - calibrated:
+            ///   - finalized:
+            ///   - createdAt:
+            ///   - createdBy:
+            ///   - progressByUnit:
+            ///   - subjects:
+            ///   - openedAt:
+            ///   - calibrationStartedAt:
+            ///   - finalizedAt:
+            ///   - archivedAt:
+            public init(
+                openedAt: Components.Schemas.Timestamp?,
+                calibrationStartedAt: Components.Schemas.Timestamp?,
+                finalizedAt: Components.Schemas.Timestamp?,
+                archivedAt: Components.Schemas.Timestamp?,
+                id: Components.Schemas.Uuid,
+                name: Swift.String,
+                kind: Components.Schemas.EvaluationCycleKind,
+                periodLabel: Swift.String,
+                dueDate: Components.Schemas.Date,
+                stage: Components.Schemas.EvaluationCycleStage,
+                subjectsTotal: Swift.Int64,
+                managerSubmitted: Swift.Int64,
+                selfSubmitted: Swift.Int64,
+                calibrated: Swift.Int64,
+                finalized: Swift.Int64,
+                createdAt: Components.Schemas.Timestamp,
+                createdBy: Components.Schemas.Uuid,
+                progressByUnit: [Components.Schemas.EvaluationUnitProgress],
+                subjects: [Components.Schemas.EvaluationSubjectSummary]
+            ) {
+                self.openedAt = openedAt
+                self.calibrationStartedAt = calibrationStartedAt
+                self.finalizedAt = finalizedAt
+                self.archivedAt = archivedAt
+                self.id = id
+                self.name = name
+                self.kind = kind
+                self.periodLabel = periodLabel
+                self.dueDate = dueDate
+                self.stage = stage
+                self.subjectsTotal = subjectsTotal
+                self.managerSubmitted = managerSubmitted
+                self.selfSubmitted = selfSubmitted
+                self.calibrated = calibrated
+                self.finalized = finalized
+                self.createdAt = createdAt
+                self.createdBy = createdBy
+                self.progressByUnit = progressByUnit
+                self.subjects = subjects
+            }
+            public enum CodingKeys: String, CodingKey {
+                case openedAt = "opened_at"
+                case calibrationStartedAt = "calibration_started_at"
+                case finalizedAt = "finalized_at"
+                case archivedAt = "archived_at"
+                case id
+                case name
+                case kind
+                case periodLabel = "period_label"
+                case dueDate = "due_date"
+                case stage
+                case subjectsTotal = "subjects_total"
+                case managerSubmitted = "manager_submitted"
+                case selfSubmitted = "self_submitted"
+                case calibrated
+                case finalized
+                case createdAt = "created_at"
+                case createdBy = "created_by"
+                case progressByUnit = "progress_by_unit"
+                case subjects
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._openedAt = try container.decode(
+                    RequiredNullable<Components.Schemas.Timestamp>.self,
+                    forKey: .openedAt
+                )
+                self._calibrationStartedAt = try container.decode(
+                    RequiredNullable<Components.Schemas.Timestamp>.self,
+                    forKey: .calibrationStartedAt
+                )
+                self._finalizedAt = try container.decode(
+                    RequiredNullable<Components.Schemas.Timestamp>.self,
+                    forKey: .finalizedAt
+                )
+                self._archivedAt = try container.decode(
+                    RequiredNullable<Components.Schemas.Timestamp>.self,
+                    forKey: .archivedAt
+                )
+                self.id = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.EvaluationCycleKind.self,
+                    forKey: .kind
+                )
+                self.periodLabel = try container.decode(
+                    Swift.String.self,
+                    forKey: .periodLabel
+                )
+                self.dueDate = try container.decode(
+                    Components.Schemas.Date.self,
+                    forKey: .dueDate
+                )
+                self.stage = try container.decode(
+                    Components.Schemas.EvaluationCycleStage.self,
+                    forKey: .stage
+                )
+                self.subjectsTotal = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .subjectsTotal
+                )
+                self.managerSubmitted = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .managerSubmitted
+                )
+                self.selfSubmitted = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .selfSubmitted
+                )
+                self.calibrated = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .calibrated
+                )
+                self.finalized = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .finalized
+                )
+                self.createdAt = try container.decode(
+                    Components.Schemas.Timestamp.self,
+                    forKey: .createdAt
+                )
+                self.createdBy = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .createdBy
+                )
+                self.progressByUnit = try container.decode(
+                    [Components.Schemas.EvaluationUnitProgress].self,
+                    forKey: .progressByUnit
+                )
+                self.subjects = try container.decode(
+                    [Components.Schemas.EvaluationSubjectSummary].self,
+                    forKey: .subjects
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "opened_at",
+                    "calibration_started_at",
+                    "finalized_at",
+                    "archived_at",
+                    "id",
+                    "name",
+                    "kind",
+                    "period_label",
+                    "due_date",
+                    "stage",
+                    "subjects_total",
+                    "manager_submitted",
+                    "self_submitted",
+                    "calibrated",
+                    "finalized",
+                    "created_at",
+                    "created_by",
+                    "progress_by_unit",
+                    "subjects"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationGoal`.
+        public struct EvaluationGoal: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoal/id`.
+            public var id: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoal/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoal/metric_kind`.
+            public var metricKind: Components.Schemas.EvaluationMetricKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoal/target_label`.
+            public var targetLabel: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoal/weight_pct`.
+            public var weightPct: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/EvaluationGoal/sort_order`.
+            public var sortOrder: Swift.Int32
+            /// Creates a new `EvaluationGoal`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - title:
+            ///   - metricKind:
+            ///   - targetLabel:
+            ///   - weightPct:
+            ///   - sortOrder:
+            public init(
+                id: Components.Schemas.Uuid,
+                title: Swift.String,
+                metricKind: Components.Schemas.EvaluationMetricKind,
+                targetLabel: Swift.String,
+                weightPct: Swift.Int,
+                sortOrder: Swift.Int32
+            ) {
+                self.id = id
+                self.title = title
+                self.metricKind = metricKind
+                self.targetLabel = targetLabel
+                self.weightPct = weightPct
+                self.sortOrder = sortOrder
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case title
+                case metricKind = "metric_kind"
+                case targetLabel = "target_label"
+                case weightPct = "weight_pct"
+                case sortOrder = "sort_order"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .id
+                )
+                self.title = try container.decode(
+                    Swift.String.self,
+                    forKey: .title
+                )
+                self.metricKind = try container.decode(
+                    Components.Schemas.EvaluationMetricKind.self,
+                    forKey: .metricKind
+                )
+                self.targetLabel = try container.decode(
+                    Swift.String.self,
+                    forKey: .targetLabel
+                )
+                self.weightPct = try container.decode(
+                    Swift.Int.self,
+                    forKey: .weightPct
+                )
+                self.sortOrder = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .sortOrder
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "title",
+                    "metric_kind",
+                    "target_label",
+                    "weight_pct",
+                    "sort_order"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLink`.
+        public struct EvaluationEvidenceLink: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLink/id`.
+            public var id: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLink/object_kind`.
+            public var objectKind: Components.Schemas.EvaluationEvidenceKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLink/object_ref`.
+            public var objectRef: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLink/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationEvidenceLink/sort_order`.
+            public var sortOrder: Swift.Int32
+            /// Creates a new `EvaluationEvidenceLink`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - objectKind:
+            ///   - objectRef:
+            ///   - label:
+            ///   - sortOrder:
+            public init(
+                id: Components.Schemas.Uuid,
+                objectKind: Components.Schemas.EvaluationEvidenceKind,
+                objectRef: Swift.String,
+                label: Swift.String,
+                sortOrder: Swift.Int32
+            ) {
+                self.id = id
+                self.objectKind = objectKind
+                self.objectRef = objectRef
+                self.label = label
+                self.sortOrder = sortOrder
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case objectKind = "object_kind"
+                case objectRef = "object_ref"
+                case label
+                case sortOrder = "sort_order"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .id
+                )
+                self.objectKind = try container.decode(
+                    Components.Schemas.EvaluationEvidenceKind.self,
+                    forKey: .objectKind
+                )
+                self.objectRef = try container.decode(
+                    Swift.String.self,
+                    forKey: .objectRef
+                )
+                self.label = try container.decode(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                self.sortOrder = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .sortOrder
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "object_kind",
+                    "object_ref",
+                    "label",
+                    "sort_order"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationReview`.
+        public struct EvaluationReview: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/id`.
+            public var id: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/subject_id`.
+            public var subjectId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/kind`.
+            public var kind: Components.Schemas.EvaluationReviewKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/status`.
+            public var status: Components.Schemas.EvaluationReviewStatus
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/evaluator_user_id`.
+            public var evaluatorUserId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/note`.
+            @RequiredNullable public var note: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/evidence_links`.
+            public var evidenceLinks: [Components.Schemas.EvaluationEvidenceLink]
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/updated_at`.
+            public var updatedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/grade`.
+            @RequiredNullable public var grade: Components.Schemas.EvaluationGrade?
+            /// - Remark: Generated from `#/components/schemas/EvaluationReview/submitted_at`.
+            @RequiredNullable public var submittedAt: Components.Schemas.Timestamp?
+            /// Creates a new `EvaluationReview`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - subjectId:
+            ///   - kind:
+            ///   - status:
+            ///   - evaluatorUserId:
+            ///   - note:
+            ///   - evidenceLinks:
+            ///   - updatedAt:
+            ///   - grade:
+            ///   - submittedAt:
+            public init(
+                grade: Components.Schemas.EvaluationGrade?,
+                submittedAt: Components.Schemas.Timestamp?,
+                id: Components.Schemas.Uuid,
+                subjectId: Components.Schemas.Uuid,
+                kind: Components.Schemas.EvaluationReviewKind,
+                status: Components.Schemas.EvaluationReviewStatus,
+                evaluatorUserId: Components.Schemas.Uuid,
+                note: Swift.String?,
+                evidenceLinks: [Components.Schemas.EvaluationEvidenceLink],
+                updatedAt: Components.Schemas.Timestamp
+            ) {
+                self.grade = grade
+                self.submittedAt = submittedAt
+                self.id = id
+                self.subjectId = subjectId
+                self.kind = kind
+                self.status = status
+                self.evaluatorUserId = evaluatorUserId
+                self.note = note
+                self.evidenceLinks = evidenceLinks
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case grade
+                case submittedAt = "submitted_at"
+                case id
+                case subjectId = "subject_id"
+                case kind
+                case status
+                case evaluatorUserId = "evaluator_user_id"
+                case note
+                case evidenceLinks = "evidence_links"
+                case updatedAt = "updated_at"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._grade = try container.decode(
+                    RequiredNullable<Components.Schemas.EvaluationGrade>.self,
+                    forKey: .grade
+                )
+                self._submittedAt = try container.decode(
+                    RequiredNullable<Components.Schemas.Timestamp>.self,
+                    forKey: .submittedAt
+                )
+                self.id = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .id
+                )
+                self.subjectId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .subjectId
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.EvaluationReviewKind.self,
+                    forKey: .kind
+                )
+                self.status = try container.decode(
+                    Components.Schemas.EvaluationReviewStatus.self,
+                    forKey: .status
+                )
+                self.evaluatorUserId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .evaluatorUserId
+                )
+                self._note = try container.decode(
+                    RequiredNullable<Swift.String>.self,
+                    forKey: .note
+                )
+                self.evidenceLinks = try container.decode(
+                    [Components.Schemas.EvaluationEvidenceLink].self,
+                    forKey: .evidenceLinks
+                )
+                self.updatedAt = try container.decode(
+                    Components.Schemas.Timestamp.self,
+                    forKey: .updatedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "grade",
+                    "submitted_at",
+                    "id",
+                    "subject_id",
+                    "kind",
+                    "status",
+                    "evaluator_user_id",
+                    "note",
+                    "evidence_links",
+                    "updated_at"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail`.
+        public struct EvaluationSubjectDetail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/id`.
+            public var id: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/cycle_id`.
+            public var cycleId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/employee_id`.
+            public var employeeId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/employee_name`.
+            public var employeeName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/org_unit`.
+            @RequiredNullable public var orgUnit: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/manager_user_id`.
+            public var managerUserId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/state`.
+            public var state: Components.Schemas.EvaluationSubjectState
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/rv_code`.
+            @RequiredNullable public var rvCode: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/goals`.
+            public var goals: [Components.Schemas.EvaluationGoal]
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/reviews`.
+            public var reviews: [Components.Schemas.EvaluationReview]
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/calibration_reason`.
+            @RequiredNullable public var calibrationReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/final_grade`.
+            @RequiredNullable public var finalGrade: Components.Schemas.EvaluationGrade?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/calibrated_grade`.
+            @RequiredNullable public var calibratedGrade: Components.Schemas.EvaluationGrade?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/calibrated_by`.
+            @RequiredNullable public var calibratedBy: Components.Schemas.Uuid?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/calibrated_at`.
+            @RequiredNullable public var calibratedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/EvaluationSubjectDetail/finalized_at`.
+            @RequiredNullable public var finalizedAt: Components.Schemas.Timestamp?
+            /// Creates a new `EvaluationSubjectDetail`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - cycleId:
+            ///   - employeeId:
+            ///   - employeeName:
+            ///   - orgUnit:
+            ///   - managerUserId:
+            ///   - state:
+            ///   - rvCode:
+            ///   - goals:
+            ///   - reviews:
+            ///   - calibrationReason:
+            ///   - finalGrade:
+            ///   - calibratedGrade:
+            ///   - calibratedBy:
+            ///   - calibratedAt:
+            ///   - finalizedAt:
+            public init(
+                finalGrade: Components.Schemas.EvaluationGrade?,
+                calibratedGrade: Components.Schemas.EvaluationGrade?,
+                calibratedBy: Components.Schemas.Uuid?,
+                calibratedAt: Components.Schemas.Timestamp?,
+                finalizedAt: Components.Schemas.Timestamp?,
+                id: Components.Schemas.Uuid,
+                cycleId: Components.Schemas.Uuid,
+                employeeId: Components.Schemas.Uuid,
+                employeeName: Swift.String,
+                orgUnit: Swift.String?,
+                managerUserId: Components.Schemas.Uuid,
+                state: Components.Schemas.EvaluationSubjectState,
+                rvCode: Swift.String?,
+                goals: [Components.Schemas.EvaluationGoal],
+                reviews: [Components.Schemas.EvaluationReview],
+                calibrationReason: Swift.String?
+            ) {
+                self.finalGrade = finalGrade
+                self.calibratedGrade = calibratedGrade
+                self.calibratedBy = calibratedBy
+                self.calibratedAt = calibratedAt
+                self.finalizedAt = finalizedAt
+                self.id = id
+                self.cycleId = cycleId
+                self.employeeId = employeeId
+                self.employeeName = employeeName
+                self.orgUnit = orgUnit
+                self.managerUserId = managerUserId
+                self.state = state
+                self.rvCode = rvCode
+                self.goals = goals
+                self.reviews = reviews
+                self.calibrationReason = calibrationReason
+            }
+            public enum CodingKeys: String, CodingKey {
+                case finalGrade = "final_grade"
+                case calibratedGrade = "calibrated_grade"
+                case calibratedBy = "calibrated_by"
+                case calibratedAt = "calibrated_at"
+                case finalizedAt = "finalized_at"
+                case id
+                case cycleId = "cycle_id"
+                case employeeId = "employee_id"
+                case employeeName = "employee_name"
+                case orgUnit = "org_unit"
+                case managerUserId = "manager_user_id"
+                case state
+                case rvCode = "rv_code"
+                case goals
+                case reviews
+                case calibrationReason = "calibration_reason"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._finalGrade = try container.decode(
+                    RequiredNullable<Components.Schemas.EvaluationGrade>.self,
+                    forKey: .finalGrade
+                )
+                self._calibratedGrade = try container.decode(
+                    RequiredNullable<Components.Schemas.EvaluationGrade>.self,
+                    forKey: .calibratedGrade
+                )
+                self._calibratedBy = try container.decode(
+                    RequiredNullable<Components.Schemas.Uuid>.self,
+                    forKey: .calibratedBy
+                )
+                self._calibratedAt = try container.decode(
+                    RequiredNullable<Components.Schemas.Timestamp>.self,
+                    forKey: .calibratedAt
+                )
+                self._finalizedAt = try container.decode(
+                    RequiredNullable<Components.Schemas.Timestamp>.self,
+                    forKey: .finalizedAt
+                )
+                self.id = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .id
+                )
+                self.cycleId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .cycleId
+                )
+                self.employeeId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .employeeId
+                )
+                self.employeeName = try container.decode(
+                    Swift.String.self,
+                    forKey: .employeeName
+                )
+                self._orgUnit = try container.decode(
+                    RequiredNullable<Swift.String>.self,
+                    forKey: .orgUnit
+                )
+                self.managerUserId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .managerUserId
+                )
+                self.state = try container.decode(
+                    Components.Schemas.EvaluationSubjectState.self,
+                    forKey: .state
+                )
+                self._rvCode = try container.decode(
+                    RequiredNullable<Swift.String>.self,
+                    forKey: .rvCode
+                )
+                self.goals = try container.decode(
+                    [Components.Schemas.EvaluationGoal].self,
+                    forKey: .goals
+                )
+                self.reviews = try container.decode(
+                    [Components.Schemas.EvaluationReview].self,
+                    forKey: .reviews
+                )
+                self._calibrationReason = try container.decode(
+                    RequiredNullable<Swift.String>.self,
+                    forKey: .calibrationReason
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "final_grade",
+                    "calibrated_grade",
+                    "calibrated_by",
+                    "calibrated_at",
+                    "finalized_at",
+                    "id",
+                    "cycle_id",
+                    "employee_id",
+                    "employee_name",
+                    "org_unit",
+                    "manager_user_id",
+                    "state",
+                    "rv_code",
+                    "goals",
+                    "reviews",
+                    "calibration_reason"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationPreflightItem`.
+        public struct EvaluationPreflightItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationPreflightItem/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationPreflightItem/message`.
+            public var message: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationPreflightItem/subject_id`.
+            @RequiredNullable public var subjectId: Components.Schemas.Uuid?
+            /// Creates a new `EvaluationPreflightItem`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - message:
+            ///   - subjectId:
+            public init(
+                subjectId: Components.Schemas.Uuid?,
+                code: Swift.String,
+                message: Swift.String
+            ) {
+                self.subjectId = subjectId
+                self.code = code
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case subjectId = "subject_id"
+                case code
+                case message
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._subjectId = try container.decode(
+                    RequiredNullable<Components.Schemas.Uuid>.self,
+                    forKey: .subjectId
+                )
+                self.code = try container.decode(
+                    Swift.String.self,
+                    forKey: .code
+                )
+                self.message = try container.decode(
+                    Swift.String.self,
+                    forKey: .message
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "subject_id",
+                    "code",
+                    "message"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationPreflightReport`.
+        public struct EvaluationPreflightReport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationPreflightReport/blockers`.
+            public var blockers: [Components.Schemas.EvaluationPreflightItem]
+            /// - Remark: Generated from `#/components/schemas/EvaluationPreflightReport/advisories`.
+            public var advisories: [Components.Schemas.EvaluationPreflightItem]
+            /// - Remark: Generated from `#/components/schemas/EvaluationPreflightReport/next_transition`.
+            @RequiredNullable public var nextTransition: Components.Schemas.EvaluationCycleTransition?
+            /// Creates a new `EvaluationPreflightReport`.
+            ///
+            /// - Parameters:
+            ///   - blockers:
+            ///   - advisories:
+            ///   - nextTransition:
+            public init(
+                nextTransition: Components.Schemas.EvaluationCycleTransition?,
+                blockers: [Components.Schemas.EvaluationPreflightItem],
+                advisories: [Components.Schemas.EvaluationPreflightItem]
+            ) {
+                self.nextTransition = nextTransition
+                self.blockers = blockers
+                self.advisories = advisories
+            }
+            public enum CodingKeys: String, CodingKey {
+                case nextTransition = "next_transition"
+                case blockers
+                case advisories
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._nextTransition = try container.decode(
+                    RequiredNullable<Components.Schemas.EvaluationCycleTransition>.self,
+                    forKey: .nextTransition
+                )
+                self.blockers = try container.decode(
+                    [Components.Schemas.EvaluationPreflightItem].self,
+                    forKey: .blockers
+                )
+                self.advisories = try container.decode(
+                    [Components.Schemas.EvaluationPreflightItem].self,
+                    forKey: .advisories
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "next_transition",
+                    "blockers",
+                    "advisories"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem`.
+        public struct EvaluationTaskItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/subject_id`.
+            public var subjectId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/cycle_id`.
+            public var cycleId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/cycle_name`.
+            public var cycleName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/due_date`.
+            public var dueDate: Components.Schemas.Date
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/employee_id`.
+            public var employeeId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/employee_name`.
+            public var employeeName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/kind`.
+            public var kind: Components.Schemas.EvaluationReviewKind
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskItem/review_status`.
+            @RequiredNullable public var reviewStatus: Components.Schemas.EvaluationReviewStatus?
+            /// Creates a new `EvaluationTaskItem`.
+            ///
+            /// - Parameters:
+            ///   - subjectId:
+            ///   - cycleId:
+            ///   - cycleName:
+            ///   - dueDate:
+            ///   - employeeId:
+            ///   - employeeName:
+            ///   - kind:
+            ///   - reviewStatus:
+            public init(
+                reviewStatus: Components.Schemas.EvaluationReviewStatus?,
+                subjectId: Components.Schemas.Uuid,
+                cycleId: Components.Schemas.Uuid,
+                cycleName: Swift.String,
+                dueDate: Components.Schemas.Date,
+                employeeId: Components.Schemas.Uuid,
+                employeeName: Swift.String,
+                kind: Components.Schemas.EvaluationReviewKind
+            ) {
+                self.reviewStatus = reviewStatus
+                self.subjectId = subjectId
+                self.cycleId = cycleId
+                self.cycleName = cycleName
+                self.dueDate = dueDate
+                self.employeeId = employeeId
+                self.employeeName = employeeName
+                self.kind = kind
+            }
+            public enum CodingKeys: String, CodingKey {
+                case reviewStatus = "review_status"
+                case subjectId = "subject_id"
+                case cycleId = "cycle_id"
+                case cycleName = "cycle_name"
+                case dueDate = "due_date"
+                case employeeId = "employee_id"
+                case employeeName = "employee_name"
+                case kind
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._reviewStatus = try container.decode(
+                    RequiredNullable<Components.Schemas.EvaluationReviewStatus>.self,
+                    forKey: .reviewStatus
+                )
+                self.subjectId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .subjectId
+                )
+                self.cycleId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .cycleId
+                )
+                self.cycleName = try container.decode(
+                    Swift.String.self,
+                    forKey: .cycleName
+                )
+                self.dueDate = try container.decode(
+                    Components.Schemas.Date.self,
+                    forKey: .dueDate
+                )
+                self.employeeId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .employeeId
+                )
+                self.employeeName = try container.decode(
+                    Swift.String.self,
+                    forKey: .employeeName
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.EvaluationReviewKind.self,
+                    forKey: .kind
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "review_status",
+                    "subject_id",
+                    "cycle_id",
+                    "cycle_name",
+                    "due_date",
+                    "employee_id",
+                    "employee_name",
+                    "kind"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationTaskPage`.
+        public struct EvaluationTaskPage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationTaskPage/items`.
+            public var items: [Components.Schemas.EvaluationTaskItem]
+            /// Creates a new `EvaluationTaskPage`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            public init(items: [Components.Schemas.EvaluationTaskItem]) {
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    [Components.Schemas.EvaluationTaskItem].self,
+                    forKey: .items
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry`.
+        public struct EvaluationLedgerEntry: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry/rv_code`.
+            public var rvCode: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry/cycle_id`.
+            public var cycleId: Components.Schemas.Uuid
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry/cycle_name`.
+            public var cycleName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry/period_label`.
+            public var periodLabel: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry/final_grade`.
+            public var finalGrade: Components.Schemas.EvaluationGrade
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry/finalized_at`.
+            public var finalizedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerEntry/subject_id`.
+            public var subjectId: Components.Schemas.Uuid
+            /// Creates a new `EvaluationLedgerEntry`.
+            ///
+            /// - Parameters:
+            ///   - rvCode:
+            ///   - cycleId:
+            ///   - cycleName:
+            ///   - periodLabel:
+            ///   - finalGrade:
+            ///   - finalizedAt:
+            ///   - subjectId:
+            public init(
+                rvCode: Swift.String,
+                cycleId: Components.Schemas.Uuid,
+                cycleName: Swift.String,
+                periodLabel: Swift.String,
+                finalGrade: Components.Schemas.EvaluationGrade,
+                finalizedAt: Components.Schemas.Timestamp,
+                subjectId: Components.Schemas.Uuid
+            ) {
+                self.rvCode = rvCode
+                self.cycleId = cycleId
+                self.cycleName = cycleName
+                self.periodLabel = periodLabel
+                self.finalGrade = finalGrade
+                self.finalizedAt = finalizedAt
+                self.subjectId = subjectId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case rvCode = "rv_code"
+                case cycleId = "cycle_id"
+                case cycleName = "cycle_name"
+                case periodLabel = "period_label"
+                case finalGrade = "final_grade"
+                case finalizedAt = "finalized_at"
+                case subjectId = "subject_id"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.rvCode = try container.decode(
+                    Swift.String.self,
+                    forKey: .rvCode
+                )
+                self.cycleId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .cycleId
+                )
+                self.cycleName = try container.decode(
+                    Swift.String.self,
+                    forKey: .cycleName
+                )
+                self.periodLabel = try container.decode(
+                    Swift.String.self,
+                    forKey: .periodLabel
+                )
+                self.finalGrade = try container.decode(
+                    Components.Schemas.EvaluationGrade.self,
+                    forKey: .finalGrade
+                )
+                self.finalizedAt = try container.decode(
+                    Components.Schemas.Timestamp.self,
+                    forKey: .finalizedAt
+                )
+                self.subjectId = try container.decode(
+                    Components.Schemas.Uuid.self,
+                    forKey: .subjectId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "rv_code",
+                    "cycle_id",
+                    "cycle_name",
+                    "period_label",
+                    "final_grade",
+                    "finalized_at",
+                    "subject_id"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EvaluationLedgerPage`.
+        public struct EvaluationLedgerPage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EvaluationLedgerPage/items`.
+            public var items: [Components.Schemas.EvaluationLedgerEntry]
+            /// Creates a new `EvaluationLedgerPage`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            public init(items: [Components.Schemas.EvaluationLedgerEntry]) {
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    [Components.Schemas.EvaluationLedgerEntry].self,
+                    forKey: .items
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items"
+                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BenefitCatalogScope`.
@@ -54184,6 +56255,19 @@ public enum Components {
     }
     /// Types generated from the `#/components/parameters` section of the OpenAPI document.
     public enum Parameters {
+        /// - Remark: Generated from `#/components/parameters/EvaluationCycleId`.
+        public typealias EvaluationCycleId = Components.Schemas.Uuid
+        /// - Remark: Generated from `#/components/parameters/EvaluationSubjectId`.
+        public typealias EvaluationSubjectId = Components.Schemas.Uuid
+        /// - Remark: Generated from `#/components/parameters/EvaluationEmployeeId`.
+        public typealias EvaluationEmployeeId = Components.Schemas.Uuid
+        /// Lowercase path representation of a review kind.
+        ///
+        /// - Remark: Generated from `#/components/parameters/EvaluationReviewKindPath`.
+        @frozen public enum EvaluationReviewKindPath: String, Codable, Hashable, Sendable, CaseIterable {
+            case _self = "self"
+            case manager = "manager"
+        }
         /// - Remark: Generated from `#/components/parameters/LifecycleObjectType`.
         public typealias LifecycleObjectType = Swift.String
         /// - Remark: Generated from `#/components/parameters/LifecycleObjectId`.
@@ -182237,6 +184321,4192 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// List evaluation cycles
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)`.
+    public enum ListEvaluationCycles {
+        public static let id: Swift.String = "listEvaluationCycles"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/GET/query/stage`.
+                public var stage: Components.Schemas.EvaluationCycleStage?
+                /// Normalized to the inclusive range 1 through 100; defaults to 50.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/GET/query/limit`.
+                public var limit: Swift.Int64?
+                /// Negative values normalize to zero.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/GET/query/offset`.
+                public var offset: Swift.Int64?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - stage:
+                ///   - limit: Normalized to the inclusive range 1 through 100; defaults to 50.
+                ///   - offset: Negative values normalize to zero.
+                public init(
+                    stage: Components.Schemas.EvaluationCycleStage? = nil,
+                    limit: Swift.Int64? = nil,
+                    offset: Swift.Int64? = nil
+                ) {
+                    self.stage = stage
+                    self.limit = limit
+                    self.offset = offset
+                }
+            }
+            public var query: Operations.ListEvaluationCycles.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListEvaluationCycles.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListEvaluationCycles.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListEvaluationCycles.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.ListEvaluationCycles.Input.Query = .init(),
+                headers: Operations.ListEvaluationCycles.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationCyclePage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationCyclePage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListEvaluationCycles.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListEvaluationCycles.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Evaluation cycle page.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListEvaluationCycles.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListEvaluationCycles.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/get(listEvaluationCycles)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Create a draft evaluation cycle
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)`.
+    public enum CreateEvaluationCycle {
+        public static let id: Swift.String = "createEvaluationCycle"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateEvaluationCycle.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateEvaluationCycle.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.CreateEvaluationCycle.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.CreateEvaluationCycleRequest)
+            }
+            public var body: Operations.CreateEvaluationCycle.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.CreateEvaluationCycle.Input.Headers = .init(),
+                body: Operations.CreateEvaluationCycle.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.EvaluationCycleDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationCycleDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateEvaluationCycle.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateEvaluationCycle.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// Draft cycle created.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.CreateEvaluationCycle.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.CreateEvaluationCycle.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Request failed validation.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationError)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationError {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/post(createEvaluationCycle)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Get an evaluation cycle with enrolled subjects
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles/{cycle_id}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)`.
+    public enum GetEvaluationCycle {
+        public static let id: Swift.String = "getEvaluationCycle"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/GET/path/cycle_id`.
+                public var cycleId: Components.Parameters.EvaluationCycleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - cycleId:
+                public init(cycleId: Components.Parameters.EvaluationCycleId) {
+                    self.cycleId = cycleId
+                }
+            }
+            public var path: Operations.GetEvaluationCycle.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetEvaluationCycle.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetEvaluationCycle.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetEvaluationCycle.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetEvaluationCycle.Input.Path,
+                headers: Operations.GetEvaluationCycle.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationCycleDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationCycleDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetEvaluationCycle.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetEvaluationCycle.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Evaluation cycle.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetEvaluationCycle.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetEvaluationCycle.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/get(getEvaluationCycle)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Read the next transition's blocking and advisory conditions
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/cycles/{cycle_id}/preflight`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)`.
+    public enum GetEvaluationCyclePreflight {
+        public static let id: Swift.String = "getEvaluationCyclePreflight"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/preflight/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/preflight/GET/path/cycle_id`.
+                public var cycleId: Components.Parameters.EvaluationCycleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - cycleId:
+                public init(cycleId: Components.Parameters.EvaluationCycleId) {
+                    self.cycleId = cycleId
+                }
+            }
+            public var path: Operations.GetEvaluationCyclePreflight.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/preflight/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetEvaluationCyclePreflight.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetEvaluationCyclePreflight.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetEvaluationCyclePreflight.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetEvaluationCyclePreflight.Input.Path,
+                headers: Operations.GetEvaluationCyclePreflight.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/preflight/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/preflight/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationPreflightReport)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationPreflightReport {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetEvaluationCyclePreflight.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetEvaluationCyclePreflight.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Preflight report.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetEvaluationCyclePreflight.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetEvaluationCyclePreflight.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/preflight/get(getEvaluationCyclePreflight)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Open a draft cycle after its server-side preflight passes
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/open`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)`.
+    public enum OpenEvaluationCycle {
+        public static let id: Swift.String = "openEvaluationCycle"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/open/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/open/POST/path/cycle_id`.
+                public var cycleId: Components.Parameters.EvaluationCycleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - cycleId:
+                public init(cycleId: Components.Parameters.EvaluationCycleId) {
+                    self.cycleId = cycleId
+                }
+            }
+            public var path: Operations.OpenEvaluationCycle.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/open/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.OpenEvaluationCycle.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.OpenEvaluationCycle.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.OpenEvaluationCycle.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.OpenEvaluationCycle.Input.Path,
+                headers: Operations.OpenEvaluationCycle.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/open/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/open/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationCycleDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationCycleDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.OpenEvaluationCycle.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.OpenEvaluationCycle.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Transitioned cycle.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.OpenEvaluationCycle.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.OpenEvaluationCycle.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/open/post(openEvaluationCycle)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Move an open cycle into calibration after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/start-calibration`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)`.
+    public enum StartEvaluationCalibration {
+        public static let id: Swift.String = "startEvaluationCalibration"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/start-calibration/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/start-calibration/POST/path/cycle_id`.
+                public var cycleId: Components.Parameters.EvaluationCycleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - cycleId:
+                public init(cycleId: Components.Parameters.EvaluationCycleId) {
+                    self.cycleId = cycleId
+                }
+            }
+            public var path: Operations.StartEvaluationCalibration.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/start-calibration/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.StartEvaluationCalibration.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.StartEvaluationCalibration.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.StartEvaluationCalibration.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.StartEvaluationCalibration.Input.Path,
+                headers: Operations.StartEvaluationCalibration.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/start-calibration/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/start-calibration/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationCycleDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationCycleDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.StartEvaluationCalibration.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.StartEvaluationCalibration.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Transitioned cycle.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.StartEvaluationCalibration.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.StartEvaluationCalibration.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/start-calibration/post(startEvaluationCalibration)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Finalize a calibrated cycle after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/finalize`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)`.
+    public enum FinalizeEvaluationCycle {
+        public static let id: Swift.String = "finalizeEvaluationCycle"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/finalize/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/finalize/POST/path/cycle_id`.
+                public var cycleId: Components.Parameters.EvaluationCycleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - cycleId:
+                public init(cycleId: Components.Parameters.EvaluationCycleId) {
+                    self.cycleId = cycleId
+                }
+            }
+            public var path: Operations.FinalizeEvaluationCycle.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/finalize/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.FinalizeEvaluationCycle.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.FinalizeEvaluationCycle.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.FinalizeEvaluationCycle.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.FinalizeEvaluationCycle.Input.Path,
+                headers: Operations.FinalizeEvaluationCycle.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/finalize/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/finalize/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationCycleDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationCycleDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.FinalizeEvaluationCycle.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.FinalizeEvaluationCycle.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Transitioned cycle.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.FinalizeEvaluationCycle.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.FinalizeEvaluationCycle.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/finalize/post(finalizeEvaluationCycle)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Archive a finalized cycle after preflight
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/cycles/{cycle_id}/archive`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)`.
+    public enum ArchiveEvaluationCycle {
+        public static let id: Swift.String = "archiveEvaluationCycle"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/archive/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/archive/POST/path/cycle_id`.
+                public var cycleId: Components.Parameters.EvaluationCycleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - cycleId:
+                public init(cycleId: Components.Parameters.EvaluationCycleId) {
+                    self.cycleId = cycleId
+                }
+            }
+            public var path: Operations.ArchiveEvaluationCycle.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/archive/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ArchiveEvaluationCycle.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ArchiveEvaluationCycle.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ArchiveEvaluationCycle.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.ArchiveEvaluationCycle.Input.Path,
+                headers: Operations.ArchiveEvaluationCycle.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/archive/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/cycles/{cycle_id}/archive/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationCycleDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationCycleDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ArchiveEvaluationCycle.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ArchiveEvaluationCycle.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Transitioned cycle.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ArchiveEvaluationCycle.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ArchiveEvaluationCycle.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/cycles/{cycle_id}/archive/post(archiveEvaluationCycle)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Enroll an employee in a draft evaluation cycle
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)`.
+    public enum AddEvaluationSubject {
+        public static let id: Swift.String = "addEvaluationSubject"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AddEvaluationSubject.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AddEvaluationSubject.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AddEvaluationSubject.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.AddEvaluationSubjectRequest)
+            }
+            public var body: Operations.AddEvaluationSubject.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.AddEvaluationSubject.Input.Headers = .init(),
+                body: Operations.AddEvaluationSubject.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.EvaluationSubjectDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationSubjectDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AddEvaluationSubject.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AddEvaluationSubject.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// Enrolled evaluation subject.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.AddEvaluationSubject.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.AddEvaluationSubject.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Request failed validation.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationError)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationError {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/post(addEvaluationSubject)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Get an evaluation subject
+    ///
+    /// Submit-only callers receive 404 for subjects not assigned to them; read-capable callers can read visible subjects.
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/subjects/{subject_id}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)`.
+    public enum GetEvaluationSubject {
+        public static let id: Swift.String = "getEvaluationSubject"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/GET/path/subject_id`.
+                public var subjectId: Components.Parameters.EvaluationSubjectId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - subjectId:
+                public init(subjectId: Components.Parameters.EvaluationSubjectId) {
+                    self.subjectId = subjectId
+                }
+            }
+            public var path: Operations.GetEvaluationSubject.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetEvaluationSubject.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetEvaluationSubject.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetEvaluationSubject.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetEvaluationSubject.Input.Path,
+                headers: Operations.GetEvaluationSubject.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationSubjectDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationSubjectDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetEvaluationSubject.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetEvaluationSubject.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Evaluation subject.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetEvaluationSubject.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetEvaluationSubject.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/get(getEvaluationSubject)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Replace all typed goals for an assigned or managed subject
+    ///
+    /// - Remark: HTTP `PUT /api/v1/evaluation/subjects/{subject_id}/goals`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)`.
+    public enum ReplaceEvaluationGoals {
+        public static let id: Swift.String = "replaceEvaluationGoals"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/goals/PUT/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/goals/PUT/path/subject_id`.
+                public var subjectId: Components.Parameters.EvaluationSubjectId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - subjectId:
+                public init(subjectId: Components.Parameters.EvaluationSubjectId) {
+                    self.subjectId = subjectId
+                }
+            }
+            public var path: Operations.ReplaceEvaluationGoals.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/goals/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ReplaceEvaluationGoals.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ReplaceEvaluationGoals.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ReplaceEvaluationGoals.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/goals/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/goals/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.ReplaceEvaluationGoalsRequest)
+            }
+            public var body: Operations.ReplaceEvaluationGoals.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.ReplaceEvaluationGoals.Input.Path,
+                headers: Operations.ReplaceEvaluationGoals.Input.Headers = .init(),
+                body: Operations.ReplaceEvaluationGoals.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/goals/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/goals/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationSubjectDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationSubjectDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ReplaceEvaluationGoals.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ReplaceEvaluationGoals.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Subject with replacement goals.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ReplaceEvaluationGoals.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ReplaceEvaluationGoals.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Request failed validation.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationError)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationError {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/goals/put(replaceEvaluationGoals)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Save a draft self or manager review
+    ///
+    /// Review kind is lowercase `self` or `manager`; unassigned submitters receive 404.
+    ///
+    /// - Remark: HTTP `PUT /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)`.
+    public enum SaveEvaluationReview {
+        public static let id: Swift.String = "saveEvaluationReview"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/path/subject_id`.
+                public var subjectId: Components.Parameters.EvaluationSubjectId
+                /// - Remark: Generated from `#/components/parameters/EvaluationReviewKindPath`.
+                @frozen public enum EvaluationReviewKindPath: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _self = "self"
+                    case manager = "manager"
+                }
+                /// Lowercase path representation of a review kind.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/path/kind`.
+                public var kind: Components.Parameters.EvaluationReviewKindPath
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - subjectId:
+                ///   - kind: Lowercase path representation of a review kind.
+                public init(
+                    subjectId: Components.Parameters.EvaluationSubjectId,
+                    kind: Components.Parameters.EvaluationReviewKindPath
+                ) {
+                    self.subjectId = subjectId
+                    self.kind = kind
+                }
+            }
+            public var path: Operations.SaveEvaluationReview.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SaveEvaluationReview.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SaveEvaluationReview.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.SaveEvaluationReview.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.SaveEvaluationReviewRequest)
+            }
+            public var body: Operations.SaveEvaluationReview.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.SaveEvaluationReview.Input.Path,
+                headers: Operations.SaveEvaluationReview.Input.Headers = .init(),
+                body: Operations.SaveEvaluationReview.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationReview)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationReview {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SaveEvaluationReview.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SaveEvaluationReview.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Saved review draft.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.SaveEvaluationReview.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.SaveEvaluationReview.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Request failed validation.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationError)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationError {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/put(saveEvaluationReview)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Submit a saved self or manager review
+    ///
+    /// Submission is terminal; the backend enforces grade/evidence gates and returns conflicts for unmet gates or replays.
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)`.
+    public enum SubmitEvaluationReview {
+        public static let id: Swift.String = "submitEvaluationReview"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/POST/path/subject_id`.
+                public var subjectId: Components.Parameters.EvaluationSubjectId
+                /// - Remark: Generated from `#/components/parameters/EvaluationReviewKindPath`.
+                @frozen public enum EvaluationReviewKindPath: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _self = "self"
+                    case manager = "manager"
+                }
+                /// Lowercase path representation of a review kind.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/POST/path/kind`.
+                public var kind: Components.Parameters.EvaluationReviewKindPath
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - subjectId:
+                ///   - kind: Lowercase path representation of a review kind.
+                public init(
+                    subjectId: Components.Parameters.EvaluationSubjectId,
+                    kind: Components.Parameters.EvaluationReviewKindPath
+                ) {
+                    self.subjectId = subjectId
+                    self.kind = kind
+                }
+            }
+            public var path: Operations.SubmitEvaluationReview.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SubmitEvaluationReview.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SubmitEvaluationReview.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.SubmitEvaluationReview.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.SubmitEvaluationReview.Input.Path,
+                headers: Operations.SubmitEvaluationReview.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationReview)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationReview {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SubmitEvaluationReview.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SubmitEvaluationReview.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Submitted review.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.SubmitEvaluationReview.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.SubmitEvaluationReview.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit/post(submitEvaluationReview)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Record a calibrated grade for an evaluation subject
+    ///
+    /// - Remark: HTTP `POST /api/v1/evaluation/subjects/{subject_id}/calibrate`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)`.
+    public enum CalibrateEvaluationSubject {
+        public static let id: Swift.String = "calibrateEvaluationSubject"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/calibrate/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/calibrate/POST/path/subject_id`.
+                public var subjectId: Components.Parameters.EvaluationSubjectId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - subjectId:
+                public init(subjectId: Components.Parameters.EvaluationSubjectId) {
+                    self.subjectId = subjectId
+                }
+            }
+            public var path: Operations.CalibrateEvaluationSubject.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/calibrate/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CalibrateEvaluationSubject.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CalibrateEvaluationSubject.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.CalibrateEvaluationSubject.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/calibrate/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/calibrate/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.CalibrateEvaluationSubjectRequest)
+            }
+            public var body: Operations.CalibrateEvaluationSubject.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.CalibrateEvaluationSubject.Input.Path,
+                headers: Operations.CalibrateEvaluationSubject.Input.Headers = .init(),
+                body: Operations.CalibrateEvaluationSubject.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/calibrate/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/subjects/{subject_id}/calibrate/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationSubjectDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationSubjectDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CalibrateEvaluationSubject.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CalibrateEvaluationSubject.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Calibrated subject.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.CalibrateEvaluationSubject.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.CalibrateEvaluationSubject.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// State conflict or illegal transition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Request failed validation.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationError)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationError {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/subjects/{subject_id}/calibrate/post(calibrateEvaluationSubject)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// List the authenticated submitter's evaluation tasks
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/my-tasks`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)`.
+    public enum ListMyEvaluationTasks {
+        public static let id: Swift.String = "listMyEvaluationTasks"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/my-tasks/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListMyEvaluationTasks.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListMyEvaluationTasks.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListMyEvaluationTasks.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.ListMyEvaluationTasks.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/my-tasks/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/my-tasks/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationTaskPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationTaskPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListMyEvaluationTasks.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListMyEvaluationTasks.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Submitter task page.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListMyEvaluationTasks.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListMyEvaluationTasks.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/my-tasks/get(listMyEvaluationTasks)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// List a managed employee's finalized evaluation ledger
+    ///
+    /// - Remark: HTTP `GET /api/v1/evaluation/employees/{employee_id}/reviews`.
+    /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)`.
+    public enum ListEmployeeEvaluationReviews {
+        public static let id: Swift.String = "listEmployeeEvaluationReviews"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/employees/{employee_id}/reviews/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/employees/{employee_id}/reviews/GET/path/employee_id`.
+                public var employeeId: Components.Parameters.EvaluationEmployeeId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - employeeId:
+                public init(employeeId: Components.Parameters.EvaluationEmployeeId) {
+                    self.employeeId = employeeId
+                }
+            }
+            public var path: Operations.ListEmployeeEvaluationReviews.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/evaluation/employees/{employee_id}/reviews/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListEmployeeEvaluationReviews.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListEmployeeEvaluationReviews.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListEmployeeEvaluationReviews.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.ListEmployeeEvaluationReviews.Input.Path,
+                headers: Operations.ListEmployeeEvaluationReviews.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/evaluation/employees/{employee_id}/reviews/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/evaluation/employees/{employee_id}/reviews/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluationLedgerPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluationLedgerPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListEmployeeEvaluationReviews.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListEmployeeEvaluationReviews.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Finalized review ledger.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListEmployeeEvaluationReviews.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListEmployeeEvaluationReviews.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or invalid bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Principal lacks role or branch authority.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Resource was not found in branch scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Unexpected server-side failure.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Required storage or platform dependency is not configured.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/evaluation/employees/{employee_id}/reviews/get(listEmployeeEvaluationReviews)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
                             response: self
                         )
                     }

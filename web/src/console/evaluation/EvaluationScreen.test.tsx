@@ -63,6 +63,10 @@ const cycle = (stage: EvaluationCycleSummary["stage"] = "OPEN"): EvaluationCycle
 
 const detail = (stage: EvaluationCycleSummary["stage"] = "OPEN"): EvaluationCycleDetail => ({
   ...cycle(stage),
+  opened_at: null,
+  calibration_started_at: null,
+  finalized_at: null,
+  archived_at: null,
   created_by: "user-admin",
   progress_by_unit: [{ org_unit: "정비사업팀", total: 4, manager_submitted: 2 }],
   subjects: [
@@ -81,8 +85,22 @@ const detail = (stage: EvaluationCycleSummary["stage"] = "OPEN"): EvaluationCycl
 });
 
 const preflight = (): EvaluationPreflightReport => ({
-  next_transition: "CALIBRATION",
+  next_transition: "start_calibration",
   blockers: [],
+  advisories: [],
+});
+
+const blockedPreflight = (
+  nextTransition: EvaluationPreflightReport["next_transition"],
+): EvaluationPreflightReport => ({
+  next_transition: nextTransition,
+  blockers: [
+    {
+      code: "MISSING_GOALS",
+      message: "목표를 저장해야 다음 단계로 진행할 수 있습니다.",
+      subject_id: "subject-1",
+    },
+  ],
   advisories: [],
 });
 
@@ -90,11 +108,11 @@ const task = (): EvaluationTaskSummary => ({
   subject_id: "subject-1",
   cycle_id: "cycle-1",
   cycle_name: "2026 상반기 정기평가",
-  period_label: "2026 H1",
   due_date: "2099-07-18",
   kind: "MANAGER",
   employee_id: "emp-1",
   employee_name: "조이슨",
+  review_status: null,
 });
 
 const subjectDetail = (): EvaluationSubjectDetail => ({
@@ -119,6 +137,10 @@ const subjectDetail = (): EvaluationSubjectDetail => ({
   ],
   reviews: [],
   calibrated_grade: null,
+  calibration_reason: null,
+  calibrated_by: null,
+  calibrated_at: null,
+  finalized_at: null,
 });
 
 function ok<T>(data: T) {
@@ -141,11 +163,11 @@ function client(routes: RouteMap = {}) {
 }
 
 const defaultRoutes = (): RouteMap => ({
-  "/api/v1/evaluation/cycles": () => ok({ items: [cycle()], limit: 50, offset: 0, total: 1 }),
-  "/api/v1/evaluation/my-tasks": () => ok({ items: [task()], limit: 50, offset: 0, total: 1 }),
-  "/api/v1/evaluation/cycles/{cycleId}": () => ok(detail()),
-  "/api/v1/evaluation/cycles/{cycleId}/preflight": () => ok(preflight()),
-  "/api/v1/evaluation/subjects/{subjectId}": () => ok(subjectDetail()),
+  "/api/v1/evaluation/cycles": () => ok({ items: [cycle()], total: 1 }),
+  "/api/v1/evaluation/my-tasks": () => ok({ items: [task()] }),
+  "/api/v1/evaluation/cycles/{cycle_id}": () => ok(detail()),
+  "/api/v1/evaluation/cycles/{cycle_id}/preflight": () => ok(preflight()),
+  "/api/v1/evaluation/subjects/{subject_id}": () => ok(subjectDetail()),
   "/api/v1/users": () =>
     ok({ items: [{ id: "user-mgr", display_name: "김성아", is_active: true }], limit: 100, offset: 0, total: 1 }),
   "/api/v1/employees": () =>
@@ -193,7 +215,7 @@ describe("EvaluationScreen", () => {
   it("retries an initial cycle-list error and renders the backend list", async () => {
     const { impl, api } = client();
     impl.GET.mockResolvedValueOnce(reject(500, "boom")).mockResolvedValueOnce(
-      ok({ items: [cycle()], limit: 50, offset: 0, total: 1 }),
+      ok({ items: [cycle()], total: 1 }),
     );
     renderScreen(readOnly, api);
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
@@ -206,8 +228,8 @@ describe("EvaluationScreen", () => {
 
   it("shows empty states with a next action instead of fabricated rows", async () => {
     const { api } = client({
-      "/api/v1/evaluation/cycles": () => ok({ items: [], limit: 50, offset: 0, total: 0 }),
-      "/api/v1/evaluation/my-tasks": () => ok({ items: [], limit: 50, offset: 0, total: 0 }),
+      "/api/v1/evaluation/cycles": () => ok({ items: [], total: 0 }),
+      "/api/v1/evaluation/my-tasks": () => ok({ items: [] }),
     });
     renderScreen(submitter, api);
     expect(await screen.findByText(text.cycleEmptyReadOnly)).toBeVisible();
@@ -228,7 +250,7 @@ describe("EvaluationScreen", () => {
 
   it("renders a denied cycle detail as a status, not a retryable error", async () => {
     const routes = defaultRoutes();
-    routes["/api/v1/evaluation/cycles/{cycleId}"] = () => reject(403, "forbidden");
+    routes["/api/v1/evaluation/cycles/{cycle_id}"] = () => reject(403, "forbidden");
     const { api } = client(routes);
     renderScreen(readOnly, api);
     await userEvent.click(
@@ -248,8 +270,8 @@ describe("EvaluationScreen", () => {
     });
     await userEvent.click(transition);
     expect(impl.POST).toHaveBeenCalledWith(
-      "/api/v1/evaluation/cycles/{cycleId}/start-calibration",
-      expect.objectContaining({ params: { path: { cycleId: "cycle-1" } } }),
+      "/api/v1/evaluation/cycles/{cycle_id}/start-calibration",
+      expect.objectContaining({ params: { path: { cycle_id: "cycle-1" } } }),
     );
     await waitFor(() => {
       expect(within(list).getByText(text.stage.CALIBRATION)).toBeVisible();
@@ -299,14 +321,97 @@ describe("EvaluationScreen", () => {
     });
   });
 
+  it("replaces goals then reloads server preflight before enabling cycle open", async () => {
+    const routes = defaultRoutes();
+    let preflightCalls = 0;
+    routes["/api/v1/evaluation/cycles"] = () => ok({ items: [cycle("DRAFT")], total: 1 });
+    routes["/api/v1/evaluation/cycles/{cycle_id}"] = () => ok(detail("DRAFT"));
+    routes["/api/v1/evaluation/cycles/{cycle_id}/preflight"] = () => {
+      preflightCalls += 1;
+      return ok(preflightCalls === 1 ? blockedPreflight("open") : { ...blockedPreflight("open"), blockers: [] });
+    };
+    const { impl, api } = client(routes);
+    impl.PUT.mockResolvedValue(ok(subjectDetail()));
+    renderScreen(manage, api);
+    await openCycleRow();
+    const cyclePanel = await screen.findByRole("region", { name: cycle().name });
+    expect(within(cyclePanel).getByRole("button", { name: text.transition.OPEN })).toBeDisabled();
+    await userEvent.click(
+      within(screen.getByRole("list", { name: text.subjects })).getByRole("button", {
+        name: /^조이슨/,
+      }),
+    );
+    await screen.findByRole("region", { name: "조이슨" });
+    await userEvent.click(screen.getByRole("button", { name: text.saveGoals }));
+    await waitFor(() => {
+      expect(preflightCalls).toBe(2);
+    });
+    await userEvent.click(screen.getByRole("button", { name: text.back }));
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("region", { name: cycle().name })).getByRole("button", {
+          name: text.transition.OPEN,
+        }),
+      ).toBeEnabled();
+    });
+  });
+
+  it("calibrates then reloads server preflight before enabling finalization", async () => {
+    const routes = defaultRoutes();
+    let preflightCalls = 0;
+    routes["/api/v1/evaluation/cycles"] = () => ok({ items: [cycle("CALIBRATION")], total: 1 });
+    routes["/api/v1/evaluation/cycles/{cycle_id}"] = () => ok(detail("CALIBRATION"));
+    routes["/api/v1/evaluation/cycles/{cycle_id}/preflight"] = () => {
+      preflightCalls += 1;
+      return ok(preflightCalls === 1 ? blockedPreflight("finalize") : { ...blockedPreflight("finalize"), blockers: [] });
+    };
+    routes["/api/v1/evaluation/subjects/{subject_id}"] = () =>
+      ok({ ...subjectDetail(), state: "REVIEWED" });
+    const { impl, api } = client(routes);
+    impl.POST.mockResolvedValue(
+      ok({
+        ...subjectDetail(),
+        state: "CALIBRATED",
+        calibrated_grade: "A",
+        calibrated_by: "user-admin",
+        calibrated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    renderScreen(manage, api);
+    await openCycleRow();
+    const cyclePanel = await screen.findByRole("region", { name: cycle().name });
+    expect(
+      within(cyclePanel).getByRole("button", { name: text.transition.FINALIZED }),
+    ).toBeDisabled();
+    await userEvent.click(
+      within(screen.getByRole("list", { name: text.subjects })).getByRole("button", {
+        name: /^조이슨/,
+      }),
+    );
+    await screen.findByRole("region", { name: "조이슨" });
+    await userEvent.click(screen.getByRole("button", { name: "A" }));
+    await userEvent.click(screen.getByRole("button", { name: text.calibrate }));
+    await waitFor(() => {
+      expect(preflightCalls).toBe(2);
+    });
+    await userEvent.click(screen.getByRole("button", { name: text.back }));
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("region", { name: cycle().name })).getByRole("button", {
+          name: text.transition.FINALIZED,
+        }),
+      ).toBeEnabled();
+    });
+  });
+
   it("walks the scorecard: evidence required for a manager grade, submit clears the task", async () => {
     const routes = defaultRoutes();
     let taskCalls = 0;
     routes["/api/v1/evaluation/my-tasks"] = () => {
       taskCalls += 1;
       return taskCalls === 1
-        ? ok({ items: [task()], limit: 50, offset: 0, total: 1 })
-        : ok({ items: [], limit: 50, offset: 0, total: 0 });
+        ? ok({ items: [task()] })
+        : ok({ items: [] });
     };
     const { impl, api } = client(routes);
     impl.PUT.mockResolvedValue(ok({ id: "review-1", subject_id: "subject-1", kind: "MANAGER", status: "DRAFT", evaluator_user_id: "user-mgr", evidence_links: [], updated_at: "2026-07-24T00:00:00Z" }));
@@ -321,22 +426,24 @@ describe("EvaluationScreen", () => {
     await userEvent.type(screen.getByLabelText(text.evidenceRef), "KPI-SLA");
     await userEvent.type(screen.getByLabelText(text.evidenceLabel), "고객 응답 97%");
     await userEvent.click(screen.getByRole("button", { name: text.addEvidence }));
+    expect(screen.getByText(text.notFound)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /KPI.*KPI-SLA/ })).toBeNull();
     expect(submit).toBeEnabled();
     await userEvent.click(submit);
     expect(impl.PUT).toHaveBeenCalledWith(
-      "/api/v1/evaluation/subjects/{subjectId}/reviews/{kind}",
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}",
       expect.objectContaining({
-        params: { path: { subjectId: "subject-1", kind: "manager" } },
+        params: { path: { subject_id: "subject-1", kind: "manager" } },
         body: expect.objectContaining({
           grade: "A",
           evidence_links: [
-            expect.objectContaining({ object_ref: "KPI-SLA", sort_order: 1 }),
+            expect.objectContaining({ object_ref: "KPI-SLA" }),
           ],
         }),
       }),
     );
     expect(impl.POST).toHaveBeenCalledWith(
-      "/api/v1/evaluation/subjects/{subjectId}/reviews/{kind}/submit",
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit",
       expect.anything(),
     );
     await waitFor(() => {
@@ -345,6 +452,183 @@ describe("EvaluationScreen", () => {
     await waitFor(() => {
       expect(screen.getByText(text.tasksEmpty)).toBeVisible();
     });
+  });
+
+  it("lets a linked employee draft and submit only their SELF task through the typed self review route", async () => {
+    const selfTask: EvaluationTaskSummary = {
+      ...task(),
+      kind: "SELF",
+      employee_id: "emp-linked",
+      employee_name: "이연결",
+    };
+    const selfSubject: EvaluationSubjectDetail = {
+      ...subjectDetail(),
+      employee_id: selfTask.employee_id,
+      employee_name: selfTask.employee_name,
+    };
+    const routes = defaultRoutes();
+    routes["/api/v1/evaluation/my-tasks"] = () => ok({ items: [selfTask] });
+    routes["/api/v1/evaluation/subjects/{subject_id}"] = () => ok(selfSubject);
+    const { impl, api } = client(routes);
+    impl.PUT.mockResolvedValue(
+      ok({
+        id: "review-self",
+        subject_id: selfTask.subject_id,
+        kind: "SELF",
+        status: "DRAFT",
+        evaluator_user_id: "user-linked",
+        grade: "A",
+        note: "목표를 달성했습니다.",
+        evidence_links: [],
+        submitted_at: null,
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    impl.POST.mockResolvedValue(
+      ok({
+        id: "review-self",
+        subject_id: selfTask.subject_id,
+        kind: "SELF",
+        status: "SUBMITTED",
+        grade: "A",
+        note: "목표를 달성했습니다.",
+        evaluator_user_id: "user-linked",
+        evidence_links: [],
+        submitted_at: "2026-07-25T00:00:00Z",
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    renderScreen(submitOnly, api);
+
+    const tasks = await screen.findByRole("list", { name: text.myTasks });
+    expect(within(tasks).getByText(/이연결 · 자기평가/)).toBeVisible();
+    await userEvent.click(within(tasks).getByRole("button", { name: text.write }));
+
+    const dialog = await screen.findByRole("dialog", { name: text.scorecard });
+    expect(dialog).toHaveTextContent(text.reviewKind.SELF);
+    await userEvent.click(within(dialog).getByRole("button", { name: "A" }));
+    await userEvent.type(screen.getByLabelText(text.notePlaceholder), "목표를 달성했습니다.");
+    await userEvent.click(screen.getByRole("button", { name: text.saveDraft }));
+    expect(impl.PUT).toHaveBeenCalledWith(
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}",
+      expect.objectContaining({
+        params: { path: { subject_id: selfTask.subject_id, kind: "self" } },
+        body: {
+          grade: "A",
+          note: "목표를 달성했습니다.",
+          evidence_links: [],
+        },
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: text.submit }));
+    expect(impl.POST).toHaveBeenCalledWith(
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit",
+      expect.objectContaining({
+        params: { path: { subject_id: selfTask.subject_id, kind: "self" } },
+      }),
+    );
+    expect(impl.POST).not.toHaveBeenCalledWith(
+      "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit",
+      expect.objectContaining({
+        params: { path: expect.objectContaining({ kind: "manager" }) },
+      }),
+    );
+  });
+
+  it("keeps the selected cycle gate bound to that cycle when a task from another cycle is submitted", async () => {
+    const cycleA = { ...cycle("DRAFT"), id: "cycle-a" };
+    const cycleB = {
+      ...cycle("CALIBRATION"),
+      id: "cycle-b",
+      name: "2026 하반기 정기평가",
+      period_label: "2026 H2",
+    };
+    const detailA = { ...detail("DRAFT"), ...cycleA };
+    const detailB = { ...detail("CALIBRATION"), ...cycleB, subjects: [] };
+    const taskB: EvaluationTaskSummary = {
+      ...task(),
+      subject_id: "subject-b",
+      cycle_id: cycleB.id,
+      cycle_name: cycleB.name,
+      employee_id: "emp-b",
+      employee_name: "한지민",
+    };
+    const subjectB = {
+      ...subjectDetail(),
+      id: taskB.subject_id,
+      cycle_id: cycleB.id,
+      employee_id: taskB.employee_id,
+      employee_name: taskB.employee_name,
+    };
+    const routes = defaultRoutes();
+    routes["/api/v1/evaluation/cycles"] = () => ok({ items: [cycleA, cycleB], total: 2 });
+    routes["/api/v1/evaluation/my-tasks"] = () => ok({ items: [taskB] });
+    const { impl, api } = client(routes);
+    impl.GET.mockImplementation(
+      (path: string, request?: { params?: { path?: Record<string, string> } }) => {
+        const cycleId = request?.params?.path?.cycle_id;
+        if (path === "/api/v1/evaluation/cycles/{cycle_id}") {
+          return Promise.resolve(ok(cycleId === cycleB.id ? detailB : detailA));
+        }
+        if (path === "/api/v1/evaluation/cycles/{cycle_id}/preflight") {
+          return Promise.resolve(
+            ok(cycleId === cycleB.id ? preflight() : { ...preflight(), next_transition: "open" }),
+          );
+        }
+        if (path === "/api/v1/evaluation/subjects/{subject_id}") {
+          return Promise.resolve(ok(subjectB));
+        }
+        const handler = routes[path];
+        return Promise.resolve(handler ? handler() : reject(404, `unmocked GET ${path}`));
+      },
+    );
+    impl.PUT.mockResolvedValue(
+      ok({
+        id: "review-b",
+        subject_id: taskB.subject_id,
+        kind: "MANAGER",
+        status: "DRAFT",
+        evaluator_user_id: "user-mgr",
+        evidence_links: [],
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+    impl.POST.mockResolvedValue(
+      ok({
+        id: "review-b",
+        subject_id: taskB.subject_id,
+        kind: "MANAGER",
+        status: "SUBMITTED",
+        grade: "A",
+        evaluator_user_id: "user-mgr",
+        evidence_links: [],
+        submitted_at: "2026-07-25T00:00:00Z",
+        updated_at: "2026-07-25T00:00:00Z",
+      }),
+    );
+
+    renderScreen(manage, api);
+    await openCycleRow();
+    const cyclePanel = await screen.findByRole("region", { name: cycleA.name });
+    expect(within(cyclePanel).getByRole("button", { name: text.transition.OPEN })).toBeEnabled();
+
+    await userEvent.click(await screen.findByRole("button", { name: text.write }));
+    await screen.findByRole("dialog", { name: text.scorecard });
+    await userEvent.click(screen.getByRole("button", { name: "A" }));
+    await userEvent.type(screen.getByLabelText(text.evidenceRef), "KPI-H2");
+    await userEvent.type(screen.getByLabelText(text.evidenceLabel), "하반기 KPI");
+    await userEvent.click(screen.getByRole("button", { name: text.addEvidence }));
+    await userEvent.click(screen.getByRole("button", { name: text.submit }));
+
+    await waitFor(() => {
+      expect(impl.GET).toHaveBeenCalledWith(
+        "/api/v1/evaluation/cycles/{cycle_id}/preflight",
+        expect.objectContaining({ params: { path: { cycle_id: cycleB.id } } }),
+      );
+    });
+    expect(within(cyclePanel).getByRole("button", { name: text.transition.OPEN })).toBeEnabled();
+    expect(within(cyclePanel).queryByRole("button", { name: text.transition.FINALIZED })).toBeNull();
   });
 
   it("closes the scorecard with Escape without submitting", async () => {
@@ -361,7 +645,7 @@ describe("EvaluationScreen", () => {
 
   it("opens the audited person ledger from a task and drills back into the RV- object", async () => {
     const routes = defaultRoutes();
-    routes["/api/v1/evaluation/employees/{employeeId}/reviews"] = () =>
+    routes["/api/v1/evaluation/employees/{employee_id}/reviews"] = () =>
       ok({
         items: [
           {
@@ -375,7 +659,7 @@ describe("EvaluationScreen", () => {
           },
         ],
       });
-    routes["/api/v1/evaluation/subjects/{subjectId}"] = () =>
+    routes["/api/v1/evaluation/subjects/{subject_id}"] = () =>
       ok({ ...subjectDetail(), id: "subject-0", state: "FINALIZED", rv_code: "RV-2501", final_grade: "A" });
     const { impl, api } = client(routes);
     renderScreen(submitter, api);
@@ -385,8 +669,8 @@ describe("EvaluationScreen", () => {
     expect(await screen.findByText(text.auditChip)).toBeVisible();
     expect(await screen.findByText("RV-2501")).toBeVisible();
     expect(impl.GET).toHaveBeenCalledWith(
-      "/api/v1/evaluation/employees/{employeeId}/reviews",
-      expect.objectContaining({ params: { path: { employeeId: "emp-1" } } }),
+      "/api/v1/evaluation/employees/{employee_id}/reviews",
+      expect.objectContaining({ params: { path: { employee_id: "emp-1" } } }),
     );
     await userEvent.click(screen.getByRole("button", { name: /RV-2501/ }));
     const zone = await screen.findByRole("region", { name: "조이슨" });
@@ -395,7 +679,7 @@ describe("EvaluationScreen", () => {
 
   it("renders a denied-by-omission ledger 404 as a status, not a retryable error", async () => {
     const routes = defaultRoutes();
-    routes["/api/v1/evaluation/employees/{employeeId}/reviews"] = () =>
+    routes["/api/v1/evaluation/employees/{employee_id}/reviews"] = () =>
       reject(404, "not found");
     const { api } = client(routes);
     renderScreen(submitter, api);
@@ -429,7 +713,7 @@ describe("EvaluationScreen", () => {
     const { api } = client({
       ...defaultRoutes(),
       "/api/v1/evaluation/cycles": () =>
-        ok({ items: [cycle("CALIBRATION")], limit: 50, offset: 0, total: 1 }),
+        ok({ items: [cycle("CALIBRATION")], total: 1 }),
     });
     const view = render(
       <MemoryRouter initialEntries={["/console/evaluation"]}>
@@ -459,7 +743,7 @@ describe("EvaluationScreen", () => {
     expect(
       await screen.findByRole("button", { name: /2026 상반기 정기평가/ }),
     ).toHaveTextContent(text.stage.CALIBRATION);
-    resolveFirst(ok({ items: [cycle("DRAFT")], limit: 50, offset: 0, total: 1 }));
+    resolveFirst(ok({ items: [cycle("DRAFT")], total: 1 }));
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: /2026 상반기 정기평가/ }),

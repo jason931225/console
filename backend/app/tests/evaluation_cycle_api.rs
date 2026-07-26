@@ -1,18 +1,18 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! STORY-EVALUATION-001 end-to-end contract for the dark-landed evaluation
+//! STORY-EVALUATION-001 end-to-end contract for the authenticated evaluation
 //! console (CAP-EVALUATION-CONSOLE).
 //!
-//! The evaluation router is mounted directly (not through `build_router` —
-//! the module lands dark; the openapi drift gate couples `build_router` mounts
-//! with `openapi.yaml`, which the consolidation integrator owns). Every HTTP
-//! request executes as the genuine `mnt_rt` runtime role (NOSUPERUSER,
-//! NOBYPASSRLS) under FORCE RLS, never the BYPASSRLS superuser the default
+//! The first test exercises `build_router` so route composition and JWT
+//! authentication cannot regress. The workflow story below mounts the same
+//! evaluation router against an `mnt_rt` pool to exercise FORCE RLS
+//! (NOSUPERUSER, NOBYPASSRLS), never the BYPASSRLS superuser the default
 //! `#[sqlx::test]` pool connects as. Seed helpers live here rather than in the
 //! rest crate so the audit-coverage gate does not misread them as unaudited
 //! mutations.
 
 use axum::body::{Body, to_bytes};
 use http::{Request, StatusCode, header};
+use mnt_app::{AppConfig, AppRole, AppState, DatabaseDependency, build_router};
 use mnt_evaluation_adapter_postgres::PgEvaluationStore;
 use mnt_evaluation_rest::EvaluationRestState;
 use mnt_kernel_core::{BranchId, OrgId, UserId};
@@ -32,6 +32,27 @@ const AUDIENCE: &str = "mnt-api";
 const CYCLES: &str = "/api/v1/evaluation/cycles";
 const SUBJECTS: &str = "/api/v1/evaluation/subjects";
 const ORG_B: Uuid = Uuid::from_u128(0xeb00_0000_0000_0000_0000_0000_0000_00b2);
+
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn evaluation_routes_are_mounted_by_the_authenticated_app_router(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let router = build_router(
+        app_state(runtime_role_pool(&pool).await, fixture.public_pem.clone()).unwrap(),
+    );
+
+    let (status, body) = send(&router, "GET", CYCLES, None, None).await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "app router must authenticate evaluation routes: {body}"
+    );
+    assert_eq!(body, json!("missing or malformed bearer token"));
+
+    let (status, page) = send(&router, "GET", CYCLES, Some(&fixture.admin), None).await;
+    assert_eq!(status, StatusCode::OK, "authorized evaluation read: {page}");
+    assert_eq!(page["items"], json!([]));
+    assert_eq!(page["total"], 0);
+}
 
 #[sqlx::test(migrations = "../crates/platform/db/migrations")]
 async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool) {
@@ -174,7 +195,8 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "re-open: {replay}");
 
-    // The manager's task list carries both pending review kinds for s1.
+    // Review work is relationship-scoped by kind: the assigned manager sees
+    // only MANAGER work and the linked employee sees only SELF work.
     let (status, tasks) = send(
         &router,
         "GET",
@@ -184,7 +206,19 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(tasks["items"].as_array().unwrap().len(), 2, "{tasks}");
+    assert_eq!(tasks["items"].as_array().unwrap().len(), 1, "{tasks}");
+    assert_eq!(tasks["items"][0]["kind"], "MANAGER", "{tasks}");
+    let (status, tasks) = send(
+        &router,
+        "GET",
+        "/api/v1/evaluation/my-tasks",
+        Some(&f.subject),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(tasks["items"].as_array().unwrap().len(), 1, "{tasks}");
+    assert_eq!(tasks["items"][0]["kind"], "SELF", "{tasks}");
 
     // Server-persisted draft: a refresh (fresh GET) still sees it.
     let review_path = format!("{SUBJECTS}/{s1}/reviews/manager");
@@ -269,13 +303,13 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
         "draft upsert after submit: {mutate}"
     );
 
-    // SELF review for s1 (recorded by the assigned manager — see contract note).
+    // The subject, not their manager, owns the SELF review.
     let self_path = format!("{SUBJECTS}/{s1}/reviews/self");
     let (status, _) = send(
         &router,
         "PUT",
         &self_path,
-        Some(&f.manager),
+        Some(&f.subject),
         Some(json!({"grade": "B", "evidence_links": []})),
     )
     .await;
@@ -284,7 +318,7 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
         &router,
         "POST",
         &format!("{self_path}/submit"),
-        Some(&f.manager),
+        Some(&f.subject),
         None,
     )
     .await;
@@ -370,7 +404,7 @@ async fn story_evaluation_001_walks_cycle_to_ledger_as_runtime_role(pool: PgPool
         &router,
         "PUT",
         &self_path,
-        Some(&f.manager),
+        Some(&f.subject),
         Some(json!({"grade": "A", "evidence_links": []})),
     )
     .await;
@@ -790,6 +824,307 @@ async fn authorization_conceals_and_isolates_without_leakage(pool: PgPool) {
     assert_eq!(unarmed, 0, "unarmed GUC must read nothing under FORCE RLS");
 }
 
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn review_identity_relationships_fail_closed_by_kind(pool: PgPool) {
+    let f = Fixture::new(&pool).await;
+    let router = f.router(&pool).await;
+
+    let (_, cycle) = send(
+        &router,
+        "POST",
+        CYCLES,
+        Some(&f.admin),
+        Some(json!({"name": "관계 검증", "kind": "REGULAR", "period_label": "2026-Q4", "due_date": "2026-12-31"})),
+    )
+    .await;
+    let cycle_id = cycle["id"].as_str().unwrap();
+    let (_, subject) = send(
+        &router,
+        "POST",
+        SUBJECTS,
+        Some(&f.admin),
+        Some(json!({"cycle_id": cycle_id, "employee_id": f.employee_a, "manager_user_id": f.manager_id})),
+    )
+    .await;
+    let subject_id = subject["id"].as_str().unwrap();
+    let (_, _) = send(
+        &router,
+        "PUT",
+        &format!("{SUBJECTS}/{subject_id}/goals"),
+        Some(&f.manager),
+        Some(json!({"goals": [{"title": "관계 검증", "metric_kind": "KPI", "target_label": "완료", "weight_pct": 100}]})),
+    )
+    .await;
+    let (status, _) = send(
+        &router,
+        "POST",
+        &format!("{CYCLES}/{cycle_id}/open"),
+        Some(&f.admin),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let self_path = format!("{SUBJECTS}/{subject_id}/reviews/self");
+    let manager_path = format!("{SUBJECTS}/{subject_id}/reviews/manager");
+    let draft = json!({"grade": "A", "evidence_links": []});
+
+    let (status, detail) = send(
+        &router,
+        "GET",
+        &format!("{SUBJECTS}/{subject_id}"),
+        Some(&f.subject),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "linked subject detail: {detail}");
+    let (status, _) = send(
+        &router,
+        "GET",
+        &format!("{SUBJECTS}/{subject_id}"),
+        Some(&f.unlinked),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // The assigned manager is linked, but cannot impersonate the subject.
+    let (status, _) = send(
+        &router,
+        "PUT",
+        &self_path,
+        Some(&f.manager),
+        Some(draft.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // The linked subject cannot impersonate their manager.
+    let (status, _) = send(
+        &router,
+        "PUT",
+        &manager_path,
+        Some(&f.subject),
+        Some(draft.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // A capability holder without users.employee_id fails closed for either kind.
+    let (status, _) = send(&router, "PUT", &self_path, Some(&f.unlinked), Some(draft)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, saved) = send(
+        &router,
+        "PUT",
+        &self_path,
+        Some(&f.subject),
+        Some(json!({"grade": "A", "evidence_links": []})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "linked subject self review: {saved}"
+    );
+    assert_eq!(saved["kind"], "SELF");
+    let (status, saved) = send(
+        &router,
+        "PUT",
+        &manager_path,
+        Some(&f.manager),
+        Some(json!({"grade": "A", "evidence_links": [{"object_kind": "KPI", "object_ref": "KPI-identity", "label": "identity proof"}]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "linked manager review: {saved}");
+    assert_eq!(saved["kind"], "MANAGER");
+}
+
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: PgPool) {
+    let f = Fixture::new(&pool).await;
+    let router = f.router(&pool).await;
+
+    let (_, cycle) = send(
+        &router,
+        "POST",
+        CYCLES,
+        Some(&f.admin),
+        Some(json!({"name": "신원 잠금", "kind": "REGULAR", "period_label": "2026-Q4", "due_date": "2026-12-31"})),
+    )
+    .await;
+    let cycle_id = cycle["id"].as_str().unwrap();
+    let (_, subject) = send(
+        &router,
+        "POST",
+        SUBJECTS,
+        Some(&f.admin),
+        Some(json!({"cycle_id": cycle_id, "employee_id": f.employee_a, "manager_user_id": f.manager_id})),
+    )
+    .await;
+    let subject_id = subject["id"].as_str().unwrap().to_owned();
+    let (_, _) = send(
+        &router,
+        "PUT",
+        &format!("{SUBJECTS}/{subject_id}/goals"),
+        Some(&f.manager),
+        Some(json!({"goals": [{"title": "신원 잠금", "metric_kind": "KPI", "target_label": "완료", "weight_pct": 100}]})),
+    )
+    .await;
+    let (status, _) = send(
+        &router,
+        "POST",
+        &format!("{CYCLES}/{cycle_id}/open"),
+        Some(&f.admin),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // A relink transaction holds the same update-conflicting user lock used by
+    // submit-only detail reads. The request cannot observe the pre-unlink
+    // relationship and then load a body after the unlink commits.
+    let mut relink = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*f.subject_user_id.as_uuid())
+        .fetch_one(&mut *relink)
+        .await
+        .unwrap();
+    let relink_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *relink)
+        .await
+        .unwrap();
+    let detail_router = router.clone();
+    let detail_token = f.subject.clone();
+    let detail_path = format!("{SUBJECTS}/{subject_id}");
+    let detail = tokio::spawn(async move {
+        send(
+            &detail_router,
+            "GET",
+            &detail_path,
+            Some(&detail_token),
+            None,
+        )
+        .await
+    });
+    await_actor_identity_lock_wait(&pool, relink_pid).await;
+    sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
+        .bind(*f.subject_user_id.as_uuid())
+        .execute(&mut *relink)
+        .await
+        .unwrap();
+    relink.commit().await.unwrap();
+    let (status, _) = detail.await.unwrap();
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Restore the canonical link, then prove the same serialization protects
+    // the review write itself: a relink that wins the lock race leaves no
+    // authored review behind.
+    link_user_employee(&pool, OrgId::knl(), f.subject_user_id, f.employee_a).await;
+    let mut unlink = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*f.subject_user_id.as_uuid())
+        .fetch_one(&mut *unlink)
+        .await
+        .unwrap();
+    let unlink_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *unlink)
+        .await
+        .unwrap();
+    let write_router = router.clone();
+    let write_token = f.subject.clone();
+    let write_path = format!("{SUBJECTS}/{subject_id}/reviews/self");
+    let write = tokio::spawn(async move {
+        send(
+            &write_router,
+            "PUT",
+            &write_path,
+            Some(&write_token),
+            Some(json!({"grade": "A", "evidence_links": []})),
+        )
+        .await
+    });
+    await_actor_identity_lock_wait(&pool, unlink_pid).await;
+    sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
+        .bind(*f.subject_user_id.as_uuid())
+        .execute(&mut *unlink)
+        .await
+        .unwrap();
+    unlink.commit().await.unwrap();
+    let (status, _) = write.await.unwrap();
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let authored: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM evaluation_reviews WHERE subject_id = $1 AND kind = 'SELF'",
+    )
+    .bind(Uuid::parse_str(&subject_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(authored, 0, "unlinked actor must not author a review");
+
+    // Task discovery is an authorization result too. It must take the same
+    // update-conflicting canonical identity lock before deciding whether this
+    // caller has SELF work, so an unlink that wins the race cannot leak a
+    // stale task into the response.
+    link_user_employee(&pool, OrgId::knl(), f.subject_user_id, f.employee_a).await;
+    let mut task_unlink = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*f.subject_user_id.as_uuid())
+        .fetch_one(&mut *task_unlink)
+        .await
+        .unwrap();
+    let task_unlink_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *task_unlink)
+        .await
+        .unwrap();
+    let task_router = router.clone();
+    let task_token = f.subject.clone();
+    let tasks = tokio::spawn(async move {
+        send(
+            &task_router,
+            "GET",
+            "/api/v1/evaluation/my-tasks",
+            Some(&task_token),
+            None,
+        )
+        .await
+    });
+    await_actor_identity_lock_wait(&pool, task_unlink_pid).await;
+    sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
+        .bind(*f.subject_user_id.as_uuid())
+        .execute(&mut *task_unlink)
+        .await
+        .unwrap();
+    task_unlink.commit().await.unwrap();
+    let (status, task_page) = tasks.await.unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(task_page["items"], json!([]));
+}
+
+/// Synchronize on PostgreSQL's actual lock graph, not scheduler timing. The
+/// spawned HTTP request must be waiting at the adapter's update-conflicting
+/// canonical-identity lock and be blocked by this exact relink transaction
+/// before the test commits the unlink.
+async fn await_actor_identity_lock_wait(pool: &PgPool, relink_pid: i32) {
+    for _ in 0..512 {
+        let waiting: bool = sqlx::query_scalar(
+            "SELECT EXISTS ( \
+               SELECT 1 \
+               FROM pg_stat_activity a \
+               WHERE $1 = ANY(pg_blocking_pids(a.pid)) \
+                 AND a.query LIKE '%SELECT employee_id FROM users WHERE id = $1 FOR NO KEY UPDATE%' \
+             )",
+        )
+        .bind(relink_pid)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiting {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+    panic!("request did not reach the canonical actor identity lock");
+}
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
@@ -798,10 +1133,13 @@ struct Fixture {
     admin: String,
     admin2: String,
     manager: String,
+    subject: String,
+    unlinked: String,
     outsider: String,
     foreign_admin: String,
     admin_id: UserId,
     manager_id: UserId,
+    subject_user_id: UserId,
     employee_a: Uuid,
     employee_b: Uuid,
     public_pem: String,
@@ -820,14 +1158,22 @@ impl Fixture {
         let branch = seed_branch(pool, org, "평가-본점").await;
         let foreign_branch = seed_branch(pool, OrgId::from_uuid(ORG_B), "격리-지점").await;
 
+        let employee_a = seed_employee(pool, org, "김평가", "품질팀", 1).await;
+        let employee_b = seed_employee(pool, org, "이성과", "생산팀", 2).await;
+        let manager_employee = seed_employee(pool, org, "평가관리자", "품질팀", 3).await;
+
         let admin_id = UserId::new();
         let admin2_id = UserId::new();
         let manager_id = UserId::new();
+        let subject_user_id = UserId::new();
+        let unlinked_id = UserId::new();
         let outsider_id = UserId::new();
         let foreign_admin_id = UserId::new();
         seed_user(pool, org, admin_id, branch, "ADMIN").await;
         seed_user(pool, org, admin2_id, branch, "ADMIN").await;
         seed_user(pool, org, manager_id, branch, "MEMBER").await;
+        seed_user(pool, org, subject_user_id, branch, "MEMBER").await;
+        seed_user(pool, org, unlinked_id, branch, "MEMBER").await;
         seed_user(pool, org, outsider_id, branch, "MEMBER").await;
         seed_user(
             pool,
@@ -838,9 +1184,11 @@ impl Fixture {
         )
         .await;
         grant_feature(pool, org, manager_id, "evaluation_submit").await;
-
-        let employee_a = seed_employee(pool, org, "김평가", "품질팀", 1).await;
-        let employee_b = seed_employee(pool, org, "이성과", "생산팀", 2).await;
+        grant_feature(pool, org, subject_user_id, "evaluation_submit").await;
+        grant_feature(pool, org, unlinked_id, "evaluation_submit").await;
+        link_user_employee(pool, org, admin_id, employee_b).await;
+        link_user_employee(pool, org, manager_id, manager_employee).await;
+        link_user_employee(pool, org, subject_user_id, employee_a).await;
 
         let issuer = JwtIssuer::from_es256_pem(
             jwt_settings(),
@@ -871,6 +1219,8 @@ impl Fixture {
             admin: token(admin_id, org, vec!["ADMIN"], Vec::new()),
             admin2: token(admin2_id, org, vec!["ADMIN"], Vec::new()),
             manager: token(manager_id, org, vec!["MEMBER"], vec![branch]),
+            subject: token(subject_user_id, org, vec!["MEMBER"], vec![branch]),
+            unlinked: token(unlinked_id, org, vec!["MEMBER"], vec![branch]),
             outsider: token(outsider_id, org, vec!["MEMBER"], vec![branch]),
             foreign_admin: token(
                 foreign_admin_id,
@@ -880,6 +1230,7 @@ impl Fixture {
             ),
             admin_id,
             manager_id,
+            subject_user_id,
             employee_a,
             employee_b,
             public_pem,
@@ -921,6 +1272,17 @@ async fn runtime_role_pool(owner: &PgPool) -> PgPool {
         .unwrap()
 }
 
+fn app_state(pool: PgPool, public_key_pem: String) -> Result<AppState, mnt_app::AppError> {
+    let config = AppConfig::from_pairs([
+        ("MNT_APP_ROLE", AppRole::Api.to_string()),
+        ("MNT_HTTP_ADDR", "127.0.0.1:0".to_owned()),
+        ("MNT_JWT_ISSUER", ISSUER.to_owned()),
+        ("MNT_JWT_AUDIENCE", AUDIENCE.to_owned()),
+        ("MNT_JWT_PUBLIC_KEY_PEM", public_key_pem),
+    ])?;
+    AppState::new(config, DatabaseDependency::Postgres(pool))
+}
+
 async fn send(
     router: &axum::Router,
     method: &str,
@@ -947,7 +1309,8 @@ async fn send(
     let json = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+        serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()))
     };
     (status, json)
 }
@@ -1013,6 +1376,16 @@ async fn seed_employee(pool: &PgPool, org: OrgId, name: &str, org_unit: &str, ro
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+async fn link_user_employee(pool: &PgPool, org: OrgId, user: UserId, employee: Uuid) {
+    sqlx::query("UPDATE users SET employee_id = $1 WHERE id = $2 AND org_id = $3")
+        .bind(employee)
+        .bind(*user.as_uuid())
+        .bind(*org.as_uuid())
+        .execute(pool)
+        .await
+        .unwrap();
 }
 
 /// Grant one evaluation feature to a user through the declarative policy-role

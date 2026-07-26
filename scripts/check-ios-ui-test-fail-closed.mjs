@@ -20,6 +20,7 @@ const expectedShardBudgets = new Map([
   ["preflight-session", 60],
   ["preflight-fixtures", 30],
   ["preflight-restore", 90],
+  ["authenticated-shell", 150],
   ["login-validation", 90],
   ["accessibility-id-parity", 45],
   ["critical-today", 150],
@@ -40,11 +41,11 @@ const expectedShardBudgets = new Map([
 ]);
 
 const expectedShardBatches = new Map([
-  ["core", ["preflight-session", "preflight-fixtures", "preflight-restore", "login-validation", "accessibility-id-parity"]],
+  ["core", ["authenticated-shell", "preflight-restore", "preflight-session", "preflight-fixtures", "login-validation", "accessibility-id-parity"]],
   ["critical-core", ["critical-today", "camera-capture"]],
   ["critical-report", ["critical-report"]],
   ["critical-location", ["critical-location"]],
-  ["messenger-dynamic", ["messenger-render", "messenger-mutation", "audit-dynamic-today", "audit-dynamic-detail"]],
+  ["messenger-dynamic", ["messenger-mutation", "messenger-render", "audit-dynamic-today", "audit-dynamic-detail"]],
   ["audit-standard", ["audit-dynamic-messenger", "audit-dynamic-login", "accessibility-standard"]],
   ["audit-adaptive", ["accessibility-largest", "accessibility-dark", "dynamic-type-large", "dynamic-type-ax5"]],
 ]);
@@ -130,26 +131,22 @@ function hasCompleteFailSlowRuntimeBudget(job) {
     && /-parallel-testing-enabled\s+NO\b/.test(job);
 }
 
-function hasCappedXCTestPrewarm(files) {
+function hasFunctionalColdStartProof(files) {
   const workflow = files[".github/workflows/ios-ui-tests.yml"] ?? "";
   const activeJob = stripInertShellData(iosJob(workflow));
   const prewarm = files["ios/UITests/XCTestPrewarmUITests.swift"] ?? "";
-  const prewarmStart = activeJob.indexOf("timing_start xctest-prewarm");
-  const functionalLoop = activeJob.indexOf('for shard_name in "${SHARD_MANIFEST[@]}"; do');
-  return /final\s+class\s+XCTestPrewarmUITests:\s*XCTestCase/.test(prewarm)
-    && /func\s+testRunnerAndHostLaunch\s*\(\s*\)/.test(prewarm)
-    && /let\s+app\s*=\s*XCUIApplication\s*\(\s*\)/.test(prewarm)
-    && /app\.launch\s*\(\s*\)/.test(prewarm)
-    && /app\.terminate\s*\(\s*\)/.test(prewarm)
-    && /app\.state[\s\S]{0,120}\.runningForeground/.test(prewarm)
-    && /TIMING_BUDGET_SECONDS=75\s*\n\s*timing_start xctest-prewarm/.test(activeJob)
-    && /run_xcode_with_timeout\s+xctest-prewarm\s+"\$RAW_RESULTS\/xctest-prewarm\.xcresult"\s+75\s+MaintenanceFieldUITests\/XCTestPrewarmUITests\/testRunnerAndHostLaunch/.test(activeJob)
-    && /xctest-prewarm-failure\.txt/.test(activeJob)
-    && /TEST_STATUS=1/.test(activeJob.slice(prewarmStart, functionalLoop))
-    && prewarmStart !== -1
-    && functionalLoop !== -1
-    && prewarmStart < functionalLoop
-    && !/MNT_IOS_SHARD_BATCH[^\n]*xctest-prewarm/.test(activeJob);
+  const coreShards = matrixShardBatches(activeJob).get("core") ?? [];
+  const messengerShards = matrixShardBatches(activeJob).get("messenger-dynamic") ?? [];
+  return prewarm.trim() === ""
+    && !/xctest-prewarm|XCTestPrewarmUITests|testRunnerAndHostLaunch/.test(activeJob)
+    && coreShards.join(" ") === "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
+    && messengerShards.join(" ") === "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"
+    && /authenticated-shell\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/FieldCriticalPathUITests\/testAuthenticatedLaunchShowsTodayTabInKorean\)/.test(activeJob)
+    && /preflight-restore\)\s*\n\s*SHARD_TIMEOUT_SECONDS=90\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/PreflightUITests\/testSeederRestoresThenClearsRealSession\)/.test(activeJob)
+    && /critical-today\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testDispatchListRendersDeterministicMechanicWorkOrder[\s\S]{0,160}testFullFixtureRowsRemainReachableAboveTabBar[\s\S]{0,80}\)/.test(activeJob)
+    && !/critical-today\)[\s\S]{0,360}testAuthenticatedLaunchShowsTodayTabInKorean/.test(activeJob)
+    && /messenger-mutation\)\s*\n\s*SHARD_TIMEOUT_SECONDS=180\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testMessengerSendSurvivesBackendRefresh[\s\S]{0,160}testMessengerSearchUnmatchedQueryShowsRealNoResults[\s\S]{0,80}\)/.test(activeJob)
+    && /run_xcode_with_timeout\s+"\$shard_name"\s+"\$result"\s+"\$SHARD_TIMEOUT_SECONDS"\s+"\$\{SHARD_SELECTORS\[@\]\}"\s+\|\|\s+\{\s*shard_status=\$\?;\s*TEST_STATUS=1;\s*\}/.test(activeJob);
 }
 
 function hasPipelineTimingTelemetry(job) {
@@ -169,7 +166,6 @@ function hasPipelineTimingTelemetry(job) {
     && /trap\s+on_exit\s+EXIT/.test(activeJob)
     && phases.every((phase) => activeJob.includes(`timing_start ${phase}`))
     && /timing_start\s+"test:\$shard_name"/.test(activeJob)
-    && /timing_start xctest-prewarm[\s\S]{0,1200}prewarm_status == 124[\s\S]{0,280}timing_finish timeout/.test(activeJob)
     && /TIMING_BUDGET_SECONDS="\$SHARD_TIMEOUT_SECONDS"/.test(activeJob)
     && /timeout_marker="\$ARTIFACTS\/\$shard_name-timeout\.txt"/.test(activeJob)
     && />\s*"\$timeout_marker"/.test(activeJob)
@@ -377,7 +373,7 @@ function hasValidLoopbackWebauthnPolicy(job, launcher) {
   const launch = matches[0]?.index ?? -1;
   const pidRead = activeJob.indexOf('BACKEND_PID="$(cat "$BACKEND_PID_FILE")"');
   const forbiddenLowLevelControls = /\b(?:E2E_AUTH_DIR|E2E_HTTP_ADDR|E2E_PORT_CONFLICT_MODE|E2E_COLDSTART_OTP|E2E_RP_ORIGIN|E2E_RP_ID)\b|e2e\/harness\/boot-backend\.sh/;
-  const approvedBackendStepSha256 = "1e0c2016a442c489c7babb9c1ddf304f48b810264b0d0fa360df8a7d01c520bf";
+  const approvedBackendStepSha256 = "59c3ac5fe61bcde3e38b6f2774a548520681dee9cd040e11904f809a1d342f2a";
   const approvedLauncherSha256 = "a153fab32c9f4ca597605ec126d40e3bfc106c0ce17c368078e22c265ca9f1ad";
   const backendStepSha256 = createHash("sha256").update(backendStep).digest("hex");
   const launcherSha256 = createHash("sha256").update(launcher).digest("hex");
@@ -521,11 +517,10 @@ function hasMode600Xctestrun(job) {
   const discovered = job.search(/\bXCTESTRUN="\$\(find\s+"\$DERIVED\/Build\/Products"[\s\S]{0,160}-name\s+'\*\.xctestrun'[\s\S]{0,160}-print\s+-quit\)"/);
   const protectedFile = job.search(/chmod\s+600\s+"\$XCTESTRUN"/);
   const staticPatch = job.search(/patch-ios-xctestrun\.py\s+"\$XCTESTRUN"\s+--target\s+MaintenanceFieldUITests\s+--ui-target-app-path\s+'__TESTROOT__\/Debug-iphonesimulator\/MaintenanceFieldApp\.app'\s*\)/);
-  const prewarm = job.search(/timing_start\s+xctest-prewarm/);
   const perShardPatch = /mint_shard_session\s*\(\s*\)[\s\S]{0,4000}patch-ios-xctestrun\.py\s+"\$XCTESTRUN"[\s\S]{0,480}--ui-target-app-path\s+'__TESTROOT__\/Debug-iphonesimulator\/MaintenanceFieldApp\.app'[\s\S]{0,1200}--env\s+MNT_UITEST_ACCESS_TOKEN[\s\S]{0,240}--env\s+MNT_UITEST_REFRESH_TOKEN/.test(job);
   const executed = job.search(/test-without-building[\s\S]{0,160}-xctestrun\s+"\$XCTESTRUN"/);
   return derived !== -1 && discovered > derived && protectedFile > discovered
-    && staticPatch > protectedFile && prewarm > staticPatch && perShardPatch && executed > staticPatch;
+    && staticPatch === -1 && perShardPatch && executed > protectedFile;
 }
 
 function hasExactFailSlowExecution(job) {
@@ -571,6 +566,22 @@ function hasExactFailSlowExecution(job) {
 
 function hasStructuredResultVerification(workerJob, aggregateJob) {
   const activeAggregate = stripInertShellData(aggregateJob);
+  const matrixBatches = matrixShardBatches(workerJob);
+  const aggregateShards = /EXPECTED_SHARDS=\(([^)]*)\)/.exec(activeAggregate)?.[1]?.trim().split(/\s+/) ?? [];
+  const artifactManifests = new Map([...activeAggregate.matchAll(/^\s*([a-z0-9-]+)\)\s+expected_manifest='([^']*)'\s*;;$/gm)]
+    .map(([, batch, shards]) => [batch, shards.trim().split(/\s+/)]));
+  const expectedAggregateShards = [...expectedShardBatches.values()].flat();
+  const hasExactMatrixArtifactAggregateOrder = expectedShardBatches.size === matrixBatches.size
+    && expectedShardBatches.size === artifactManifests.size
+    && aggregateShards.length === expectedAggregateShards.length
+    && expectedAggregateShards.every((shard, index) => aggregateShards[index] === shard)
+    && [...expectedShardBatches].every(([batch, expectedShards]) => {
+      const matrixShards = matrixBatches.get(batch);
+      const artifactShards = artifactManifests.get(batch);
+      return matrixShards?.length === expectedShards.length
+        && artifactShards?.length === expectedShards.length
+        && expectedShards.every((shard, index) => matrixShards[index] === shard && artifactShards[index] === shard);
+    });
   return /^  ios-ui-results:\s*\n    name:[^\n]+\n    needs:\s*ios-ui-tests\s*\n    if:\s*always\(\)\s*$/m.test(aggregateJob)
     && /runs-on:\s*ubuntu-24\.04\b/.test(aggregateJob)
     && /actions\/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0/.test(aggregateJob)
@@ -584,10 +595,10 @@ function hasStructuredResultVerification(workerJob, aggregateJob) {
     && /WORKER_RESULT:\s*\$\{\{ needs\.ios-ui-tests\.result \}\}/.test(aggregateJob)
     && /test\s+"\$\(git rev-parse HEAD\)"\s*=\s*"\$GITHUB_SHA"/.test(activeAggregate)
     && /EXPECTED_BATCHES=\(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive\)/.test(activeAggregate)
-    && /EXPECTED_SHARDS=\(preflight-session preflight-fixtures preflight-restore login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-render messenger-mutation audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5\)/.test(activeAggregate)
+    && hasExactMatrixArtifactAggregateOrder
     && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-mindepth\s+1\s+-maxdepth\s+1\s+-type\s+d\s+-name\s+'ios-ui-test-results-\*'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+7/.test(activeAggregate)
-    && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-summary\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+20/.test(activeAggregate)
-    && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-tests\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+20/.test(activeAggregate)
+    && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-summary\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+21/.test(activeAggregate)
+    && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-tests\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+21/.test(activeAggregate)
     && /mapfile\s+-t\s+summaries[\s\S]{0,300}\(\(\$\{#summaries\[@\]\}\s*==\s*1\)\)/.test(activeAggregate)
     && /mapfile\s+-t\s+tests[\s\S]{0,300}\(\(\$\{#tests\[@\]\}\s*==\s*1\)\)/.test(activeAggregate)
     && /VERIFY_ARGS\+=\(\s*--summary\s+"\$\{summaries\[0\]\}"\s+--tests\s+"\$\{tests\[0\]\}"\s*\)/.test(activeAggregate)
@@ -806,10 +817,47 @@ function hasUnobscuredTabContentHost(files) {
     && !/selectedViewController\b|value\s*\(forKey:|NSClassFromString|object_getIvar|recursiveDescription|traitOverrides|additionalSafeAreaInsets|contentInset\b|safeAreaInset\s*\(\s*edge:\s*\.bottom|constraint\s*\(equalToConstant:|\bview\.frame\s*=(?!=)|view\.subviews\b|tabBarController\.tabBar\.bounds\.height/.test(views);
 }
 
-function hasSemanticMessengerMessagesHeader(files) {
+function hasScalableInlineMessengerSectionHeaders(files) {
   const views = files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "";
   const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
-  return /Section\s*\{[\s\S]{0,180}Text\s*\(\s*"messenger_messages"\s*\)[\s\S]{0,300}accessibilityAddTraits\s*\(\s*\.isHeader\s*\)[\s\S]{0,2200}ForEach\s*\(\s*messages\s*\)/.test(messenger);
+  const inlineHeader = (key) => new RegExp(
+    `Section\\s*\\{\\s*Text\\s*\\(\\s*"${key}"\\s*\\)`
+      + `[\\s\\S]{0,160}\\.font\\s*\\(\\s*\\.headline\\s*\\)`
+      + `[\\s\\S]{0,160}\\.fixedSize\\s*\\(\\s*horizontal:\\s*false\\s*,\\s*vertical:\\s*true\\s*\\)`
+      + `[\\s\\S]{0,160}\\.foregroundStyle\\s*\\(\\s*\\.primary\\s*\\)`
+      + `[\\s\\S]{0,160}\\.accessibilityAddTraits\\s*\\(\\s*\\.isHeader\\s*\\)`
+      + `[\\s\\S]{0,160}\\.listRowBackground\\s*\\(\\s*Color\\.clear\\s*\\)`
+      + `[\\s\\S]{0,160}\\.listRowSeparator\\s*\\(\\s*\\.hidden\\s*\\)`,
+  );
+  return inlineHeader("messenger_threads").test(messenger)
+    && inlineHeader("messenger_messages").test(messenger)
+    && !/Section\s*\{[\s\S]{0,2200}\}\s*header:\s*\{[\s\S]{0,240}Text\s*\(\s*"messenger_threads"\s*\)/.test(messenger)
+    && !/headerProminence\s*\(/.test(messenger);
+}
+
+function hasContrastSafeMessengerComposerPlaceholder(files) {
+  const views = files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "";
+  const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
+  return /ZStack\s*\(\s*alignment:\s*\.leading\s*\)\s*\{[\s\S]{0,180}if\s+viewModel\.messengerDraft\.isEmpty\s*\{[\s\S]{0,140}Text\s*\(\s*"messenger_composer"\s*\)[\s\S]{0,120}\.foregroundStyle\s*\(\s*\.primary\s*\)[\s\S]{0,120}\.accessibilityHidden\s*\(\s*true\s*\)[\s\S]{0,120}\.allowsHitTesting\s*\(\s*false\s*\)[\s\S]{0,180}TextField\s*\(\s*""\s*,\s*text:\s*\$viewModel\.messengerDraft\s*,\s*axis:\s*\.vertical\s*\)[\s\S]{0,180}\.accessibilityLabel\s*\(\s*Text\s*\(\s*"messenger_composer"\s*\)\s*\)[\s\S]{0,180}\.accessibilityIdentifier\s*\(\s*FieldAccessibilityID\.messengerComposerField\s*\)/.test(messenger)
+    && !/TextField\s*\([\s\S]{0,180}text:\s*\$viewModel\.messengerDraft[\s\S]{0,180}prompt:\s*Text\s*\(\s*"messenger_composer"\s*\)/.test(messenger);
+}
+
+function hasAccessibleMessengerThreadAndNavigationContrast(files) {
+  const views = stripSwiftCommentsAndStrings(files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "", false);
+  const runtimeTests = files["ios/UITests/DynamicTypeRuntimeUITests.swift"] ?? "";
+  const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
+  const thread = extractFunctionBody(views, /struct\s+MessengerThreadRow:\s*View/) ?? "";
+  const viewModifiers = extractFunctionBody(views, /private\s+extension\s+View\b/) ?? "";
+  const semanticColors = extractFunctionBody(views, /private\s+extension\s+Color\b/) ?? "";
+  const accessibilityLayout = /@Environment\s*\(\s*\\\.dynamicTypeSize\s*\)\s+private\s+var\s+dynamicTypeSize[\s\S]{0,420}if\s+dynamicTypeSize\.isAccessibilitySize\s*\{[\s\S]{0,780}VStack\s*\(\s*alignment:\s*\.leading[\s\S]{0,520}Text\s*\(\s*messengerThreadDisplayTitle\(thread\)\s*\)[\s\S]{0,520}FieldChip\s*\(\s*key:\s*thread\.kind\.fieldLabelKey\s*\)[\s\S]{0,520}Text\s*\(\s*localizedString\(\s*"messenger_member_count_format"\s*,\s*thread\.memberCount\s*\)\s*\)/.test(thread);
+  const standardLayout = /else\s*\{[\s\S]{0,460}HStack\s*\(\s*alignment:\s*\.firstTextBaseline[\s\S]{0,360}Text\s*\(\s*messengerThreadDisplayTitle\(thread\)\s*\)[\s\S]{0,360}FieldChip\s*\(\s*key:\s*thread\.kind\.fieldLabelKey\s*\)/.test(thread);
+  const noContentSuppression = !/\.lineLimit\s*\(|\.minimumScaleFactor\s*\(|\.allowsTightening\s*\(|\.fixedSize\s*\(|\.textCase\s*\(|\.frame\s*\(\s*(?:width|maxWidth|minWidth)\s*:/.test(thread);
+  const opaqueNavigationSurface = /static\s+var\s+opaqueFieldNavigationBackground:\s*Color[\s\S]{0,180}Color\s*\(\s*uiColor:\s*\.systemBackground\s*\)/.test(semanticColors);
+  const scopedNavigationBackground = /\.messengerNavigationBarBackground\s*\(\s*\)/.test(messenger)
+    && /func\s+messengerNavigationBarBackground\s*\(\s*\)\s*->\s*some\s+View\s*\{[\s\S]{0,120}#if\s+os\s*\(\s*iOS\s*\)[\s\S]{0,120}self[\s\S]{0,120}\.toolbarBackground\s*\(\s*Color\.opaqueFieldNavigationBackground\s*,\s*for:\s*\.navigationBar\s*\)[\s\S]{0,180}\.toolbarBackground\s*\(\s*\.visible\s*,\s*for:\s*\.navigationBar\s*\)[\s\S]{0,120}#else[\s\S]{0,80}self[\s\S]{0,80}#endif/.test(viewModifiers);
+  const accessibilityViewportReservation = /\.safeAreaInset\s*\(\s*edge:\s*\.top\s*,\s*spacing:\s*0\s*\)[\s\S]{0,260}if\s+dynamicTypeSize\s*==\s*\.accessibility5\s*\{[\s\S]{0,180}Color\.clear[\s\S]{0,120}\.frame\s*\(\s*height:\s*56\s*\)/.test(messenger);
+  const runtimeGeometry = /testAccessibilityExtraExtraExtraLargeRuntimeContract[\s\S]{0,2500}let\s+navigationBar\s*=\s*app\.navigationBars\.firstMatch[\s\S]{0,600}XCTAssertTrue\s*\(\s*navigationBar\.waitForExistence\s*\([\s\S]{0,1200}thread\.frame\.minY\s*,\s*navigationBar\.frame\.maxY[\s\S]{0,2800}thread\.descendants\s*\(\s*matching:\s*\.staticText\s*\)[\s\S]{0,840}XCTAssertGreaterThan\s*\(\s*member\.frame\.minY\s*,\s*max\s*\(\s*title\.frame\.maxY\s*,\s*chip\.frame\.maxY\s*\)/.test(runtimeTests);
+  return accessibilityLayout && standardLayout && noContentSuppression && opaqueNavigationSurface && scopedNavigationBackground && accessibilityViewportReservation && runtimeGeometry;
 }
 
 function hasContrastStableCapsules(files) {
@@ -1180,13 +1228,45 @@ function hasDetailLazyControlScroll(files) {
   if (detailHelper === null) return false;
 
   return hasBoundedExactElementScroll(files)
-    // The toolbar back control stays mounted while the full-screen detail's
-    // lazy Form materializes. A Form row is not a stable normalization anchor.
-    && /scrollToElement\s*\(\s*element\s*,\s*in:\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]\s*,\s*topSentinel:\s*app\.buttons\[AID\.detailBackButton\]/.test(detailHelper)
+    // A persistent toolbar control cannot prove the lazy Form reached its top;
+    // the first detail section is the stable normalization anchor.
+    && /scrollToElement\s*\(\s*element\s*,\s*in:\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]\s*,\s*topSentinel:\s*app\.staticTexts\[KO\.locationConsentTitle\]/.test(detailHelper)
     && /\.scrollDismissesKeyboard\s*\(\s*\.immediately\s*\)/.test(detailView)
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailStartWorkButton\]\s*\)/g) ?? []).length === 1
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailSubmitReportButton\]\s*\)/g) ?? []).length === 2
     && (camera.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailCaptureEvidenceButton\]\s*\)/g) ?? []).length === 1;
+}
+
+function hasDetailScopedReportTerminalEvidence(files) {
+  const critical = stripSwiftCommentsAndStrings(files["ios/UITests/FieldCriticalPathUITests.swift"] ?? "");
+  const report = extractFunctionBody(
+    critical,
+    /func\s+testReportSubmissionPersistsVisibleTerminalOutcome\s*\(\s*\)\s+async\s+throws/,
+  );
+  if (report === null) return false;
+
+  return /let\s+detail\s*=\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]/.test(report)
+    && /let\s+detailMessage\s*=\s*detail\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailMessage\]/.test(report)
+    && /guard\s+let\s+resolvedMessage\s*=\s*scrollToElement\s*\(\s*detailMessage\s*,\s*in:\s*detail\s*,\s*topSentinel:\s*detail\.buttons\[AID\.detailSubmitReportButton\]\s*,\s*timeout:\s*15\s*\)/.test(report)
+    && /XCTAssertEqual\s*\(\s*resolvedMessage\.label\s*,\s*KO\.reportSuccessMessage\s*,/.test(report)
+    && /let\s+detailStatus\s*=\s*detail\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailStatus\]/.test(report)
+    && /guard\s+let\s+resolvedStatus\s*=\s*scrollToElement\s*\(\s*detailStatus\s*,\s*in:\s*detail\s*,\s*topSentinel:\s*detail\.staticTexts\[KO\.locationConsentTitle\]\s*,\s*timeout:\s*15\s*\)/.test(report)
+    && /XCTAssertEqual\s*\(\s*resolvedStatus\.label\s*,\s*KO\.reportSubmitted\s*,/.test(report)
+    && !/app\.staticTexts\[KO\.(?:reportSuccessMessage|reportSubmitted)\]/.test(report);
+}
+
+function hasReportFeedbackAdjacentToSubmit(files) {
+  const views = stripSwiftCommentsAndStrings(files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "");
+  const detailStart = views.indexOf("struct WorkOrderDetailView");
+  const detailEnd = views.indexOf("struct LocationConsentSection", detailStart);
+  const detailView = detailStart === -1 || detailEnd === -1 ? "" : views.slice(detailStart, detailEnd);
+  const submit = detailView.indexOf("FieldAccessibilityID.detailSubmitReportButton");
+  const feedback = detailView.indexOf("FieldAccessibilityID.detailMessage");
+  const camera = detailView.indexOf("FieldAccessibilityID.detailCaptureEvidenceButton");
+  return submit !== -1
+    && feedback > submit
+    && camera > feedback
+    && /if\s+let\s+messageKey\s*=\s*viewModel\.messageKey\s*\{\s*Text\s*\(\s*LocalizedStringKey\s*\(\s*messageKey\s*\)\s*\)\s*\.accessibilityIdentifier\s*\(\s*FieldAccessibilityID\.detailMessage\s*\)\s*\}/.test(detailView);
 }
 
 function hasActionableDetailReadiness(files) {
@@ -1389,8 +1469,8 @@ function hasDurableCriticalPathEvidence(files) {
   const startTap = critical.indexOf("startWork.tap()");
   const scopedStatus = critical.indexOf("AID.detailStatus", startTap);
   const scopedLabel = critical.indexOf("detailStatus.label", scopedStatus);
-  const grant = critical.indexOf("grant.tap()");
-  const withdraw = critical.indexOf("reloadedWithdraw.tap()", grant);
+  const grant = critical.indexOf("detailButton(AID.locationConsentGrantButton).tap()");
+  const withdraw = critical.indexOf("detailButton(AID.locationConsentWithdrawButton).tap()", grant);
   const locationRelaunches = (critical.match(/app\.terminate\(\)/g) ?? []).length;
 
   const send = messenger.indexOf("AID.messengerSendButton");
@@ -1416,6 +1496,38 @@ function hasDurableCriticalPathEvidence(files) {
     && !/static\s+func\s+workOrderID\s*\(/.test(support);
 }
 
+function hasFreshLocationConsentQueries(files) {
+  const support = files["ios/UITests/Support/FieldUITestCase.swift"] ?? "";
+  const critical = files["ios/UITests/FieldCriticalPathUITests.swift"] ?? "";
+  const waitForLabel = extractFunctionBody(support, /func\s+waitForLabel\s*\(/);
+  const detailButton = extractFunctionBody(support, /func\s+detailButton\s*\(/);
+  const locationLifecycle = extractFunctionBody(
+    critical,
+    /func\s+testLocationConsentTransitionsPersistThroughTheRealBackend\s*\(\s*\)\s+async\s+throws\s*/,
+  );
+  if (waitForLabel === null || detailButton === null || locationLifecycle === null) return false;
+
+  const freshDetailRoot = /let\s+detail\s*=\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\s*\[\s*AID\.detailView\s*\]/;
+  const freshDetailRoots = waitForLabel.match(new RegExp(freshDetailRoot.source, "g")) ?? [];
+  const freshQuery = /let\s+element\s*=\s*detail\.descendants\s*\(\s*matching:\s*\.any\s*\)\s*\[\s*identifier\s*\]/;
+  const freshQueries = waitForLabel.match(new RegExp(freshQuery.source, "g")) ?? [];
+  const cachedDynamicElement = /\blet\s+(?:grant|suspend|resume|withdraw|stateValue|collectionValue|reloadedStateValue|reloadedCollectionValue|reloadedSuspend|reloadedResume|reloadedWithdraw|terminalStateValue|terminalCollectionValue)\s*=/;
+  const identifierWaits = locationLifecycle.match(/waitForLabel\s*\(\s*AID\.locationConsent(?:State|Collection)Value\s*,/g) ?? [];
+  const detailButtonCalls = locationLifecycle.match(/detailButton\s*\(\s*AID\.locationConsent(?:Grant|Suspend|Resume|Withdraw)Button\s*\)/g) ?? [];
+
+  return /func\s+waitForLabel\s*\(\s*_\s+identifier:\s*String,/.test(support)
+    && !/_\s+element:\s*XCUIElement/.test(waitForLabel)
+    && freshDetailRoots.length === 2
+    && freshQueries.length === 2
+    && /while\s+Date\(\)\s*<\s*deadline/.test(waitForLabel)
+    && /return\s+app\.descendants\s*\(\s*matching:\s*\.any\s*\)\s*\[\s*AID\.detailView\s*\]\.buttons\s*\[\s*identifier\s*\]/.test(detailButton)
+    && identifierWaits.length === 14
+    && detailButtonCalls.length === 21
+    && !/app\.buttons\s*\[\s*AID\.locationConsent(?:Grant|Suspend|Resume|Withdraw)Button\s*\]/.test(locationLifecycle)
+    && !cachedDynamicElement.test(locationLifecycle)
+    && !/waitForLabel\s*\(\s*(?!AID\.)[A-Za-z_][A-Za-z0-9_]*\s*,/.test(locationLifecycle);
+}
+
 
 /** Pure, mutation-testable evaluation of the hosted iOS UI CI contract. */
 export function evaluateIosUiTestFailClosedChecks(files) {
@@ -1437,7 +1549,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasCandidateShaBeforeBackendBuild(job), "iOS UI CI must verify git rev-parse HEAD against GITHUB_SHA before building candidate mnt-app"]);
   checks.push([hasOptimizedBehavioralBackendBuild(job), "iOS UI CI must use the measured stripped-debug mnt-app build for behavioral E2E and reject release optimization overhead"]);
   checks.push([hasPipelineTimingTelemetry(job), "iOS UI CI must emit durable phase and per-shard timings so slow stages are diagnosed before budgets change"]);
-  checks.push([hasCappedXCTestPrewarm(files), "iOS UI CI must cap an infrastructure-only XCTest prewarm before functional shards without treating it as product success"]);
+  checks.push([hasFunctionalColdStartProof(files), "iOS UI CI must start cold-sensitive workers with complete functional proofs under unchanged watchdogs, including core restore and Messenger persisted-send/search before focused render, never a standalone XCTest prewarm or result substitute"]);
   checks.push([hasPinnedJobLocalXcodegen(job), "iOS UI CI must install checksum-pinned XcodeGen 2.46.0 under its job root without mutating Homebrew"]);
   checks.push([hasOfficialPostgres184Source(job), "iOS UI CI must build PostgreSQL 18.4 from the official source tarball after SHA-256 verification"]);
   checks.push([hasRequiredPostgresExtensions(job), "iOS UI CI must configure PostgreSQL with OpenSSL and build, install, and load-test the required pgcrypto and pg_trgm extensions before compiling the backend"]);
@@ -1451,9 +1563,11 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasDecodedTodayPreflight(files), "iOS preflight must prove the restored session decodes and renders the exact deterministic Today work order, not only an authenticated shell"]);
   checks.push([hasFullFixtureTabBarGeometryEvidence(files), "iOS functional tests must traverse all five deterministic Today rows above the tab bar while accessibility audits remain diagnostic-free"]);
   checks.push([hasActionableDetailReadiness(files), "iOS UI navigation must prove detail readiness with the actionable back control, not container hittability"]);
-  checks.push([hasDetailLazyControlScroll(files), "iOS UI tests must use one deadline-bounded exact-element scroll for lazy detail controls, using the persistent detail toolbar back control as the normalization sentinel"]);
+  checks.push([hasDetailLazyControlScroll(files), "iOS UI tests must use one deadline-bounded exact-element scroll for lazy detail controls, using the first detail section as the normalization sentinel"]);
+  checks.push([hasDetailScopedReportTerminalEvidence(files), "iOS report submission must resolve message and terminal status through detail-owned accessibility identifiers, then assert their rendered localized labels"]);
+  checks.push([hasReportFeedbackAdjacentToSubmit(files), "iOS work-order detail must place live report response feedback adjacent to submit-report controls before the unrelated camera section"]);
   checks.push([hasEntitledSimulatorSeederContract(job), "iOS UI CI must preserve the Xcode-created Simulator Runner and prove matching app/seeder Mach-O keychain entitlements before test execution"]);
-  checks.push([hasMode600Xctestrun(job), "iOS UI CI must normalize the static UI host path before XCTest prewarm and inject renewable session material only per functional shard through a mode-0600 job-root xctestrun"]);
+  checks.push([hasMode600Xctestrun(job), "iOS UI CI must inject the UI host path and renewable session material only per functional shard through a mode-0600 job-root xctestrun"]);
   checks.push([!/-skip-testing|XCTSkip|optional\/skipped|HAS_REAL_SESSION_SOURCE/.test(workflow + (files["ios/UITests/Support/FieldUITestCase.swift"] ?? "") + (files["ios/UITests/Support/RealSessionSeed.swift"] ?? "")), "iOS UI CI and its test support must not include skip-testing, XCTSkip, or fail-open session branches"]);
   checks.push([! /MNT_UITEST_AUDIT_STRICT/.test(workflow), "iOS UI CI must not make strict accessibility conditional through an environment toggle"]);
   checks.push([hasStrictAccessibility(files), "iOS UI CI must enforce strict accessibility auditing"]);
@@ -1462,14 +1576,17 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasUnobscuredTabContentHost(files), "every authenticated iOS tab must use the direct UIKit content-layout-guide host seam with lifecycle-safe containment and no private hierarchy coupling"]);
   checks.push([hasAccessibilityIDParity(files), "iOS UI CI must mirror every FieldAccessibilityID static and dynamic identifier in UITests AID"]);
   checks.push([hasSectionScopedMessengerMessageRows(files), "iOS messenger search results and selected-thread messages must use section-scoped dynamic accessibility IDs"]);
-  checks.push([hasSemanticMessengerMessagesHeader(files), "iOS messenger messages must retain a scalable semantic header before selected-thread content"]);
+  checks.push([hasScalableInlineMessengerSectionHeaders(files), "iOS Messenger thread and message sections must use scalable semantic in-row headers without pinned translucent section chrome"]);
+  checks.push([hasContrastSafeMessengerComposerPlaceholder(files), "iOS Messenger composer must use a primary-foreground semantic placeholder without native placeholder opacity"]);
+  checks.push([hasAccessibleMessengerThreadAndNavigationContrast(files), "iOS Messenger AX5 must preserve complete adaptive thread content and an opaque visible navigation surface"]);
   checks.push([hasContrastStableCapsules(files), "iOS detail actions, status, attachment, and read-progress capsules must use explicit primary foregrounds on contrast-stable adaptive backgrounds"]);
   checks.push([hasModernFullScreenLaunch(files), "iOS app and CI build must preserve a modern full-screen launch contract"]);
   checks.push([hasCiOnlyLocalAts(files), "iOS UI CI must confine local ATS to CI-only job-root loopback configuration while production Info.plist remains unchanged"]);
   checks.push([hasExactFailSlowExecution(job), "each iOS UI matrix worker must execute only its declared named-shard batch fail-slow, preserve every xcresult extraction failure, keep Xcode per-test parallelization disabled, and exit with worker status"]);
-  checks.push([hasStructuredResultVerification(job, aggregateJob), "iOS UI CI must aggregate exactly one structured summary and tests JSON for all twenty shards from seven uniquely named batch artifacts and fail when any worker, artifact, or shard is missing"]);
+  checks.push([hasStructuredResultVerification(job, aggregateJob), "iOS UI CI must aggregate exactly one structured summary and tests JSON for all twenty-one shards from seven uniquely named batch artifacts and fail when any worker, artifact, or shard is missing"]);
   checks.push([hasCameraAuthorizationReactivation(files), "iOS camera capture must refresh authorization when the app becomes active after returning from Settings"]);
   checks.push([hasDurableCriticalPathEvidence(files), "iOS UI tests must prove scoped mutations, backend readback after relaunch, camera dismissal, and UUID fixtures without local-state false greens"]);
+  checks.push([hasFreshLocationConsentQueries(files), "iOS location lifecycle UI tests must reacquire dynamic SwiftUI elements within the work-order detail root after every state replacement"]);
   checks.push([hasArtifactSecretScan(job), "iOS UI CI must upload only scan-clean derived diagnostics, never raw xcresult bundles containing OTP, access, or refresh session material"]);
   checks.push([hasOwnedCleanup(job), "iOS UI CI must upload before final always-cleanup and prove identity-aware backend, PostgreSQL, Simulator, and job-root cleanup"]);
 

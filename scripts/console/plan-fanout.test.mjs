@@ -342,6 +342,9 @@ test('exact-SHA verification scheduling groups only compatible validated work an
   const { groupValidatedVerificationEntries } = await import('./plan-fanout.mjs');
   const leafA = 'b'.repeat(40); const leafB = 'c'.repeat(40); const leafC = 'd'.repeat(40);
   const entry = (lane_id, receipt_leaf_commit, quality_utility, resources, buck2_targets) => ({ capability_id: lane_id, lane_id, receipt_leaf_commit, quality_utility, resources, buck2_targets, leaf_commands: ['git diff --check'] });
+  assert.throws(() => groupValidatedVerificationEntries([
+    entry('BAD', 'B'.repeat(40), 1, { writer: 1, postgres: 0, browser: 0, ios: 0, graph: 0, cas: 0 }, []),
+  ]), /exact leaf SHA/);
   const shared = groupValidatedVerificationEntries([
     entry('B', leafA, 0.8, { writer: 1, postgres: 1, browser: 0, ios: 0, graph: 1, cas: 0 }, ['//b:test']),
     entry('A', leafA, 0.9, { writer: 1, postgres: 0, browser: 0, ios: 0, graph: 1, cas: 1 }, ['//a:test', '//b:test']),

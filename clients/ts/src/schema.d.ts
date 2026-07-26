@@ -9488,6 +9488,271 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/evaluation/cycles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List evaluation cycles */
+        get: operations["listEvaluationCycles"];
+        put?: never;
+        /** Create a draft evaluation cycle */
+        post: operations["createEvaluationCycle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/cycles/{cycle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an evaluation cycle with enrolled subjects */
+        get: operations["getEvaluationCycle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/cycles/{cycle_id}/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the next transition's blocking and advisory conditions */
+        get: operations["getEvaluationCyclePreflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/cycles/{cycle_id}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a draft cycle after its server-side preflight passes */
+        post: operations["openEvaluationCycle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/cycles/{cycle_id}/start-calibration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move an open cycle into calibration after preflight */
+        post: operations["startEvaluationCalibration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/cycles/{cycle_id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalize a calibrated cycle after preflight */
+        post: operations["finalizeEvaluationCycle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/cycles/{cycle_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a finalized cycle after preflight */
+        post: operations["archiveEvaluationCycle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll an employee in a draft evaluation cycle */
+        post: operations["addEvaluationSubject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/subjects/{subject_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an evaluation subject
+         * @description Submit-only callers receive 404 for subjects not assigned to them; read-capable callers can read visible subjects.
+         */
+        get: operations["getEvaluationSubject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/subjects/{subject_id}/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace all typed goals for an assigned or managed subject */
+        put: operations["replaceEvaluationGoals"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save a draft self or manager review
+         * @description Review kind is lowercase `self` or `manager`; unassigned submitters receive 404.
+         */
+        put: operations["saveEvaluationReview"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a saved self or manager review
+         * @description Submission is terminal; the backend enforces grade/evidence gates and returns conflicts for unmet gates or replays.
+         */
+        post: operations["submitEvaluationReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/subjects/{subject_id}/calibrate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a calibrated grade for an evaluation subject */
+        post: operations["calibrateEvaluationSubject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/my-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the authenticated submitter's evaluation tasks */
+        get: operations["listMyEvaluationTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/employees/{employee_id}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a managed employee's finalized evaluation ledger */
+        get: operations["listEmployeeEvaluationReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recruiting/talent-pool": {
         parameters: {
             query?: never;
@@ -9509,6 +9774,211 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        EvaluationCycleKind: "REGULAR" | "PROBATION";
+        /** @enum {string} */
+        EvaluationCycleStage: "DRAFT" | "OPEN" | "CALIBRATION" | "FINALIZED" | "ARCHIVED";
+        /** @enum {string} */
+        EvaluationCycleTransition: "open" | "start_calibration" | "finalize" | "archive";
+        /** @enum {string} */
+        EvaluationGrade: "S" | "A" | "B" | "C" | "D";
+        /** @enum {string} */
+        EvaluationReviewKind: "SELF" | "MANAGER";
+        /** @enum {string} */
+        EvaluationReviewStatus: "DRAFT" | "SUBMITTED";
+        /** @enum {string} */
+        EvaluationMetricKind: "KPI" | "ATTENDANCE" | "TASK" | "CUSTOM";
+        /** @enum {string} */
+        EvaluationEvidenceKind: "ATTENDANCE" | "WORK_ORDER" | "APPROVAL" | "KPI" | "OTHER";
+        /** @enum {string} */
+        EvaluationSubjectState: "ENROLLED" | "IN_REVIEW" | "REVIEWED" | "CALIBRATED" | "FINALIZED";
+        CreateEvaluationCycleRequest: {
+            name: string;
+            kind: components["schemas"]["EvaluationCycleKind"];
+            period_label: string;
+            due_date: components["schemas"]["Date"];
+        };
+        AddEvaluationSubjectRequest: {
+            cycle_id: components["schemas"]["Uuid"];
+            employee_id: components["schemas"]["Uuid"];
+            manager_user_id: components["schemas"]["Uuid"];
+        };
+        EvaluationGoalInput: {
+            title: string;
+            metric_kind: components["schemas"]["EvaluationMetricKind"];
+            target_label: string;
+            /** Format: int16 */
+            weight_pct: number;
+        };
+        ReplaceEvaluationGoalsRequest: {
+            goals: components["schemas"]["EvaluationGoalInput"][];
+        };
+        EvaluationEvidenceLinkInput: {
+            object_kind: components["schemas"]["EvaluationEvidenceKind"];
+            object_ref: string;
+            label: string;
+        };
+        SaveEvaluationReviewRequest: {
+            grade?: components["schemas"]["EvaluationGrade"] | null;
+            note?: string | null;
+            /** @default [] */
+            evidence_links: components["schemas"]["EvaluationEvidenceLinkInput"][];
+        };
+        CalibrateEvaluationSubjectRequest: {
+            final_grade: components["schemas"]["EvaluationGrade"];
+            reason?: string | null;
+        };
+        EvaluationCycleSummary: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            kind: components["schemas"]["EvaluationCycleKind"];
+            period_label: string;
+            due_date: components["schemas"]["Date"];
+            stage: components["schemas"]["EvaluationCycleStage"];
+            /** Format: int64 */
+            subjects_total: number;
+            /** Format: int64 */
+            manager_submitted: number;
+            /** Format: int64 */
+            self_submitted: number;
+            /** Format: int64 */
+            calibrated: number;
+            /** Format: int64 */
+            finalized: number;
+            created_at: components["schemas"]["Timestamp"];
+        };
+        EvaluationCyclePage: {
+            items: components["schemas"]["EvaluationCycleSummary"][];
+            /** Format: int64 */
+            total: number;
+        };
+        EvaluationUnitProgress: {
+            org_unit: string | null;
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            manager_submitted: number;
+        };
+        EvaluationSubjectSummary: {
+            id: components["schemas"]["Uuid"];
+            cycle_id: components["schemas"]["Uuid"];
+            employee_id: components["schemas"]["Uuid"];
+            employee_name: string;
+            org_unit: string | null;
+            manager_user_id: components["schemas"]["Uuid"];
+            state: components["schemas"]["EvaluationSubjectState"];
+            final_grade: components["schemas"]["EvaluationGrade"] | null;
+            rv_code: string | null;
+        };
+        EvaluationCycleDetail: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            kind: components["schemas"]["EvaluationCycleKind"];
+            period_label: string;
+            due_date: components["schemas"]["Date"];
+            stage: components["schemas"]["EvaluationCycleStage"];
+            /** Format: int64 */
+            subjects_total: number;
+            /** Format: int64 */
+            manager_submitted: number;
+            /** Format: int64 */
+            self_submitted: number;
+            /** Format: int64 */
+            calibrated: number;
+            /** Format: int64 */
+            finalized: number;
+            created_at: components["schemas"]["Timestamp"];
+            opened_at: components["schemas"]["Timestamp"] | null;
+            calibration_started_at: components["schemas"]["Timestamp"] | null;
+            finalized_at: components["schemas"]["Timestamp"] | null;
+            archived_at: components["schemas"]["Timestamp"] | null;
+            created_by: components["schemas"]["Uuid"];
+            progress_by_unit: components["schemas"]["EvaluationUnitProgress"][];
+            subjects: components["schemas"]["EvaluationSubjectSummary"][];
+        };
+        EvaluationGoal: {
+            id: components["schemas"]["Uuid"];
+            title: string;
+            metric_kind: components["schemas"]["EvaluationMetricKind"];
+            target_label: string;
+            /** Format: int16 */
+            weight_pct: number;
+            /** Format: int32 */
+            sort_order: number;
+        };
+        EvaluationEvidenceLink: {
+            id: components["schemas"]["Uuid"];
+            object_kind: components["schemas"]["EvaluationEvidenceKind"];
+            object_ref: string;
+            label: string;
+            /** Format: int32 */
+            sort_order: number;
+        };
+        EvaluationReview: {
+            id: components["schemas"]["Uuid"];
+            subject_id: components["schemas"]["Uuid"];
+            kind: components["schemas"]["EvaluationReviewKind"];
+            status: components["schemas"]["EvaluationReviewStatus"];
+            evaluator_user_id: components["schemas"]["Uuid"];
+            grade: components["schemas"]["EvaluationGrade"] | null;
+            note: string | null;
+            evidence_links: components["schemas"]["EvaluationEvidenceLink"][];
+            submitted_at: components["schemas"]["Timestamp"] | null;
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        EvaluationSubjectDetail: {
+            id: components["schemas"]["Uuid"];
+            cycle_id: components["schemas"]["Uuid"];
+            employee_id: components["schemas"]["Uuid"];
+            employee_name: string;
+            org_unit: string | null;
+            manager_user_id: components["schemas"]["Uuid"];
+            state: components["schemas"]["EvaluationSubjectState"];
+            final_grade: components["schemas"]["EvaluationGrade"] | null;
+            rv_code: string | null;
+            goals: components["schemas"]["EvaluationGoal"][];
+            reviews: components["schemas"]["EvaluationReview"][];
+            calibrated_grade: components["schemas"]["EvaluationGrade"] | null;
+            calibration_reason: string | null;
+            calibrated_by: components["schemas"]["Uuid"] | null;
+            calibrated_at: components["schemas"]["Timestamp"] | null;
+            finalized_at: components["schemas"]["Timestamp"] | null;
+        };
+        EvaluationPreflightItem: {
+            code: string;
+            message: string;
+            subject_id: components["schemas"]["Uuid"] | null;
+        };
+        EvaluationPreflightReport: {
+            next_transition: components["schemas"]["EvaluationCycleTransition"] | null;
+            blockers: components["schemas"]["EvaluationPreflightItem"][];
+            advisories: components["schemas"]["EvaluationPreflightItem"][];
+        };
+        EvaluationTaskItem: {
+            subject_id: components["schemas"]["Uuid"];
+            cycle_id: components["schemas"]["Uuid"];
+            cycle_name: string;
+            due_date: components["schemas"]["Date"];
+            employee_id: components["schemas"]["Uuid"];
+            employee_name: string;
+            kind: components["schemas"]["EvaluationReviewKind"];
+            review_status: components["schemas"]["EvaluationReviewStatus"] | null;
+        };
+        EvaluationTaskPage: {
+            items: components["schemas"]["EvaluationTaskItem"][];
+        };
+        EvaluationLedgerEntry: {
+            rv_code: string;
+            cycle_id: components["schemas"]["Uuid"];
+            cycle_name: string;
+            period_label: string;
+            final_grade: components["schemas"]["EvaluationGrade"];
+            finalized_at: components["schemas"]["Timestamp"];
+            subject_id: components["schemas"]["Uuid"];
+        };
+        EvaluationLedgerPage: {
+            items: components["schemas"]["EvaluationLedgerEntry"][];
+        };
         BenefitCatalogScope: {
             /** @enum {string} */
             scope_type: "ORG" | "BRANCH" | "SITE" | "TEAM" | "ROLE" | "EMPLOYEE_SEGMENT";
@@ -18118,6 +18588,11 @@ export interface components {
         };
     };
     parameters: {
+        EvaluationCycleId: components["schemas"]["Uuid"];
+        EvaluationSubjectId: components["schemas"]["Uuid"];
+        EvaluationEmployeeId: components["schemas"]["Uuid"];
+        /** @description Lowercase path representation of a review kind. */
+        EvaluationReviewKindPath: "self" | "manager";
         LifecycleObjectType: string;
         LifecycleObjectId: string;
         WorkOrderId: string;
@@ -35149,6 +35624,471 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationError"];
+        };
+    };
+    listEvaluationCycles: {
+        parameters: {
+            query?: {
+                stage?: components["schemas"]["EvaluationCycleStage"];
+                /** @description Normalized to the inclusive range 1 through 100; defaults to 50. */
+                limit?: number;
+                /** @description Negative values normalize to zero. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evaluation cycle page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationCyclePage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createEvaluationCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEvaluationCycleRequest"];
+            };
+        };
+        responses: {
+            /** @description Draft cycle created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationCycleDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getEvaluationCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: components["parameters"]["EvaluationCycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evaluation cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationCycleDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getEvaluationCyclePreflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: components["parameters"]["EvaluationCycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preflight report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationPreflightReport"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    openEvaluationCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: components["parameters"]["EvaluationCycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transitioned cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationCycleDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    startEvaluationCalibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: components["parameters"]["EvaluationCycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transitioned cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationCycleDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    finalizeEvaluationCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: components["parameters"]["EvaluationCycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transitioned cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationCycleDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    archiveEvaluationCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: components["parameters"]["EvaluationCycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transitioned cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationCycleDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    addEvaluationSubject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddEvaluationSubjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Enrolled evaluation subject. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationSubjectDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getEvaluationSubject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: components["parameters"]["EvaluationSubjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evaluation subject. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationSubjectDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    replaceEvaluationGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: components["parameters"]["EvaluationSubjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceEvaluationGoalsRequest"];
+            };
+        };
+        responses: {
+            /** @description Subject with replacement goals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationSubjectDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    saveEvaluationReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: components["parameters"]["EvaluationSubjectId"];
+                /** @description Lowercase path representation of a review kind. */
+                kind: components["parameters"]["EvaluationReviewKindPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveEvaluationReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved review draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    submitEvaluationReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: components["parameters"]["EvaluationSubjectId"];
+                /** @description Lowercase path representation of a review kind. */
+                kind: components["parameters"]["EvaluationReviewKindPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Submitted review. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    calibrateEvaluationSubject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: components["parameters"]["EvaluationSubjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrateEvaluationSubjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Calibrated subject. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationSubjectDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listMyEvaluationTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Submitter task page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationTaskPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listEmployeeEvaluationReviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: components["parameters"]["EvaluationEmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Finalized review ledger. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationLedgerPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listRecruitTalentPool: {

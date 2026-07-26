@@ -193,8 +193,10 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     nonempty(delivery.id, `${cap.id} delivery unit id`);
     if (!['NOT_APPLICABLE','REQUIRED','REQUIRED_UNRESOLVED'].includes(delivery.rust_status)) fail(`${cap.id} delivery unit has invalid Rust status`);
     const buckTargets = array(delivery.buck2_targets);
+    const verificationBuckTargets = array(cap.tests?.buck2_targets);
     if (delivery.rust_status === 'REQUIRED' && !buckTargets.length) fail(`${cap.id} Rust-required delivery unit has empty Buck targets`);
     if (delivery.rust_status === 'REQUIRED_UNRESOLVED' && (truth.implementation !== 'HOLD' || evidence.status !== 'HOLD')) fail(`${cap.id} unresolved Rust delivery must remain HOLD`);
+    if (verificationBuckTargets.length && (buckTargets.length !== verificationBuckTargets.length || buckTargets.some((target, index) => target !== verificationBuckTargets[index]))) fail(`${cap.id} delivery Buck targets must match declared verification targets`);
     for (const target of buckTargets) { if (typeof target !== 'string' || !/^\/\/[A-Za-z0-9_./-]+:[A-Za-z0-9_.-]+$/.test(target) || !resolveBuckTarget(target)) fail(`${cap.id} has invalid/nonexistent Buck target`); }
     const dependencies = array(cap.dependency_edges);
     for (const edge of dependencies) {

@@ -67,6 +67,10 @@ OPENAPI_DRIFT_SOURCE_PACKAGES = [
     "backend/crates/payroll/rest",
     "backend/crates/analytics-quant/rest",
     "backend/crates/equipment/rest",
+    "backend/crates/evaluation/rest",
+    "backend/crates/notifications/rest",
+    "backend/crates/orgchange/rest",
+    "backend/crates/recruiting/rest",
 ]
 
 
@@ -81,6 +85,23 @@ OPENAPI_DRIFT_EXTERNAL = {
 OPENAPI_DRIFT_EXTERNAL["//backend/openapi:openapi.yaml"] = (
     "backend/openapi/openapi.yaml"
 )
+OPENAPI_DRIFT_EXTERNAL.update({
+    "//clients:kotlin-dispatch-queue-status": (
+        "clients/kotlin/src/main/kotlin/com/maintenance/api/client/model/"
+        "DispatchQueueStatus.kt"
+    ),
+    "//clients:kotlin-p1-dispatches-api": (
+        "clients/kotlin/src/main/kotlin/com/maintenance/api/client/api/"
+        "P1DispatchesApi.kt"
+    ),
+    "//clients:swift-client": (
+        "clients/swift/Sources/MaintenanceAPIClient/Generated/Client.swift"
+    ),
+    "//clients:swift-types": (
+        "clients/swift/Sources/MaintenanceAPIClient/Generated/Types.swift"
+    ),
+    "//clients:ts-schema": "clients/ts/src/schema.d.ts",
+})
 
 # Compile-time and runtime fixture inputs outside a crate package. Labels expose
 # the authoritative bytes; mapped destinations preserve the checkout topology.
@@ -94,6 +115,9 @@ RESOURCE_CONFIG = {
             "tests/openapi_drift.rs": {
                 "srcs": ["src/**/*.rs"],
                 "external": OPENAPI_DRIFT_EXTERNAL,
+            },
+            "tests/workbench_api.rs": {
+                "srcs": ["src/workbench.rs"],
             },
             "tests/dev_seed_notification_links.rs": {
                 "external": {
@@ -247,6 +271,9 @@ TEST_RESOURCE_REQUIREMENTS = {
         'unit': 'none',
     },
     'mnt-evaluation-application': {
+        'unit': 'none',
+    },
+    'mnt-evaluation-adapter-postgres': {
         'unit': 'none',
     },
     'mnt-evaluation-domain': {
@@ -887,6 +914,14 @@ INLINE_TEST_VARIANTS = {
         "feature": "test-postgres",
         "resource": "postgres",
     },),
+    # Cargo's dev-auth suite includes the auth-rest crate's inline PostgreSQL
+    # tests. Emit that feature graph explicitly so CI can run it through the
+    # disposable PostgreSQL harness instead of a direct Cargo invocation.
+    "mnt-platform-auth-rest": ({
+        "name": "itest-dev-auth-postgres",
+        "feature": "dev-auth",
+        "resource": "postgres",
+    },),
 }
 
 INTEGRATION_TEST_FEATURES = {
@@ -895,6 +930,7 @@ INTEGRATION_TEST_FEATURES = {
     },
     "mnt-platform-auth-rest": {
         "tests/dev_auth_session.rs": ("dev-auth",),
+        "tests/group_admin_tenant_context.rs": ("dev-auth",),
     },
 }
 

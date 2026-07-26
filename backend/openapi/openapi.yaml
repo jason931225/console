@@ -17281,6 +17281,242 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /api/v1/evaluation/cycles:
+    get:
+      tags: [evaluation]
+      operationId: listEvaluationCycles
+      summary: List evaluation cycles
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - name: stage
+        in: query
+        required: false
+        schema: { $ref: '#/components/schemas/EvaluationCycleStage' }
+      - name: limit
+        in: query
+        required: false
+        description: Normalized to the inclusive range 1 through 100; defaults to 50.
+        schema: { type: integer, format: int64, default: 50 }
+      - name: offset
+        in: query
+        required: false
+        description: Negative values normalize to zero.
+        schema: { type: integer, format: int64, default: 0 }
+      responses:
+        '200': { description: Evaluation cycle page., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationCyclePage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [evaluation]
+      operationId: createEvaluationCycle
+      summary: Create a draft evaluation cycle
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateEvaluationCycleRequest' } } } }
+      responses:
+        '201': { description: Draft cycle created., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationCycleDetail' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/cycles/{cycle_id}:
+    get:
+      tags: [evaluation]
+      operationId: getEvaluationCycle
+      summary: Get an evaluation cycle with enrolled subjects
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationCycleId' }]
+      responses:
+        '200': { description: Evaluation cycle., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationCycleDetail' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/cycles/{cycle_id}/preflight:
+    get:
+      tags: [evaluation]
+      operationId: getEvaluationCyclePreflight
+      summary: Read the next transition's blocking and advisory conditions
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationCycleId' }]
+      responses:
+        '200': { description: Preflight report., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationPreflightReport' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/cycles/{cycle_id}/open:
+    post:
+      tags: [evaluation]
+      operationId: openEvaluationCycle
+      summary: Open a draft cycle after its server-side preflight passes
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationCycleId' }]
+      responses: &evaluationTransitionResponses
+        '200': { description: Transitioned cycle., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationCycleDetail' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/cycles/{cycle_id}/start-calibration:
+    post:
+      tags: [evaluation]
+      operationId: startEvaluationCalibration
+      summary: Move an open cycle into calibration after preflight
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationCycleId' }]
+      responses: *evaluationTransitionResponses
+  /api/v1/evaluation/cycles/{cycle_id}/finalize:
+    post:
+      tags: [evaluation]
+      operationId: finalizeEvaluationCycle
+      summary: Finalize a calibrated cycle after preflight
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationCycleId' }]
+      responses: *evaluationTransitionResponses
+  /api/v1/evaluation/cycles/{cycle_id}/archive:
+    post:
+      tags: [evaluation]
+      operationId: archiveEvaluationCycle
+      summary: Archive a finalized cycle after preflight
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationCycleId' }]
+      responses: *evaluationTransitionResponses
+  /api/v1/evaluation/subjects:
+    post:
+      tags: [evaluation]
+      operationId: addEvaluationSubject
+      summary: Enroll an employee in a draft evaluation cycle
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AddEvaluationSubjectRequest' } } } }
+      responses:
+        '201': { description: Enrolled evaluation subject., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationSubjectDetail' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/subjects/{subject_id}:
+    get:
+      tags: [evaluation]
+      operationId: getEvaluationSubject
+      summary: Get an evaluation subject
+      description: Submit-only callers receive 404 for subjects not assigned to them; read-capable callers can read visible subjects.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationSubjectId' }]
+      responses:
+        '200': { description: Evaluation subject., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationSubjectDetail' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/subjects/{subject_id}/goals:
+    put:
+      tags: [evaluation]
+      operationId: replaceEvaluationGoals
+      summary: Replace all typed goals for an assigned or managed subject
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationSubjectId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReplaceEvaluationGoalsRequest' } } } }
+      responses:
+        '200': { description: Subject with replacement goals., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationSubjectDetail' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}:
+    put:
+      tags: [evaluation]
+      operationId: saveEvaluationReview
+      summary: Save a draft self or manager review
+      description: Review kind is lowercase `self` or `manager`; unassigned submitters receive 404.
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - $ref: '#/components/parameters/EvaluationSubjectId'
+      - $ref: '#/components/parameters/EvaluationReviewKindPath'
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SaveEvaluationReviewRequest' } } } }
+      responses:
+        '200': { description: Saved review draft., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationReview' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}/submit:
+    post:
+      tags: [evaluation]
+      operationId: submitEvaluationReview
+      summary: Submit a saved self or manager review
+      description: Submission is terminal; the backend enforces grade/evidence gates and returns conflicts for unmet gates or replays.
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - $ref: '#/components/parameters/EvaluationSubjectId'
+      - $ref: '#/components/parameters/EvaluationReviewKindPath'
+      responses:
+        '200': { description: Submitted review., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationReview' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/subjects/{subject_id}/calibrate:
+    post:
+      tags: [evaluation]
+      operationId: calibrateEvaluationSubject
+      summary: Record a calibrated grade for an evaluation subject
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationSubjectId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CalibrateEvaluationSubjectRequest' } } } }
+      responses:
+        '200': { description: Calibrated subject., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationSubjectDetail' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/my-tasks:
+    get:
+      tags: [evaluation]
+      operationId: listMyEvaluationTasks
+      summary: List the authenticated submitter's evaluation tasks
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Submitter task page., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationTaskPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/evaluation/employees/{employee_id}/reviews:
+    get:
+      tags: [evaluation]
+      operationId: listEmployeeEvaluationReviews
+      summary: List a managed employee's finalized evaluation ledger
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EvaluationEmployeeId' }]
+      responses:
+        '200': { description: Finalized review ledger., content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationLedgerPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/recruiting/talent-pool:
     get:
       tags:
@@ -17310,6 +17546,27 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    EvaluationCycleId:
+      name: cycle_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    EvaluationSubjectId:
+      name: subject_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    EvaluationEmployeeId:
+      name: employee_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    EvaluationReviewKindPath:
+      name: kind
+      in: path
+      required: true
+      description: Lowercase path representation of a review kind.
+      schema: { type: string, enum: [self, manager] }
     LifecycleObjectType:
       name: objectType
       in: path
@@ -17510,6 +17767,274 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorBody'
   schemas:
+    EvaluationCycleKind:
+      type: string
+      enum: [REGULAR, PROBATION]
+    EvaluationCycleStage:
+      type: string
+      enum: [DRAFT, OPEN, CALIBRATION, FINALIZED, ARCHIVED]
+    EvaluationCycleTransition:
+      type: string
+      enum: [open, start_calibration, finalize, archive]
+    EvaluationGrade:
+      type: string
+      enum: [S, A, B, C, D]
+    EvaluationReviewKind:
+      type: string
+      enum: [SELF, MANAGER]
+    EvaluationReviewStatus:
+      type: string
+      enum: [DRAFT, SUBMITTED]
+    EvaluationMetricKind:
+      type: string
+      enum: [KPI, ATTENDANCE, TASK, CUSTOM]
+    EvaluationEvidenceKind:
+      type: string
+      enum: [ATTENDANCE, WORK_ORDER, APPROVAL, KPI, OTHER]
+    EvaluationSubjectState:
+      type: string
+      enum: [ENROLLED, IN_REVIEW, REVIEWED, CALIBRATED, FINALIZED]
+    CreateEvaluationCycleRequest:
+      type: object
+      additionalProperties: false
+      required: [name, kind, period_label, due_date]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        kind: { $ref: '#/components/schemas/EvaluationCycleKind' }
+        period_label: { type: string, minLength: 1, maxLength: 60 }
+        due_date: { $ref: '#/components/schemas/Date' }
+    AddEvaluationSubjectRequest:
+      type: object
+      additionalProperties: false
+      required: [cycle_id, employee_id, manager_user_id]
+      properties:
+        cycle_id: { $ref: '#/components/schemas/Uuid' }
+        employee_id: { $ref: '#/components/schemas/Uuid' }
+        manager_user_id: { $ref: '#/components/schemas/Uuid' }
+    EvaluationGoalInput:
+      type: object
+      additionalProperties: false
+      required: [title, metric_kind, target_label, weight_pct]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        metric_kind: { $ref: '#/components/schemas/EvaluationMetricKind' }
+        target_label: { type: string, minLength: 1, maxLength: 200 }
+        weight_pct: { type: integer, format: int16, minimum: 0, maximum: 100 }
+    ReplaceEvaluationGoalsRequest:
+      type: object
+      additionalProperties: false
+      required: [goals]
+      properties:
+        goals:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/EvaluationGoalInput' }
+    EvaluationEvidenceLinkInput:
+      type: object
+      additionalProperties: false
+      required: [object_kind, object_ref, label]
+      properties:
+        object_kind: { $ref: '#/components/schemas/EvaluationEvidenceKind' }
+        object_ref: { type: string, minLength: 1, maxLength: 120 }
+        label: { type: string, minLength: 1, maxLength: 200 }
+    SaveEvaluationReviewRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        grade: { oneOf: [{ $ref: '#/components/schemas/EvaluationGrade' }, { type: 'null' }] }
+        note: { type: [string, 'null'], maxLength: 2000 }
+        evidence_links:
+          type: array
+          maxItems: 10
+          default: []
+          items: { $ref: '#/components/schemas/EvaluationEvidenceLinkInput' }
+    CalibrateEvaluationSubjectRequest:
+      type: object
+      additionalProperties: false
+      required: [final_grade]
+      properties:
+        final_grade: { $ref: '#/components/schemas/EvaluationGrade' }
+        reason: { type: [string, 'null'], maxLength: 500 }
+    EvaluationCycleSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind, period_label, due_date, stage, subjects_total, manager_submitted, self_submitted, calibrated, finalized, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/EvaluationCycleKind' }
+        period_label: { type: string }
+        due_date: { $ref: '#/components/schemas/Date' }
+        stage: { $ref: '#/components/schemas/EvaluationCycleStage' }
+        subjects_total: { type: integer, format: int64 }
+        manager_submitted: { type: integer, format: int64 }
+        self_submitted: { type: integer, format: int64 }
+        calibrated: { type: integer, format: int64 }
+        finalized: { type: integer, format: int64 }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    EvaluationCyclePage:
+      type: object
+      additionalProperties: false
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/EvaluationCycleSummary' } }
+        total: { type: integer, format: int64 }
+    EvaluationUnitProgress:
+      type: object
+      additionalProperties: false
+      required: [org_unit, total, manager_submitted]
+      properties:
+        org_unit: { type: [string, 'null'] }
+        total: { type: integer, format: int64 }
+        manager_submitted: { type: integer, format: int64 }
+    EvaluationSubjectSummary:
+      type: object
+      additionalProperties: false
+      required: [id, cycle_id, employee_id, employee_name, org_unit, manager_user_id, state, final_grade, rv_code]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        cycle_id: { $ref: '#/components/schemas/Uuid' }
+        employee_id: { $ref: '#/components/schemas/Uuid' }
+        employee_name: { type: string }
+        org_unit: { type: [string, 'null'] }
+        manager_user_id: { $ref: '#/components/schemas/Uuid' }
+        state: { $ref: '#/components/schemas/EvaluationSubjectState' }
+        final_grade: { oneOf: [{ $ref: '#/components/schemas/EvaluationGrade' }, { type: 'null' }] }
+        rv_code: { type: [string, 'null'] }
+    EvaluationCycleDetail:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind, period_label, due_date, stage, subjects_total, manager_submitted, self_submitted, calibrated, finalized, created_at, opened_at, calibration_started_at, finalized_at, archived_at, created_by, progress_by_unit, subjects]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/EvaluationCycleKind' }
+        period_label: { type: string }
+        due_date: { $ref: '#/components/schemas/Date' }
+        stage: { $ref: '#/components/schemas/EvaluationCycleStage' }
+        subjects_total: { type: integer, format: int64 }
+        manager_submitted: { type: integer, format: int64 }
+        self_submitted: { type: integer, format: int64 }
+        calibrated: { type: integer, format: int64 }
+        finalized: { type: integer, format: int64 }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        opened_at: { oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }] }
+        calibration_started_at: { oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }] }
+        finalized_at: { oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }] }
+        archived_at: { oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }] }
+        created_by: { $ref: '#/components/schemas/Uuid' }
+        progress_by_unit: { type: array, items: { $ref: '#/components/schemas/EvaluationUnitProgress' } }
+        subjects: { type: array, items: { $ref: '#/components/schemas/EvaluationSubjectSummary' } }
+    EvaluationGoal:
+      type: object
+      additionalProperties: false
+      required: [id, title, metric_kind, target_label, weight_pct, sort_order]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        title: { type: string }
+        metric_kind: { $ref: '#/components/schemas/EvaluationMetricKind' }
+        target_label: { type: string }
+        weight_pct: { type: integer, format: int16 }
+        sort_order: { type: integer, format: int32 }
+    EvaluationEvidenceLink:
+      type: object
+      additionalProperties: false
+      required: [id, object_kind, object_ref, label, sort_order]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        object_kind: { $ref: '#/components/schemas/EvaluationEvidenceKind' }
+        object_ref: { type: string }
+        label: { type: string }
+        sort_order: { type: integer, format: int32 }
+    EvaluationReview:
+      type: object
+      additionalProperties: false
+      required: [id, subject_id, kind, status, evaluator_user_id, grade, note, evidence_links, submitted_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        subject_id: { $ref: '#/components/schemas/Uuid' }
+        kind: { $ref: '#/components/schemas/EvaluationReviewKind' }
+        status: { $ref: '#/components/schemas/EvaluationReviewStatus' }
+        evaluator_user_id: { $ref: '#/components/schemas/Uuid' }
+        grade: { oneOf: [{ $ref: '#/components/schemas/EvaluationGrade' }, { type: 'null' }] }
+        note: { type: [string, 'null'] }
+        evidence_links: { type: array, items: { $ref: '#/components/schemas/EvaluationEvidenceLink' } }
+        submitted_at: { oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }] }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    EvaluationSubjectDetail:
+      type: object
+      additionalProperties: false
+      required: [id, cycle_id, employee_id, employee_name, org_unit, manager_user_id, state, final_grade, rv_code, goals, reviews, calibrated_grade, calibration_reason, calibrated_by, calibrated_at, finalized_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        cycle_id: { $ref: '#/components/schemas/Uuid' }
+        employee_id: { $ref: '#/components/schemas/Uuid' }
+        employee_name: { type: string }
+        org_unit: { type: [string, 'null'] }
+        manager_user_id: { $ref: '#/components/schemas/Uuid' }
+        state: { $ref: '#/components/schemas/EvaluationSubjectState' }
+        final_grade: { oneOf: [{ $ref: '#/components/schemas/EvaluationGrade' }, { type: 'null' }] }
+        rv_code: { type: [string, 'null'] }
+        goals: { type: array, items: { $ref: '#/components/schemas/EvaluationGoal' } }
+        reviews: { type: array, items: { $ref: '#/components/schemas/EvaluationReview' } }
+        calibrated_grade: { oneOf: [{ $ref: '#/components/schemas/EvaluationGrade' }, { type: 'null' }] }
+        calibration_reason: { type: [string, 'null'] }
+        calibrated_by: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
+        calibrated_at: { oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }] }
+        finalized_at: { oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }] }
+    EvaluationPreflightItem:
+      type: object
+      additionalProperties: false
+      required: [code, message, subject_id]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        subject_id: { oneOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }
+    EvaluationPreflightReport:
+      type: object
+      additionalProperties: false
+      required: [next_transition, blockers, advisories]
+      properties:
+        next_transition: { oneOf: [{ $ref: '#/components/schemas/EvaluationCycleTransition' }, { type: 'null' }] }
+        blockers: { type: array, items: { $ref: '#/components/schemas/EvaluationPreflightItem' } }
+        advisories: { type: array, items: { $ref: '#/components/schemas/EvaluationPreflightItem' } }
+    EvaluationTaskItem:
+      type: object
+      additionalProperties: false
+      required: [subject_id, cycle_id, cycle_name, due_date, employee_id, employee_name, kind, review_status]
+      properties:
+        subject_id: { $ref: '#/components/schemas/Uuid' }
+        cycle_id: { $ref: '#/components/schemas/Uuid' }
+        cycle_name: { type: string }
+        due_date: { $ref: '#/components/schemas/Date' }
+        employee_id: { $ref: '#/components/schemas/Uuid' }
+        employee_name: { type: string }
+        kind: { $ref: '#/components/schemas/EvaluationReviewKind' }
+        review_status: { oneOf: [{ $ref: '#/components/schemas/EvaluationReviewStatus' }, { type: 'null' }] }
+    EvaluationTaskPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/EvaluationTaskItem' } }
+    EvaluationLedgerEntry:
+      type: object
+      additionalProperties: false
+      required: [rv_code, cycle_id, cycle_name, period_label, final_grade, finalized_at, subject_id]
+      properties:
+        rv_code: { type: string }
+        cycle_id: { $ref: '#/components/schemas/Uuid' }
+        cycle_name: { type: string }
+        period_label: { type: string }
+        final_grade: { $ref: '#/components/schemas/EvaluationGrade' }
+        finalized_at: { $ref: '#/components/schemas/Timestamp' }
+        subject_id: { $ref: '#/components/schemas/Uuid' }
+    EvaluationLedgerPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/EvaluationLedgerEntry' } }
     BenefitCatalogScope:
       type: object
       additionalProperties: false

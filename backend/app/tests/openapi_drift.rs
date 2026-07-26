@@ -13,6 +13,7 @@ const REQUIRED_CONFIGURED_SURFACES: &[&str] = &[
     "dispatch",
     "benefit",
     "financial",
+    "evaluation",
     "integrity",
     "hr",
     "workflow-studio",
@@ -65,6 +66,12 @@ const CONFIGURED_ROUTE_SOURCES: &[RouteSource] = &[
         name: "financial REST router",
         surface: "financial",
         source: include_str!("../../crates/financial/rest/src/lib.rs"),
+        ignored_route_refs: &[],
+    },
+    RouteSource {
+        name: "evaluation REST router",
+        surface: "evaluation",
+        source: include_str!("../../crates/evaluation/rest/src/lib.rs"),
         ignored_route_refs: &[],
     },
     RouteSource {
