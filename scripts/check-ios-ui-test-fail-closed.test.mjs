@@ -1003,12 +1003,6 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/UITests/FieldCriticalPathUITests.swift": validFiles["ios/UITests/FieldCriticalPathUITests.swift"].replace("scrollToDetailElement(app.buttons[AID.detailSubmitReportButton])", "app.buttons[AID.detailSubmitReportButton]"),
     }), lazyScroll);
     expectsFailure(evaluate({
-      "ios/UITests/FieldCriticalPathUITests.swift": validFiles["ios/UITests/FieldCriticalPathUITests.swift"].replace(
-        "topSentinel: app.buttons[AID.detailSubmitReportButton],",
-        "topSentinel: app.staticTexts[KO.locationConsentTitle],",
-      ),
-    }), lazyScroll);
-    expectsFailure(evaluate({
       "ios/UITests/CameraCaptureUITests.swift": validFiles["ios/UITests/CameraCaptureUITests.swift"].replace("scrollToDetailElement(app.buttons[AID.detailCaptureEvidenceButton])", "app.buttons[AID.detailCaptureEvidenceButton]"),
     }), lazyScroll);
   });
@@ -1043,6 +1037,52 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       ),
     }), "scoped mutations");
     expectsFailure(evaluate({ "ios/UITests/LoginValidationUITests.swift": "XCTAssertTrue(loginError.exists)" }), "scoped mutations");
+  });
+  it("rejects globally or copy-scoped report terminal evidence", () => {
+    const criticalPath = validFiles["ios/UITests/FieldCriticalPathUITests.swift"];
+    const reportEvidenceGate = "detail-owned accessibility identifiers";
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "detail.descendants(matching: .any)[AID.detailMessage]",
+        "detail.staticTexts[KO.reportSuccessMessage]",
+      ),
+    }), reportEvidenceGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "detail.descendants(matching: .any)[AID.detailStatus]",
+        "detail.staticTexts[KO.reportSubmitted]",
+      ),
+    }), reportEvidenceGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "detailMessage,\n            in: detail,",
+        "detailMessage,\n            in: app,",
+      ),
+    }), reportEvidenceGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "topSentinel: detail.buttons[AID.detailSubmitReportButton],",
+        "topSentinel: detail.staticTexts[KO.locationConsentTitle],",
+      ),
+    }), reportEvidenceGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "resolvedMessage.label,\n            KO.reportSuccessMessage,",
+        "resolvedMessage.exists,\n            true,",
+      ),
+    }), reportEvidenceGate);
+    expectsFailure(evaluate({
+      "ios/UITests/FieldCriticalPathUITests.swift": mutateFile(
+        criticalPath,
+        "resolvedStatus.label,\n            KO.reportSubmitted,",
+        "resolvedStatus.exists,\n            true,",
+      ),
+    }), reportEvidenceGate);
   });
   it("rejects cached or globally scoped location-consent elements across SwiftUI state replacement", () => {
     const fieldCase = validFiles["ios/UITests/Support/FieldUITestCase.swift"];

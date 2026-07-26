@@ -1234,8 +1234,25 @@ function hasDetailLazyControlScroll(files) {
     && /\.scrollDismissesKeyboard\s*\(\s*\.immediately\s*\)/.test(detailView)
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailStartWorkButton\]\s*\)/g) ?? []).length === 1
     && (critical.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailSubmitReportButton\]\s*\)/g) ?? []).length === 2
-    && /scrollToElement\s*\(\s*app\.staticTexts\[KO\.reportSuccessMessage\]\s*,\s*in:\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]\s*,\s*topSentinel:\s*app\.buttons\[AID\.detailSubmitReportButton\]\s*,\s*timeout:\s*15\s*\)/.test(critical)
     && (camera.match(/scrollToDetailElement\s*\(\s*app\.buttons\[AID\.detailCaptureEvidenceButton\]\s*\)/g) ?? []).length === 1;
+}
+
+function hasDetailScopedReportTerminalEvidence(files) {
+  const critical = stripSwiftCommentsAndStrings(files["ios/UITests/FieldCriticalPathUITests.swift"] ?? "");
+  const report = extractFunctionBody(
+    critical,
+    /func\s+testReportSubmissionPersistsVisibleTerminalOutcome\s*\(\s*\)\s+async\s+throws/,
+  );
+  if (report === null) return false;
+
+  return /let\s+detail\s*=\s*app\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailView\]/.test(report)
+    && /let\s+detailMessage\s*=\s*detail\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailMessage\]/.test(report)
+    && /guard\s+let\s+resolvedMessage\s*=\s*scrollToElement\s*\(\s*detailMessage\s*,\s*in:\s*detail\s*,\s*topSentinel:\s*detail\.buttons\[AID\.detailSubmitReportButton\]\s*,\s*timeout:\s*15\s*\)/.test(report)
+    && /XCTAssertEqual\s*\(\s*resolvedMessage\.label\s*,\s*KO\.reportSuccessMessage\s*,/.test(report)
+    && /let\s+detailStatus\s*=\s*detail\.descendants\s*\(\s*matching:\s*\.any\s*\)\[AID\.detailStatus\]/.test(report)
+    && /guard\s+let\s+resolvedStatus\s*=\s*scrollToElement\s*\(\s*detailStatus\s*,\s*in:\s*detail\s*,\s*topSentinel:\s*detail\.staticTexts\[KO\.locationConsentTitle\]\s*,\s*timeout:\s*15\s*\)/.test(report)
+    && /XCTAssertEqual\s*\(\s*resolvedStatus\.label\s*,\s*KO\.reportSubmitted\s*,/.test(report)
+    && !/app\.staticTexts\[KO\.(?:reportSuccessMessage|reportSubmitted)\]/.test(report);
 }
 
 function hasReportFeedbackAdjacentToSubmit(files) {
@@ -1547,6 +1564,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasFullFixtureTabBarGeometryEvidence(files), "iOS functional tests must traverse all five deterministic Today rows above the tab bar while accessibility audits remain diagnostic-free"]);
   checks.push([hasActionableDetailReadiness(files), "iOS UI navigation must prove detail readiness with the actionable back control, not container hittability"]);
   checks.push([hasDetailLazyControlScroll(files), "iOS UI tests must use one deadline-bounded exact-element scroll for lazy detail controls, using the first detail section as the normalization sentinel"]);
+  checks.push([hasDetailScopedReportTerminalEvidence(files), "iOS report submission must resolve message and terminal status through detail-owned accessibility identifiers, then assert their rendered localized labels"]);
   checks.push([hasReportFeedbackAdjacentToSubmit(files), "iOS work-order detail must place live report response feedback adjacent to submit-report controls before the unrelated camera section"]);
   checks.push([hasEntitledSimulatorSeederContract(job), "iOS UI CI must preserve the Xcode-created Simulator Runner and prove matching app/seeder Mach-O keychain entitlements before test execution"]);
   checks.push([hasMode600Xctestrun(job), "iOS UI CI must inject the UI host path and renewable session material only per functional shard through a mode-0600 job-root xctestrun"]);

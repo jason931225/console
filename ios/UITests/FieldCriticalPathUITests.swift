@@ -132,24 +132,43 @@ final class FieldCriticalPathUITests: FieldUITestCase {
         }
         submit.tap()
 
-        XCTAssertNotNil(
-            scrollToElement(
-                app.staticTexts[KO.reportSuccessMessage],
-                in: app.descendants(matching: .any)[AID.detailView],
-                // The response is inserted immediately after the report controls.
-                // Preserve that local scroll position instead of resetting the
-                // full Form to its first section before searching forward.
-                topSentinel: app.buttons[AID.detailSubmitReportButton],
-                timeout: 15
-            ),
-            "Submitting the isolated report fixture must prove the live API success response."
+        let detail = app.descendants(matching: .any)[AID.detailView]
+        let detailMessage = detail.descendants(matching: .any)[AID.detailMessage]
+        guard let resolvedMessage = scrollToElement(
+            detailMessage,
+            in: detail,
+            // The response is inserted immediately after the report controls.
+            // Preserve that local scroll position instead of resetting the
+            // full Form to its first section before searching forward.
+            topSentinel: detail.buttons[AID.detailSubmitReportButton],
+            timeout: 15
+        ) else {
+            XCTFail("Submitting the isolated report fixture must expose detail-owned live API feedback.")
+            return
+        }
+        XCTAssertEqual(
+            resolvedMessage.label,
+            KO.reportSuccessMessage,
+            "Submitting the isolated report fixture must prove the rendered live API success response."
         )
-        XCTAssertNotNil(
-            scrollToDetailElement(app.staticTexts[KO.reportSubmitted], timeout: 15),
+
+        let detailStatus = detail.descendants(matching: .any)[AID.detailStatus]
+        guard let resolvedStatus = scrollToElement(
+            detailStatus,
+            in: detail,
+            topSentinel: detail.staticTexts[KO.locationConsentTitle],
+            timeout: 15
+        ) else {
+            XCTFail("Submitting the isolated report fixture must expose the detail-owned terminal status.")
+            return
+        }
+        XCTAssertEqual(
+            resolvedStatus.label,
+            KO.reportSubmitted,
             "Submitting the isolated report fixture must visibly persist the 보고 완료 terminal outcome."
         )
         XCTAssertFalse(
-            app.staticTexts[KO.operationFailed].exists,
+            detail.staticTexts[KO.operationFailed].exists,
             "A successfully persisted report must not settle in the generic operation failure state."
         )
     }
