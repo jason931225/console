@@ -8,7 +8,9 @@
 > Current authority is
 > [`console-enterprise-roadmap.md`](console-enterprise-roadmap.md), its
 > machine-readable capability and jurisdiction registers, current repository
-> contracts, and exact-candidate evidence.
+> contracts, the
+> [`console-development-pipeline.md`](console-development-pipeline.md)
+> plan-to-deployment pipeline, and exact-candidate evidence.
 > The current Buck2 execution policy is
 > [`console-buck2-scale-playbook.md`](console-buck2-scale-playbook.md). The
 > older Buck2-CI charter below is historical context and cannot authorize Cargo
