@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -244,13 +244,12 @@ export async function executeVerificationQueue(plan, supplied = {}) {
     resourceSnapshot: supplied.resourceSnapshot ?? defaultResourceSnapshot,
   };
   const receiptRoot = canonicalizeReceiptRoot(options.receiptRoot);
-  if (existsSync(receiptRoot)) fail('local receipt root already exists; refusing to mix or overwrite evidence');
-  const stagingRoot = requireDirectory(path.dirname(receiptRoot), `${receiptRoot}.staging-${process.pid}`);
-  if (existsSync(stagingRoot)) fail('local receipt staging root already exists');
-  mkdirSync(stagingRoot, { recursive: true, mode: 0o700 });
   const declaredCapacity = plan.policy?.cold_rust_compile_lanes;
   const maxCohorts = supplied.maxCohorts ?? declaredCapacity ?? 1;
   if (!Number.isInteger(maxCohorts) || maxCohorts < 1 || (declaredCapacity !== undefined && (!Number.isInteger(declaredCapacity) || maxCohorts > declaredCapacity))) fail('max cohorts exceeds declared cold-Rust capacity');
+  if (existsSync(receiptRoot)) fail('local receipt root already exists; refusing to mix or overwrite evidence');
+  const stagingRoot = mkdtempSync(path.join(path.dirname(receiptRoot), `.console-verification-staging-${process.pid}-`));
+  if (lstatSync(stagingRoot).isSymbolicLink()) { rmSync(stagingRoot, { recursive: true, force: true }); fail('local receipt staging root is a symbolic link'); }
   let peakFd = 0; let peakRssKb = 0;
   const activeChildren = new Set(); let interrupted = null;
   const interrupt = (signal) => { interrupted ??= signal; void terminateActiveChildren(activeChildren); };
@@ -314,14 +313,16 @@ export async function executeVerificationQueue(plan, supplied = {}) {
     recheckWorktree(receipt.worktree, receipt.verification_sha, options.inspectWorktree);
     if (options.toolDigest(receipt.worktree) !== receipt.tool_digest) { rmSync(stagingRoot, { recursive: true, force: true }); fail('selected Buck tool changed after cohort execution'); }
   }
+  if (interrupted) { rmSync(stagingRoot, { recursive: true, force: true }); fail('verification queue was interrupted before receipt promotion'); }
   assertSafeReceiptTree(stagingRoot);
+  if (interrupted) { rmSync(stagingRoot, { recursive: true, force: true }); fail('verification queue was interrupted before receipt promotion'); }
   renameSync(stagingRoot, receiptRoot);
   const ordered = results.sort((left, right) => left.verification_sha.localeCompare(right.verification_sha, 'en'));
   for (const receipt of ordered) { receipt.receipt_path = path.join(receiptRoot, receipt.receipt_relative_path); delete receipt.receipt_relative_path; delete receipt.worktree; delete receipt.tool_digest; }
   Object.defineProperty(ordered, 'peak_cohorts', { value: peakCohorts, enumerable: false });
   Object.defineProperty(ordered, 'max_cohorts', { value: maxCohorts, enumerable: false });
-  Object.defineProperty(ordered, 'peak_fd', { value: peakFd, enumerable: false });
-  Object.defineProperty(ordered, 'peak_rss_kb', { value: peakRssKb, enumerable: false });
+  Object.defineProperty(ordered, 'orchestrator_peak_fd', { value: peakFd, enumerable: false });
+  Object.defineProperty(ordered, 'orchestrator_peak_rss_kb', { value: peakRssKb, enumerable: false });
   return ordered;
 }
 
@@ -361,7 +362,7 @@ async function main() {
   const authority = { candidate: args.candidate, authorityTip: args.authorityTip, syntheticMerge: args.syntheticMerge, admission: args.admission };
   const canonicalPlan = recomputePlan(authority); verifyPlanAgainstAuthority(plan, authority, () => canonicalPlan); verifyPlanBytes(planBytes, canonicalPlan);
   const receipts = await executeVerificationQueue(canonicalPlan, { receiptRoot: args.receiptRoot, maxCohorts: args.maxCohorts ?? undefined });
-  process.stdout.write(`${JSON.stringify({ status: 'passed', max_cohorts: receipts.max_cohorts, peak_cohorts: receipts.peak_cohorts, peak_fd: receipts.peak_fd, peak_rss_kb: receipts.peak_rss_kb, receipts })}\n`);
+  process.stdout.write(`${JSON.stringify({ status: 'passed', max_cohorts: receipts.max_cohorts, peak_cohorts: receipts.peak_cohorts, orchestrator_peak_fd: receipts.orchestrator_peak_fd, orchestrator_peak_rss_kb: receipts.orchestrator_peak_rss_kb, receipts })}\n`);
 }
 if (import.meta.url === new URL(process.argv[1], 'file:').href) {
   main().catch((error) => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });
