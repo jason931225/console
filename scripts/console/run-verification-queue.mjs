@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -11,6 +11,8 @@ const BUCK_LABEL = /^(?:[A-Za-z0-9_.-]+)?\/\/[A-Za-z0-9_./-]+:[A-Za-z0-9_.-]+$/;
 const POSTGRES_WRAPPER = /^\/\/tools\/buck:[A-Za-z0-9_.-]+$/;
 const EXECUTION = 'canonical_shared_daemon_combined_targets';
 const SCHEMA = 'console-fanout-epoch-v2';
+const FORBIDDEN_WRAPPER_ENV = ['BUCK_ISOLATION_DIR', 'MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR', 'MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK', 'MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT'];
+const RESOURCE_KEYS = ['writer', 'postgres', 'browser', 'ios', 'graph', 'cas'];
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -26,7 +28,24 @@ function requireDirectory(root, candidate) {
   if (resolvedCandidate !== resolvedRoot && !resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)) fail('receipt/report path escapes configured local receipt root');
   return resolvedCandidate;
 }
+function canonicalizeReceiptRoot(candidate) {
+  const resolved = path.resolve(candidate);
+  if (existsSync(resolved)) {
+    if (lstatSync(resolved).isSymbolicLink()) fail('receipt root may not be a symbolic link');
+    return resolved;
+  }
+  const parent = path.dirname(resolved);
+  if (!existsSync(parent)) return canonicalizeReceiptRoot(parent) + path.sep + path.basename(resolved);
+  // Canonicalize system aliases such as /tmp before appending an uncreated
+  // operator leaf; no attacker-controlled existing leaf is ever followed.
+  return path.join(realpathSync(parent), path.basename(resolved));
+}
 function isPlainObject(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
+function isCanonicalBuckLabel(target) {
+  if (typeof target !== 'string' || target.startsWith('root//') || !BUCK_LABEL.test(target)) return false;
+  const [prefix, suffix] = target.split('//'); const packagePath = suffix.slice(0, suffix.indexOf(':'));
+  return prefix !== '.' && prefix !== '..' && packagePath.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
 
 /** Validate only the already-admitted scheduler contract; this does not re-plan work. */
 export function validateVerificationPlan(plan) {
@@ -43,7 +62,7 @@ export function validateVerificationPlan(plan) {
     if (!Array.isArray(entry.buck2_targets) || entry.buck2_targets.length === 0) fail('scheduled entry has no Buck targets');
     const targetSet = new Set();
     for (const target of entry.buck2_targets) {
-      if (typeof target !== 'string' || target.startsWith('root//') || !BUCK_LABEL.test(target) || targetSet.has(target)) fail('scheduled entry has malformed, root-qualified, or duplicate Buck target');
+      if (!isCanonicalBuckLabel(target) || targetSet.has(target)) fail('scheduled entry has malformed, root-qualified, traversal, or duplicate Buck target');
       targetSet.add(target);
     }
     if (!Array.isArray(entry.leaf_commands) || entry.leaf_commands.length !== 0) fail('scheduled entry has executable leaf commands outside this Buck-only executor');
@@ -100,18 +119,21 @@ function defaultListWorktrees(repo) {
   const porcelain = execFileSync('git', ['-C', repo, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' });
   return parseWorktreePorcelain(porcelain);
 }
-function defaultRun(command, worktree) {
+function defaultRun(command, worktree, activeChildren) {
   const [file, ...args] = command.argv;
-  const { BUCK_ISOLATION_DIR: _ignored, ...environment } = process.env;
+  const environment = { ...process.env };
+  for (const key of FORBIDDEN_WRAPPER_ENV) delete environment[key];
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, { cwd: worktree, stdio: 'inherit', env: environment });
+    activeChildren?.add(child);
     child.once('error', reject);
-    child.once('close', (status, signal) => resolve({ status, signal }));
+    child.once('close', (status, signal) => { activeChildren?.delete(child); resolve({ status, signal }); });
   });
 }
 function defaultToolDigest(worktree) { return hashBytes(readFileSync(path.join(worktree, 'tools/buck2'))); }
 function defaultPlatformFacts() { return { platform: process.platform, arch: process.arch, release: os.release() }; }
 function defaultMonotonicNow() { return Number(process.hrtime.bigint()); }
+function defaultResourceSnapshot() { return { fd: readdirSync('/dev/fd').length, rss_kb: process.resourceUsage().maxRSS }; }
 function defaultQueryMetadata(targets, worktree) {
   const query = `set(${targets.join(' ')})`;
   const output = execFileSync(path.join(worktree, 'tools/buck2'), ['uquery', '--json', '--output-attribute', '^labels$', query], { cwd: worktree, encoding: 'utf8' });
@@ -146,14 +168,29 @@ export function verifyPlanAgainstAuthority(suppliedPlan, authority, runPlanner) 
   if (!isPlainObject(recomputed) || hashJson(recomputed) !== hashJson(suppliedPlan)) fail('supplied fanout plan differs from the exact recomputed authority plan');
   return recomputed;
 }
+export function verifyPlanBytes(suppliedBytes, recomputedPlan) {
+  const canonical = `${JSON.stringify(recomputedPlan)}\n`;
+  if (typeof suppliedBytes !== 'string' || suppliedBytes !== canonical) fail('supplied fanout plan bytes are noncanonical or differ from recomputation');
+  return recomputedPlan;
+}
 
 function resolveWorktree(sha, options) {
   const listed = options.listWorktrees();
-  if (listed?.path) return { selected: listed, candidates: [listed] };
+  if (!Array.isArray(listed)) fail('worktree discovery did not return a full porcelain array');
   const inspect = options.inspectWorktree;
   return selectCanonicalWorktree(listed, sha, (candidate) => {
     try { const state = inspect(candidate.path); return state.clean === true && state.head === sha; } catch { return false; }
   });
+}
+export async function terminateActiveChildren(children) {
+  const waiting = [];
+  for (const child of children) {
+    if (child.exitCode == null && child.signalCode == null) {
+      child.kill('SIGTERM');
+      waiting.push(new Promise((resolve) => child.once('close', resolve)));
+    }
+  }
+  await Promise.allSettled(waiting);
 }
 function recheckWorktree(worktree, sha, inspect) {
   const state = inspect(worktree);
@@ -161,16 +198,32 @@ function recheckWorktree(worktree, sha, inspect) {
 }
 function readBuildReport(reportPath, receiptRoot) {
   requireDirectory(receiptRoot, reportPath);
-  if (!existsSync(reportPath)) fail('Buck call produced no build report');
+  if (!existsSync(reportPath) || lstatSync(reportPath).isSymbolicLink()) fail('Buck call produced no safe build report');
   const bytes = readFileSync(reportPath);
   if (bytes.length === 0) fail('Buck call produced an empty build report');
   return hashBytes(bytes);
 }
+function validateResourceVectors(plan, entries) {
+  const budgets = plan.policy?.resource_budgets;
+  if (budgets === undefined) return;
+  if (!isPlainObject(budgets)) fail('resource budget authority is malformed');
+  const totals = Object.fromEntries(RESOURCE_KEYS.map((key) => [key, 0]));
+  for (const key of RESOURCE_KEYS) if (!Number.isInteger(budgets[key]) || budgets[key] < 0) fail('resource budget authority is malformed');
+  for (const entry of entries) {
+    if (!isPlainObject(entry.resources)) fail('scheduled cohort lacks full resource vector');
+    for (const key of RESOURCE_KEYS) {
+      if (!Number.isInteger(entry.resources[key]) || entry.resources[key] < 0) fail('scheduled cohort has malformed resource vector');
+      totals[key] += entry.resources[key];
+    }
+  }
+  for (const key of RESOURCE_KEYS) if (totals[key] > budgets[key]) fail(`scheduled cohorts exceed ${key} budget`);
+}
 
 /** Execute admitted cohorts within the planner's declared bounded cold-Rust capacity. */
 export async function executeVerificationQueue(plan, supplied = {}) {
-  if (process.env.BUCK_ISOLATION_DIR || process.env.MNT_BUCK_NEEDS_POSTGRES_ISOLATION_DIR) fail('inherited Buck isolation is forbidden for compatible exact-SHA cohorts');
+  if (FORBIDDEN_WRAPPER_ENV.some((key) => process.env[key] !== undefined)) fail('wrapper-affecting environment is forbidden for compatible exact-SHA cohorts');
   const entries = validateVerificationPlan(plan);
+  validateResourceVectors(plan, entries);
   const options = {
     receiptRoot: supplied.receiptRoot ?? path.join(process.cwd(), '.tmp/console-verification'),
     listWorktrees: supplied.listWorktrees ?? (() => defaultListWorktrees(process.cwd())),
@@ -180,20 +233,32 @@ export async function executeVerificationQueue(plan, supplied = {}) {
     platformFacts: supplied.platformFacts ?? defaultPlatformFacts,
     monotonicNow: supplied.monotonicNow ?? defaultMonotonicNow,
     queryMetadata: supplied.queryMetadata ?? defaultQueryMetadata,
+    resourceSnapshot: supplied.resourceSnapshot ?? defaultResourceSnapshot,
   };
-  const receiptRoot = path.resolve(options.receiptRoot);
+  const receiptRoot = canonicalizeReceiptRoot(options.receiptRoot);
+  if (existsSync(receiptRoot)) fail('local receipt root already exists; refusing to mix or overwrite evidence');
+  const stagingRoot = requireDirectory(path.dirname(receiptRoot), `${receiptRoot}.staging-${process.pid}`);
+  if (existsSync(stagingRoot)) fail('local receipt staging root already exists');
+  mkdirSync(stagingRoot, { recursive: true, mode: 0o700 });
   const declaredCapacity = plan.policy?.cold_rust_compile_lanes;
   const maxCohorts = supplied.maxCohorts ?? declaredCapacity ?? 1;
   if (!Number.isInteger(maxCohorts) || maxCohorts < 1 || (declaredCapacity !== undefined && (!Number.isInteger(declaredCapacity) || maxCohorts > declaredCapacity))) fail('max cohorts exceeds declared cold-Rust capacity');
+  let peakFd = 0; let peakRssKb = 0;
+  const activeChildren = new Set(); let interrupted = null;
+  const interrupt = (signal) => { interrupted ??= signal; void terminateActiveChildren(activeChildren); };
+  process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
+  const sampleResources = () => {
+    const sample = options.resourceSnapshot();
+    if (!Number.isInteger(sample?.fd) || sample.fd < 0 || !Number.isInteger(sample?.rss_kb) || sample.rss_kb < 0) fail('resource telemetry is malformed');
+    peakFd = Math.max(peakFd, sample.fd); peakRssKb = Math.max(peakRssKb, sample.rss_kb); return sample;
+  };
   const runEntry = async (entry) => {
     const selection = resolveWorktree(entry.verification_sha, options);
     const worktree = selection.selected.path;
     recheckWorktree(worktree, entry.verification_sha, options.inspectWorktree);
     const partition = partitionTargetsByMetadata(entry.buck2_targets, options.queryMetadata(entry.buck2_targets, worktree));
     const identity = hashJson({ verification_sha: entry.verification_sha, targets: entry.buck2_targets, buck2_sha256: options.toolDigest(worktree), execution_platform: options.platformFacts() });
-    const finalDirectory = requireDirectory(receiptRoot, path.join(receiptRoot, entry.verification_sha, identity));
-    if (existsSync(finalDirectory)) fail('local receipt already exists for exact verification identity');
-    const staging = requireDirectory(receiptRoot, path.join(receiptRoot, `.staging-${process.pid}-${identity}`));
+    const staging = requireDirectory(stagingRoot, path.join(stagingRoot, entry.verification_sha, identity));
     mkdirSync(staging, { recursive: true, mode: 0o700 });
     try {
       const commands = buildVerificationCommands(entry, worktree, staging, partition);
@@ -201,18 +266,17 @@ export async function executeVerificationQueue(plan, supplied = {}) {
       for (const command of commands) {
         recheckWorktree(worktree, entry.verification_sha, options.inspectWorktree);
         const started = options.monotonicNow();
-        const execution = await options.run(command, worktree);
+        const resourceStart = sampleResources();
+        const execution = await options.run(command, worktree, activeChildren);
         const ended = options.monotonicNow();
-        if (execution.status !== 0 || execution.signal) fail(`${command.kind} Buck call failed`);
-        calls.push({ kind: command.kind, targets: command.targets, argv: command.argv, started_monotonic_ns: started, ended_monotonic_ns: ended, exit_status: execution.status, build_report_sha256: readBuildReport(command.reportPath, receiptRoot) });
+        const resourceEnd = sampleResources();
+        if (interrupted || execution.status !== 0 || execution.signal) fail(`${command.kind} Buck call failed or was interrupted`);
+        calls.push({ kind: command.kind, targets: command.targets, argv: command.argv, started_monotonic_ns: started, ended_monotonic_ns: ended, exit_status: execution.status, resource_start: resourceStart, resource_end: resourceEnd, build_report_sha256: readBuildReport(command.reportPath, stagingRoot) });
       }
       const receipt = stable({ schema_version: 'console-verification-receipt-v1', status: 'passed', verification_sha: entry.verification_sha, cache_affinity: entry.cache_affinity, execution: entry.execution, verification_identity_sha256: identity, selected_worktree: worktree, candidate_worktrees: selection.candidates.map((candidate) => candidate.path), target_partition: partition, buck2_sha256: options.toolDigest(worktree), execution_platform: options.platformFacts(), isolation_absent: true, calls });
       writeFileSync(path.join(staging, 'receipt.json'), `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
-      mkdirSync(path.dirname(finalDirectory), { recursive: true, mode: 0o700 });
-      renameSync(staging, finalDirectory);
-      return { verification_sha: entry.verification_sha, receipt_path: path.join(finalDirectory, 'receipt.json') };
+      return { verification_sha: entry.verification_sha, receipt_relative_path: path.relative(stagingRoot, path.join(staging, 'receipt.json')), worktree, tool_digest: options.toolDigest(worktree) };
     } catch (error) {
-      rmSync(staging, { recursive: true, force: true });
       throw error;
     }
   };
@@ -223,10 +287,22 @@ export async function executeVerificationQueue(plan, supplied = {}) {
       try { results.push(await runEntry(entry)); } finally { activeCohorts -= 1; }
     }
   });
-  await Promise.all(workers);
+  const outcomes = await Promise.allSettled(workers);
+  process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
+  await terminateActiveChildren(activeChildren);
+  const rejected = outcomes.find((outcome) => outcome.status === 'rejected');
+  if (rejected) { rmSync(stagingRoot, { recursive: true, force: true }); throw rejected.reason; }
+  for (const receipt of results) {
+    recheckWorktree(receipt.worktree, receipt.verification_sha, options.inspectWorktree);
+    if (options.toolDigest(receipt.worktree) !== receipt.tool_digest) { rmSync(stagingRoot, { recursive: true, force: true }); fail('selected Buck tool changed after cohort execution'); }
+  }
+  renameSync(stagingRoot, receiptRoot);
   const ordered = results.sort((left, right) => left.verification_sha.localeCompare(right.verification_sha, 'en'));
+  for (const receipt of ordered) { receipt.receipt_path = path.join(receiptRoot, receipt.receipt_relative_path); delete receipt.receipt_relative_path; delete receipt.worktree; delete receipt.tool_digest; }
   Object.defineProperty(ordered, 'peak_cohorts', { value: peakCohorts, enumerable: false });
   Object.defineProperty(ordered, 'max_cohorts', { value: maxCohorts, enumerable: false });
+  Object.defineProperty(ordered, 'peak_fd', { value: peakFd, enumerable: false });
+  Object.defineProperty(ordered, 'peak_rss_kb', { value: peakRssKb, enumerable: false });
   return ordered;
 }
 
@@ -262,11 +338,11 @@ function recomputePlan(authority) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) { process.stdout.write('usage: node scripts/console/run-verification-queue.mjs --plan <fanout-plan.json> --candidate <sha> --authority-tip <sha> --synthetic-merge <sha> [--admission <sha>] [--receipt-root <ignored-local-dir>] [--max-cohorts <1..declared>]\n'); return; }
-  const plan = JSON.parse(readFileSync(args.planPath, 'utf8'));
+  const planBytes = readFileSync(args.planPath, 'utf8'); const plan = JSON.parse(planBytes);
   const authority = { candidate: args.candidate, authorityTip: args.authorityTip, syntheticMerge: args.syntheticMerge, admission: args.admission };
-  const canonicalPlan = verifyPlanAgainstAuthority(plan, authority, recomputePlan);
+  const canonicalPlan = recomputePlan(authority); verifyPlanAgainstAuthority(plan, authority, () => canonicalPlan); verifyPlanBytes(planBytes, canonicalPlan);
   const receipts = await executeVerificationQueue(canonicalPlan, { receiptRoot: args.receiptRoot, maxCohorts: args.maxCohorts ?? undefined });
-  process.stdout.write(`${JSON.stringify({ status: 'passed', max_cohorts: receipts.max_cohorts, peak_cohorts: receipts.peak_cohorts, receipts })}\n`);
+  process.stdout.write(`${JSON.stringify({ status: 'passed', max_cohorts: receipts.max_cohorts, peak_cohorts: receipts.peak_cohorts, peak_fd: receipts.peak_fd, peak_rss_kb: receipts.peak_rss_kb, receipts })}\n`);
 }
 if (import.meta.url === new URL(process.argv[1], 'file:').href) {
   main().catch((error) => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });

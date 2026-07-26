@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -14,6 +14,7 @@ import {
   selectCanonicalWorktree,
   validateVerificationPlan,
   verifyPlanAgainstAuthority,
+  verifyPlanBytes,
 } from './run-verification-queue.mjs';
 
 const SHA = 'a'.repeat(40);
@@ -38,6 +39,8 @@ test('admission rejects malformed or non-executable verification cohorts', () =>
     { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry({ cache_affinity: OTHER_SHA })] },
     { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry({ buck2_targets: [] })] },
     { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry({ buck2_targets: ['/absolute:target'] })] },
+    { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry({ buck2_targets: ['//../outside:target'] })] },
+    { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry({ buck2_targets: ['cell//a/../../outside:target'] })] },
     { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry({ buck2_targets: ['root//tools/buck:app-example-postgres'] })] },
     { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry({ leaf_commands: ['git diff --check'] })] },
     { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry(), queueEntry()] },
@@ -57,12 +60,29 @@ test('clean matching worktree selection is canonical and rejects absent or dirty
   assert.throws(() => selectCanonicalWorktree(parsed, OTHER_SHA, () => true), /no clean exact-HEAD/);
 });
 
+test('singleton worktree listings still use canonical selection rather than bypassing cleanliness checks', async () => {
+  await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, {
+    listWorktrees: () => [{ path: '/only', head: SHA }], inspectWorktree: () => ({ clean: false, head: SHA }),
+  }), /no clean exact-HEAD/);
+});
+
+test('active children receive SIGTERM and are awaited during interruption cleanup', async () => {
+  const { terminateActiveChildren } = await import('./run-verification-queue.mjs');
+  let killed = 0; let waited = 0;
+  const child = { exitCode: null, kill: (signal) => { assert.equal(signal, 'SIGTERM'); killed += 1; }, once: (event, callback) => { assert.equal(event, 'close'); waited += 1; callback(); } };
+  await terminateActiveChildren(new Set([child]));
+  assert.equal(killed, 1); assert.equal(waited, 1);
+});
+
 test('a supplied JSON plan is held unless it exactly matches explicit immutable authority recomputation', () => {
   const authority = { candidate: SHA, authorityTip: OTHER_SHA, syntheticMerge: 'c'.repeat(40), admission: 'd'.repeat(40) };
   const plan = { schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] };
   assert.equal(verifyPlanAgainstAuthority(plan, authority, () => structuredClone(plan)).schema_version, plan.schema_version);
   assert.throws(() => verifyPlanAgainstAuthority(plan, authority, () => ({ ...plan, verification_queue: [] })), /differs/);
   assert.throws(() => verifyPlanAgainstAuthority(plan, { ...authority, candidate: 'bad' }, () => plan), /immutable SHA/);
+  const canonical = `${JSON.stringify(plan)}\n`;
+  assert.equal(verifyPlanBytes(canonical, plan).schema_version, plan.schema_version);
+  assert.throws(() => verifyPlanBytes(`${JSON.stringify({ verification_queue: plan.verification_queue, schema_version: plan.schema_version })}\n`, plan), /noncanonical/);
 });
 
 test('command construction uses exact metadata rather than a path heuristic and never serializes Buck compilation', async () => {
@@ -90,7 +110,7 @@ test('execution writes a digest-bound receipt only after every combined call suc
     const calls = [];
     const result = await executeVerificationQueue(plan, {
       receiptRoot: reportRoot,
-      listWorktrees: () => selected,
+      listWorktrees: () => [selected],
       inspectWorktree: () => ({ clean: true, head: SHA }),
       toolDigest: () => 'c'.repeat(64),
       platformFacts: () => ({ os: 'test', arch: 'test' }),
@@ -119,7 +139,7 @@ test('failed calls leave no successful or partial receipt behind', async () => {
     const reportRoot = path.join(root, 'reports');
     await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, {
       receiptRoot: reportRoot,
-      listWorktrees: () => ({ path: '/canonical/repo', head: SHA }),
+      listWorktrees: () => [{ path: '/canonical/repo', head: SHA }],
       inspectWorktree: () => ({ clean: true, head: SHA }),
       toolDigest: () => 'c'.repeat(64),
       platformFacts: () => ({ os: 'test', arch: 'test' }),
@@ -128,6 +148,35 @@ test('failed calls leave no successful or partial receipt behind', async () => {
       monotonicNow: () => 1,
     }));
     assert.equal(requireNoReceipts(reportRoot), true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('wrapper-affecting environment is a fail-closed admission boundary', async () => {
+  const saved = Object.fromEntries(['MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK', 'MNT_BUCK_NEEDS_POSTGRES_TEST_EXACT'].map((key) => [key, process.env[key]]));
+  try {
+    for (const key of Object.keys(saved)) {
+      process.env[key] = 'forged';
+      await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, { listWorktrees: () => [{ path: '/repo', head: SHA }], inspectWorktree: () => ({ clean: true, head: SHA }) }), /wrapper-affecting environment/);
+      delete process.env[key];
+    }
+  } finally {
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+test('a later cohort failure publishes no earlier cohort receipt', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'queue-global-atomic-'));
+  try {
+    const other = queueEntry({ verification_sha: OTHER_SHA, cache_affinity: OTHER_SHA });
+    const worktrees = [{ path: '/repo-a', head: SHA }, { path: '/repo-b', head: OTHER_SHA }];
+    let call = 0;
+    await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', policy: { cold_rust_compile_lanes: 1 }, verification_queue: [queueEntry(), other] }, {
+      receiptRoot: path.join(root, 'reports'), listWorktrees: () => worktrees,
+      inspectWorktree: (candidate) => ({ clean: true, head: worktrees.find((worktree) => worktree.path === candidate).head }), toolDigest: () => 'c'.repeat(64), platformFacts: () => ({}), monotonicNow: () => 1,
+      queryMetadata: () => ({ 'root//backend/crates/example:unit': { labels: [] }, 'root//tools/buck:app-example-postgres': { labels: ['needs-postgres'] } }),
+      run: (command) => { call += 1; writeFileSync(command.reportPath, 'report\n'); return { status: call === 3 ? 1 : 0, signal: null }; },
+    }));
+    assert.equal(existsSync(path.join(root, 'reports')), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
