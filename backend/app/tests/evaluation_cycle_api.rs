@@ -1077,7 +1077,7 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
         .unwrap();
     let task_router = router.clone();
     let task_token = f.subject.clone();
-    let mut tasks = tokio::spawn(async move {
+    let tasks = tokio::spawn(async move {
         send(
             &task_router,
             "GET",

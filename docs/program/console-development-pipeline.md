@@ -2,8 +2,8 @@
 
 ## Authority and scope
 
-Status: active development-pipeline authority  
-Effective date: 2026-07-25  
+Status: active development-pipeline authority
+Effective date: 2026-07-25
 Product scope: the B2B SaaS Console only
 
 This document governs how Console work is planned, implemented, reviewed,
