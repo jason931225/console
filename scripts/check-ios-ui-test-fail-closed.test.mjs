@@ -94,7 +94,7 @@ describe("iOS hermetic UI CI contract", () => {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("timeout-minutes: 45", "timeout-minutes: 44") }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("timeout-minutes: 45", "timeout-minutes: 90") }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("fail-fast: false", "fail-fast: true") }), matrixGate);
-    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("max-parallel: 7", "max-parallel: 15") }), matrixGate);
+    expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("max-parallel: 5", "max-parallel: 15") }), matrixGate);
     for (const [shard, budget, invalidBudget] of [
       ["preflight-session", 60, 30],
       ["preflight-restore", 150, 120],

@@ -13,17 +13,8 @@ concurrency:
 jobs:
   ios-ui-tests:
     name: iOS — ${{ matrix.batch }} (Simulator)
-    # Seven independent GitHub-hosted workers, one per batch, keeping untrusted
-    # pull-request code away from reusable self-hosted macOS runners.
-    #
-    # max-parallel matches the batch count deliberately. At five it was the
-    # binding constraint on wall clock, not runner availability: measured on
-    # 56efbdf4, five batches started at t=0 and the remaining two at t+22min and
-    # t+24min, once the first wave drained. audit-adaptive is both the longest
-    # batch at 36 minutes and was last in that queue, so the run spent 61
-    # minutes delivering a 36-minute critical path. If the account's macOS
-    # concurrency cap is below seven the scheduler queues the remainder, which
-    # is exactly today's behaviour — this cannot be worse, only better.
+    # Five independent GitHub-hosted workers bound fanout while keeping
+    # untrusted pull-request code away from reusable self-hosted macOS runners.
     runs-on: macos-26
     # The largest batch has 840 seconds of shard watchdogs, each sized to the
     # duration that shard was measured to need rather than to a round number. A
@@ -32,7 +23,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 7
+      max-parallel: 5
       matrix:
         include:
           - batch: core

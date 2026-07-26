@@ -132,7 +132,7 @@ function hasCompleteFailSlowRuntimeBudget(job) {
   return Number(timeout[1]) === 45
     && maximumBatchSeconds === 840
     && maximumBatchSeconds + setupAndCleanupReserveSeconds <= 45 * 60
-    && /strategy:\s*\n[ ]{6}fail-fast:\s*false\s*\n[ ]{6}max-parallel:\s*7\b/.test(job)
+    && /strategy:\s*\n[ ]{6}fail-fast:\s*false\s*\n[ ]{6}max-parallel:\s*5\b/.test(job)
     && /read\s+-r\s+-a\s+SHARD_MANIFEST\s+<<<\s+"\$MNT_IOS_SHARD_BATCH"/.test(job)
     && /-parallel-testing-enabled\s+NO\b/.test(job);
 }
