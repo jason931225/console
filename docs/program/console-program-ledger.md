@@ -327,3 +327,6 @@ Candidate advanced to the commit adding `npm run verify`, a local mirror of the 
 
 ## CANDIDATE REBIND (2026-07-25, hardening fixture)
 Candidate advanced to the commit updating the production-hardening regression fixture. The backend topology step is pinned in three places — ci.yml, the checker constant, and the checker's own test fixture — so the `mnt_buck_admin` provisioning needed all three updated; missing the third turned the kubernetes-manifests job red. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, PR492 nullable Attendance resolution)
+Candidate advanced to signed commit `6d8dcb6c06bc4e8ed94db977c4e872e62ebf827a`, which correctly types the nullable numeric overtime-resolution bind and carries an exact credential-safe Buck2 PostgreSQL target receipt with 10/10 tests passing. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
