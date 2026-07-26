@@ -309,7 +309,14 @@ jobs:
     needs: preflight
     # Serial integration execution avoids cluster-global role mutation races;
     # retain enough headroom for the full workspace on a cold hosted runner.
-    timeout-minutes: 45
+    #
+    # 45 was sized for main's shape, where the job ran 34 min and the workspace
+    # suite alone was 25 of them. The disposable-PostgreSQL harness then added
+    # 13 per-invocation Docker bring-ups (2 Apalis + 11 guarded regressions) in
+    # front of it, and this branch carries considerably more code than main. At
+    # 45 the job would report a timeout instead of a test result -- an
+    # uninformative red that costs a full cycle to learn nothing.
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:18.4
