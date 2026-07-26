@@ -379,3 +379,6 @@ Candidate advanced to the commit updating the production-hardening regression fi
 
 ## CANDIDATE REBIND (2026-07-25, PR492 nullable Attendance resolution)
 Candidate advanced to signed commit `6d8dcb6c06bc4e8ed94db977c4e872e62ebf827a`, which correctly types the nullable numeric overtime-resolution bind and carries an exact credential-safe Buck2 PostgreSQL target receipt with 10/10 tests passing. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-25, PR492 hosted rustfmt normalization)
+Candidate advanced to signed commit `d8db5ff40724f321a234deef0ee6216e7124205c`, a formatting-only import normalization after exact hosted `cargo fmt` evidence. Runtime semantics are unchanged, so the prior credential-safe Buck2 PostgreSQL receipt of 10/10 tests remains applicable; no new runtime evidence is claimed. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
