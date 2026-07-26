@@ -106,14 +106,27 @@ class ExecutionTests(unittest.TestCase):
 
     @staticmethod
     def completed_runs() -> list[subprocess.CompletedProcess[str]]:
+        """Apalis harness targets, then the guarded 11, then the workspace suite.
+
+        The workspace sweep runs last on purpose: the gate's own exact receipts
+        are cheap and specific, so a broad suite failure must not bury them.
+        """
         specs = ExecutionTests.specs()
-        return [
-            subprocess.CompletedProcess(["buck"], 0, "", "")
-            for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
-        ] + [
-            subprocess.CompletedProcess(["buck"], 0, ExecutionTests.successful_output(name), "")
-            for _, name in specs
-        ]
+        return (
+            [
+                subprocess.CompletedProcess(["buck"], 0, "", "")
+                for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
+            ]
+            + [
+                subprocess.CompletedProcess(["buck"], 0, ExecutionTests.successful_output(name), "")
+                for _, name in specs
+            ]
+            + [subprocess.CompletedProcess(["cargo"], 0, "", "")]
+        )
+
+    @staticmethod
+    def workspace_call_index() -> int:
+        return len(gate.OPERATIONAL_SQLX_TARGETS[2:]) + len(ExecutionTests.specs())
 
     @staticmethod
     def specs() -> tuple[tuple[str, str], ...]:
@@ -184,9 +197,59 @@ class ExecutionTests(unittest.TestCase):
             with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=completed) as run_mock:
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
-        environment = run_mock.call_args.kwargs["env"]
-        for key in inherited:
-            self.assertNotIn(key, environment)
+        # Every harness invocation, not merely the last one. The workspace sweep
+        # is deliberately excluded: it is the one call that must keep the service
+        # URLs, and its own test asserts that.
+        harness_calls = [
+            call
+            for index, call in enumerate(run_mock.call_args_list)
+            if index != self.workspace_call_index()
+        ]
+        self.assertEqual(len(harness_calls), len(completed) - 1)
+        for call in harness_calls:
+            for key in inherited:
+                self.assertNotIn(key, call.kwargs["env"])
+
+    def test_runs_the_full_workspace_suite_skipping_only_harness_owned_tests(self) -> None:
+        """The gate's headline promise: it must not weaken the workspace run.
+
+        A rewrite once removed this invocation with no replacement anywhere in
+        CI, taking ~1,548 tests with it while the docstring still claimed
+        otherwise. This test is what makes that deletion loud.
+        """
+        with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=self.completed_runs()) as run_mock:
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
+
+        command = run_mock.call_args_list[self.workspace_call_index()].args[0]
+        self.assertEqual(command[:6], ["cargo", "test", "--locked", "--manifest-path", "backend/Cargo.toml", "--workspace"])
+        self.assertIn("--no-fail-fast", command)
+        self.assertIn("--test-threads=1", command)
+        skipped = [command[i + 1] for i, token in enumerate(command) if token == "--skip"]
+        expected = list(gate.HARNESS_OWNED_TESTS) + [t["name"] for t in valid_manifest()["guarded_tests"]]
+        self.assertEqual(skipped, expected)
+
+    def test_workspace_suite_keeps_the_service_database_url(self) -> None:
+        """`#[sqlx::test]` derives per-test databases from it; the harness must not."""
+        inherited = {"DATABASE_URL": "postgres://postgres@localhost:5432/mnt_ci"}
+        with patch.dict(os.environ, inherited, clear=False):
+            with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=self.completed_runs()) as run_mock:
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
+
+        workspace = run_mock.call_args_list[self.workspace_call_index()]
+        self.assertEqual(workspace.kwargs["env"]["DATABASE_URL"], inherited["DATABASE_URL"])
+        for index, call in enumerate(run_mock.call_args_list):
+            if index != self.workspace_call_index():
+                self.assertNotIn("DATABASE_URL", call.kwargs["env"])
+
+    def test_fails_when_the_workspace_suite_fails(self) -> None:
+        runs = self.completed_runs()
+        runs[self.workspace_call_index()] = subprocess.CompletedProcess(["cargo"], 101, "", "")
+        with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=runs):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                with self.assertRaisesRegex(gate.GateError, "workspace tests exited 101"):
+                    gate.execute(SCRIPT.parents[1])
 
     def test_fails_when_buck_harness_fails(self) -> None:
         completed = subprocess.CompletedProcess(["buck"], 19, "", "")
@@ -197,13 +260,17 @@ class ExecutionTests(unittest.TestCase):
     def test_accepts_receipts_replayed_by_the_buck_console_on_stderr(self) -> None:
         """CI's real delivery path: stdout empty, receipts on Buck2's stderr."""
         specs = self.specs()
-        completed = [
-            subprocess.CompletedProcess(["buck"], 0, "", "")
-            for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
-        ] + [
-            subprocess.CompletedProcess(["buck"], 0, "", self.buck_console_replay(name))
-            for _, name in specs
-        ]
+        completed = (
+            [
+                subprocess.CompletedProcess(["buck"], 0, "", "")
+                for _ in gate.OPERATIONAL_SQLX_TARGETS[2:]
+            ]
+            + [
+                subprocess.CompletedProcess(["buck"], 0, "", self.buck_console_replay(name))
+                for _, name in specs
+            ]
+            + [subprocess.CompletedProcess(["cargo"], 0, "", "")]
+        )
         with patch.object(gate, "resolved_target_metadata", return_value=self.metadata()), patch.object(gate, "run", side_effect=completed):
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 self.assertEqual(gate.execute(SCRIPT.parents[1]), 0)
