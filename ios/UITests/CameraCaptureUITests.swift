@@ -26,18 +26,34 @@ final class CameraCaptureUITests: FieldUITestCase {
             return
         }
 
-        let deny = ["Don’t Allow", "Don't Allow", "허용 안 함", "허용하지 않음"]
-            .lazy
-            .map { systemPermissionAlert.buttons[$0] }
-            .first { $0.exists }
-        guard let deny else {
-            XCTFail("The SpringBoard camera-permission prompt must expose an explicit denial control.")
-            return
+        // Deny every prompt SpringBoard raises, not just the first. A capture
+        // session can request more than one privacy scope, and `alerts.firstMatch`
+        // resolves to whichever prompt is on screen — so dismissing one and then
+        // asserting that no alert exists is a race the runner loses whenever the
+        // next prompt is already up. That is the observed flake: the query still
+        // matched an alert for the full five seconds after a successful tap.
+        let denialLabels = ["Don’t Allow", "Don't Allow", "허용 안 함", "허용하지 않음"]
+        var deniedPrompts = 0
+        let promptDeadline = Date().addingTimeInterval(30)
+        while Date() < promptDeadline {
+            let prompt = springboard.alerts.firstMatch
+            guard prompt.exists else { break }
+            guard let deny = denialLabels.lazy.map({ prompt.buttons[$0] }).first(where: { $0.exists }) else {
+                XCTFail("The SpringBoard privacy prompt must expose an explicit denial control.")
+                return
+            }
+            deny.tap()
+            deniedPrompts += 1
+            _ = prompt.waitForNonExistence(timeout: 5)
         }
-        deny.tap()
-        XCTAssertTrue(
-            systemPermissionAlert.waitForNonExistence(timeout: 5),
-            "The SpringBoard camera-permission alert must resolve before app-owned controls are used."
+        XCTAssertGreaterThanOrEqual(
+            deniedPrompts,
+            1,
+            "The reset camera-permission prompt must be denied through its owning process."
+        )
+        XCTAssertFalse(
+            springboard.alerts.firstMatch.exists,
+            "Every SpringBoard privacy alert must resolve before app-owned controls are used."
         )
 
         // The Simulator can deterministically reach a preview, a denied or
