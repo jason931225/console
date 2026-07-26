@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -35,6 +36,16 @@ SHA = re.compile(r"^[0-9a-f]{40}$")
 
 class PlannerError(RuntimeError):
     pass
+
+
+class PlanningFailure(PlannerError):
+    """A typed terminal failure that keeps already-recorded immutable receipts."""
+
+    def __init__(self, message: str, *, base_sha: str | None, candidate_sha: str | None, receipts: list[dict[str, Any]]):
+        super().__init__(message)
+        self.base_sha = base_sha
+        self.candidate_sha = candidate_sha
+        self.receipts = receipts
 
 
 def sha256(value: bytes | str) -> str:
@@ -129,6 +140,20 @@ def build_manifest(
 
 def encode_manifest(manifest: dict[str, Any]) -> str:
     return json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
+
+
+def failure_manifest(error: PlanningFailure) -> dict[str, Any]:
+    """Emit a machine-readable terminal receipt without turning failure into success."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "mode": "shadow_only",
+        "status": "failed",
+        "base_sha": error.base_sha,
+        "candidate_sha": error.candidate_sha,
+        "failure": {"kind": "planner_error", "message": str(error)},
+        "receipts": error.receipts[:MAX_RECEIPTS],
+        "truncated": {"receipts": len(error.receipts) > MAX_RECEIPTS},
+    }
 
 
 def run(repo: Path, args: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -239,29 +264,72 @@ def git_output(repo: Path, args: list[str], receipts: list[dict[str, Any]], name
     return result.stdout
 
 
+def configured_local_cells(config: str) -> dict[str, str]:
+    """Parse the local `[cells]` mapping without treating missing cells as equal.
+
+    Cell aliases and external cells do not define local configuration roots.
+    Values must remain repository-relative; any syntax this tiny parser cannot
+    prove safe is terminal rather than silently omitted from compatibility.
+    """
+    cells: dict[str, str] = {}
+    in_cells = False
+    for raw_line in config.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            in_cells = line == "[cells]"
+            continue
+        if not in_cells:
+            continue
+        name, separator, location = line.partition("=")
+        name, location = name.strip(), location.strip()
+        if not separator or not re.fullmatch(r"[A-Za-z0-9_.-]+", name) or not location:
+            raise PlannerError(f"unparseable local Buck cell declaration: {raw_line!r}")
+        path = Path(location)
+        if path.is_absolute() or ".." in path.parts:
+            raise PlannerError(f"local Buck cell {name} escapes the immutable repository")
+        normalized = path.as_posix()
+        if normalized == ".":
+            normalized = "."
+        cells[name] = normalized
+    if not cells:
+        raise PlannerError("immutable .buckconfig declares no local Buck cells")
+    return dict(sorted(cells.items()))
+
+
 def graph_digest(repo: Path, revision: str, receipts: list[dict[str, Any]]) -> dict[str, Any]:
     listing = git_output(repo, ["ls-tree", "-r", revision], receipts, f"graph-inputs-{revision[:12]}")
     graph_lines = []
     config_lines = []
-    config_blobs: list[dict[str, str]] = []
+    objects_by_path: dict[str, str] = {}
     for line in listing.splitlines():
         try:
             metadata, path = line.split("\t", 1)
         except ValueError:
             continue
-        if path == ".buckconfig" or path == "tools/buck2" or path.startswith(("toolchains/", "prelude/")):
+        fields = metadata.split()
+        if len(fields) == 3 and fields[1] == "blob" and re.fullmatch(r"[0-9a-f]{40,64}", fields[2]):
+            objects_by_path[path] = fields[2]
+        if path in {".buckconfig", "tools/buck2"}:
             config_lines.append(line)
-            fields = metadata.split()
-            if len(fields) != 3 or fields[1] != "blob" or not re.fullmatch(r"[0-9a-f]{40,64}", fields[2]):
-                raise PlannerError(f"invalid immutable configuration object for {path}")
-            config_blobs.append({"path": path, "object_id": fields[2]})
         if Path(path).name == "BUCK" or path.endswith(".bzl") or path in {".buckconfig", "tools/buck2"}:
             graph_lines.append(line)
+    config = git_output(repo, ["show", f"{revision}:.buckconfig"], receipts, f"buck-cell-config-{revision[:12]}")
+    cells = configured_local_cells(config)
+    cell_buck_ids = []
+    for cell, location in cells.items():
+        buck_path = "BUCK" if location == "." else f"{location}/BUCK"
+        cell_buck_ids.append({"cell": cell, "path": buck_path, "object_id": objects_by_path.get(buck_path)})
     manifest = git_output(repo, ["show", f"{revision}:tools/buck2"], receipts, f"pinned-buck-manifest-{revision[:12]}")
     return {
         "revision": revision,
         "configuration_sha256": sha256("\n".join(sorted(config_lines))),
-        "configuration_blob_ids": sorted(config_blobs, key=lambda item: item["path"]),
+        "configuration_blob_ids": [
+            {"path": path, "object_id": objects_by_path[path]} for path in sorted({".buckconfig", "tools/buck2"})
+            if path in objects_by_path
+        ],
+        "configured_cell_buck_ids": cell_buck_ids,
         "target_definition_sha256": sha256("\n".join(sorted(graph_lines))),
         "pinned_buck_manifest_sha256": sha256(manifest),
     }
@@ -329,27 +397,21 @@ def buck_probe(worktree: Path, revision: str, receipts: list[dict[str, Any]]) ->
 
 
 def ignored_scratch_root(repo: Path) -> Path:
-    """Return the only permitted archive extraction root for this repository.
-
-    Keeping snapshots beneath an ignored path makes cleanup observable to Git:
-    a failed cleanup cannot be mistaken for product input, while a caller cannot
-    redirect immutable materialization into an arbitrary host directory.
-    """
-    configured = os.environ.get("BUCK_IMPACT_SCRATCH_ROOT")
-    root = Path(configured) if configured else repo / ".tmp" / "buck-impact-shadow"
-    if not root.is_absolute():
-        root = repo / root
-    root = root.resolve()
+    """Use Buck's watcher-ignored output boundary for all archive snapshots."""
+    helper_path = Path(__file__).resolve().parents[1] / "snapshot_root.py"
+    spec = importlib.util.spec_from_file_location("buck_snapshot_root", helper_path)
+    if spec is None or spec.loader is None:
+        raise PlannerError("Buck snapshot-root helper is unavailable")
+    helper = importlib.util.module_from_spec(spec)
     try:
-        relative = root.relative_to(repo.resolve())
-    except ValueError as error:
-        raise PlannerError("impact scratch root must be inside the repository and Git-ignored") from error
-    if not relative.parts:
-        raise PlannerError("impact scratch root must not be the repository root")
+        spec.loader.exec_module(helper)
+        root = helper.root_for(
+            repo,
+            os.environ.get("MNT_BUCK_IMPACT_SCRATCH_ROOT", "buck-out/buck-impact-snapshots"),
+        )
+    except (OSError, ValueError) as error:
+        raise PlannerError(f"invalid Buck output snapshot root: {error}") from error
     root.mkdir(parents=True, exist_ok=True)
-    ignored = run(repo, ["check-ignore", "-q", "--", relative.as_posix()])
-    if ignored.returncode != 0:
-        raise PlannerError("impact scratch root is not Git-ignored")
     return root
 
 
@@ -360,7 +422,7 @@ def extract_archive(archive: Path, destination: Path) -> None:
             path = Path(member.name)
             if path.is_absolute() or ".." in path.parts:
                 raise PlannerError(f"immutable archive contains unsafe path: {member.name!r}")
-            if member.isdev() or member.isfifo():
+            if member.isdev() or member.isfifo() or member.issym() or member.islnk():
                 raise PlannerError(f"immutable archive contains unsupported special entry: {member.name!r}")
         tar.extractall(destination)
 
@@ -375,7 +437,7 @@ def candidate_archive_snapshot(repo: Path, candidate: str, receipts: list[dict[s
     previous_handlers: dict[int, Any] = {}
 
     def terminate(signum: int, _frame: Any) -> None:
-        raise SystemExit(128 + signum)
+        raise PlannerError(f"planner interrupted by signal {signum}")
 
     try:
         snapshot.mkdir(mode=0o700)
@@ -429,42 +491,52 @@ def candidate_archive_snapshot(repo: Path, candidate: str, receipts: list[dict[s
 
 
 def plan(repo: Path, base: str, candidate: str) -> dict[str, Any]:
-    require_clean_repository(repo)
-    base = require_commit(repo, base, "base")
-    candidate = require_commit(repo, candidate, "candidate")
+    raw_base, raw_candidate = base, candidate
     receipts: list[dict[str, Any]] = []
-    base_identity = graph_digest(repo, base, receipts)
-    candidate_identity = graph_digest(repo, candidate, receipts)
-    paths = changed_paths(repo, base, candidate, receipts)
-    config_compatible = (
-        base_identity["configuration_blob_ids"] == candidate_identity["configuration_blob_ids"]
-        and base_identity["pinned_buck_manifest_sha256"] == candidate_identity["pinned_buck_manifest_sha256"]
-    )
+    try:
+        require_clean_repository(repo)
+        base = require_commit(repo, base, "base")
+        candidate = require_commit(repo, candidate, "candidate")
+        base_identity = graph_digest(repo, base, receipts)
+        candidate_identity = graph_digest(repo, candidate, receipts)
+        paths = changed_paths(repo, base, candidate, receipts)
+        config_compatible = (
+            base_identity["configuration_blob_ids"] == candidate_identity["configuration_blob_ids"]
+            and base_identity["configured_cell_buck_ids"] == candidate_identity["configured_cell_buck_ids"]
+            and base_identity["pinned_buck_manifest_sha256"] == candidate_identity["pinned_buck_manifest_sha256"]
+        )
 
-    with candidate_archive_snapshot(repo, candidate, receipts) as candidate_snapshot:
-        candidate_cell, universe = buck_probe(candidate_snapshot, candidate, receipts)
-    # Configuration identity comes from immutable Git objects.  When the
-    # relevant blobs are equal, candidate's immutable cell map is necessarily
-    # the base map; when they differ, the conservative full-universe fallback
-    # does not need a second Buck daemon merely to prove it is conservative.
-    if config_compatible:
-        base_cell: dict[str, Any] = candidate_cell
-        base_cell_source = "candidate_probe_equal_configuration"
-    else:
-        base_cell = {"status": "not_probed_incompatible_configuration"}
-        base_cell_source = "not_probed_incompatible_configuration"
-    return build_manifest(
-        base_sha=base,
-        candidate_sha=candidate,
-        changed_paths=paths,
-        config_compatible=config_compatible,
-        universe=universe,
-        receipts=receipts,
-        graph_identity={
-            "base": {**base_identity, "cell_map": base_cell, "cell_map_source": base_cell_source},
-            "candidate": {**candidate_identity, "cell_map": candidate_cell, "cell_map_source": "candidate_immutable_archive_probe"},
-        },
-    )
+        with candidate_archive_snapshot(repo, candidate, receipts) as candidate_snapshot:
+            candidate_cell, universe = buck_probe(candidate_snapshot, candidate, receipts)
+        # Configuration identity comes from immutable Git objects.  When the
+        # relevant blobs are equal, candidate's immutable cell map is necessarily
+        # the base map; when they differ, the conservative full-universe fallback
+        # does not need a second Buck daemon merely to prove it is conservative.
+        if config_compatible:
+            base_cell: dict[str, Any] = candidate_cell
+            base_cell_source = "candidate_probe_equal_configuration"
+        else:
+            base_cell = {"status": "not_probed_incompatible_configuration"}
+            base_cell_source = "not_probed_incompatible_configuration"
+        return build_manifest(
+            base_sha=base,
+            candidate_sha=candidate,
+            changed_paths=paths,
+            config_compatible=config_compatible,
+            universe=universe,
+            receipts=receipts,
+            graph_identity={
+                "base": {**base_identity, "cell_map": base_cell, "cell_map_source": base_cell_source},
+                "candidate": {**candidate_identity, "cell_map": candidate_cell, "cell_map_source": "candidate_immutable_archive_probe"},
+            },
+        )
+    except PlannerError as error:
+        raise PlanningFailure(
+            str(error),
+            base_sha=base if SHA.fullmatch(base) else raw_base if SHA.fullmatch(raw_base) else None,
+            candidate_sha=candidate if SHA.fullmatch(candidate) else raw_candidate if SHA.fullmatch(raw_candidate) else None,
+            receipts=receipts,
+        ) from error
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -482,7 +554,12 @@ def main(argv: list[str] | None = None) -> int:
         else:
             sys.stdout.write(encoded)
         return 0
-    except PlannerError as error:
+    except PlanningFailure as error:
+        encoded = encode_manifest(failure_manifest(error))
+        if args.output:
+            args.output.write_text(encoded, encoding="utf-8")
+        else:
+            sys.stdout.write(encoded)
         print(f"buck-impact-plan: {error}", file=sys.stderr)
         return 1
 
