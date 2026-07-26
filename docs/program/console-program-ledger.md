@@ -321,3 +321,6 @@ Candidate advanced to the commit withdrawing the previous rebind's workspace res
 
 ## CANDIDATE REBIND (2026-07-25, dev-auth suites re-identified)
 Candidate advanced to the commit running the dev-auth suites as `mnt_buck_admin`. Fixing the PR 473 gate exposed the next casualty of migration 0196 one run later: two direct-Cargo commands were still connecting as the `postgres` service account, which 0196 forbids from applying migrations, so every test there died before asserting. CI now provisions the required superuser identity and exports `MNT_BUCK_ADMIN_DATABASE_URL`; verified locally at 15/15 and 1/1 against the exact suites CI failed. This also corrects the previous rebind's claim that the workspace sweep was impossible — it is merely un-run, and now cheap to restore. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, local CI mirror)
+Candidate advanced to the commit adding `npm run verify`, a local mirror of the preflight, backend and kubernetes-manifests jobs, checked against `ci.yml` on every run so it fails closed when it drifts. It also carries the `check:production-hardening` constant update: that gate pins the exact text of the backend topology step, so the `mnt_buck_admin` provisioning added in the previous candidate turned the kubernetes-manifests and Trivy IaC jobs red. All records re-bind and remain HOLD.
