@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -137,6 +137,32 @@ test('a post-command promotion signal and a post-staging failure leave no publis
     await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, { ...common, receiptRoot: failRoot, resourceSnapshot: () => ({ fd: -1, rss_kb: 1 }) }), /telemetry/);
     assert.equal(existsSync(failRoot), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('promotion refuses and preserves a receipt root created by a concurrent publisher', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'queue-promotion-race-'));
+  const receiptRoot = path.join(root, 'reports');
+  let foreignInode;
+  try {
+    await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, {
+      receiptRoot,
+      listWorktrees: () => [{ path: '/repo', head: SHA }],
+      inspectWorktree: () => ({ clean: true, head: SHA }),
+      toolDigest: () => 'c'.repeat(64),
+      platformFacts: () => ({}),
+      monotonicNow: () => 1,
+      queryMetadata: () => ({ 'root//backend/crates/example:unit': { labels: [] }, 'root//tools/buck:app-example-postgres': { labels: ['needs-postgres'] } }),
+      run: (command) => { writeFileSync(command.reportPath, 'ok\n'); return { status: 0, signal: null }; },
+      beforePromotion: () => {
+        mkdirSync(receiptRoot);
+        foreignInode = statSync(receiptRoot).ino;
+      },
+    }), /receipt root appeared before promotion/);
+    assert.equal(statSync(receiptRoot).ino, foreignInode);
+    assert.deepEqual(readdirSync(receiptRoot), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('resource-aware scheduling serializes conflicting PostgreSQL cohorts instead of rejecting their total', async () => {

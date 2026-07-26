@@ -336,6 +336,7 @@ export async function executeVerificationQueue(plan, supplied = {}) {
   options.beforePromotion();
   assertSafeReceiptTree(stagingRoot);
   if (interrupted) fail('verification queue was interrupted before receipt promotion');
+  if (existsSync(receiptRoot)) fail('local receipt root appeared before promotion; refusing to overwrite or mix evidence');
   renameSync(stagingRoot, receiptRoot);
   promoted = true;
   const ordered = results.sort((left, right) => left.verification_sha.localeCompare(right.verification_sha, 'en'));
