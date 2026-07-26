@@ -15,6 +15,7 @@ import {
   validateVerificationPlan,
   verifyPlanAgainstAuthority,
   verifyPlanBytes,
+  readBuildReport,
 } from './run-verification-queue.mjs';
 
 const SHA = 'a'.repeat(40);
@@ -94,6 +95,31 @@ test('a signal sentinel prevents publication even when a runner reports success'
       run: (command) => { process.emit('SIGINT'); writeFileSync(command.reportPath, 'ok\n'); return { status: 0, signal: null }; },
     }), /interrupted/);
     assert.equal(existsSync(path.join(root, 'reports')), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('atomic report reads reject a symlink replacement before consuming its bytes', () => {
+  let closed = false;
+  assert.throws(() => readBuildReport('/receipts/report.json', '/receipts', {
+    open: () => { const error = new Error('symlink'); error.code = 'ELOOP'; throw error; }, stat: () => { throw new Error('unreachable'); }, read: () => { throw new Error('unreachable'); }, close: () => { closed = true; },
+  }), /symbolic link/);
+  assert.equal(closed, false);
+  const digest = readBuildReport('/receipts/report.json', '/receipts', {
+    open: () => 7, stat: () => ({ isFile: () => true, size: 2 }), read: (_fd, buffer, offset) => { buffer.write('ok', offset); return 2; }, close: () => { closed = true; },
+  });
+  assert.equal(digest, createHash('sha256').update('ok').digest('hex')); assert.equal(closed, true);
+});
+
+test('a post-command promotion signal and a post-staging failure leave no published receipt root', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'queue-promotion-'));
+  const common = { listWorktrees: () => [{ path: '/repo', head: SHA }], inspectWorktree: () => ({ clean: true, head: SHA }), toolDigest: () => 'c'.repeat(64), platformFacts: () => ({}), monotonicNow: () => 1, queryMetadata: () => ({ 'root//backend/crates/example:unit': { labels: [] }, 'root//tools/buck:app-example-postgres': { labels: ['needs-postgres'] } }), run: (command) => { writeFileSync(command.reportPath, 'ok\n'); return { status: 0, signal: null }; } };
+  try {
+    const signalRoot = path.join(root, 'signal');
+    await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, { ...common, receiptRoot: signalRoot, beforePromotion: () => process.emit('SIGTERM') }), /interrupted/);
+    assert.equal(existsSync(signalRoot), false);
+    const failRoot = path.join(root, 'failure');
+    await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, { ...common, receiptRoot: failRoot, resourceSnapshot: () => ({ fd: -1, rss_kb: 1 }) }), /telemetry/);
+    assert.equal(existsSync(failRoot), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

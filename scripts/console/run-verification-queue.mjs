@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -196,12 +196,21 @@ function recheckWorktree(worktree, sha, inspect) {
   const state = inspect(worktree);
   if (state.head !== sha || state.clean !== true) fail('selected worktree changed, is dirty, or no longer matches verification SHA');
 }
-function readBuildReport(reportPath, receiptRoot) {
+export function readBuildReport(reportPath, receiptRoot, io = {}) {
   requireDirectory(receiptRoot, reportPath);
-  if (!existsSync(reportPath) || lstatSync(reportPath).isSymbolicLink()) fail('Buck call produced no safe build report');
-  const bytes = readFileSync(reportPath);
-  if (bytes.length === 0) fail('Buck call produced an empty build report');
-  return hashBytes(bytes);
+  const open = io.open ?? openSync; const stat = io.stat ?? fstatSync; const read = io.read ?? readSync; const close = io.close ?? closeSync;
+  let descriptor;
+  try {
+    descriptor = open(reportPath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    const metadata = stat(descriptor);
+    if (!metadata.isFile() || metadata.size < 1) fail('Buck call produced no safe build report');
+    const bytes = Buffer.alloc(metadata.size); let offset = 0;
+    while (offset < bytes.length) { const count = read(descriptor, bytes, offset, bytes.length - offset, offset); if (count <= 0) fail('Buck call build report changed while being read'); offset += count; }
+    return hashBytes(bytes);
+  } catch (error) {
+    if (String(error?.code) === 'ELOOP') fail('Buck call build report may not be a symbolic link');
+    throw error;
+  } finally { if (descriptor !== undefined) close(descriptor); }
 }
 function assertSafeReceiptTree(root) {
   const stat = lstatSync(root);
@@ -242,6 +251,7 @@ export async function executeVerificationQueue(plan, supplied = {}) {
     monotonicNow: supplied.monotonicNow ?? defaultMonotonicNow,
     queryMetadata: supplied.queryMetadata ?? defaultQueryMetadata,
     resourceSnapshot: supplied.resourceSnapshot ?? defaultResourceSnapshot,
+    beforePromotion: supplied.beforePromotion ?? (() => {}),
   };
   const receiptRoot = canonicalizeReceiptRoot(options.receiptRoot);
   const declaredCapacity = plan.policy?.cold_rust_compile_lanes;
@@ -315,6 +325,7 @@ export async function executeVerificationQueue(plan, supplied = {}) {
   }
   if (interrupted) fail('verification queue was interrupted before receipt promotion');
   writeFileSync(path.join(stagingRoot, 'queue-receipt.json'), `${JSON.stringify(stable({ schema_version: 'console-verification-queue-receipt-v1', status: 'passed', cohorts: results.map((entry) => entry.verification_sha).sort(), max_cohorts: maxCohorts, orchestrator_peak_cohorts: peakCohorts, orchestrator_peak_fd: peakFd, orchestrator_peak_rss_kb: peakRssKb }))}\n`, { mode: 0o600, flag: 'wx' });
+  options.beforePromotion();
   assertSafeReceiptTree(stagingRoot);
   if (interrupted) fail('verification queue was interrupted before receipt promotion');
   renameSync(stagingRoot, receiptRoot);
