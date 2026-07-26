@@ -126,14 +126,31 @@ final class DynamicTypeRuntimeUITests: FieldUITestCase {
         let deadline = Date().addingTimeInterval(timeout)
         guard container.waitForExistence(timeout: min(timeout, 2)) else { return false }
 
+        // Stop on the condition the caller actually asserts. `isHittable` is
+        // satisfied by a row whose bottom edge is still clipped by the list, so
+        // this helper handed back a timestamp that then failed the caller's
+        // strict containment check. Positioning the message FOR that check is
+        // the helper's job; making it merely tappable is not enough.
         for _ in 0..<maxSwipes {
-            if body.exists, body.isHittable, timestamp.exists, timestamp.isHittable {
+            if messagePositioned(body: body, timestamp: timestamp, in: container) {
                 return true
             }
             guard Date() < deadline else { return false }
             container.swipeUp()
         }
-        return body.exists && body.isHittable && timestamp.exists && timestamp.isHittable
+        return messagePositioned(body: body, timestamp: timestamp, in: container)
+    }
+
+    private func messagePositioned(
+        body: XCUIElement,
+        timestamp: XCUIElement,
+        in container: XCUIElement
+    ) -> Bool {
+        guard body.exists, body.isHittable, timestamp.exists, timestamp.isHittable else {
+            return false
+        }
+        let bounds = container.frame
+        return visible(body.frame, in: bounds) && visible(timestamp.frame, in: bounds)
     }
 
     private func sameHorizontalBand(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
