@@ -417,6 +417,10 @@ function stepName(step) {
   return step.match(/^name: ([^\n]+)$/m)?.[1] ?? null;
 }
 
+function stepWorkingDirectory(step) {
+  return step.match(/^        working-directory: ([^\n]+)$/m)?.[1]?.trim() ?? null;
+}
+
 function hasOnlyExpectedCondition(step, expectedIf) {
   const conditions = [...step.matchAll(/^        if: ([^\n]+)$/gm)].map((match) => match[1]);
   return (expectedIf === null
@@ -433,6 +437,8 @@ function requireOrderedStepContracts(steps, contracts, job, failures) {
       .filter(({ step }) => stepName(step) === contract.name);
     if (matches.length !== 1
       || (contract.run !== undefined && runCommand(matches[0]?.step) !== contract.run)
+      || (contract.workingDirectory !== undefined
+        && stepWorkingDirectory(matches[0]?.step ?? "") !== contract.workingDirectory)
       || !hasOnlyExpectedCondition(matches[0]?.step ?? "", contract.if)) {
       failures.push(`${job} must preserve the locked fail-fast step multiset and failure semantics`);
       indexes.push(-1);
@@ -681,9 +687,15 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
             "//tools/buck:auth-rest-dev-auth-group-admin-postgres \\",
             "//tools/buck:provisioning-dev-principal-upsert-race-postgres",
           ].join("\n"),
+          workingDirectory: ".",
           if: failFastIf,
         },
-        { name: "Buck2 mnt-app unit suite", run: "env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit", if: failFastIf },
+        {
+          name: "Buck2 mnt-app unit suite",
+          run: "env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit",
+          workingDirectory: ".",
+          if: failFastIf,
+        },
         {
           name: "Buck2 mnt-app inline PostgreSQL suites",
           run: [
@@ -691,6 +703,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
             "//tools/buck:app-inline-postgres \\",
             "//tools/buck:app-dev-auth-persona-guard-postgres",
           ].join("\n"),
+          workingDirectory: ".",
           if: failFastIf,
         },
       ],

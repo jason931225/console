@@ -571,6 +571,7 @@ jobs:
           fi
 
       - name: Buck2 dev-auth feature PostgreSQL suites
+        working-directory: .
         # `dev-auth` is NOT in default features (proven above). These exact
         # feature-sensitive auth-rest and provisioning binaries run through
         # generator-owned Buck targets and the disposable role-topology harness;

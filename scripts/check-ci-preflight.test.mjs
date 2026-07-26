@@ -117,6 +117,22 @@ describe("CI preflight contract", () => {
     );
   });
 
+  it("requires backend Buck2 commands to run from the repository root", () => {
+    for (const stepName of [
+      "Buck2 dev-auth feature PostgreSQL suites",
+      "Buck2 mnt-app unit suite",
+      "Buck2 mnt-app inline PostgreSQL suites",
+    ]) {
+      expectFailure(
+        workflow.replace(
+          `      - name: ${stepName}\n        working-directory: .\n`,
+          `      - name: ${stepName}\n`,
+        ),
+        "backend must preserve the locked fail-fast step multiset and failure semantics",
+      );
+    }
+  });
+
   it("requires dev-up smoke to install pinned DotSlash before its indirect Buck2 build", () => {
     const devUp = workflow.indexOf("  dev-up-smoke:\n");
     const installStep =
