@@ -358,3 +358,6 @@ Candidate advanced to the commit restoring `cargo test --workspace` to the PR 47
 
 ## CANDIDATE REBIND (2026-07-25, backend timeout fitted to the restored suite)
 Candidate advanced to the commit raising the backend job timeout from 45 to 90 minutes. The 45 was sized for main's job shape before the disposable-PostgreSQL harness added 13 per-invocation Docker bring-ups ahead of the workspace suite; with the suite restored this branch extrapolates to roughly 70 minutes, so 45 would have reported a timeout instead of a test result. Nothing about what is executed changes. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, PR491 T8 forward base integration)
+Candidate advanced to signed merge `b01461c21b52e51eb00decef9110f09a9a1b3a32`, forward-integrating the advanced operational base into the T7 authority lineage and preserving the independently approved conflict resolutions across the authority ledger, CI, test, evidence, and attendance seams. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
