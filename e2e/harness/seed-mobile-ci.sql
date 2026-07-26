@@ -342,7 +342,16 @@ INSERT INTO messenger_messages (
     '00000000-0000-0000-0000-0000000000c1',
     '00000000-0000-0000-0000-0000000d0002',
     '다음 교대조에도 동일한 작업 맥락을 전달하겠습니다.',
-    now() - interval '1 minute',
+    -- The handoff sequence above stays backdated so it reads in order, but the
+    -- LAST message lands at `now()` for the same reason the audit profile's
+    -- single message does: threads display by last activity descending, and the
+    -- browser-persona thread seeded by db.sh has no messages at all, so its key
+    -- is pinned to the instant db.sh ran. Backdating the newest message here
+    -- made this thread's position depend on how much wall clock separated
+    -- seeding from the session mint — a minute's margin instead of the audit
+    -- profile's eight, but the same race, and one that only stays hidden while
+    -- setup is slow.
+    now(),
     '00000000-0000-0000-0000-0000000000a1'
   )
 ON CONFLICT (id) DO NOTHING;
