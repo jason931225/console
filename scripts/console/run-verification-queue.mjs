@@ -250,11 +250,13 @@ export async function executeVerificationQueue(plan, supplied = {}) {
   if (existsSync(receiptRoot)) fail('local receipt root already exists; refusing to mix or overwrite evidence');
   const stagingRoot = mkdtempSync(path.join(path.dirname(receiptRoot), `.console-verification-staging-${process.pid}-`));
   if (lstatSync(stagingRoot).isSymbolicLink()) { rmSync(stagingRoot, { recursive: true, force: true }); fail('local receipt staging root is a symbolic link'); }
-  let peakFd = 0; let peakRssKb = 0;
+  let promoted = false;
   const activeChildren = new Set(); let interrupted = null;
   const interrupt = (signal) => { interrupted ??= signal; void terminateActiveChildren(activeChildren); };
   const onSigint = () => interrupt('SIGINT'); const onSigterm = () => interrupt('SIGTERM');
   process.once('SIGINT', onSigint); process.once('SIGTERM', onSigterm);
+  try {
+  let peakFd = 0; let peakRssKb = 0;
   const sampleResources = () => {
     const sample = options.resourceSnapshot();
     if (!Number.isInteger(sample?.fd) || sample.fd < 0 || !Number.isInteger(sample?.rss_kb) || sample.rss_kb < 0) fail('resource telemetry is malformed');
@@ -304,19 +306,19 @@ export async function executeVerificationQueue(plan, supplied = {}) {
     outcomes.push(...await Promise.allSettled(batch.map((entry) => runEntry(entry)))); activeCohorts = 0;
     if (outcomes.some((outcome) => outcome.status === 'rejected')) break;
   }
-  process.removeListener('SIGINT', onSigint); process.removeListener('SIGTERM', onSigterm);
-  await terminateActiveChildren(activeChildren);
   const rejected = outcomes.find((outcome) => outcome.status === 'rejected');
-  if (rejected) { rmSync(stagingRoot, { recursive: true, force: true }); throw rejected.reason; }
+  if (rejected) throw rejected.reason;
   results.push(...outcomes.map((outcome) => outcome.value));
   for (const receipt of results) {
     recheckWorktree(receipt.worktree, receipt.verification_sha, options.inspectWorktree);
-    if (options.toolDigest(receipt.worktree) !== receipt.tool_digest) { rmSync(stagingRoot, { recursive: true, force: true }); fail('selected Buck tool changed after cohort execution'); }
+    if (options.toolDigest(receipt.worktree) !== receipt.tool_digest) fail('selected Buck tool changed after cohort execution');
   }
-  if (interrupted) { rmSync(stagingRoot, { recursive: true, force: true }); fail('verification queue was interrupted before receipt promotion'); }
+  if (interrupted) fail('verification queue was interrupted before receipt promotion');
+  writeFileSync(path.join(stagingRoot, 'queue-receipt.json'), `${JSON.stringify(stable({ schema_version: 'console-verification-queue-receipt-v1', status: 'passed', cohorts: results.map((entry) => entry.verification_sha).sort(), max_cohorts: maxCohorts, orchestrator_peak_cohorts: peakCohorts, orchestrator_peak_fd: peakFd, orchestrator_peak_rss_kb: peakRssKb }))}\n`, { mode: 0o600, flag: 'wx' });
   assertSafeReceiptTree(stagingRoot);
-  if (interrupted) { rmSync(stagingRoot, { recursive: true, force: true }); fail('verification queue was interrupted before receipt promotion'); }
+  if (interrupted) fail('verification queue was interrupted before receipt promotion');
   renameSync(stagingRoot, receiptRoot);
+  promoted = true;
   const ordered = results.sort((left, right) => left.verification_sha.localeCompare(right.verification_sha, 'en'));
   for (const receipt of ordered) { receipt.receipt_path = path.join(receiptRoot, receipt.receipt_relative_path); delete receipt.receipt_relative_path; delete receipt.worktree; delete receipt.tool_digest; }
   Object.defineProperty(ordered, 'peak_cohorts', { value: peakCohorts, enumerable: false });
@@ -324,6 +326,11 @@ export async function executeVerificationQueue(plan, supplied = {}) {
   Object.defineProperty(ordered, 'orchestrator_peak_fd', { value: peakFd, enumerable: false });
   Object.defineProperty(ordered, 'orchestrator_peak_rss_kb', { value: peakRssKb, enumerable: false });
   return ordered;
+  } finally {
+    process.removeListener('SIGINT', onSigint); process.removeListener('SIGTERM', onSigterm);
+    await terminateActiveChildren(activeChildren);
+    if (!promoted) rmSync(stagingRoot, { recursive: true, force: true });
+  }
 }
 
 function parseArgs(argv) {

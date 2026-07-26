@@ -158,6 +158,10 @@ test('execution writes a digest-bound receipt only after every combined call suc
     assert.equal(receipt.calls.length, 2);
     assert.equal(receipt.calls[0].build_report_sha256, createHash('sha256').update('report-1\n').digest('hex'));
     assert.equal(receipt.isolation_absent, true);
+    const queueReceipt = JSON.parse(readFileSync(path.join(reportRoot, 'queue-receipt.json'), 'utf8'));
+    assert.equal(queueReceipt.status, 'passed');
+    assert.equal(queueReceipt.orchestrator_peak_cohorts, 1);
+    assert.ok(Number.isInteger(queueReceipt.orchestrator_peak_fd));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
