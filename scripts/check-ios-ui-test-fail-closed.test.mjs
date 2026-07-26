@@ -682,18 +682,18 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
         fieldViews,
         `ZStack(alignment: .leading) {
-                            if viewModel.messengerDraft.isEmpty {
-                                Text("messenger_composer")
-                                    .foregroundStyle(.primary)
-                                    .accessibilityHidden(true)
-                                    .allowsHitTesting(false)
-                            }
-                            TextField("", text: $viewModel.messengerDraft, axis: .vertical)`,
+                    if viewModel.messengerDraft.isEmpty {
+                        Text("messenger_composer")
+                            .foregroundStyle(.primary)
+                            .accessibilityHidden(true)
+                            .allowsHitTesting(false)
+                    }
+                    TextField("", text: $viewModel.messengerDraft, axis: .vertical)`,
         `TextField(
-                            "",
-                            text: $viewModel.messengerDraft,
-                            prompt: Text("messenger_composer").foregroundStyle(.primary),
-                            axis: .vertical
+                    "",
+                    text: $viewModel.messengerDraft,
+                    prompt: Text("messenger_composer").foregroundStyle(.primary),
+                    axis: .vertical
                         )`,
       ),
     }), composerGate);
@@ -701,21 +701,21 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
         fieldViews,
         `Text("messenger_composer")
-                                    .foregroundStyle(.primary)
-                                    .accessibilityHidden(true)`,
+                            .foregroundStyle(.primary)
+                            .accessibilityHidden(true)`,
         `Text("messenger_composer")
-                                    .foregroundStyle(.secondary)
-                                    .accessibilityHidden(true)`,
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)`,
       ),
     }), composerGate);
     expectsFailure(evaluate({
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
         fieldViews,
         `Text("messenger_composer")
-                                    .foregroundStyle(.primary)
-                                    .accessibilityHidden(true)`,
+                            .foregroundStyle(.primary)
+                            .accessibilityHidden(true)`,
         `Text("messenger_composer")
-                                    .foregroundStyle(.primary)`,
+                            .foregroundStyle(.primary)`,
       ),
     }), composerGate);
     expectsFailure(evaluate({
@@ -728,17 +728,77 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
     expectsFailure(evaluate({
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
         fieldViews,
-        `.accessibilityHidden(true)\n                                    .allowsHitTesting(false)`,
-        `.accessibilityHidden(true)\n                                    .allowsHitTesting(true)`,
+        `.accessibilityHidden(true)\n                            .allowsHitTesting(false)`,
+        `.accessibilityHidden(true)\n                            .allowsHitTesting(true)`,
       ),
     }), composerGate);
     expectsFailure(evaluate({
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
         fieldViews,
-        `.accessibilityHidden(true)\n                                    .allowsHitTesting(false)`,
+        `.accessibilityHidden(true)\n                            .allowsHitTesting(false)`,
         `.accessibilityHidden(true)`,
       ),
     }), composerGate);
+  });
+  it("rejects a Messenger composer that is not a persistent gated sibling of the List", () => {
+    const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
+    const messengerTests = validFiles["ios/UITests/MessengerUITests.swift"];
+    const persistentGate = "selected-thread-gated opaque VStack sibling of the List";
+
+    // The send action returns to a row inside the lazy List — the exact defect.
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        "VStack(spacing: 0) {\n        List {",
+        "VStack(spacing: 0) {\n        List {\n            Button(\"x\") {}\n                .accessibilityIdentifier(FieldAccessibilityID.messengerSendButton)",
+      ),
+    }), persistentGate);
+
+    // Selected-thread gate removed: the bar would render with no thread open.
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        "if viewModel.messengerState.selectedThreadID != nil {\n                messengerComposerBar\n            }",
+        "messengerComposerBar",
+      ),
+    }), persistentGate);
+
+    // The List is no longer wrapped, so the bar is not a sibling of it.
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        "VStack(spacing: 0) {\n        List {",
+        "Group {\n        List {",
+      ),
+    }), persistentGate);
+
+    // The opaque surface keeping the primary action readable is removed.
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        ".background(Color.opaqueFieldNavigationBackground)",
+        ".background(Color.clear)",
+      ),
+    }), persistentGate);
+
+    // The List's modifiers drift onto the VStack: safeAreaInset(edge: .top)
+    // stops insetting a scroll view and silently becomes layout padding.
+    expectsFailure(evaluate({
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(
+        fieldViews,
+        "        .safeAreaInset(edge: .top, spacing: 0) {\n            if dynamicTypeSize == .accessibility5 {\n                Color.clear\n                    .frame(height: 56)\n                    .accessibilityHidden(true)\n            }\n        }\n            if viewModel.messengerState.selectedThreadID != nil {\n                messengerComposerBar\n            }",
+        "            if viewModel.messengerState.selectedThreadID != nil {\n                messengerComposerBar\n            }\n        .safeAreaInset(edge: .top, spacing: 0) {\n            if dynamicTypeSize == .accessibility5 {\n                Color.clear\n                    .frame(height: 56)\n                    .accessibilityHidden(true)\n            }\n        }",
+      ),
+    }), persistentGate);
+
+    // Tests scroll to reach the composer again, re-masking any regression.
+    expectsFailure(evaluate({
+      "ios/UITests/MessengerUITests.swift": mutateFile(
+        messengerTests,
+        "let composer = persistentComposer()\n        guard composer.waitForExistence(timeout: 15), waitUntilHittable(composer) else {",
+        "let composer = app.descendants(matching: .any)[AID.messengerComposerField]\n        guard scrollToMessengerElement(composer, topSentinel: thread) != nil else {",
+      ),
+    }), persistentGate);
   });
   it("rejects Messenger AX5 content suppression, missing vertical geometry, and translucent navigation chrome", () => {
     const fieldViews = validFiles["ios/Sources/MaintenanceFieldApp/FieldViews.swift"];
@@ -748,7 +808,7 @@ ${forbidden}` }), "every authenticated iOS tab must use the direct UIKit content
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, "struct MessengerThreadRow: View {\n    let thread: MessengerThread\n    let isSelected: Bool\n    @Environment(\\.dynamicTypeSize) private var dynamicTypeSize\n\n    var body: some View {\n        if dynamicTypeSize.isAccessibilitySize {", "struct MessengerThreadRow: View {\n    let thread: MessengerThread\n    let isSelected: Bool\n    @Environment(\\.dynamicTypeSize) private var dynamicTypeSize\n\n    var body: some View {\n        if dynamicTypeSize.isAccessibilitySize == false {"),
     }), ax5Gate);
     expectsFailure(evaluate({
-      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, "Color.opaqueFieldNavigationBackground", "Color.clear"),
+      "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".toolbarBackground(Color.opaqueFieldNavigationBackground, for: .navigationBar)", ".toolbarBackground(Color.clear, for: .navigationBar)"),
     }), ax5Gate);
     expectsFailure(evaluate({
       "ios/Sources/MaintenanceFieldApp/FieldViews.swift": mutateFile(fieldViews, ".toolbarBackground(.visible, for: .navigationBar)", ".toolbarBackground(.automatic, for: .navigationBar)"),

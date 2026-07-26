@@ -65,8 +65,10 @@ struct FieldAuthenticatedTabs: View {
                 }
             UnobscuredTabContent {
                 NavigationStack {
+                    // The identifier is attached to the List inside
+                    // MessengerTabView, whose body root is now a VStack; the
+                    // UI tests query it as a collection view.
                     MessengerTabView(viewModel: viewModel)
-                        .accessibilityIdentifier(FieldAccessibilityID.messengerTab)
                 }
             }
                 .tabItem {
@@ -755,6 +757,11 @@ struct MessengerTabView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // The composer/send bar is a sibling of the List, never a row inside
+        // it: the UIKit content-layout-guide host already excludes the tab bar
+        // from this content area, so the bottom child sits above it without an
+        // ad-hoc safe-area inset (which the tab-host seam deliberately forbids).
+        VStack(spacing: 0) {
         List {
             Section {
                 HStack {
@@ -867,34 +874,12 @@ struct MessengerTabView: View {
                             accessibilityIdentifier: FieldAccessibilityID.messengerMessageRow(message.id)
                         )
                     }
-                    HStack(alignment: .bottom) {
-                        // Native TextField prompts retain placeholder opacity
-                        // even with a primary foreground, which falls below
-                        // contrast requirements at accessibility text sizes.
-                        ZStack(alignment: .leading) {
-                            if viewModel.messengerDraft.isEmpty {
-                                Text("messenger_composer")
-                                    .foregroundStyle(.primary)
-                                    .accessibilityHidden(true)
-                                    .allowsHitTesting(false)
-                            }
-                            TextField("", text: $viewModel.messengerDraft, axis: .vertical)
-                                .lineLimit(2...5)
-                                .accessibilityLabel(Text("messenger_composer"))
-                                .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
-                        }
-                            .layoutPriority(1)
-                        Button {
-                            Task { await viewModel.sendMessengerMessage() }
-                        } label: {
-                            Label("messenger_send", systemImage: "paperplane.fill")
-                                .labelStyle(.iconOnly)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityLabel(Text("messenger_send"))
-                        .accessibilityIdentifier(FieldAccessibilityID.messengerSendButton)
-                    }
+                    // The composer and send action deliberately do NOT live here.
+                    // Inside this lazy List they were the last rows of the
+                    // message section, so a long thread scrolled the primary
+                    // message action off-screen and it was never materialized
+                    // for accessibility queries. They are now a persistent
+                    // sibling of this List; see `messengerComposerBar`.
                 } else {
                     Text("messenger_select_thread")
                         .accessibilityIdentifier(FieldAccessibilityID.messengerSelectThreadPrompt)
@@ -905,6 +890,12 @@ struct MessengerTabView: View {
                 Text(LocalizedStringKey(messageKey))
             }
         }
+        // These stay attached to the List, not the enclosing VStack. The tab
+        // identifier must land on the collection view the UI tests query, and
+        // `safeAreaInset(edge: .top)` only reserves a scroll-safe viewport when
+        // it insets a scroll view — on a VStack it degrades to ordinary layout
+        // padding above the whole stack, which looks identical at rest.
+        .accessibilityIdentifier(FieldAccessibilityID.messengerTab)
         .navigationTitle(Text("messenger_title"))
         // Messenger contains long, changing operational conversations. Keep the
         // navigation title and actions on an opaque semantic surface rather
@@ -918,6 +909,10 @@ struct MessengerTabView: View {
                 Color.clear
                     .frame(height: 56)
                     .accessibilityHidden(true)
+            }
+        }
+            if viewModel.messengerState.selectedThreadID != nil {
+                messengerComposerBar
             }
         }
         .toolbar {
@@ -946,6 +941,63 @@ struct MessengerTabView: View {
                 await viewModel.refreshMessenger()
             }
         }
+    }
+
+    /// Persistent composer and send action, presented as a sibling of the List
+    /// inside a `VStack` rather than as trailing rows of the lazy message List.
+    ///
+    /// Deliberately NOT a bottom safe-area inset: `hasUnobscuredTabContentHost`
+    /// forbids that construct anywhere in this file — it scans the raw source,
+    /// so even naming it here trips the gate — because the UIKit
+    /// `contentLayoutGuide` tab-host seam owns bottom insets. Do not "fix" this
+    /// to match a mental model of a bottom inset.
+    ///
+    /// Bindings, send semantics, accessibility identifiers, the contrast-safe
+    /// placeholder and its `allowsHitTesting(false)` are carried over verbatim
+    /// from the previous in-List rows; only the placement changed.
+    private var messengerComposerBar: some View {
+        VStack(spacing: 0) {
+            // Opaque semantic surface: scrolling message content must never
+            // alter the contrast of the primary action, and the floating tab
+            // bar must not obscure it.
+            Divider()
+            HStack(alignment: .bottom) {
+                // Native TextField prompts retain placeholder opacity
+                // even with a primary foreground, which falls below
+                // contrast requirements at accessibility text sizes.
+                ZStack(alignment: .leading) {
+                    if viewModel.messengerDraft.isEmpty {
+                        Text("messenger_composer")
+                            .foregroundStyle(.primary)
+                            .accessibilityHidden(true)
+                            .allowsHitTesting(false)
+                    }
+                    TextField("", text: $viewModel.messengerDraft, axis: .vertical)
+                        .lineLimit(2...5)
+                        .accessibilityLabel(Text("messenger_composer"))
+                        .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
+                }
+                    .layoutPriority(1)
+                Button {
+                    Task { await viewModel.sendMessengerMessage() }
+                } label: {
+                    Label("messenger_send", systemImage: "paperplane.fill")
+                        .labelStyle(.iconOnly)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text("messenger_send"))
+                .accessibilityIdentifier(FieldAccessibilityID.messengerSendButton)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        // Platform-neutral. This package also builds for macOS (Package.swift
+        // declares .macOS(.v14)) where `Color(_:)` resolves to Color(NSColor)
+        // and `.systemBackground` does not exist, so the bare UIKit literal
+        // fails the `ios-app` job's `swift build`. Every semantic surface in
+        // this file goes through an os-guarded helper for exactly this reason.
+        .background(Color.opaqueFieldNavigationBackground)
     }
 }
 

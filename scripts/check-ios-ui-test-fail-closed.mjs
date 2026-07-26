@@ -835,6 +835,70 @@ function hasScalableInlineMessengerSectionHeaders(files) {
     && !/headerProminence\s*\(/.test(messenger);
 }
 
+/** The brace-balanced `List { … }` block of a SwiftUI view body, or null. */
+function swiftListBlock(view) {
+  const start = view.indexOf("List {");
+  if (start < 0) return null;
+  let depth = 0;
+  for (let index = view.indexOf("{", start); index < view.length; index += 1) {
+    if (view[index] === "{") depth += 1;
+    else if (view[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return view.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * The Messenger composer and send action are the primary message controls. Kept
+ * as trailing rows of the lazy `List`, a long thread scrolled them off-screen and
+ * SwiftUI never materialized them, so accessibility queries burned their deadline
+ * before any interaction could happen.
+ *
+ * They must be a selected-thread-gated sibling of the List inside a `VStack`, not
+ * rows within it — and deliberately NOT a `safeAreaInset(edge: .bottom)`, which
+ * `hasUnobscuredTabContentHost` forbids in this file because the UIKit
+ * content-layout-guide seam already excludes the tab bar from the content area.
+ * The UI tests must assert both controls directly; scrolling to reach them would
+ * re-mask exactly this defect.
+ */
+function hasPersistentMessengerComposer(files) {
+  const views = stripSwiftCommentsAndStrings(files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "", false);
+  const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
+  // Comment-stripped: a future doc comment or XCTFail message naming an
+  // identifier must not trip the exactly-once rule below.
+  const tests = stripSwiftCommentsAndStrings(files["ios/UITests/MessengerUITests.swift"] ?? "", false);
+  const list = swiftListBlock(messenger);
+  if (!list) return false;
+  const outsideLazyList = !/messengerComposerField|messengerSendButton/.test(list);
+  const listWrappedInStack = /VStack\s*\(\s*spacing:\s*0\s*\)\s*\{\s*List\s*\{/.test(messenger);
+  const gatedSiblingBar = /if\s+viewModel\.messengerState\.selectedThreadID\s*!=\s*nil\s*\{\s*messengerComposerBar\s*\}/.test(messenger);
+  const noAdHocBottomInset = !/safeAreaInset\s*\(\s*edge:\s*\.bottom/.test(messenger);
+  // The List's own modifiers must stay attached to the List, not drift onto
+  // the enclosing VStack. `safeAreaInset(edge: .top)` only reserves a
+  // scroll-safe viewport when it insets a scroll view; on a VStack it
+  // silently degrades to layout padding that looks identical at rest. It
+  // must therefore appear BEFORE the gated composer sibling.
+  const insetAttachedToList = messenger.indexOf("safeAreaInset(edge: .top") >= 0
+    && messenger.indexOf("safeAreaInset(edge: .top")
+       < messenger.indexOf("selectedThreadID != nil");
+  const barCarriesBothControls = /private\s+var\s+messengerComposerBar:\s*some\s+View[\s\S]{0,2400}messengerComposerField[\s\S]{0,1200}messengerSendButton/.test(messenger);
+  const opaqueUnobscuredSurface = /private\s+var\s+messengerComposerBar:\s*some\s+View[\s\S]{0,2600}Divider\s*\(\s*\)[\s\S]{0,2200}\.background\s*\(\s*Color\.opaqueFieldNavigationBackground\s*\)/.test(messenger);
+  // Each control identifier may appear exactly once, inside its own accessor. A
+  // second occurrence means a test re-acquired the control by hand, which is how
+  // scrolling for it creeps back and re-masks this defect.
+  const composerIdUses = (tests.match(/messengerComposerField/g) ?? []).length;
+  const sendIdUses = (tests.match(/messengerSendButton/g) ?? []).length;
+  const directlyAsserted = composerIdUses === 1 && sendIdUses === 1
+    && /private\s+func\s+persistentComposer\s*\(\s*\)[\s\S]{0,200}messengerComposerField/.test(tests)
+    && /private\s+func\s+persistentSendButton\s*\(\s*\)[\s\S]{0,200}messengerSendButton/.test(tests)
+    && /persistentComposer\s*\(\s*\)[\s\S]{0,300}waitForExistence/.test(tests)
+    && /persistentSendButton\s*\(\s*\)[\s\S]{0,300}waitForExistence/.test(tests);
+  return outsideLazyList && listWrappedInStack && gatedSiblingBar && noAdHocBottomInset && insetAttachedToList
+    && barCarriesBothControls && opaqueUnobscuredSurface && directlyAsserted;
+}
+
 function hasContrastSafeMessengerComposerPlaceholder(files) {
   const views = files["ios/Sources/MaintenanceFieldApp/FieldViews.swift"] ?? "";
   const messenger = extractFunctionBody(views, /struct\s+MessengerTabView\b/) ?? "";
@@ -1473,7 +1537,10 @@ function hasDurableCriticalPathEvidence(files) {
   const withdraw = critical.indexOf("detailButton(AID.locationConsentWithdrawButton).tap()", grant);
   const locationRelaunches = (critical.match(/app\.terminate\(\)/g) ?? []).length;
 
-  const send = messenger.indexOf("AID.messengerSendButton");
+  // Anchor on the interaction, not the accessor declaration. Extracting
+  // `persistentSendButton()` moved the identifier literal above every test,
+  // so matching it no longer proves a send happened before the relaunch.
+  const send = messenger.indexOf("send.tap()");
   const messengerRelaunch = messenger.indexOf("app.terminate()", send);
   const reopenedThread = messenger.indexOf("openSeededThread()", messengerRelaunch);
   const persistedBody = messenger.indexOf("sentMessageBody", reopenedThread);
@@ -1577,6 +1644,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasAccessibilityIDParity(files), "iOS UI CI must mirror every FieldAccessibilityID static and dynamic identifier in UITests AID"]);
   checks.push([hasSectionScopedMessengerMessageRows(files), "iOS messenger search results and selected-thread messages must use section-scoped dynamic accessibility IDs"]);
   checks.push([hasScalableInlineMessengerSectionHeaders(files), "iOS Messenger thread and message sections must use scalable semantic in-row headers without pinned translucent section chrome"]);
+  checks.push([hasPersistentMessengerComposer(files), "iOS Messenger composer and send action must be a selected-thread-gated opaque VStack sibling of the List, never rows inside it and never an ad-hoc bottom safe-area inset, with UI tests asserting both controls directly rather than scrolling to reach them"]);
   checks.push([hasContrastSafeMessengerComposerPlaceholder(files), "iOS Messenger composer must use a primary-foreground semantic placeholder without native placeholder opacity"]);
   checks.push([hasAccessibleMessengerThreadAndNavigationContrast(files), "iOS Messenger AX5 must preserve complete adaptive thread content and an opaque visible navigation surface"]);
   checks.push([hasContrastStableCapsules(files), "iOS detail actions, status, attachment, and read-progress capsules must use explicit primary foregrounds on contrast-stable adaptive backgrounds"]);
