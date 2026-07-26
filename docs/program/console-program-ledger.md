@@ -346,3 +346,6 @@ Candidate advanced to signed source candidate `04ef8258398bb0c3ec995754434ae9b71
 
 ## CANDIDATE REBIND (2026-07-25, PR491 forward-only topology recovery)
 Candidate advanced to signed source candidate `bf9f2e12f87b5ba38508469a88e967ee7b9d2df7`, integrating the P0.2 single-candidate archive impact probe and the P0.3 one-archive/two-extract preflight. This forward-only authority topology recovery preserves every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state at `HOLD`; it makes no completion, deployment, release, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-25, PR491 T7 approved integration)
+Candidate advanced to signed source candidate `bdc52d46e6cd6edd962ae6a6a4b1c04152fb9011`, consolidating the T6 resource-aware verification queue and Evaluation repairs, the Attendance runtime-role amendment repair, the iOS cold-shard and report-feedback repair, and the clean-worktree receipt-parent and promotion-integrity repairs. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
