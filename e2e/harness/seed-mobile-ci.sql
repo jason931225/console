@@ -248,6 +248,14 @@ ON CONFLICT (thread_id, user_id) DO NOTHING;
 \if :accessibility_audit_one_row
 -- The audit profile deliberately has only the exact message selected by
 -- AccessibilityAuditUITests. Functional classes retain the full handoff sequence.
+--
+-- `now()` rather than a backdated timestamp, because threads display ordered by
+-- last activity descending. Backdating put this thread BEHIND the browser-persona
+-- threads seeded by db.sh at `now()`, so the fixture rendered third — exactly the
+-- coupling to "another scenario's ordering" this fixture was written to avoid.
+-- At accessibility text sizes a third row sits below the fold, and the AX5
+-- contract then measured scroll position instead of the row rendering it exists
+-- to check. The audited row must be the row on screen.
 INSERT INTO messenger_messages (
   id, thread_id, branch_id, sender_id, body, sent_at, org_id
 ) VALUES
@@ -257,7 +265,7 @@ INSERT INTO messenger_messages (
     '00000000-0000-0000-0000-0000000000c1',
     '00000000-0000-0000-0000-0000000d0003',
     'iOS CI 초기 메시지',
-    now() - interval '8 minutes',
+    now(),
     '00000000-0000-0000-0000-0000000000a1'
   )
 ON CONFLICT (id) DO NOTHING;
