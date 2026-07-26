@@ -367,3 +367,15 @@ Candidate advanced to the commit withdrawing the previous rebind's workspace res
 
 ## CANDIDATE REBIND (2026-07-25, PR491 T9 latest-base integration)
 Candidate advanced to signed merge `e9b923bcd17ce706131d7664d387fa7914a1ade5`, forward-integrating the latest operational base into the T8 authority lineage and preserving the independently approved conflict resolutions across the authority ledger and pipeline-correction seams. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-25, dev-auth suites re-identified)
+Candidate advanced to the commit running the dev-auth suites as `mnt_buck_admin`. Fixing the PR 473 gate exposed the next casualty of migration 0196 one run later: two direct-Cargo commands were still connecting as the `postgres` service account, which 0196 forbids from applying migrations, so every test there died before asserting. CI now provisions the required superuser identity and exports `MNT_BUCK_ADMIN_DATABASE_URL`; verified locally at 15/15 and 1/1 against the exact suites CI failed. This also corrects the previous rebind's claim that the workspace sweep was impossible — it is merely un-run, and now cheap to restore. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, local CI mirror)
+Candidate advanced to the commit adding `npm run verify`, a local mirror of the preflight, backend and kubernetes-manifests jobs, checked against `ci.yml` on every run so it fails closed when it drifts. It also carries the `check:production-hardening` constant update: that gate pins the exact text of the backend topology step, so the `mnt_buck_admin` provisioning added in the previous candidate turned the kubernetes-manifests and Trivy IaC jobs red. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, hardening fixture)
+Candidate advanced to the commit updating the production-hardening regression fixture. The backend topology step is pinned in three places — ci.yml, the checker constant, and the checker's own test fixture — so the `mnt_buck_admin` provisioning needed all three updated; missing the third turned the kubernetes-manifests job red. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, PR492 nullable Attendance resolution)
+Candidate advanced to signed commit `6d8dcb6c06bc4e8ed94db977c4e872e62ebf827a`, which correctly types the nullable numeric overtime-resolution bind and carries an exact credential-safe Buck2 PostgreSQL target receipt with 10/10 tests passing. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.

@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 use mnt_attendance_adapter_postgres::PgAttendanceStore;
 use mnt_attendance_application::{
-    AssignSubstitute, CallerScope, CancelSubstitution, ResolveException, SubstitutionCandidateQuery,
+    AssignSubstitute, CallerScope, CancelSubstitution, ResolveException,
+    SubstitutionCandidateQuery,
 };
 use mnt_attendance_domain::{ResolutionAction, SubstitutionWindow};
 use mnt_kernel_core::{AuditAction, AuditEvent, OrgId, TraceContext, UserId};
@@ -76,6 +77,95 @@ async fn assigned_substitution_cancels_through_runtime_adapter_using_migration_0
         .unwrap();
         assert_eq!(persisted.0, "CANCELLED");
         assert_eq!(persisted.1.as_deref(), Some("approved staffing change"));
+    })
+    .await;
+}
+
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn confirm_resolution_without_overtime_uses_a_typed_null_through_runtime_adapter(
+    owner_pool: PgPool,
+) {
+    scope_org(OrgId::knl(), async move {
+        let branch = seed_branch(
+            &owner_pool,
+            "attendance-confirm-no-overtime",
+            "operations",
+        )
+        .await;
+        let provisioner = seed_user(
+            &owner_pool,
+            "Employee Directory Provisioner",
+            "SUPER_ADMIN",
+            branch,
+        )
+        .await;
+        let actor = seed_user(&owner_pool, "Attendance Manager", "ADMIN", branch).await;
+        let employee =
+            seed_employee(&owner_pool, branch, provisioner, "Confirmed employee").await;
+        let exception_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO attendance_exceptions (id,org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) VALUES ($1,$2,$3,'LATE',$4,$5,$6,'verified arrival',$7,$8,$9)",
+        )
+        .bind(exception_id)
+        .bind(*OrgId::knl().as_uuid())
+        .bind(format!("AT-{exception_id}"))
+        .bind(employee)
+        .bind(*branch.as_uuid())
+        .bind(OffsetDateTime::now_utc().date())
+        .bind(*actor.as_uuid())
+        .bind(format!("confirm-no-overtime-{exception_id}"))
+        .bind("a".repeat(64))
+        .execute(&owner_pool)
+        .await
+        .unwrap();
+
+        let store = PgAttendanceStore::new(runtime_role_pool(&owner_pool).await);
+        let caller = CallerScope {
+            org_id: *OrgId::knl().as_uuid(),
+            user_id: *actor.as_uuid(),
+            branch_ids: vec![*branch.as_uuid()],
+            org_wide: false,
+        };
+        let resolved = store
+            .resolve_exception(
+                &caller,
+                ResolveException {
+                    exception_id,
+                    action: ResolutionAction::Confirm,
+                    reason: "verified arrival".to_owned(),
+                    linked_work_ref: None,
+                    overtime_minutes: None,
+                },
+            )
+            .await
+            .expect("CONFIRM without overtime must persist through the runtime adapter");
+
+        assert_eq!(resolved.id, exception_id);
+        assert_eq!(resolved.status, "RESOLVED");
+        assert_eq!(
+            resolved
+                .resolution
+                .expect("resolution must be returned")
+                .ot_hours,
+            None
+        );
+        let persisted: (String, Option<String>) = sqlx::query_as(
+            "SELECT status, ot_hours::text FROM attendance_exceptions e JOIN attendance_exception_resolutions r ON r.exception_id=e.id WHERE e.id=$1",
+        )
+        .bind(exception_id)
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(persisted.0, "RESOLVED");
+        assert_eq!(persisted.1, None);
+        let audits: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM audit_events WHERE action='attendance.exception.resolve' AND target_id=$1",
+        )
+        .bind(exception_id.to_string())
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(audits, 1, "resolve must retain its domain audit event");
     })
     .await;
 }

@@ -8,8 +8,9 @@ the CI service account (`postgres`) cannot satisfy it -- so a workspace-wide
 cargo run against that database cannot execute a single migration-applying test.
 Only the tests named below are carried here.
 
-Restoring workspace-wide coverage needs a harness-identity container, not a
-change to this file.  See H-8 in docs/program/false-green-gate-holes.md.
+Restoring workspace-wide coverage is a matter of running it as `mnt_buck_admin`
+(CI now provisions that role; see `MNT_BUCK_ADMIN_DATABASE_URL` in ci.yml), not
+a change to this file.  See H-8 in docs/program/false-green-gate-holes.md.
 """
 
 from __future__ import annotations
