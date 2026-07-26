@@ -169,7 +169,7 @@ export function verifyPlanAgainstAuthority(suppliedPlan, authority, runPlanner) 
   return recomputed;
 }
 export function verifyPlanBytes(suppliedBytes, recomputedPlan) {
-  const canonical = `${JSON.stringify(recomputedPlan)}\n`;
+  const canonical = `${JSON.stringify(recomputedPlan, null, 2)}\n`;
   if (typeof suppliedBytes !== 'string' || suppliedBytes !== canonical) fail('supplied fanout plan bytes are noncanonical or differ from recomputation');
   return recomputedPlan;
 }
@@ -203,27 +203,35 @@ function readBuildReport(reportPath, receiptRoot) {
   if (bytes.length === 0) fail('Buck call produced an empty build report');
   return hashBytes(bytes);
 }
+function assertSafeReceiptTree(root) {
+  const stat = lstatSync(root);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) fail('receipt staging tree is not a real directory');
+  for (const name of readdirSync(root)) {
+    const child = path.join(root, name); const childStat = lstatSync(child);
+    if (childStat.isSymbolicLink()) fail('receipt staging tree contains a symbolic link');
+    if (childStat.isDirectory()) assertSafeReceiptTree(child);
+  }
+}
 function validateResourceVectors(plan, entries) {
   const budgets = plan.policy?.resource_budgets;
   if (budgets === undefined) return;
   if (!isPlainObject(budgets)) fail('resource budget authority is malformed');
-  const totals = Object.fromEntries(RESOURCE_KEYS.map((key) => [key, 0]));
   for (const key of RESOURCE_KEYS) if (!Number.isInteger(budgets[key]) || budgets[key] < 0) fail('resource budget authority is malformed');
   for (const entry of entries) {
     if (!isPlainObject(entry.resources)) fail('scheduled cohort lacks full resource vector');
     for (const key of RESOURCE_KEYS) {
       if (!Number.isInteger(entry.resources[key]) || entry.resources[key] < 0) fail('scheduled cohort has malformed resource vector');
-      totals[key] += entry.resources[key];
+      if (entry.resources[key] > budgets[key]) fail(`scheduled cohort exceeds ${key} budget`);
     }
   }
-  for (const key of RESOURCE_KEYS) if (totals[key] > budgets[key]) fail(`scheduled cohorts exceed ${key} budget`);
+  return budgets;
 }
 
 /** Execute admitted cohorts within the planner's declared bounded cold-Rust capacity. */
 export async function executeVerificationQueue(plan, supplied = {}) {
   if (FORBIDDEN_WRAPPER_ENV.some((key) => process.env[key] !== undefined)) fail('wrapper-affecting environment is forbidden for compatible exact-SHA cohorts');
   const entries = validateVerificationPlan(plan);
-  validateResourceVectors(plan, entries);
+  const resourceBudgets = validateResourceVectors(plan, entries);
   const options = {
     receiptRoot: supplied.receiptRoot ?? path.join(process.cwd(), '.tmp/console-verification'),
     listWorktrees: supplied.listWorktrees ?? (() => defaultListWorktrees(process.cwd())),
@@ -246,7 +254,8 @@ export async function executeVerificationQueue(plan, supplied = {}) {
   let peakFd = 0; let peakRssKb = 0;
   const activeChildren = new Set(); let interrupted = null;
   const interrupt = (signal) => { interrupted ??= signal; void terminateActiveChildren(activeChildren); };
-  process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
+  const onSigint = () => interrupt('SIGINT'); const onSigterm = () => interrupt('SIGTERM');
+  process.once('SIGINT', onSigint); process.once('SIGTERM', onSigterm);
   const sampleResources = () => {
     const sample = options.resourceSnapshot();
     if (!Number.isInteger(sample?.fd) || sample.fd < 0 || !Number.isInteger(sample?.rss_kb) || sample.rss_kb < 0) fail('resource telemetry is malformed');
@@ -274,28 +283,38 @@ export async function executeVerificationQueue(plan, supplied = {}) {
         calls.push({ kind: command.kind, targets: command.targets, argv: command.argv, started_monotonic_ns: started, ended_monotonic_ns: ended, exit_status: execution.status, resource_start: resourceStart, resource_end: resourceEnd, build_report_sha256: readBuildReport(command.reportPath, stagingRoot) });
       }
       const receipt = stable({ schema_version: 'console-verification-receipt-v1', status: 'passed', verification_sha: entry.verification_sha, cache_affinity: entry.cache_affinity, execution: entry.execution, verification_identity_sha256: identity, selected_worktree: worktree, candidate_worktrees: selection.candidates.map((candidate) => candidate.path), target_partition: partition, buck2_sha256: options.toolDigest(worktree), execution_platform: options.platformFacts(), isolation_absent: true, calls });
-      writeFileSync(path.join(staging, 'receipt.json'), `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+      writeFileSync(path.join(staging, 'receipt.json'), `${JSON.stringify(receipt)}\n`, { mode: 0o600, flag: 'wx' });
       return { verification_sha: entry.verification_sha, receipt_relative_path: path.relative(stagingRoot, path.join(staging, 'receipt.json')), worktree, tool_digest: options.toolDigest(worktree) };
     } catch (error) {
       throw error;
     }
   };
   const pending = [...entries]; const results = []; let activeCohorts = 0; let peakCohorts = 0;
-  const workers = Array.from({ length: Math.min(maxCohorts, pending.length) }, async () => {
-    while (pending.length) {
-      const entry = pending.shift(); activeCohorts += 1; peakCohorts = Math.max(peakCohorts, activeCohorts);
-      try { results.push(await runEntry(entry)); } finally { activeCohorts -= 1; }
+  const available = () => Object.fromEntries(RESOURCE_KEYS.map((key) => [key, resourceBudgets?.[key] ?? Number.MAX_SAFE_INTEGER]));
+  const outcomes = [];
+  while (pending.length) {
+    const capacity = available(); const batch = [];
+    for (let index = 0; index < pending.length && batch.length < maxCohorts;) {
+      const entry = pending[index]; const resources = entry.resources ?? {};
+      if (RESOURCE_KEYS.every((key) => (resources[key] ?? 0) <= capacity[key])) {
+        pending.splice(index, 1); batch.push(entry); for (const key of RESOURCE_KEYS) capacity[key] -= resources[key] ?? 0;
+      } else index += 1;
     }
-  });
-  const outcomes = await Promise.allSettled(workers);
-  process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
+    if (!batch.length) { rmSync(stagingRoot, { recursive: true, force: true }); fail('no pending cohort fits the declared resource budget'); }
+    activeCohorts = batch.length; peakCohorts = Math.max(peakCohorts, activeCohorts);
+    outcomes.push(...await Promise.allSettled(batch.map((entry) => runEntry(entry)))); activeCohorts = 0;
+    if (outcomes.some((outcome) => outcome.status === 'rejected')) break;
+  }
+  process.removeListener('SIGINT', onSigint); process.removeListener('SIGTERM', onSigterm);
   await terminateActiveChildren(activeChildren);
   const rejected = outcomes.find((outcome) => outcome.status === 'rejected');
   if (rejected) { rmSync(stagingRoot, { recursive: true, force: true }); throw rejected.reason; }
+  results.push(...outcomes.map((outcome) => outcome.value));
   for (const receipt of results) {
     recheckWorktree(receipt.worktree, receipt.verification_sha, options.inspectWorktree);
     if (options.toolDigest(receipt.worktree) !== receipt.tool_digest) { rmSync(stagingRoot, { recursive: true, force: true }); fail('selected Buck tool changed after cohort execution'); }
   }
+  assertSafeReceiptTree(stagingRoot);
   renameSync(stagingRoot, receiptRoot);
   const ordered = results.sort((left, right) => left.verification_sha.localeCompare(right.verification_sha, 'en'));
   for (const receipt of ordered) { receipt.receipt_path = path.join(receiptRoot, receipt.receipt_relative_path); delete receipt.receipt_relative_path; delete receipt.worktree; delete receipt.tool_digest; }

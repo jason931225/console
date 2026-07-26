@@ -80,9 +80,37 @@ test('a supplied JSON plan is held unless it exactly matches explicit immutable 
   assert.equal(verifyPlanAgainstAuthority(plan, authority, () => structuredClone(plan)).schema_version, plan.schema_version);
   assert.throws(() => verifyPlanAgainstAuthority(plan, authority, () => ({ ...plan, verification_queue: [] })), /differs/);
   assert.throws(() => verifyPlanAgainstAuthority(plan, { ...authority, candidate: 'bad' }, () => plan), /immutable SHA/);
-  const canonical = `${JSON.stringify(plan)}\n`;
+  const canonical = `${JSON.stringify(plan, null, 2)}\n`;
   assert.equal(verifyPlanBytes(canonical, plan).schema_version, plan.schema_version);
   assert.throws(() => verifyPlanBytes(`${JSON.stringify({ verification_queue: plan.verification_queue, schema_version: plan.schema_version })}\n`, plan), /noncanonical/);
+});
+
+test('a signal sentinel prevents publication even when a runner reports success', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'queue-signal-'));
+  try {
+    await assert.rejects(() => executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', verification_queue: [queueEntry()] }, {
+      receiptRoot: path.join(root, 'reports'), listWorktrees: () => [{ path: '/repo', head: SHA }], inspectWorktree: () => ({ clean: true, head: SHA }), toolDigest: () => 'c'.repeat(64), platformFacts: () => ({}), monotonicNow: () => 1,
+      queryMetadata: () => ({ 'root//backend/crates/example:unit': { labels: [] }, 'root//tools/buck:app-example-postgres': { labels: ['needs-postgres'] } }),
+      run: (command) => { process.emit('SIGINT'); writeFileSync(command.reportPath, 'ok\n'); return { status: 0, signal: null }; },
+    }), /interrupted/);
+    assert.equal(existsSync(path.join(root, 'reports')), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('resource-aware scheduling serializes conflicting PostgreSQL cohorts instead of rejecting their total', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'queue-resource-'));
+  try {
+    const resources = { writer: 0, postgres: 1, browser: 0, ios: 0, graph: 0, cas: 0 };
+    const other = queueEntry({ verification_sha: OTHER_SHA, cache_affinity: OTHER_SHA, resources });
+    const worktrees = [{ path: '/repo-a', head: SHA }, { path: '/repo-b', head: OTHER_SHA }];
+    let active = 0; let peak = 0;
+    const receipts = await executeVerificationQueue({ schema_version: 'console-fanout-epoch-v2', policy: { cold_rust_compile_lanes: 2, resource_budgets: { writer: 2, postgres: 1, browser: 2, ios: 2, graph: 2, cas: 2 } }, verification_queue: [queueEntry({ resources }), other] }, {
+      receiptRoot: path.join(root, 'reports'), maxCohorts: 2, listWorktrees: () => worktrees, inspectWorktree: (candidate) => ({ clean: true, head: worktrees.find((item) => item.path === candidate).head }), toolDigest: () => 'c'.repeat(64), platformFacts: () => ({}), monotonicNow: () => 1,
+      queryMetadata: () => ({ 'root//backend/crates/example:unit': { labels: [] }, 'root//tools/buck:app-example-postgres': { labels: ['needs-postgres'] } }),
+      run: async (command) => { active += 1; peak = Math.max(peak, active); await new Promise((resolve) => setTimeout(resolve, 5)); writeFileSync(command.reportPath, 'ok\n'); active -= 1; return { status: 0, signal: null }; },
+    });
+    assert.equal(receipts.length, 2); assert.equal(peak, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('command construction uses exact metadata rather than a path heuristic and never serializes Buck compilation', async () => {
