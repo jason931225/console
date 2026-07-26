@@ -798,6 +798,13 @@ impl PgEvaluationStore {
         let org = current_org().map_err(KernelError::from)?;
         with_org_conn(&self.pool, org, move |tx| {
             Box::pin(async move {
+                // A task is an authorization result, not a cacheable view of
+                // a JWT claim. Lock the current user-to-employee relation in
+                // this request transaction before selecting SELF work so an
+                // unlink or relink cannot race the returned assignment.
+                let Some(actor_employee_id) = lock_actor_employee_id(tx, caller).await? else {
+                    return Ok(TaskPage { items: Vec::new() });
+                };
                 let rows = sqlx::query(
                     "SELECT s.id AS subject_id, c.id AS cycle_id, c.name AS cycle_name, \
                             c.due_date, s.employee_id, e.name AS employee_name, \
@@ -805,15 +812,14 @@ impl PgEvaluationStore {
                      FROM evaluation_subjects s \
                      JOIN evaluation_cycles c ON c.id = s.cycle_id AND c.stage = 'OPEN' \
                      JOIN employees e ON e.id = s.employee_id \
-                     JOIN users u ON u.id = $1 \
                      CROSS JOIN (VALUES ('SELF'), ('MANAGER')) AS k(kind) \
                      LEFT JOIN evaluation_reviews r ON r.subject_id = s.id AND r.kind = k.kind \
-                     WHERE u.employee_id IS NOT NULL \
-                       AND ((k.kind = 'SELF' AND s.employee_id = u.employee_id) \
-                         OR (k.kind = 'MANAGER' AND s.manager_user_id = $1)) \
+                     WHERE ((k.kind = 'SELF' AND s.employee_id = $1) \
+                         OR (k.kind = 'MANAGER' AND s.manager_user_id = $2)) \
                        AND (r.id IS NULL OR r.status = 'DRAFT') \
                      ORDER BY c.due_date, e.name, k.kind",
                 )
+                .bind(actor_employee_id)
                 .bind(*caller.as_uuid())
                 .fetch_all(tx.as_mut())
                 .await?;

@@ -1059,6 +1059,44 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
     .await
     .unwrap();
     assert_eq!(authored, 0, "unlinked actor must not author a review");
+
+    // Task discovery is an authorization result too. It must take the same
+    // update-conflicting canonical identity lock before deciding whether this
+    // caller has SELF work, so an unlink that wins the race cannot leak a
+    // stale task into the response.
+    link_user_employee(&pool, OrgId::knl(), f.subject_user_id, f.employee_a).await;
+    let mut task_unlink = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*f.subject_user_id.as_uuid())
+        .fetch_one(&mut *task_unlink)
+        .await
+        .unwrap();
+    let task_unlink_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *task_unlink)
+        .await
+        .unwrap();
+    let task_router = router.clone();
+    let task_token = f.subject.clone();
+    let mut tasks = tokio::spawn(async move {
+        send(
+            &task_router,
+            "GET",
+            "/api/v1/evaluation/my-tasks",
+            Some(&task_token),
+            None,
+        )
+        .await
+    });
+    await_actor_identity_lock_wait(&pool, task_unlink_pid).await;
+    sqlx::query("UPDATE users SET employee_id = NULL WHERE id = $1")
+        .bind(*f.subject_user_id.as_uuid())
+        .execute(&mut *task_unlink)
+        .await
+        .unwrap();
+    task_unlink.commit().await.unwrap();
+    let (status, task_page) = tasks.await.unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(task_page["items"], json!([]));
 }
 
 /// Synchronize on PostgreSQL's actual lock graph, not scheduler timing. The
