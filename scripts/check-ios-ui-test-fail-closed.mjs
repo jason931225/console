@@ -25,7 +25,7 @@ const expectedShardBudgets = new Map([
   ["accessibility-id-parity", 45],
   ["critical-today", 150],
   ["critical-report", 240],
-  ["critical-location", 150],
+  ["critical-location", 240],
   ["camera-capture", 150],
   ["messenger-render", 90],
   ["messenger-mutation", 180],
@@ -373,7 +373,10 @@ function hasValidLoopbackWebauthnPolicy(job, launcher) {
   const launch = matches[0]?.index ?? -1;
   const pidRead = activeJob.indexOf('BACKEND_PID="$(cat "$BACKEND_PID_FILE")"');
   const forbiddenLowLevelControls = /\b(?:E2E_AUTH_DIR|E2E_HTTP_ADDR|E2E_PORT_CONFLICT_MODE|E2E_COLDSTART_OTP|E2E_RP_ORIGIN|E2E_RP_ID)\b|e2e\/harness\/boot-backend\.sh/;
-  const approvedBackendStepSha256 = "59c3ac5fe61bcde3e38b6f2774a548520681dee9cd040e11904f809a1d342f2a";
+  // Reseal whenever the backend step legitimately changes; the pin exists to
+  // force that change through review, not to freeze the step. Last resealed to
+  // raise the critical-location shard budget 150 -> 240 seconds.
+  const approvedBackendStepSha256 = "f095d2b31d6671e9ac0f9b7006c5d7c56a034adca9ab509079fed391d15b06c8";
   const approvedLauncherSha256 = "a153fab32c9f4ca597605ec126d40e3bfc106c0ce17c368078e22c265ca9f1ad";
   const backendStepSha256 = createHash("sha256").update(backendStep).digest("hex");
   const launcherSha256 = createHash("sha256").update(launcher).digest("hex");

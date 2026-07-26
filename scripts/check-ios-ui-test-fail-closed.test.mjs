@@ -99,7 +99,7 @@ describe("iOS hermetic UI CI contract", () => {
       ["preflight-session", 60, 30],
       ["preflight-restore", 90, 120],
       ["critical-report", 240, 540],
-      ["critical-location", 150, 90],
+      ["critical-location", 240, 90],
       ["camera-capture", 150, 90],
       ["messenger-mutation", 180, 120],
     ]) {

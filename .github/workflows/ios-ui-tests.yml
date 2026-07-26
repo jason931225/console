@@ -31,6 +31,13 @@ jobs:
             shards: "critical-today camera-capture"
           - batch: critical-report
             shards: "critical-report"
+          # Its one test relaunches the app three times to prove every consent
+          # transition reads back from the real backend, and it is alone here,
+          # so no warm-up shard absorbs the cold XCTest/Simulator launch for it.
+          # Measured 105s and 127s passing, then 167s killed, against the old
+          # 150-second budget: normal runs sat 15% under the limit, so ordinary
+          # runner variance read as a product failure. Its 240 seconds now match
+          # critical-report, the other heavy single-batch critical worker.
           - batch: critical-location
             shards: "critical-location"
           # The first shard pays this worker's cold XCTest/Simulator launch.
@@ -317,7 +324,7 @@ jobs:
                 )
                 ;;
               critical-location)
-                SHARD_TIMEOUT_SECONDS=150
+                SHARD_TIMEOUT_SECONDS=240
                 SHARD_SELECTORS=(
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testLocationConsentTransitionsPersistThroughTheRealBackend
                 )
