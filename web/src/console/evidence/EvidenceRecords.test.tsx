@@ -217,6 +217,39 @@ describe("EvidenceRecords list truthfulness", () => {
     expect(screen.queryByText(T.hold.active)).toBeNull();
     expect(screen.queryByRole("button", { name: new RegExp(T.hold.active) })).toBeNull();
   });
+
+  it("keeps an opened object's authoritative detail when the user directory resolves late", async () => {
+    let resolveUsers: ((value: ApiResult) => void) | undefined;
+    const pendingUsers = new Promise<ApiResult>((resolve) => {
+      resolveUsers = resolve;
+    });
+    const wired = makeApi();
+    const wiredGet = wired.GET as unknown as (path: string, options?: unknown) => Promise<ApiResult>;
+    const GET = vi.fn((path: string, options?: unknown) =>
+      path === "/api/v1/users" ? pendingUsers : wiredGet(path, options),
+    );
+    const api = { GET, POST: vi.fn() } as unknown as ConsoleApiClient;
+
+    render(<EvidenceRecords api={api} sessionIncarnation="evidence-records-test" />);
+    await screen.findByText(heldWire.code);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: T.records.open(heldWire.code, heldWire.title) })[0],
+    );
+    const detail = await screen.findByLabelText(T.detailAria(heldWire.code));
+    expect(within(detail).getByText(T.hold.active)).toBeTruthy();
+
+    // The directory lands after the object is already open. It may only rename
+    // actors. It must not re-seed the register: the list endpoint carries no
+    // holds, custody or copies, so re-seeding redraws a held object as unheld.
+    resolveUsers?.({
+      data: { items: [{ id: "creator-1", display_name: "김보관" }] },
+      response: { ok: true, status: 200 },
+    });
+    await within(detail).findByText("김보관");
+
+    expect(GET.mock.calls.filter(([path]) => path === "/api/v1/evidence/objects")).toHaveLength(1);
+    expect(within(detail).getByText(T.hold.active)).toBeTruthy();
+  });
 });
 
 describe("EvidenceRecords detail opening", () => {
