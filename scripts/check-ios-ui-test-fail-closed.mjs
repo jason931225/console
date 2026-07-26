@@ -47,10 +47,12 @@ const expectedShardBudgets = new Map([
 ]);
 
 const expectedShardBatches = new Map([
-  ["core", ["authenticated-shell", "preflight-restore", "preflight-session", "preflight-fixtures", "login-validation", "accessibility-id-parity"]],
-  ["critical-core", ["critical-today", "camera-capture"]],
-  ["critical-report", ["critical-report"]],
-  ["critical-location", ["critical-location"]],
+  // Five batches, matching the measured macOS concurrency cap of 5 shared with
+  // ci.yml. critical-location and critical-report are appended to existing
+  // batches rather than given their own workers, each after that batch's
+  // functional warm-up shard so the cold-start ordering below still holds.
+  ["core", ["authenticated-shell", "preflight-restore", "preflight-session", "preflight-fixtures", "login-validation", "accessibility-id-parity", "critical-location"]],
+  ["critical-core", ["critical-today", "camera-capture", "critical-report"]],
   ["messenger-dynamic", ["messenger-mutation", "messenger-render", "audit-dynamic-today", "audit-dynamic-detail"]],
   ["audit-standard", ["audit-dynamic-messenger", "audit-dynamic-login", "accessibility-standard"]],
   ["audit-adaptive", ["accessibility-largest", "accessibility-dark", "dynamic-type-large", "dynamic-type-ax5"]],
@@ -153,7 +155,7 @@ function hasFunctionalColdStartProof(files) {
   // that remains rejected above.
   return prewarm.trim() === ""
     && !/xctest-prewarm|XCTestPrewarmUITests|testRunnerAndHostLaunch/.test(activeJob)
-    && coreShards.join(" ") === "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
+    && coreShards.join(" ") === "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location"
     && messengerShards.join(" ") === "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"
     && /authenticated-shell\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/FieldCriticalPathUITests\/testAuthenticatedLaunchShowsTodayTabInKorean\)/.test(activeJob)
     && /preflight-restore\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/PreflightUITests\/testSeederRestoresThenClearsRealSession\)/.test(activeJob)
@@ -611,9 +613,9 @@ function hasStructuredResultVerification(workerJob, aggregateJob) {
     && !/merge-multiple:\s*true/.test(aggregateJob)
     && /WORKER_RESULT:\s*\$\{\{ needs\.ios-ui-tests\.result \}\}/.test(aggregateJob)
     && /test\s+"\$\(git rev-parse HEAD\)"\s*=\s*"\$GITHUB_SHA"/.test(activeAggregate)
-    && /EXPECTED_BATCHES=\(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive\)/.test(activeAggregate)
+    && /EXPECTED_BATCHES=\(core critical-core messenger-dynamic audit-standard audit-adaptive\)/.test(activeAggregate)
     && hasExactMatrixArtifactAggregateOrder
-    && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-mindepth\s+1\s+-maxdepth\s+1\s+-type\s+d\s+-name\s+'ios-ui-test-results-\*'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+7/.test(activeAggregate)
+    && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-mindepth\s+1\s+-maxdepth\s+1\s+-type\s+d\s+-name\s+'ios-ui-test-results-\*'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+5/.test(activeAggregate)
     && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-summary\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+21/.test(activeAggregate)
     && /test\s+"\$\(find\s+"\$RESULTS_ROOT"\s+-type\s+f\s+-name\s+'\*-tests\.json'\s+\|\s+wc\s+-l\s+\|\s+tr\s+-d\s+' '\)"\s+=\s+21/.test(activeAggregate)
     && /mapfile\s+-t\s+summaries[\s\S]{0,300}\(\(\$\{#summaries\[@\]\}\s*==\s*1\)\)/.test(activeAggregate)
@@ -1668,7 +1670,7 @@ export function evaluateIosUiTestFailClosedChecks(files) {
   checks.push([hasModernFullScreenLaunch(files), "iOS app and CI build must preserve a modern full-screen launch contract"]);
   checks.push([hasCiOnlyLocalAts(files), "iOS UI CI must confine local ATS to CI-only job-root loopback configuration while production Info.plist remains unchanged"]);
   checks.push([hasExactFailSlowExecution(job), "each iOS UI matrix worker must execute only its declared named-shard batch fail-slow, preserve every xcresult extraction failure, keep Xcode per-test parallelization disabled, and exit with worker status"]);
-  checks.push([hasStructuredResultVerification(job, aggregateJob), "iOS UI CI must aggregate exactly one structured summary and tests JSON for all twenty-one shards from seven uniquely named batch artifacts and fail when any worker, artifact, or shard is missing"]);
+  checks.push([hasStructuredResultVerification(job, aggregateJob), "iOS UI CI must aggregate exactly one structured summary and tests JSON for all twenty-one shards from five uniquely named batch artifacts and fail when any worker, artifact, or shard is missing"]);
   checks.push([hasCameraAuthorizationReactivation(files), "iOS camera capture must refresh authorization when the app becomes active after returning from Settings"]);
   checks.push([hasDurableCriticalPathEvidence(files), "iOS UI tests must prove scoped mutations, backend readback after relaunch, camera dismissal, and UUID fixtures without local-state false greens"]);
   checks.push([hasFreshLocationConsentQueries(files), "iOS location lifecycle UI tests must reacquire dynamic SwiftUI elements within the work-order detail root after every state replacement"]);

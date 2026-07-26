@@ -56,7 +56,11 @@ test("the timeout tracks the workflow rather than a local copy", () => {
 
 test("every shard named in the matrix resolves", () => {
   const manifests = [...WORKFLOW.matchAll(/shards:\s*"([^"]+)"/g)].map((m) => m[1]);
-  assert.ok(manifests.length >= 7, "expected one shard manifest per batch");
+  // Derived from the matrix, never hardcoded: a literal batch count here is the
+  // same drift this module exists to prevent, and it broke the moment the
+  // matrix was repartitioned from seven batches to five.
+  const declaredBatches = [...WORKFLOW.matchAll(/^\s*- batch:\s*[a-z0-9-]+$/gm)].length;
+  assert.equal(manifests.length, declaredBatches, "one shard manifest per batch");
   for (const shard of manifests.join(" ").split(/\s+/).filter(Boolean)) {
     const config = shardConfig(shard, WORKFLOW);
     assert.ok(config.selectors.length > 0, `${shard} resolved no selectors`);

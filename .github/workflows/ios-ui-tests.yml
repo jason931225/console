@@ -13,8 +13,20 @@ concurrency:
 jobs:
   ios-ui-tests:
     name: iOS — ${{ matrix.batch }} (Simulator)
-    # Five independent GitHub-hosted workers bound fanout while keeping
-    # untrusted pull-request code away from reusable self-hosted macOS runners.
+    # Five independent GitHub-hosted workers keeping untrusted pull-request code
+    # away from reusable self-hosted macOS runners.
+    #
+    # Five BATCHES too, because five is the measured ceiling rather than a
+    # preference. Peak concurrent macOS jobs across this workflow AND ci.yml was
+    # 5 on 56efbdf4: that is the account cap and it is shared. Seven batches
+    # against it forced a second scheduling wave — five started at t=0 and the
+    # remaining two at +22 and +24 minutes, with audit-adaptive, the longest
+    # batch at 36 minutes, last in that queue. The run therefore spent 61
+    # minutes delivering a 36-minute critical path. Raising max-parallel cannot
+    # buy runners that do not exist; fitting the batch count to the cap is what
+    # removes the wave. critical-location joins core and critical-report joins
+    # critical-core, each appended AFTER that batch's existing functional
+    # warm-up so the cold-start ordering is preserved.
     runs-on: macos-26
     # The largest batch has 840 seconds of shard watchdogs, each sized to the
     # duration that shard was measured to need rather than to a round number. A
@@ -27,20 +39,9 @@ jobs:
       matrix:
         include:
           - batch: core
-            shards: "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
+            shards: "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location"
           - batch: critical-core
-            shards: "critical-today camera-capture"
-          - batch: critical-report
-            shards: "critical-report"
-          # Its one test relaunches the app three times to prove every consent
-          # transition reads back from the real backend, and it is alone here,
-          # so no warm-up shard absorbs the cold XCTest/Simulator launch for it.
-          # Measured 105s and 127s passing, then 167s killed, against the old
-          # 150-second budget: normal runs sat 15% under the limit, so ordinary
-          # runner variance read as a product failure. Its 240 seconds now match
-          # critical-report, the other heavy single-batch critical worker.
-          - batch: critical-location
-            shards: "critical-location"
+            shards: "critical-today camera-capture critical-report"
           # The first shard pays this worker's cold XCTest/Simulator launch, so
           # it opens with the complete persisted-send/search user story rather
           # than a prewarm shim. Both budgets were later raised to what the
@@ -643,17 +644,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          EXPECTED_BATCHES=(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive)
-          EXPECTED_SHARDS=(authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-today camera-capture critical-report critical-location messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
+          EXPECTED_BATCHES=(core critical-core messenger-dynamic audit-standard audit-adaptive)
+          EXPECTED_SHARDS=(authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location critical-today camera-capture critical-report messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail audit-dynamic-messenger audit-dynamic-login accessibility-standard accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5)
           for batch_name in "${EXPECTED_BATCHES[@]}"; do
             batch_dir="$RESULTS_ROOT/ios-ui-test-results-$batch_name"
             test -d "$batch_dir"
             test "$(cat "$batch_dir/batch-name.txt")" = "$batch_name"
             case "$batch_name" in
-              core) expected_manifest='authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity' ;;
-              critical-core) expected_manifest='critical-today camera-capture' ;;
-              critical-report) expected_manifest='critical-report' ;;
-              critical-location) expected_manifest='critical-location' ;;
+              core) expected_manifest='authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location' ;;
+              critical-core) expected_manifest='critical-today camera-capture critical-report' ;;
               messenger-dynamic) expected_manifest='messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail' ;;
               audit-standard) expected_manifest='audit-dynamic-messenger audit-dynamic-login accessibility-standard' ;;
               audit-adaptive) expected_manifest='accessibility-largest accessibility-dark dynamic-type-large dynamic-type-ax5' ;;
@@ -661,7 +660,7 @@ jobs:
             esac
             test "$(paste -sd' ' "$batch_dir/shard-manifest.txt")" = "$expected_manifest"
           done
-          test "$(find "$RESULTS_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'ios-ui-test-results-*' | wc -l | tr -d ' ')" = 7
+          test "$(find "$RESULTS_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'ios-ui-test-results-*' | wc -l | tr -d ' ')" = 5
           test "$(find "$RESULTS_ROOT" -type f -name '*-summary.json' | wc -l | tr -d ' ')" = 21
           test "$(find "$RESULTS_ROOT" -type f -name '*-tests.json' | wc -l | tr -d ' ')" = 21
           VERIFY_ARGS=()

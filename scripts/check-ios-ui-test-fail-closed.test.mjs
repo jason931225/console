@@ -99,8 +99,7 @@ describe("iOS hermetic UI CI contract", () => {
       ["preflight-session", 60, 30],
       ["preflight-restore", 150, 120],
       ["critical-report", 360, 540],
-      ["critical-location", 240, 90],
-      ["camera-capture", 150, 90],
+            ["camera-capture", 150, 90],
       ["messenger-mutation", 240, 120],
     ]) {
       expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
@@ -111,12 +110,12 @@ describe("iOS hermetic UI CI contract", () => {
       ) }), matrixGate);
     }
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      'shards: "critical-today camera-capture"',
+      'shards: "critical-today camera-capture critical-report"',
       'shards: "critical-today"',
     ) }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      'shards: "critical-today camera-capture"',
-      'shards: "critical-today camera-capture preflight-session"',
+      'shards: "critical-today camera-capture critical-report"',
+      'shards: "critical-today camera-capture critical-report preflight-session"',
     ) }), matrixGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("-parallel-testing-enabled NO", "-parallel-testing-enabled YES") }), matrixGate);
   });
@@ -127,8 +126,8 @@ describe("iOS hermetic UI CI contract", () => {
       "          TEST_STATUS=0\n          timing_start xctest-prewarm",
     ) }), coldStartGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      'shards: "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"',
-      'shards: "preflight-restore authenticated-shell preflight-session preflight-fixtures login-validation accessibility-id-parity"',
+      'shards: "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location"',
+      'shards: "preflight-restore authenticated-shell preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location"',
     ) }), coldStartGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       'shards: "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"',
@@ -505,16 +504,16 @@ class FieldUITestCase: XCTestCase {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow('name: "ios-ui-test-results-${{ matrix.batch }}"', "name: ios-ui-test-results") }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("if-no-files-found: error", "if-no-files-found: warn") }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "EXPECTED_BATCHES=(core critical-core critical-report critical-location messenger-dynamic audit-standard audit-adaptive)",
-      "EXPECTED_BATCHES=(core critical-core critical-report messenger-dynamic audit-standard)",
+      "EXPECTED_BATCHES=(core critical-core messenger-dynamic audit-standard audit-adaptive)",
+      "EXPECTED_BATCHES=(core critical-core messenger-dynamic audit-standard)",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       "EXPECTED_SHARDS=(authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
       "EXPECTED_SHARDS=(login-validation accessibility-id-parity",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
-      "core) expected_manifest='authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity'",
-      "core) expected_manifest='preflight-restore authenticated-shell preflight-session preflight-fixtures login-validation accessibility-id-parity'",
+      "core) expected_manifest='authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location'",
+      "core) expected_manifest='preflight-restore authenticated-shell preflight-session preflight-fixtures login-validation accessibility-id-parity critical-location'",
     ) }), aggregateGate);
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow(
       "EXPECTED_SHARDS=(authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity",
