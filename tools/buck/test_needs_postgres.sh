@@ -83,9 +83,9 @@ docker cp "${repo_root}/ops/postgres-reconcile-topology.sh" "${container_name}:/
 docker cp "${container_env_file}" "${container_name}:/topology.env"
 
 for attempt in {1..30}; do
-  if ! pid1_comm="$(docker exec "${container_name}" cat /proc/1/comm 2>&1)"; then
+  if ! pid1_comm="$(docker exec "${container_name}" cat /proc/1/comm 2>/dev/null)"; then
     if [[ "${attempt}" == 30 ]]; then
-      printf 'buck-postgres: could not inspect disposable PostgreSQL PID 1 after 30 attempts: %s\n' "${pid1_comm}" >&2
+      echo "buck-postgres: could not inspect disposable PostgreSQL PID 1 after 30 attempts" >&2
       exit 1
     fi
     sleep 1

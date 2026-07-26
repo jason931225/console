@@ -31,7 +31,7 @@ case "$1" in
     if [[ " $* " == *" /proc/1/comm "* ]]; then
       pid1_status="$(sequence_value "${FAKE_DOCKER_PID1_STATUS_SEQUENCE:-}" "${HARNESS_LOG}.pid1-status-attempt" "${FAKE_DOCKER_PID1_STATUS:-0}")"
       if [[ "${pid1_status}" != 0 ]]; then
-        printf 'fake PID1 probe failed\n' >&2
+        printf '%s\n' "${FAKE_DOCKER_PID1_ERROR_OUTPUT:-fake PID1 probe failed}" >&2
         exit "${pid1_status}"
       fi
       sequence_value "${FAKE_DOCKER_PID1_COMM_SEQUENCE:-}" "${HARNESS_LOG}.pid1-attempt" "${FAKE_DOCKER_PID1_COMM:-postgres}"
@@ -88,12 +88,13 @@ if grep -Fxq 'topology' "${entrypoint_ready_log}"; then exit 1; fi
 if grep -q '^buck' "${entrypoint_ready_log}" 2>/dev/null; then exit 1; fi
 pid1_probe_failure_log="${scratch}/pid1-probe-failure.log"
 set +e
-pid1_probe_failure_output="$(PATH="${fake_bin}:${PATH}" HARNESS_LOG="${pid1_probe_failure_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_DOCKER_PID1_STATUS_SEQUENCE=1 FAKE_SLEEP_INSTANT=1 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres 2>&1)"
+pid1_probe_failure_output="$(PATH="${fake_bin}:${PATH}" HARNESS_LOG="${pid1_probe_failure_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_DOCKER_PID1_STATUS_SEQUENCE=1 FAKE_DOCKER_PID1_ERROR_OUTPUT='secret-probe postgres://mnt_buck_admin:secret-password@127.0.0.1:5432/mnt_buck_test' FAKE_SLEEP_INSTANT=1 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres 2>&1)"
 pid1_probe_failure_status=$?
 set -e
 [[ "${pid1_probe_failure_status}" != 0 ]]
-grep -Fq 'fake PID1 probe failed' <<<"${pid1_probe_failure_output}"
 grep -Fq 'could not inspect disposable PostgreSQL PID 1 after 30 attempts' <<<"${pid1_probe_failure_output}"
+if grep -Fq 'secret-probe' <<<"${pid1_probe_failure_output}"; then exit 1; fi
+if grep -Fq 'postgres://' <<<"${pid1_probe_failure_output}"; then exit 1; fi
 [[ "$(grep -c 'cat /proc/1/comm' "${pid1_probe_failure_log}")" == 30 ]]
 [[ "$(grep -c 'pg_isready ' "${pid1_probe_failure_log}")" == 0 ]]
 if grep -Fxq 'topology' "${pid1_probe_failure_log}"; then exit 1; fi
@@ -108,9 +109,11 @@ recovery_log="${scratch}/recovery.log"
 PATH="${fake_bin}:${PATH}" HARNESS_LOG="${recovery_log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" FAKE_DOCKER_PID1_COMM_SEQUENCE=docker-entrypoint.sh,postgres,postgres FAKE_DOCKER_READINESS_STATUS_SEQUENCE=1,0 FAKE_SLEEP_INSTANT=1 "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
 [[ "$(grep -c 'cat /proc/1/comm' "${recovery_log}")" == 3 ]]
 [[ "$(grep -c 'pg_isready -h 127.0.0.1 -U mnt_buck_admin -d ' "${recovery_log}")" == 2 ]]
+[[ "$(grep -c '^topology$' "${recovery_log}")" == 1 ]]
+[[ "$(grep -c '^buck test ' "${recovery_log}")" == 1 ]]
 topology_line="$(grep -n '^topology$' "${recovery_log}" | cut -d: -f1)"
 readiness_line="$(grep -n 'pg_isready -h 127.0.0.1 -U mnt_buck_admin -d ' "${recovery_log}" | tail -1 | cut -d: -f1)"
-buck_line="$(grep -n '^buck' "${recovery_log}" | head -1 | cut -d: -f1)"
+buck_line="$(grep -n '^buck test ' "${recovery_log}" | cut -d: -f1)"
 [[ "${topology_line}" -gt "${readiness_line}" ]]
 [[ "${buck_line}" -gt "${topology_line}" ]]
 PATH="${fake_bin}:${PATH}" HARNESS_LOG="${log}" MNT_BUCK_NEEDS_POSTGRES_TEST_BUCK="${scratch}/buck" "${harness}" //tools/buck:pr473-ontology-key-revision-postgres
