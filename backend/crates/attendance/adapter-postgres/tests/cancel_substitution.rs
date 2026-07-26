@@ -10,8 +10,7 @@ use std::sync::Arc;
 
 use mnt_attendance_adapter_postgres::PgAttendanceStore;
 use mnt_attendance_application::{
-    AssignSubstitute, CallerScope, CancelSubstitution, ResolveException,
-    SubstitutionCandidateQuery,
+    AssignSubstitute, CallerScope, CancelSubstitution, ResolveException, SubstitutionCandidateQuery,
 };
 use mnt_attendance_domain::{ResolutionAction, SubstitutionWindow};
 use mnt_kernel_core::{AuditAction, AuditEvent, OrgId, TraceContext, UserId};
