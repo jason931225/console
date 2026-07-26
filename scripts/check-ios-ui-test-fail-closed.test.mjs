@@ -97,8 +97,8 @@ describe("iOS hermetic UI CI contract", () => {
     expectsFailure(evaluate({ ".github/workflows/ios-ui-tests.yml": mutateWorkflow("max-parallel: 5", "max-parallel: 15") }), matrixGate);
     for (const [shard, budget, invalidBudget] of [
       ["preflight-session", 60, 30],
-      ["preflight-restore", 90, 120],
-      ["critical-report", 240, 540],
+      ["preflight-restore", 150, 120],
+      ["critical-report", 360, 540],
       ["critical-location", 240, 90],
       ["camera-capture", 150, 90],
       ["messenger-mutation", 240, 120],

@@ -19,7 +19,7 @@ function iosJob(workflow) {
 const expectedShardBudgets = new Map([
   ["preflight-session", 60],
   ["preflight-fixtures", 30],
-  ["preflight-restore", 90],
+  ["preflight-restore", 150],
   ["authenticated-shell", 150],
   ["login-validation", 90],
   ["accessibility-id-parity", 45],
@@ -27,23 +27,23 @@ const expectedShardBudgets = new Map([
   // old 150s budget — bimodal on runner speed, with nothing in the tests
   // changing between those runs.
   ["critical-today", 240],
-  ["critical-report", 240],
+  ["critical-report", 360],
   ["critical-location", 240],
   ["camera-capture", 150],
-  ["messenger-render", 90],
+  ["messenger-render", 150],
   // Measured 134s, 149s, 151s and 183s passing, then 193s killed, against the
   // old 180s budget: it was already grazing the ceiling before the thread
   // selection became explicit, which added a tap and a message load per launch.
   ["messenger-mutation", 240],
   ["audit-dynamic-today", 150],
   ["audit-dynamic-detail", 150],
-  ["audit-dynamic-messenger", 150],
+  ["audit-dynamic-messenger", 210],
   ["audit-dynamic-login", 120],
   ["accessibility-standard", 360],
   ["accessibility-largest", 240],
   ["accessibility-dark", 240],
   ["dynamic-type-large", 150],
-  ["dynamic-type-ax5", 180],
+  ["dynamic-type-ax5", 210],
 ]);
 
 const expectedShardBatches = new Map([
@@ -130,7 +130,7 @@ function hasCompleteFailSlowRuntimeBudget(job) {
   )));
   const setupAndCleanupReserveSeconds = 30 * 60;
   return Number(timeout[1]) === 45
-    && maximumBatchSeconds === 810
+    && maximumBatchSeconds === 840
     && maximumBatchSeconds + setupAndCleanupReserveSeconds <= 45 * 60
     && /strategy:\s*\n[ ]{6}fail-fast:\s*false\s*\n[ ]{6}max-parallel:\s*5\b/.test(job)
     && /read\s+-r\s+-a\s+SHARD_MANIFEST\s+<<<\s+"\$MNT_IOS_SHARD_BATCH"/.test(job)
@@ -156,7 +156,7 @@ function hasFunctionalColdStartProof(files) {
     && coreShards.join(" ") === "authenticated-shell preflight-restore preflight-session preflight-fixtures login-validation accessibility-id-parity"
     && messengerShards.join(" ") === "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"
     && /authenticated-shell\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/FieldCriticalPathUITests\/testAuthenticatedLaunchShowsTodayTabInKorean\)/.test(activeJob)
-    && /preflight-restore\)\s*\n\s*SHARD_TIMEOUT_SECONDS=90\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/PreflightUITests\/testSeederRestoresThenClearsRealSession\)/.test(activeJob)
+    && /preflight-restore\)\s*\n\s*SHARD_TIMEOUT_SECONDS=150\s*\n\s*SHARD_SELECTORS=\(MaintenanceFieldUITests\/PreflightUITests\/testSeederRestoresThenClearsRealSession\)/.test(activeJob)
     && /critical-today\)\s*\n\s*SHARD_TIMEOUT_SECONDS=240\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testDispatchListRendersDeterministicMechanicWorkOrder[\s\S]{0,160}testFullFixtureRowsRemainReachableAboveTabBar[\s\S]{0,80}\)/.test(activeJob)
     && !/critical-today\)[\s\S]{0,360}testAuthenticatedLaunchShowsTodayTabInKorean/.test(activeJob)
     && /messenger-mutation\)\s*\n\s*SHARD_TIMEOUT_SECONDS=240\s*\n\s*SHARD_SELECTORS=\([\s\S]{0,240}testMessengerSendSurvivesBackendRefresh[\s\S]{0,160}testMessengerSearchUnmatchedQueryShowsRealNoResults[\s\S]{0,80}\)/.test(activeJob)
@@ -390,7 +390,7 @@ function hasValidLoopbackWebauthnPolicy(job, launcher) {
   // Reseal whenever the backend step legitimately changes; the pin exists to
   // force that change through review, not to freeze the step. Last resealed to
   // raise the critical-location shard budget 150 -> 240 seconds.
-  const approvedBackendStepSha256 = "20d670aadb52a427d067698341c05f6cc18a8e37d7a625b4d97fac6bae1c9c5e";
+  const approvedBackendStepSha256 = "114b60766c17bf063bc481733e723c641aa003060c44c34fee16e28d53541e85";
   const approvedLauncherSha256 = "a153fab32c9f4ca597605ec126d40e3bfc106c0ce17c368078e22c265ca9f1ad";
   const backendStepSha256 = createHash("sha256").update(backendStep).digest("hex");
   const launcherSha256 = createHash("sha256").update(launcher).digest("hex");

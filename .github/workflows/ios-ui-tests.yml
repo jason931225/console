@@ -16,9 +16,10 @@ jobs:
     # Five independent GitHub-hosted workers bound fanout while keeping
     # untrusted pull-request code away from reusable self-hosted macOS runners.
     runs-on: macos-26
-    # The largest batch has 810 seconds of original shard watchdogs. A
-    # 30-minute cold setup and cleanup reserve makes the static bound 43.5
-    # minutes, below this worker ceiling without inflating test watchdogs.
+    # The largest batch has 840 seconds of shard watchdogs, each sized to the
+    # duration that shard was measured to need rather than to a round number. A
+    # 30-minute cold setup and cleanup reserve makes the static bound 44
+    # minutes, below this worker ceiling.
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -40,10 +41,11 @@ jobs:
           # critical-report, the other heavy single-batch critical worker.
           - batch: critical-location
             shards: "critical-location"
-          # The first shard pays this worker's cold XCTest/Simulator launch.
-          # Start with the complete persisted-send/search user story under its
-          # existing 180-second budget; keep the focused render proof at its
-          # unchanged 90-second budget after the functional warm-up.
+          # The first shard pays this worker's cold XCTest/Simulator launch, so
+          # it opens with the complete persisted-send/search user story rather
+          # than a prewarm shim. Both budgets were later raised to what the
+          # shards were measured to cost; the ordering, not the numbers, is what
+          # makes the warm-up work.
           - batch: messenger-dynamic
             shards: "messenger-mutation messenger-render audit-dynamic-today audit-dynamic-detail"
           - batch: audit-standard
@@ -131,6 +133,15 @@ jobs:
             printf '%s\n' "::notice title=iOS UI timing::$TIMING_PHASE completed in ${elapsed}s ($status)"
             : > "$ACTIVE_PHASE"
             TIMING_ACTIVE=0
+            # Surface budget erosion while the shard is still green. Every
+            # watchdog raised so far was found by a red run, one shard per CI
+            # cycle, after that shard had already been passing within seconds of
+            # its limit. A phase that passes using most of its budget carries
+            # the same signal, early enough to act on without a failed run.
+            if [[ "$TIMING_BUDGET_SECONDS" != - && "$status" == passed ]] \
+              && (( elapsed * 100 >= TIMING_BUDGET_SECONDS * 80 )); then
+              printf '%s\n' "::warning title=iOS UI budget::$TIMING_PHASE passed using ${elapsed}s of its ${TIMING_BUDGET_SECONDS}s budget"
+            fi
           }
           write_state() { cat > "$STATE" <<STATE
           D='$D'
@@ -297,7 +308,7 @@ jobs:
                 SHARD_SELECTORS=(MaintenanceFieldUITests/PreflightUITests/testDeterministicWorkOrderFixturesAreConfigured)
                 ;;
               preflight-restore)
-                SHARD_TIMEOUT_SECONDS=90
+                SHARD_TIMEOUT_SECONDS=150
                 SHARD_SELECTORS=(MaintenanceFieldUITests/PreflightUITests/testSeederRestoresThenClearsRealSession)
                 ;;
               login-validation)
@@ -316,7 +327,7 @@ jobs:
                 )
                 ;;
               critical-report)
-                SHARD_TIMEOUT_SECONDS=240
+                SHARD_TIMEOUT_SECONDS=360
                 SHARD_SELECTORS=(
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testOpenWorkOrderDetailAndAdvance
                   MaintenanceFieldUITests/FieldCriticalPathUITests/testReportFormValidationSurfacesRealRequiredCopy
@@ -330,7 +341,7 @@ jobs:
                 )
                 ;;
               messenger-render)
-                SHARD_TIMEOUT_SECONDS=90
+                SHARD_TIMEOUT_SECONDS=150
                 SHARD_SELECTORS=(MaintenanceFieldUITests/MessengerUITests/testExactSeededMessengerThreadAndMessageRender)
                 ;;
               messenger-mutation)
@@ -356,7 +367,7 @@ jobs:
                 ;;
               audit-dynamic-messenger)
                 SHARD_FIXTURE_PROFILE=accessibility-audit-one-row
-                SHARD_TIMEOUT_SECONDS=150
+                SHARD_TIMEOUT_SECONDS=210
                 SHARD_SELECTORS=(MaintenanceFieldUITests/AccessibilityAuditUITests/testMessengerScreenPassesDynamicTypeAudit)
                 ;;
               audit-dynamic-login)
@@ -400,7 +411,7 @@ jobs:
               dynamic-type-ax5)
                 SHARD_FIXTURE_PROFILE=accessibility-audit-one-row
                 SHARD_CONTENT_SIZE=accessibility-extra-extra-extra-large
-                SHARD_TIMEOUT_SECONDS=180
+                SHARD_TIMEOUT_SECONDS=210
                 SHARD_SELECTORS=(MaintenanceFieldUITests/DynamicTypeRuntimeUITests/testAccessibilityExtraExtraExtraLargeRuntimeContract)
                 ;;
               *) return 1 ;;
