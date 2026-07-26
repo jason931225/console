@@ -995,7 +995,7 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
     let detail_router = router.clone();
     let detail_token = f.subject.clone();
     let detail_path = format!("{SUBJECTS}/{subject_id}");
-    let mut detail = tokio::spawn(async move {
+    let detail = tokio::spawn(async move {
         send(
             &detail_router,
             "GET",
@@ -1032,7 +1032,7 @@ async fn identity_relinks_serialize_submit_detail_and_review_authorship(pool: Pg
     let write_router = router.clone();
     let write_token = f.subject.clone();
     let write_path = format!("{SUBJECTS}/{subject_id}/reviews/self");
-    let mut write = tokio::spawn(async move {
+    let write = tokio::spawn(async move {
         send(
             &write_router,
             "PUT",
