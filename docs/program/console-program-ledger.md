@@ -315,3 +315,6 @@ Candidate advanced to the commit restoring `cargo test --workspace` to the PR 47
 
 ## CANDIDATE REBIND (2026-07-25, backend timeout fitted to the restored suite)
 Candidate advanced to the commit raising the backend job timeout from 45 to 90 minutes. The 45 was sized for main's job shape before the disposable-PostgreSQL harness added 13 per-invocation Docker bring-ups ahead of the workspace suite; with the suite restored this branch extrapolates to roughly 70 minutes, so 45 would have reported a timeout instead of a test result. Nothing about what is executed changes. All records re-bind and remain HOLD.
+
+## CANDIDATE REBIND (2026-07-25, workspace restoration withdrawn)
+Candidate advanced to the commit withdrawing the previous rebind's workspace restoration. Migration 0196 restricts migration application to the `mnt_buck_admin` harness identity with an armed `mnt.sqlx_test_bootstrap`; CI's `postgres` service account cannot satisfy it, so `cargo test --workspace` against that database cannot execute a single migration-applying test. The earlier claim that the run had been deleted carelessly was wrong — the deletion was forced. What stands is the silence around it, now corrected in four places, and the coverage gap itself, recorded as H-8 with a verified restoration recipe and left as its own charter. Nothing is promoted; all records remain HOLD.
