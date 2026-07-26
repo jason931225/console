@@ -955,6 +955,19 @@ struct MessengerTabView: View {
     /// Bindings, send semantics, accessibility identifiers, the contrast-safe
     /// placeholder and its `allowsHitTesting(false)` are carried over verbatim
     /// from the previous in-List rows; only the placement changed.
+    ///
+    /// The composer's line limit tightens at accessibility sizes. Threads
+    /// auto-select on load — `MessengerState` falls back to `threads.first` —
+    /// so this bar is on screen from the moment Messenger appears, not only
+    /// once someone opens a conversation. At AX5 a five-line composer is tall
+    /// enough to push the first thread row's kind chip outside the List's own
+    /// frame, which is a real loss of conversation content rather than merely
+    /// a failing assertion. Two lines keeps the composer usable while leaving
+    /// the thread list legible.
+    ///
+    /// Keep prose here rather than inside the body: `opaqueUnobscuredSurface`
+    /// caps the span from `Divider()` to the `.background` at 2,200 characters
+    /// and counts comments, so body comments have a hard length budget.
     private var messengerComposerBar: some View {
         VStack(spacing: 0) {
             // Opaque semantic surface: scrolling message content must never
@@ -973,7 +986,7 @@ struct MessengerTabView: View {
                             .allowsHitTesting(false)
                     }
                     TextField("", text: $viewModel.messengerDraft, axis: .vertical)
-                        .lineLimit(2...5)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1...2 : 2...5)
                         .accessibilityLabel(Text("messenger_composer"))
                         .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
                 }
