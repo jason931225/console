@@ -19,7 +19,7 @@ const reachabilityPreflightCommands = [
 const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Cargo.lock consistency
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.97.1"
 
 `;
 

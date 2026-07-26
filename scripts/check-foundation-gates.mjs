@@ -284,7 +284,7 @@ for (const releaseNeedle of [
   requireIncludes(".github/workflows/image-release.yml", releaseNeedle, `image release gate: ${releaseNeedle}`);
 }
 requireIncludes(".github/workflows/release-please.yml", "RELEASE_PLEASE_TOKEN", "release-please token fallback documented");
-requireIncludes("backend/rust-toolchain.toml", "channel = \"1.96.0\"", "Rust toolchain pinned to 1.96.0");
+requireIncludes("backend/rust-toolchain.toml", "channel = \"1.97.1\"", "Rust toolchain pinned to 1.97.1");
 
 // UI shell/design/i18n/a11y baseline.
 requireFile("e2e/fixtures/ux.ts", "browser UX fixture");

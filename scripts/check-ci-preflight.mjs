@@ -463,7 +463,7 @@ const apiContractAllowedSteps = [
   "name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7",
   "name: Install pinned DotSlash runtime\n        run: tools/buck/install_dotslash.sh",
   "name: Free runner disk for API contract\n        uses: ./.github/actions/free-runner-disk",
-  "name: Install Rust toolchain (pinned via rust-toolchain.toml)\n        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable\n        with:\n          toolchain: \"1.96.0\"",
+  "name: Install Rust toolchain (pinned via rust-toolchain.toml)\n        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable\n        with:\n          toolchain: \"1.97.1\"",
   "name: Cache Rust dependencies + build artifacts\n        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1\n        with:\n          workspaces: backend",
   "name: Set up Node.js\n        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0\n        with:\n          node-version: \"24\"\n          cache: npm",
   "name: Install client tooling\n        run: npm ci",

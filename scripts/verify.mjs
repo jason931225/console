@@ -87,13 +87,11 @@ const PLAN = new Map([
     run: "MNT_APP_ROLE=migrate SQLX_OFFLINE=true cargo run -q -p mnt-app",
     why: "migrate half only; the serve/readyz half needs the full CI keypair fixture",
   }],
-  ["Dev-auth feature build/tests", {
-    tier: "db",
-    run: [
-      "SQLX_OFFLINE=true cargo test -p mnt-platform-auth-rest --features dev-auth --no-fail-fast -- --test-threads=1",
-      "SQLX_OFFLINE=true cargo test -p mnt-platform-provisioning --test dev_principal_upsert_race --no-fail-fast -- --test-threads=1",
-    ].join(" && "),
-  }],
+  // These suites moved off direct Cargo onto generator-owned Buck targets and
+  // the disposable role-topology harness, which supplies the
+  // migration-0196-authorized `mnt_buck_admin` identity. The harness brings up
+  // its own PostgreSQL, so this needs Docker but not a provisioned database.
+  ["Buck2 dev-auth feature PostgreSQL suites", { tier: "db" }],
   ["Buck2 mnt-app unit suite", { tier: "fast" }],
   ["Buck2 mnt-app inline PostgreSQL suites", { tier: "db" }],
 

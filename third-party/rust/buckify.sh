@@ -6,9 +6,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."  # -> repo root (worktree)
 
 # buck2/reindeer must use the workspace-pinned toolchain; the machine default
-# may differ. backend/rust-toolchain.toml pins 1.96.0 but does not apply at the
+# may differ. backend/rust-toolchain.toml pins 1.97.1 but does not apply at the
 # repo root where buck2 runs.
-export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.96.0}"
+export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.97.1}"
 
 # Reindeer cannot safely emit local-source rules for a path that escapes its
 # third-party package. Keep every patched crate inside the canonical boundary
