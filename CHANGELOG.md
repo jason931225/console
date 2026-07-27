@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.2](https://github.com/jason931225/console/compare/v0.2.1...v0.2.2) (2026-07-27)
+
+
+### Features
+
+* **console:** land the console program spine on main ([#493](https://github.com/jason931225/console/issues/493)) ([78cf160](https://github.com/jason931225/console/commit/78cf1600fd43fa014bc778a9125ddf43956f288e))
+
+
+### Bug Fixes
+
+* **ci:** size the messenger-mutation budget to measurement and let xcodebuild finalize ([#496](https://github.com/jason931225/console/issues/496)) ([6655747](https://github.com/jason931225/console/commit/665574758e568e809d9ca480e7df107a8ee6ee23))
+
 ## [0.2.1](https://github.com/jason931225/maintenance/compare/v0.2.0...v0.2.1) (2026-07-23)
 
 
