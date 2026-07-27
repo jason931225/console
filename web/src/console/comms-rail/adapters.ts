@@ -3,6 +3,7 @@ import type {
   MessengerThreadSummary,
   NotificationSummary,
 } from "../../api/types";
+import { consoleScreenPath } from "../shell/nav";
 
 import type {
   CommsRailAction,
@@ -62,7 +63,12 @@ export type DecodedRailResult =
   | { kind: "error"; code: "network_error" | "server_error" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const SAFE_SCREENS = new Set(["overview", "messenger", "mail", "notifications", "board"]);
+/**
+ * A notification may promote only to a module with a published console route
+ * contract. Other server-owned screen strings remain honest static rows until
+ * their owner publishes an equivalent contract.
+ */
+const NOTIFICATION_CENTER_SCREEN = "notif";
 /**
  * Wire shape of the generated `NoticeSummary` response for `GET /api/v1/notices`.
  * The installed API client declaration has not yet exposed this schema, so keep the
@@ -137,21 +143,32 @@ function notifications(value: unknown): NotificationSummary[] | undefined {
   if (!record(value) || !Array.isArray(value.items)) return undefined;
   return value.items.every((item) => record(item) && validUuid(item.id) && validUuid(item.recipient_user_id) &&
     typeof item.category === "string" && typeof item.kind === "string" && typeof item.text === "string" &&
-    typeof item.unread === "boolean" && validTimestamp(item.created_at) &&
+    typeof item.unread === "boolean" && typeof item.muted === "boolean" && validTimestamp(item.created_at) &&
     (item.read_at === null || validTimestamp(item.read_at)) && (item.resolved_at === null || validTimestamp(item.resolved_at)) &&
     validNotificationLink(item.link)) ? value.items as NotificationSummary[] : undefined;
 }
 
 function validNotificationLink(value: unknown): boolean {
   if (!record(value) || typeof value.type !== "string") return false;
-  return value.type === "screen" ? typeof value.screen === "string" :
-    value.type === "object" && typeof value.kind === "string" && validUuid(value.id);
+  return value.type === "screen"
+    ? typeof value.screen === "string" && value.screen.trim().length > 0
+    : value.type === "object" && typeof value.kind === "string" && value.kind.trim().length > 0 &&
+      typeof value.id === "string" && value.id.trim().length > 0;
 }
 
 function safeNotificationTarget(notification: NotificationSummary): CommsRailItem["target"] | undefined {
-  if (notification.link.type !== "screen" || !SAFE_SCREENS.has(notification.link.screen)) return undefined;
-  const route = notification.link.screen === "notifications" ? "/notifications" : `/${notification.link.screen}`;
-  return { kind: "full-screen", source: "notifications", id: notification.id, route };
+  if (notification.link.type === "object") {
+    return notification.link.kind === "messenger_thread" && validUuid(notification.link.id)
+      ? { kind: "messenger-thread", source: "notifications", id: notification.link.id }
+      : undefined;
+  }
+  if (notification.link.screen !== NOTIFICATION_CENTER_SCREEN) return undefined;
+  return {
+    kind: "full-screen",
+    source: "notifications",
+    id: notification.id,
+    route: consoleScreenPath(NOTIFICATION_CENTER_SCREEN),
+  };
 }
 
 export function decodeMessengerRail(response: CommsRailResponse<unknown>): DecodedRailResult {

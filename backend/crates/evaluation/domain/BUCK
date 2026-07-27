@@ -19,8 +19,6 @@ rust_library(
     deps = [
         "//backend/crates/kernel/core:mnt-kernel-core",
         "//third-party/rust:serde",
-        "//third-party/rust:time",
-        "//third-party/rust:uuid",
     ],
 )
 
@@ -36,7 +34,5 @@ rust_test(
     deps = [
         "//backend/crates/kernel/core:mnt-kernel-core",
         "//third-party/rust:serde",
-        "//third-party/rust:time",
-        "//third-party/rust:uuid",
     ],
 )

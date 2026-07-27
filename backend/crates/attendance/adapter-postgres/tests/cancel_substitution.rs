@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 use mnt_attendance_adapter_postgres::PgAttendanceStore;
 use mnt_attendance_application::{
-    AssignSubstitute, CallerScope, CancelSubstitution, SubstitutionCandidateQuery,
+    AssignSubstitute, CallerScope, CancelSubstitution, ResolveException, SubstitutionCandidateQuery,
 };
-use mnt_attendance_domain::SubstitutionWindow;
+use mnt_attendance_domain::{ResolutionAction, SubstitutionWindow};
 use mnt_kernel_core::{AuditAction, AuditEvent, OrgId, TraceContext, UserId};
 use mnt_platform_db::{DbError, with_audits};
 use mnt_platform_request_context::scope_org;
@@ -76,6 +76,95 @@ async fn assigned_substitution_cancels_through_runtime_adapter_using_migration_0
         .unwrap();
         assert_eq!(persisted.0, "CANCELLED");
         assert_eq!(persisted.1.as_deref(), Some("approved staffing change"));
+    })
+    .await;
+}
+
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn confirm_resolution_without_overtime_uses_a_typed_null_through_runtime_adapter(
+    owner_pool: PgPool,
+) {
+    scope_org(OrgId::knl(), async move {
+        let branch = seed_branch(
+            &owner_pool,
+            "attendance-confirm-no-overtime",
+            "operations",
+        )
+        .await;
+        let provisioner = seed_user(
+            &owner_pool,
+            "Employee Directory Provisioner",
+            "SUPER_ADMIN",
+            branch,
+        )
+        .await;
+        let actor = seed_user(&owner_pool, "Attendance Manager", "ADMIN", branch).await;
+        let employee =
+            seed_employee(&owner_pool, branch, provisioner, "Confirmed employee").await;
+        let exception_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO attendance_exceptions (id,org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) VALUES ($1,$2,$3,'LATE',$4,$5,$6,'verified arrival',$7,$8,$9)",
+        )
+        .bind(exception_id)
+        .bind(*OrgId::knl().as_uuid())
+        .bind(format!("AT-{exception_id}"))
+        .bind(employee)
+        .bind(*branch.as_uuid())
+        .bind(OffsetDateTime::now_utc().date())
+        .bind(*actor.as_uuid())
+        .bind(format!("confirm-no-overtime-{exception_id}"))
+        .bind("a".repeat(64))
+        .execute(&owner_pool)
+        .await
+        .unwrap();
+
+        let store = PgAttendanceStore::new(runtime_role_pool(&owner_pool).await);
+        let caller = CallerScope {
+            org_id: *OrgId::knl().as_uuid(),
+            user_id: *actor.as_uuid(),
+            branch_ids: vec![*branch.as_uuid()],
+            org_wide: false,
+        };
+        let resolved = store
+            .resolve_exception(
+                &caller,
+                ResolveException {
+                    exception_id,
+                    action: ResolutionAction::Confirm,
+                    reason: "verified arrival".to_owned(),
+                    linked_work_ref: None,
+                    overtime_minutes: None,
+                },
+            )
+            .await
+            .expect("CONFIRM without overtime must persist through the runtime adapter");
+
+        assert_eq!(resolved.id, exception_id);
+        assert_eq!(resolved.status, "RESOLVED");
+        assert_eq!(
+            resolved
+                .resolution
+                .expect("resolution must be returned")
+                .ot_hours,
+            None
+        );
+        let persisted: (String, Option<String>) = sqlx::query_as(
+            "SELECT status, ot_hours::text FROM attendance_exceptions e JOIN attendance_exception_resolutions r ON r.exception_id=e.id WHERE e.id=$1",
+        )
+        .bind(exception_id)
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(persisted.0, "RESOLVED");
+        assert_eq!(persisted.1, None);
+        let audits: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM audit_events WHERE action='attendance.exception.resolve' AND target_id=$1",
+        )
+        .bind(exception_id.to_string())
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(audits, 1, "resolve must retain its domain audit event");
     })
     .await;
 }
@@ -502,7 +591,7 @@ async fn open_no_show_commit_blocks_the_single_connection_adapter_then_conflicts
         sqlx::query("INSERT INTO attendance_exceptions (org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) VALUES ($1,$2,'NO_SHOW',$3,$4,$5,'unavailable',$6,$7,$8)")
             .bind(*OrgId::knl().as_uuid()).bind(format!("AT-{worker}")).bind(worker).bind(*branch.as_uuid()).bind(day).bind(*actor.as_uuid()).bind(format!("open-no-show-{worker}")).bind("a".repeat(64)).execute(&mut *writer).await.unwrap();
         let store = PgAttendanceStore::new(reader);
-        let mut task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "open-no-show-race"))).await });
+        let task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "open-no-show-race"))).await });
         wait_for_advisory_lock_waiter(&owner_pool, &reader_session, &writer_session).await;
         writer.commit().await.unwrap();
         let error = task.await.unwrap().expect_err("fresh eligibility query must reject committed NO_SHOW");
@@ -540,11 +629,174 @@ async fn no_show_resolution_commit_releases_single_connection_adapter(owner_pool
         sqlx::query("UPDATE attendance_exceptions SET status='RESOLVED' WHERE id=$1").bind(exception).execute(&mut *writer).await.unwrap();
         let caller = CallerScope { org_id: *OrgId::knl().as_uuid(), user_id: *actor.as_uuid(), branch_ids: vec![*branch.as_uuid()], org_wide: false };
         let store = PgAttendanceStore::new(reader);
-        let mut task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "resolution-no-show-race"))).await });
+        let task = tokio::spawn(async move { scope_org(OrgId::knl(), store.assign_substitute(&caller, assignment_command(SubstitutionWindow::new(day, 480, 960).unwrap(), *branch.as_uuid(), covered, worker, "resolution-no-show-race"))).await });
         wait_for_advisory_lock_waiter(&owner_pool, &reader_session, &writer_session).await;
         writer.commit().await.unwrap();
         assert!(task.await.unwrap().is_ok(), "resolved NO_SHOW must permit assignment");
     }).await;
+}
+
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn confirm_resolution_persists_without_overtime_hours(owner_pool: PgPool) {
+    scope_org(OrgId::knl(), async move {
+        let branch = seed_branch(
+            &owner_pool,
+            "attendance-resolution-without-overtime",
+            "operations",
+        )
+        .await;
+        let provisioner = seed_user(
+            &owner_pool,
+            "Employee Directory Provisioner",
+            "SUPER_ADMIN",
+            branch,
+        )
+        .await;
+        let actor = seed_user(&owner_pool, "Attendance Manager", "ADMIN", branch).await;
+        let employee =
+            seed_employee(&owner_pool, branch, provisioner, "Resolution employee").await;
+        let exception_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO attendance_exceptions \
+             (id,org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) \
+             VALUES ($1,$2,$3,'NO_SHOW',$4,$5,$6,'unavailable',$7,$8,$9)",
+        )
+        .bind(exception_id)
+        .bind(*OrgId::knl().as_uuid())
+        .bind(format!("AT-{employee}"))
+        .bind(employee)
+        .bind(*branch.as_uuid())
+        .bind(OffsetDateTime::now_utc().date() + Duration::days(12))
+        .bind(*actor.as_uuid())
+        .bind(format!("resolution-without-overtime-{employee}"))
+        .bind("a".repeat(64))
+        .execute(&owner_pool)
+        .await
+        .unwrap();
+
+        let store = PgAttendanceStore::new(runtime_role_pool(&owner_pool).await);
+        let caller = CallerScope {
+            org_id: *OrgId::knl().as_uuid(),
+            user_id: *actor.as_uuid(),
+            branch_ids: vec![*branch.as_uuid()],
+            org_wide: false,
+        };
+        let resolved = store
+            .resolve_exception(
+                &caller,
+                ResolveException {
+                    exception_id,
+                    action: ResolutionAction::Confirm,
+                    reason: "verified attendance exception".to_owned(),
+                    linked_work_ref: None,
+                    overtime_minutes: None,
+                },
+            )
+            .await
+            .expect("CONFIRM without overtime hours must persist through the runtime adapter");
+
+        assert_eq!(resolved.status, "RESOLVED");
+        assert_eq!(
+            resolved
+                .resolution
+                .as_ref()
+                .and_then(|resolution| resolution.ot_hours.as_deref()),
+            None,
+        );
+        let persisted: (String, Option<String>, i64) = sqlx::query_as(
+            "SELECT e.status,r.ot_hours::text, \
+                    (SELECT count(*) FROM audit_events \
+                     WHERE action='attendance.exception.resolve' AND target_id=e.id::text) \
+             FROM attendance_exceptions e \
+             JOIN attendance_exception_resolutions r \
+               ON r.exception_id=e.id AND r.org_id=e.org_id \
+             WHERE e.id=$1",
+        )
+        .bind(exception_id)
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(persisted, ("RESOLVED".to_owned(), None, 1));
+    })
+    .await;
+}
+
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn overtime_resolution_round_trips_numeric_hours(owner_pool: PgPool) {
+    scope_org(OrgId::knl(), async move {
+        let branch = seed_branch(
+            &owner_pool,
+            "attendance-overtime-resolution",
+            "operations",
+        )
+        .await;
+        let provisioner = seed_user(
+            &owner_pool,
+            "Employee Directory Provisioner",
+            "SUPER_ADMIN",
+            branch,
+        )
+        .await;
+        let actor = seed_user(&owner_pool, "Attendance Manager", "ADMIN", branch).await;
+        let employee =
+            seed_employee(&owner_pool, branch, provisioner, "Overtime employee").await;
+        let exception_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO attendance_exceptions \
+             (id,org_id,code,kind,employee_id,branch_id,work_date,detail,created_by,idempotency_key,request_fingerprint) \
+             VALUES ($1,$2,$3,'UNAPPROVED_OVERTIME',$4,$5,$6,'unapproved overtime',$7,$8,$9)",
+        )
+        .bind(exception_id)
+        .bind(*OrgId::knl().as_uuid())
+        .bind(format!("AT-{employee}"))
+        .bind(employee)
+        .bind(*branch.as_uuid())
+        .bind(OffsetDateTime::now_utc().date() + Duration::days(13))
+        .bind(*actor.as_uuid())
+        .bind(format!("overtime-resolution-{employee}"))
+        .bind("a".repeat(64))
+        .execute(&owner_pool)
+        .await
+        .unwrap();
+
+        let store = PgAttendanceStore::new(runtime_role_pool(&owner_pool).await);
+        let caller = CallerScope {
+            org_id: *OrgId::knl().as_uuid(),
+            user_id: *actor.as_uuid(),
+            branch_ids: vec![*branch.as_uuid()],
+            org_wide: false,
+        };
+        let resolved = store
+            .resolve_exception(
+                &caller,
+                ResolveException {
+                    exception_id,
+                    action: ResolutionAction::ApproveOvertime,
+                    reason: "verified work order".to_owned(),
+                    linked_work_ref: Some("WO-ATTENDANCE-001".to_owned()),
+                    overtime_minutes: Some(90),
+                },
+            )
+            .await
+            .expect("approved overtime must round-trip the persisted NUMERIC hours");
+
+        assert_eq!(
+            resolved
+                .resolution
+                .as_ref()
+                .and_then(|resolution| resolution.ot_hours.as_deref()),
+            Some("1.50"),
+        );
+        let persisted: String = sqlx::query_scalar(
+            "SELECT ot_hours::text FROM attendance_exception_resolutions WHERE exception_id=$1",
+        )
+        .bind(exception_id)
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+        assert_eq!(persisted, "1.50");
+    })
+    .await;
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -592,7 +844,7 @@ async fn legacy_assignment_rechecks_after_leave_commit(owner_pool: PgPool) {
             .execute(&mut *leave)
             .await
             .unwrap();
-        let mut legacy = tokio::spawn(async move { sqlx::query("INSERT INTO attendance_substitutions (org_id,site,branch_id,role,cover_date,from_minutes,to_minutes,covered_employee_id,reason_kind,worker_employee_id,worker_name,worker_type,created_by,idempotency_key,request_fingerprint) VALUES ($1,'site',$2,'role',$3,480,960,$4,'OTHER',$4,'legacy','REGULAR',$5,'legacy-recheck',$6)").bind(*OrgId::knl().as_uuid()).bind(*branch.as_uuid()).bind(day).bind(worker).bind(*actor.as_uuid()).bind("a".repeat(64)).execute(&reader).await });
+        let legacy = tokio::spawn(async move { sqlx::query("INSERT INTO attendance_substitutions (org_id,site,branch_id,role,cover_date,from_minutes,to_minutes,covered_employee_id,reason_kind,worker_employee_id,worker_name,worker_type,created_by,idempotency_key,request_fingerprint) VALUES ($1,'site',$2,'role',$3,480,960,$4,'OTHER',$4,'legacy','REGULAR',$5,'legacy-recheck',$6)").bind(*OrgId::knl().as_uuid()).bind(*branch.as_uuid()).bind(day).bind(worker).bind(*actor.as_uuid()).bind("a".repeat(64)).execute(&reader).await });
         wait_for_advisory_lock_waiter(&owner_pool, &reader_session, &writer_session).await;
         leave.commit().await.unwrap();
         let error = legacy.await.unwrap().expect_err("legacy trigger rechecks committed leave");

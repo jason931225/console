@@ -1,7 +1,7 @@
 //! Tenant-scoped persistence for attendance.  All SQL is bind-parameterized;
 //! reads use RLS-bound connections and mutations write the domain audit event
 //! in the same transaction as their state transition.
-#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use std::collections::BTreeMap;
 
@@ -34,7 +34,7 @@ const LIST_EXCEPTIONS_SQL: &str = "\
     SELECT e.id,e.code,e.kind,e.status,e.employee_id,employee.name AS employee_name,\
            employee.org_unit AS team,e.branch_id,e.work_date,e.created_at AS occurred_at,\
            e.detail,e.evidence,e.links,e.created_at,r.action AS resolution_action,\
-           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours,r.actor_user_id,\
+           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours::text AS ot_hours,r.actor_user_id,\
            r.resolved_at AS resolved_at \
     FROM attendance_exceptions e \
     JOIN employees employee ON employee.id=e.employee_id AND employee.org_id=e.org_id \
@@ -50,7 +50,7 @@ const EXCEPTION_BY_ID_SQL: &str = "\
     SELECT e.id,e.code,e.kind,e.status,e.employee_id,employee.name AS employee_name,\
            employee.org_unit AS team,e.branch_id,e.work_date,e.created_at AS occurred_at,\
            e.detail,e.evidence,e.links,e.created_at,r.action AS resolution_action,\
-           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours,r.actor_user_id,\
+           r.reason AS resolution_reason,r.linked_work_ref,r.ot_hours::text AS ot_hours,r.actor_user_id,\
            r.resolved_at AS resolved_at \
     FROM attendance_exceptions e \
     JOIN employees employee ON employee.id=e.employee_id AND employee.org_id=e.org_id \
@@ -256,7 +256,7 @@ impl PgAttendanceStore {
             let kind = ExceptionKind::parse(&row.try_get::<String,_>("kind")?).map_err(app::AttendanceApplicationError::from)?;
             command.action.validate_for(kind, command.linked_work_ref.as_deref(), command.overtime_minutes).map_err(app::AttendanceApplicationError::from)?;
             let overtime_hours = command.overtime_minutes.map(|m| format!("{:.2}", f64::from(m) / 60.0));
-            let inserted=sqlx::query("INSERT INTO attendance_exception_resolutions (id,org_id,exception_id,action,reason,linked_work_ref,ot_hours,actor_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (org_id,exception_id) DO NOTHING").bind(Uuid::new_v4()).bind(caller.org_id).bind(command.exception_id).bind(command.action.as_db()).bind(&reason).bind(&command.linked_work_ref).bind(overtime_hours).bind(actor).execute(tx.as_mut()).await?;
+            let inserted=sqlx::query("INSERT INTO attendance_exception_resolutions (id,org_id,exception_id,action,reason,linked_work_ref,ot_hours,actor_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7::numeric,$8) ON CONFLICT (org_id,exception_id) DO NOTHING").bind(Uuid::new_v4()).bind(caller.org_id).bind(command.exception_id).bind(command.action.as_db()).bind(&reason).bind(&command.linked_work_ref).bind(overtime_hours).bind(actor).execute(tx.as_mut()).await?;
             if inserted.rows_affected()!=1 { return Err(AttendanceStoreError::Conflict); }
             sqlx::query("UPDATE attendance_exceptions SET status='RESOLVED' WHERE id=$1 AND status='OPEN'").bind(command.exception_id).execute(tx.as_mut()).await?;
             let view=exception_by_id(tx,command.exception_id).await?; Ok((view,vec![event(&caller,"attendance.exception.resolve","attendance_exception",command.exception_id,branch,Some(json!({"action":command.action})))?]))
@@ -541,7 +541,7 @@ impl PgAttendanceStore {
         let caller = caller.clone();
         with_audits::<_, _, AttendanceStoreError>(&self.pool, org, move |tx| Box::pin(async move {
             idempotency_lock(tx, caller.org_id, &key).await?;
-            let branch: Option<Uuid> = sqlx::query_scalar("SELECT branch_id FROM attendance_month_closes WHERE id=$1 FOR UPDATE").bind(command.close_id).fetch_optional(tx.as_mut()).await?.ok_or(AttendanceStoreError::NotFound)?;
+            let branch: Option<Uuid> = sqlx::query_scalar("SELECT branch_id FROM attendance_month_closes WHERE id=$1").bind(command.close_id).fetch_optional(tx.as_mut()).await?.ok_or(AttendanceStoreError::NotFound)?;
             app::ensure_scope(&caller, branch)?;
             let fingerprint_value = fingerprint(&json!({"close_id":command.close_id,"reason":reason,"detail":detail,"ref":reference}));
             let existing: Option<(Uuid, String)> = sqlx::query_as("SELECT id,request_fingerprint FROM attendance_close_amendments WHERE org_id=$1 AND idempotency_key=$2").bind(caller.org_id).bind(&key).fetch_optional(tx.as_mut()).await?;

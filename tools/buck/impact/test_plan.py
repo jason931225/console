@@ -113,6 +113,7 @@ class ImpactPlannerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "repo"
             (repo / "tools").mkdir(parents=True)
+            (repo / ".gitignore").write_text(".tmp/\n", encoding="utf-8")
             (repo / ".buckconfig").write_text("[cells]\n  root = .\n", encoding="utf-8")
             buck = repo / "tools/buck2"
             buck.write_text(
@@ -169,6 +170,217 @@ class ImpactPlannerTests(unittest.TestCase):
     def test_non_sha_revision_is_rejected_before_git_or_buck_access(self) -> None:
         with self.assertRaisesRegex(self.module.PlannerError, "full 40-character commit SHA"):
             self.module.require_commit(Path("/does/not/need/to/exist"), "main", "base")
+
+    def test_nonempty_diff_uses_only_a_candidate_archive_probe_without_registered_worktrees(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            (repo / "tools").mkdir(parents=True)
+            (repo / ".gitignore").write_text(".tmp/\n", encoding="utf-8")
+            (repo / ".buckconfig").write_text("[cells]\n  root = .\n", encoding="utf-8")
+            buck = repo / "tools/buck2"
+            buck.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "printf '%s|%s|%s\\n' \"$PWD\" \"$1\" \"${BUCK_ISOLATION_DIR-unset}\" >> \"$BUCK_IMPACT_TEST_LOG\"\n"
+                "case \"$1\" in\n"
+                "  audit) printf 'root: %s\\n' \"$PWD\" ;;\n"
+                "  uquery) printf '%s\\n' '{\"root//backend:unit\":{\"labels\":[\"owner.backend\"]}}' ;;\n"
+                "  *) exit 2 ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            buck.chmod(0o755)
+            for command in (
+                ["git", "init", "-q", str(repo)],
+                ["git", "-C", str(repo), "config", "user.email", "test@example.invalid"],
+                ["git", "-C", str(repo), "config", "user.name", "Impact Test"],
+                ["git", "-C", str(repo), "add", "."],
+                ["git", "-C", str(repo), "commit", "-qm", "base"],
+            ):
+                subprocess.run(command, check=True)
+            base = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True, capture_output=True, check=True
+            ).stdout.strip()
+            (repo / "changed.txt").write_text("candidate\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "changed.txt"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "candidate"], check=True)
+            candidate = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True, capture_output=True, check=True
+            ).stdout.strip()
+            before = subprocess.run(
+                ["git", "-C", str(repo), "worktree", "list", "--porcelain"], text=True, capture_output=True, check=True
+            ).stdout
+            log = Path(directory) / "buck.log"
+            completed = subprocess.run(
+                ["python3", str(PLAN), "--repo", str(repo), "--base", base, "--candidate", candidate],
+                text=True,
+                capture_output=True,
+                env={**os.environ, "BUCK_IMPACT_TEST_LOG": str(log)},
+                check=True,
+            )
+            after = subprocess.run(
+                ["git", "-C", str(repo), "worktree", "list", "--porcelain"], text=True, capture_output=True, check=True
+            ).stdout
+            manifest = json.loads(completed.stdout)
+            self.assertEqual(before, after)
+            self.assertFalse(any("worktree" in receipt["argv"] for receipt in manifest["receipts"]))
+            self.assertEqual(2, len(log.read_text(encoding="utf-8").splitlines()))
+            self.assertTrue(all(line.endswith("|unset") for line in log.read_text(encoding="utf-8").splitlines()))
+            self.assertEqual("shadow_adapter_full_universe", manifest["fallback_reason"])
+            self.assertEqual(["root//backend:unit"], [entry["target"] for entry in manifest["impacted_targets"]])
+            snapshot_root = repo / "buck-out" / "buck-impact-snapshots"
+            self.assertFalse(list(snapshot_root.glob("candidate-*")))
+            self.assertTrue(
+                all(str(snapshot_root) in line for line in log.read_text(encoding="utf-8").splitlines())
+            )
+            self.assertFalse(any(receipt["name"] == "configuration-compatibility" for receipt in manifest["receipts"]))
+            self.assertEqual(
+                manifest["graph_identity"]["base"]["configuration_blob_ids"],
+                manifest["graph_identity"]["candidate"]["configuration_blob_ids"],
+            )
+            self.assertEqual(
+                manifest["graph_identity"]["base"]["pinned_buck_manifest_sha256"],
+                manifest["graph_identity"]["candidate"]["pinned_buck_manifest_sha256"],
+            )
+
+    def test_incompatible_configuration_falls_back_without_a_base_buck_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            (repo / "tools").mkdir(parents=True)
+            (repo / ".gitignore").write_text(".tmp/\n", encoding="utf-8")
+            (repo / ".buckconfig").write_text("[cells]\n  root = .\n", encoding="utf-8")
+            buck = repo / "tools/buck2"
+            buck.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "printf '%s|%s\\n' \"$PWD\" \"$1\" >> \"$BUCK_IMPACT_TEST_LOG\"\n"
+                "case \"$1\" in\n"
+                "  audit) printf 'root: %s\\n' \"$PWD\" ;;\n"
+                "  uquery) printf '%s\\n' '[\"root//backend:unit\"]' ;;\n"
+                "  *) exit 2 ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            buck.chmod(0o755)
+            for command in (
+                ["git", "init", "-q", str(repo)],
+                ["git", "-C", str(repo), "config", "user.email", "test@example.invalid"],
+                ["git", "-C", str(repo), "config", "user.name", "Impact Test"],
+                ["git", "-C", str(repo), "add", "."],
+                ["git", "-C", str(repo), "commit", "-qm", "base"],
+            ):
+                subprocess.run(command, check=True)
+            base = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True, capture_output=True, check=True
+            ).stdout.strip()
+            (repo / ".buckconfig").write_text("[cells]\n  root = alternate\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", ".buckconfig"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "candidate"], check=True)
+            candidate = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True, capture_output=True, check=True
+            ).stdout.strip()
+            log = Path(directory) / "buck.log"
+            completed = subprocess.run(
+                ["python3", str(PLAN), "--repo", str(repo), "--base", base, "--candidate", candidate],
+                text=True,
+                capture_output=True,
+                env={**os.environ, "BUCK_IMPACT_TEST_LOG": str(log)},
+                check=True,
+            )
+            manifest = json.loads(completed.stdout)
+            self.assertEqual("incompatible_buck_toolchain_or_cell_configuration", manifest["fallback_reason"])
+            self.assertEqual(2, len(log.read_text(encoding="utf-8").splitlines()))
+
+    def test_declared_cell_buck_file_change_is_configuration_incompatible(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            (repo / "tools").mkdir(parents=True)
+            (repo / ".buckconfig").write_text("[cells]\n  root = .\n  none = none\n", encoding="utf-8")
+            buck = repo / "tools/buck2"
+            buck.write_text(
+                "#!/usr/bin/env bash\ncase \"$1\" in audit) printf 'root: %s\\n' \"$PWD\" ;; uquery) echo '[\"root//:unit\"]' ;; esac\n",
+                encoding="utf-8",
+            )
+            buck.chmod(0o755)
+            for command in (
+                ["git", "init", "-q", str(repo)],
+                ["git", "-C", str(repo), "config", "user.email", "test@example.invalid"],
+                ["git", "-C", str(repo), "config", "user.name", "Impact Test"],
+                ["git", "-C", str(repo), "add", "."],
+                ["git", "-C", str(repo), "commit", "-qm", "base"],
+            ):
+                subprocess.run(command, check=True)
+            base = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True, capture_output=True, check=True
+            ).stdout.strip()
+            (repo / "none").mkdir()
+            (repo / "none" / "BUCK").write_text("filegroup(name = 'new-cell')\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "none/BUCK"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "declare cell build file"], check=True)
+            candidate = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True, capture_output=True, check=True
+            ).stdout.strip()
+            completed = subprocess.run(
+                ["python3", str(PLAN), "--repo", str(repo), "--base", base, "--candidate", candidate],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            manifest = json.loads(completed.stdout)
+            self.assertEqual("incompatible_buck_toolchain_or_cell_configuration", manifest["fallback_reason"])
+            self.assertNotEqual(
+                manifest["graph_identity"]["base"]["configured_cell_buck_ids"],
+                manifest["graph_identity"]["candidate"]["configured_cell_buck_ids"],
+            )
+
+    def test_failed_probe_emits_typed_failure_manifest_with_cleanup_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            (repo / "tools").mkdir(parents=True)
+            (repo / ".buckconfig").write_text("[cells]\n  root = .\n", encoding="utf-8")
+            buck = repo / "tools/buck2"
+            buck.write_text("#!/usr/bin/env bash\necho audit failed >&2\nexit 17\n", encoding="utf-8")
+            buck.chmod(0o755)
+            for command in (
+                ["git", "init", "-q", str(repo)],
+                ["git", "-C", str(repo), "config", "user.email", "test@example.invalid"],
+                ["git", "-C", str(repo), "config", "user.name", "Impact Test"],
+                ["git", "-C", str(repo), "add", "."],
+                ["git", "-C", str(repo), "commit", "-qm", "fixture"],
+            ):
+                subprocess.run(command, check=True)
+            sha = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True, capture_output=True, check=True
+            ).stdout.strip()
+            output = Path(directory) / "failure.json"
+            completed = subprocess.run(
+                ["python3", str(PLAN), "--repo", str(repo), "--base", sha, "--candidate", sha, "--output", str(output)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(1, completed.returncode)
+            self.assertEqual("", completed.stdout)
+            manifest = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual("failed", manifest["status"])
+            self.assertEqual("planner_error", manifest["failure"]["kind"])
+            self.assertTrue(any(receipt["name"] == "buck-audit-cell" and receipt["exit_code"] == 17 for receipt in manifest["receipts"]))
+            self.assertTrue(any(receipt["name"].startswith("archive-cleanup-candidate-") for receipt in manifest["receipts"]))
+
+    def test_archive_rejects_symbolic_and_hard_link_entries(self) -> None:
+        import tarfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "destination"
+            cases = ((tarfile.SYMTYPE, "../../outside"), (tarfile.SYMTYPE, "inside"), (tarfile.LNKTYPE, "inside"), (tarfile.FIFOTYPE, ""))
+            for index, (entry_type, linkname) in enumerate(cases):
+                archive = Path(directory) / f"unsafe-{index}.tar"
+                with tarfile.open(archive, "w") as tar:
+                    entry = tarfile.TarInfo("entry")
+                    entry.type, entry.linkname = entry_type, linkname
+                    tar.addfile(entry)
+                with self.assertRaisesRegex(self.module.PlannerError, "unsupported special entry"):
+                    self.module.extract_archive(archive, destination)
 
 
 if __name__ == "__main__":

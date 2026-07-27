@@ -148,12 +148,11 @@ impl AnalyticsFactBinding {
         }
         if let AnalyticsResolvedScope::Dashboard(DashboardAnalyticsScope::Branch(branch_id)) =
             resolved_scope
+            && !authorized_branch_scope.allows(branch_id)
         {
-            if !authorized_branch_scope.allows(branch_id) {
-                return Err(KernelError::forbidden(
-                    "analytics fact binding branch is outside the authorized scope",
-                ));
-            }
+            return Err(KernelError::forbidden(
+                "analytics fact binding branch is outside the authorized scope",
+            ));
         }
         // Region membership is not represented by `BranchScope`; adapters must
         // resolve a region to its branches and verify that membership before
@@ -628,12 +627,12 @@ impl DashboardAnalyticsQuery {
         requested_scope: DashboardAnalyticsScope,
         branch_scope: BranchScope,
     ) -> Result<Self, KernelError> {
-        if let DashboardAnalyticsScope::Branch(branch_id) = requested_scope {
-            if !branch_scope.allows(branch_id) {
-                return Err(KernelError::forbidden(
-                    "dashboard branch is outside the authorized scope",
-                ));
-            }
+        if let DashboardAnalyticsScope::Branch(branch_id) = requested_scope
+            && !branch_scope.allows(branch_id)
+        {
+            return Err(KernelError::forbidden(
+                "dashboard branch is outside the authorized scope",
+            ));
         }
         Ok(Self {
             context,

@@ -514,9 +514,23 @@ const validPr473Files = {
             -c "DROP DATABASE IF EXISTS mnt_apalis_contract WITH (FORCE)" \
             -c "CREATE DATABASE mnt_apalis_contract OWNER mnt_app"
 
+          BUCK_ADMIN_PASSWORD="$(openssl rand -hex 32)"
+          umask 077
+          printf "CREATE ROLE mnt_buck_admin SUPERUSER LOGIN PASSWORD '%s';\\n" \
+            "$BUCK_ADMIN_PASSWORD" > "$RUNNER_TEMP/buck-admin.sql"
+          docker run --rm --network host \
+            -e PGPASSWORD=postgres \
+            -v "$RUNNER_TEMP/buck-admin.sql:/buck-admin.sql:ro" \
+            --entrypoint psql \
+            postgres:18.4@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20 \
+            -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f /buck-admin.sql
+          rm -f "$RUNNER_TEMP/buck-admin.sql"
+
           echo "::add-mask::$APP_PASSWORD"
           echo "::add-mask::$RT_PASSWORD"
+          echo "::add-mask::$BUCK_ADMIN_PASSWORD"
           {
+            echo "MNT_BUCK_ADMIN_DATABASE_URL=postgres://mnt_buck_admin:\${BUCK_ADMIN_PASSWORD}@localhost:5432/mnt_ci?options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1"
             echo "MNT_APALIS_OWNER_DATABASE_URL=postgres://mnt_app:\${APP_PASSWORD}@localhost:5432/mnt_apalis_contract"
             echo "MNT_APALIS_RUNTIME_DATABASE_URL=postgres://mnt_rt:\${RT_PASSWORD}@localhost:5432/mnt_apalis_contract"
             echo "MNT_APALIS_ADMIN_DATABASE_URL=postgres://postgres:postgres@localhost:5432/mnt_apalis_contract"
@@ -900,8 +914,10 @@ jobs:
           trivy config --severity HIGH,CRITICAL --exit-code 1 "$RUNNER_TEMP/rendered-k8s"
   filesystem:
     steps:
+      - name: Verify canonical Trivy exception projection
+        run: node scripts/generate-trivy-dev-codegen-exceptions.mjs --check
       - name: Trivy filesystem scan
-        run: trivy fs --scanners vuln,secret --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 .
+        run: trivy fs --scanners vuln,secret --ignore-unfixed --ignorefile security/trivy-dev-codegen-exceptions.yaml --severity HIGH,CRITICAL --exit-code 1 .
   rust-advisories:
     steps:
       - name: Run cargo audit
@@ -915,7 +931,11 @@ jobs:
       - name: OpenAPI toolchain compatibility
         run: npm run test:openapi-toolchain-security
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: |
+          npm audit --omit=dev --audit-level=high --json > report.json
+          node scripts/check-node-audit-exceptions.mjs --mode production --audit-report report.json
+          npm audit --audit-level=high --json > report.json
+          node scripts/check-node-audit-exceptions.mjs --mode dev-codegen --audit-report report.json
 `,
   ".github/workflows/image-release.yml": `name: Image Release
 on:

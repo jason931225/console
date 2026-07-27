@@ -12,8 +12,8 @@
 
 use mnt_kernel_core::{AuditAction, AuditEvent, KernelError, TraceContext, UserId};
 use mnt_platform_authz::cedar_pbac::authoring::{
-    self, AuthoredPolicy, DraftValidation, NoCodeBlocks, ReviewDecision, ReviewStatus, SimRequest,
-    SimulationOutcome,
+    self, AuthoredPolicy, DeclaredAttr, DraftValidation, NoCodeBlocks, ReviewDecision,
+    ReviewStatus, SimRequest, SimulationOutcome,
 };
 use mnt_platform_db::{DbError, with_audit, with_org_conn};
 use mnt_platform_request_context::current_org;
@@ -413,11 +413,18 @@ impl PgCedarPolicyStore {
     /// The ontology read path lowers these into the SQL residual under the
     /// already-armed RLS tenant floor; malformed persisted rows are a hard error
     /// rather than an optimistic unfiltered read.
+    /// `declared` are the object type's own property definitions, supplied by the
+    /// ontology caller. The execution layer has always lowered conditions against
+    /// arbitrary instance attributes; passing the declared set lets the authoring
+    /// validator admit the same properties instead of only the four generic
+    /// `Resource` attributes, while Cedar still strict-validates every read.
     pub async fn load_enforced_object_policy_blocks(
         &self,
         object_type_id: Uuid,
+        declared: &[DeclaredAttr],
     ) -> Result<Vec<NoCodeBlocks>, PgCedarError> {
         let org = current_org().map_err(KernelError::from)?;
+        let declared = declared.to_vec();
         with_org_conn::<_, _, PgCedarError>(&self.pool, org, move |tx| {
             Box::pin(async move {
                 let rows = sqlx::query(
@@ -449,7 +456,7 @@ impl PgCedarPolicyStore {
                                 "invalid enforced object policy row {policy_id}: {error}"
                             )))
                         })?;
-                        let validation = authoring::validate_blocks(org, &blocks);
+                        let validation = authoring::validate_blocks_with(org, &blocks, &declared);
                         if validation_status != "valid" || !validation.valid {
                             return Err(PgCedarError::Domain(KernelError::validation(format!(
                                 "enforced object policy row {policy_id} is not valid"

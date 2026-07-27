@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseImmutableJson } from './immutable-json.mjs';
 import { extractConsoleRouteFacts, extractConsoleRouteFactsFromTexts } from './route-inventory.mjs';
+import { CONSOLE_CANDIDATE_SIGNING_AUTHORITY, sshSignatureMatchesAuthority, verifyCommitWithCandidateSshPolicy } from './ssh-signature-policy.mjs';
+import { verifyConsoleAuthorityTrain } from './verify-console-authority-train.mjs';
 
 const SHA = /^[0-9a-f]{40}$/;
 const STATES = new Set(['DECLARED', 'PLANNED', 'IMPLEMENTED', 'VERIFIED', 'EXPOSED', 'HOLD']);
@@ -34,14 +36,14 @@ function canonicalReceiptPath(capabilityId, candidateSha) { return `docs/evidenc
 function git(root, args, encoding = 'utf8') { return execFileSync('git', ['-C', root, ...args], { encoding, stdio: ['ignore', 'pipe', 'pipe'] }); }
 function gitSucceeds(root, args) { try { git(root, args); return true; } catch { return false; } }
 function repositoryPath(value) { return typeof value === 'string' && value !== '' && !value.includes('..') && !value.startsWith('/') && !value.includes('\\'); }
-function isAuthorityControlPath(value) { return AUTHORITY_CONTROL_PATHS.has(value) || value.startsWith('scripts/console/'); }
-function verifySignedCommit(repoRoot, sha, label) {
+function isAuthorityControlPath(value) { return AUTHORITY_CONTROL_PATHS.has(value); }
+function verifySignedCommit(repoRoot, candidateSha, sha, label, authority = CONSOLE_CANDIDATE_SIGNING_AUTHORITY) {
   if (!gitSucceeds(repoRoot, ['cat-file', '-e', `${sha}^{commit}`])) fail(`${label} SHA is unresolvable`);
-  const verified = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', sha], { encoding: 'utf8' });
-  if (verified.status !== 0) fail(`${label} commit signature is not valid`);
+  try { verifyCommitWithCandidateSshPolicy(repoRoot, candidateSha, sha, authority); } catch (error) { fail(`${label} commit signature is not valid: ${error instanceof Error ? error.message : String(error)}`); }
 }
 function assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha) {
   const fields = git(repoRoot, ['diff', '--raw', '-z', '--abbrev=40', '--find-renames', '--find-copies-harder', `${candidateSha}..${integrationTipSha}`]).split('\0');
+  const changed = new Set();
   for (let index = 0; index < fields.length - 1;) {
     const header = fields[index++];
     const match = header.match(/^:([0-7]{6}) ([0-7]{6}) [0-9a-f]{40} [0-9a-f]{40} ([A-Z])(?:\d+)?$/);
@@ -49,24 +51,26 @@ function assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha) {
     const [, oldMode, newMode, status] = match;
     const paths = status === 'R' || status === 'C' ? [fields[index++], fields[index++]] : [fields[index++]];
     if (paths.some((entry) => !isAuthorityControlPath(entry))) fail(`integration tip changes product path after candidate: ${paths.find((entry) => !isAuthorityControlPath(entry))}`);
-    if (oldMode !== '000000' && oldMode !== '100644' && oldMode !== '100755') fail('integration tip changes a non-regular file');
-    if (newMode !== '000000' && newMode !== '100644' && newMode !== '100755') fail('integration tip changes a non-regular file');
+    if (oldMode !== '100644' || newMode !== '100644') fail('integration tip may only modify regular mode-100644 authority documents');
     if (status === 'R' || status === 'C') fail(`integration tip contains forbidden ${status === 'R' ? 'rename' : 'copy'}`);
-    if (!['A', 'D', 'M'].includes(status)) fail(`integration tip contains unsupported diff status: ${status}`);
-    if (status === 'M' && oldMode !== newMode) fail('integration tip changes file mode or type');
+    if (status !== 'M') fail(`integration tip contains unsupported diff status: ${status}`);
+    if (paths.length !== 1 || changed.has(paths[0])) fail('integration tip authority document diff is malformed');
+    changed.add(paths[0]);
   }
+  if (changed.size !== AUTHORITY_CONTROL_PATHS.size || [...AUTHORITY_CONTROL_PATHS].some((entry) => !changed.has(entry))) fail('integration tip must modify exactly the three authority documents');
 }
 
 /**
  * Attests an immutable product candidate C and a later authority tip T.
  * Product facts must be read through this resolver; authority files remain at T.
  */
-export function createConsoleCandidateSourceResolver(repoRoot, candidateSha, integrationTipSha) {
+export function createConsoleCandidateSourceResolver(repoRoot, candidateSha, integrationTipSha, { candidateSigningAuthority = CONSOLE_CANDIDATE_SIGNING_AUTHORITY } = {}) {
   if (typeof repoRoot !== 'string' || !path.isAbsolute(repoRoot)) fail('candidate attestation requires canonical repository root');
   sha(candidateSha, 'candidate sha'); sha(integrationTipSha, 'integration tip SHA');
-  verifySignedCommit(repoRoot, candidateSha, 'candidate');
-  if (!gitSucceeds(repoRoot, ['cat-file', '-e', `${integrationTipSha}^{commit}`])) fail('integration tip SHA is unresolvable');
-  if (!gitSucceeds(repoRoot, ['merge-base', '--is-ancestor', candidateSha, integrationTipSha])) fail('candidate SHA is not an ancestor of integration tip');
+  verifySignedCommit(repoRoot, candidateSha, candidateSha, 'candidate', candidateSigningAuthority);
+  verifySignedCommit(repoRoot, candidateSha, integrationTipSha, 'integration tip', candidateSigningAuthority);
+  const parents = git(repoRoot, ['rev-list', '--parents', '-n', '1', integrationTipSha]).trim().split(/\s+/);
+  if (parents.length !== 2 || parents[1] !== candidateSha) fail('integration tip must be the direct single-parent child of candidate');
   assertAuthorityOnlyDiff(repoRoot, candidateSha, integrationTipSha);
   const readText = (relativePath) => {
     if (!repositoryPath(relativePath)) fail('candidate source path is not repository-relative');
@@ -95,12 +99,6 @@ export function promotionAuthorityDigests(registry, jurisdiction) {
   }
   return Object.freeze({ registry: canonicalJsonDigest(registryAuthority), jurisdiction: canonicalJsonDigest(jurisdiction) });
 }
-function sshSignatureMatches(status, signing) {
-  if (signing?.format !== 'ssh' || typeof signing.principal !== 'string' || typeof signing.fingerprint !== 'string') return false;
-  const lines = String(status).split(/\r?\n/).filter((line) => line.startsWith('Good "git" signature'));
-  const match = lines.length === 1 && lines[0].match(/^Good "git" signature for (.+) with [A-Za-z0-9-]+ key (SHA256:[A-Za-z0-9+/]+={0,2})$/);
-  return Boolean(match && match[1] === signing.principal && match[2] === signing.fingerprint);
-}
 function gpgSignatureMatches(status, signing) {
   if (signing?.format !== 'gpg' || !/^[A-F0-9]{40,64}$/.test(signing.fingerprint ?? '')) return false;
   const lines = String(status).split(/\r?\n/).filter((line) => line.startsWith('[GNUPG:] VALIDSIG '));
@@ -127,9 +125,15 @@ function verifyImmutableReviewReceipt(repoRoot, reviewer, cap, candidate, outcom
   if (parsed.candidate_sha !== candidate.sha || parsed.capability_id !== cap.id || JSON.stringify(receiptOutcomes) !== JSON.stringify(expectedOutcomes) || !expectedOutcomes.every((id) => outcomeIds.has(id)) || parsed.evidence_digest !== review.evidence_digest || parsed.verdict !== review.status || parsed.reviewer_id !== reviewer.id || parsed.registry_canonical_sha256 !== authorityDigests.registry || parsed.jurisdiction_canonical_sha256 !== authorityDigests.jurisdiction || review.registry_canonical_sha256 !== authorityDigests.registry || review.jurisdiction_canonical_sha256 !== authorityDigests.jurisdiction) fail(`${cap.id} receipt payload is not bound to candidate and authority digests`);
   const [authorName, authorEmail, committerName, committerEmail] = git(repoRoot, ['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce', review.review_commit]).trim().split('\0');
   if (authorName !== reviewer.author_name || authorEmail !== reviewer.author_email || committerName !== reviewer.committer_name || committerEmail !== reviewer.committer_email) fail(`${cap.id} review commit identity is not trusted`);
-  const signature = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', review.review_commit], { encoding: 'utf8' });
-  const status = `${signature.stdout ?? ''}${signature.stderr ?? ''}`;
-  if (signature.status !== 0 || !(sshSignatureMatches(status, reviewer.signing) || gpgSignatureMatches(status, reviewer.signing))) fail(`${cap.id} review signature is not trusted`);
+  let status;
+  if (reviewer.signing?.format === 'ssh') {
+    try { status = verifyCommitWithCandidateSshPolicy(repoRoot, candidate.sha, review.review_commit, reviewer.signing); } catch { fail(`${cap.id} review signature is not trusted`); }
+    if (!sshSignatureMatchesAuthority(status, reviewer.signing)) fail(`${cap.id} review signature is not trusted`);
+  } else {
+    const signature = spawnSync('git', ['-C', repoRoot, 'verify-commit', '--raw', review.review_commit], { encoding: 'utf8' });
+    status = `${signature.stdout ?? ''}${signature.stderr ?? ''}`;
+    if (signature.status !== 0 || !gpgSignatureMatches(status, reviewer.signing)) fail(`${cap.id} review signature is not trusted`);
+  }
   const attestation = Object.freeze({}); immutableReceiptAttestations.add(attestation); return attestation;
 }
 
@@ -189,8 +193,10 @@ export function validateConsoleTruthLedger(registry, jurisdiction, { resolveSha 
     nonempty(delivery.id, `${cap.id} delivery unit id`);
     if (!['NOT_APPLICABLE','REQUIRED','REQUIRED_UNRESOLVED'].includes(delivery.rust_status)) fail(`${cap.id} delivery unit has invalid Rust status`);
     const buckTargets = array(delivery.buck2_targets);
+    const verificationBuckTargets = array(cap.tests?.buck2_targets);
     if (delivery.rust_status === 'REQUIRED' && !buckTargets.length) fail(`${cap.id} Rust-required delivery unit has empty Buck targets`);
     if (delivery.rust_status === 'REQUIRED_UNRESOLVED' && (truth.implementation !== 'HOLD' || evidence.status !== 'HOLD')) fail(`${cap.id} unresolved Rust delivery must remain HOLD`);
+    if (verificationBuckTargets.length && (buckTargets.length !== verificationBuckTargets.length || buckTargets.some((target, index) => target !== verificationBuckTargets[index]))) fail(`${cap.id} delivery Buck targets must match declared verification targets`);
     for (const target of buckTargets) { if (typeof target !== 'string' || !/^\/\/[A-Za-z0-9_./-]+:[A-Za-z0-9_.-]+$/.test(target) || !resolveBuckTarget(target)) fail(`${cap.id} has invalid/nonexistent Buck target`); }
     const dependencies = array(cap.dependency_edges);
     for (const edge of dependencies) {
@@ -242,11 +248,17 @@ export function isValidatedConsoleTruthLedger(registry) { return validatedRegist
 
 function main() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const integrationTipSha = process.env.CONSOLE_INTEGRATION_TIP_SHA;
-  if (!SHA.test(integrationTipSha ?? '')) fail('CONSOLE_INTEGRATION_TIP_SHA must be a full lowercase Git SHA');
-  const registry = parseImmutableJson(git(root, ['show', `${integrationTipSha}:docs/program/console-capability-registry.json`]), 'console capability registry').value;
-  const jurisdiction = parseImmutableJson(git(root, ['show', `${integrationTipSha}:docs/program/console-jurisdiction-register.json`]), 'console jurisdiction register').value;
-  const candidateSource = createConsoleCandidateSourceResolver(root, registry.candidate?.sha, integrationTipSha);
+  const candidateSha = process.env.CONSOLE_CANDIDATE_SHA;
+  const authorityTipSha = process.env.CONSOLE_AUTHORITY_TIP_SHA;
+  const syntheticMergeSha = process.env.CONSOLE_SYNTHETIC_MERGE_SHA;
+  if (!SHA.test(candidateSha ?? '')) fail('CONSOLE_CANDIDATE_SHA must be a full lowercase Git SHA');
+  if (!SHA.test(authorityTipSha ?? '')) fail('CONSOLE_AUTHORITY_TIP_SHA must be a full lowercase Git SHA');
+  if (!SHA.test(syntheticMergeSha ?? '')) fail('CONSOLE_SYNTHETIC_MERGE_SHA must be a full lowercase Git SHA');
+  verifyConsoleAuthorityTrain(root, candidateSha, authorityTipSha, syntheticMergeSha);
+  const registry = parseImmutableJson(git(root, ['show', `${authorityTipSha}:docs/program/console-capability-registry.json`]), 'console capability registry').value;
+  const jurisdiction = parseImmutableJson(git(root, ['show', `${authorityTipSha}:docs/program/console-jurisdiction-register.json`]), 'console jurisdiction register').value;
+  if (registry.candidate?.sha !== candidateSha) fail('CONSOLE_CANDIDATE_SHA must equal the authority-tip candidate SHA');
+  const candidateSource = createConsoleCandidateSourceResolver(root, candidateSha, authorityTipSha);
   const resolveBuckTarget = (target) => { try { execFileSync(path.join(root, 'tools/buck2'), ['targets', target], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
   const resolveSha = (value) => { try { execFileSync('git', ['cat-file', '-e', `${value}^{commit}`], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; } };
   const routeFacts = extractConsoleRouteFactsFromCandidate(candidateSource);

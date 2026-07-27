@@ -3,12 +3,17 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { createConsoleApiClient } from "../../api/client";
+import {
+  createConsoleApiClient,
+  type ConsoleApiClient,
+} from "../../api/client";
 import { ko } from "../../i18n/ko";
 import { PolicyGateProvider, type PolicyGate } from "../policy";
+import type { EntityRef } from "../runtime/entityRef";
+import type { ObjectRuntimePort } from "../runtime/objectRuntime";
 import { createObjectCardStub } from "./stub";
-import { objectCardGovStrings } from "./strings";
-import { GovernedObjectCard } from "./wired";
+import { objectCardDynStrings, objectCardGovStrings } from "./strings";
+import { GovernedObjectCard, GovernedObjectCardResolved } from "./wired";
 import type { ObjectCardDescriptor, ObjectCardHandlers } from "./types";
 
 const T = ko.console.objectcard;
@@ -105,7 +110,7 @@ function renderGoverned(
   const descriptor = createObjectCardStub();
   return render(
     <PolicyGateProvider gate={allowGate}>
-      <GovernedObjectCard
+      <GovernedObjectCardResolved
         api={api}
         descriptor={descriptor}
         handlers={handlers}
@@ -123,7 +128,7 @@ function renderGovernedWith(
 ) {
   return render(
     <PolicyGateProvider gate={gate}>
-      <GovernedObjectCard api={api} descriptor={descriptor} handlers={handlers} />
+      <GovernedObjectCardResolved api={api} descriptor={descriptor} handlers={handlers} />
     </PolicyGateProvider>,
   );
 }
@@ -143,6 +148,93 @@ function apiResult(data: unknown) {
 function clickAction(title: string) {
   fireEvent.click(screen.getByRole("button", { name: T.actionAria(title) }));
 }
+
+describe("GovernedObjectCard runtime identity and real-handler controls", () => {
+  it("never reuses a descriptor across delimiter-colliding authority partitions", async () => {
+    const descriptorA = createObjectCardStub({ title: "Authority A secret" });
+    const pendingB = deferred<ObjectCardDescriptor | undefined>();
+    const referenceA: EntityRef = {
+      authority: "ontology",
+      tenantScopeKey: "tenant|a",
+      authorityKey: "authority",
+      objectTypeId: "type",
+      id: "object",
+    };
+    const referenceB: EntityRef = {
+      authority: "ontology",
+      tenantScopeKey: "tenant",
+      authorityKey: "a|authority",
+      objectTypeId: "type",
+      id: "object",
+    };
+    const resolve = vi.fn(
+      (reference: EntityRef): Promise<ObjectCardDescriptor | undefined> =>
+        reference.tenantScopeKey === referenceA.tenantScopeKey
+          ? Promise.resolve(descriptorA)
+          : pendingB.promise,
+    );
+    const runtime: ObjectRuntimePort = {
+      authority: "ontology",
+      resolve,
+    };
+    const api = {
+      GET: vi.fn(() => new Promise<never>(() => undefined)),
+    } as unknown as ConsoleApiClient;
+    const view = render(
+      <PolicyGateProvider gate={allowGate}>
+        <GovernedObjectCard api={api} reference={referenceA} runtime={runtime} />
+      </PolicyGateProvider>,
+    );
+    expect(await screen.findByText("Authority A secret")).toBeInTheDocument();
+
+    view.rerender(
+      <PolicyGateProvider gate={allowGate}>
+        <GovernedObjectCard api={api} reference={referenceB} runtime={runtime} />
+      </PolicyGateProvider>,
+    );
+    expect(screen.queryByText("Authority A secret")).toBeNull();
+
+    pendingB.resolve(undefined);
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Loading object")).toBeNull();
+    });
+  });
+
+  it("omits draft and override edit controls without a real apply handler", () => {
+    const api = {
+      GET: vi.fn(() => new Promise<never>(() => undefined)),
+    } as unknown as ConsoleApiClient;
+    const draft = createObjectCardStub({ lifecycleState: "draft" });
+    const view = renderGovernedWith(api, draft);
+    expect(screen.queryByRole("button", { name: T.edit.direct })).toBeNull();
+
+    view.rerender(
+      <PolicyGateProvider gate={allowGate}>
+        <GovernedObjectCardResolved
+          api={api}
+          descriptor={createObjectCardStub({ lifecycleState: "active" })}
+        />
+      </PolicyGateProvider>,
+    );
+    expect(screen.queryByRole("button", { name: T.edit.override })).toBeNull();
+  });
+
+  it("keeps acting chips disabled without a real navigation handler", () => {
+    const api = {
+      GET: vi.fn(() => new Promise<never>(() => undefined)),
+    } as unknown as ConsoleApiClient;
+    renderGovernedWith(api, createObjectCardStub());
+
+    expect(
+      screen.getByRole("button", {
+        name: objectCardDynStrings().acting.navigateAria(
+          "wf-wo-review",
+          T.acting.automation,
+        ),
+      }),
+    ).toBeDisabled();
+  });
+});
 
 describe("GovernedObjectCard action preflight → execute", () => {
   it("discards an API-A preflight after descriptor B is current and never executes through B", async () => {
@@ -170,7 +262,7 @@ describe("GovernedObjectCard action preflight → execute", () => {
     });
     view.rerender(
       <PolicyGateProvider gate={allowGate}>
-        <GovernedObjectCard api={apiB} descriptor={descriptorB} />
+        <GovernedObjectCardResolved api={apiB} descriptor={descriptorB} />
       </PolicyGateProvider>,
     );
 
@@ -203,7 +295,7 @@ describe("GovernedObjectCard action preflight → execute", () => {
     // the fence between the old continuation and this new authority.
     view.rerender(
       <PolicyGateProvider gate={gateB}>
-        <GovernedObjectCard api={api} descriptor={descriptor} />
+        <GovernedObjectCardResolved api={api} descriptor={descriptor} />
       </PolicyGateProvider>,
     );
     stalePreflight.resolve(
@@ -378,53 +470,60 @@ describe("GovernedObjectCard §20 override → four-eyes decide", () => {
 
   it("requires a reason before any override POST leaves the client", () => {
     const overrideCalls = vi.fn();
+    const onEdit = vi.fn();
     server.use(
       http.post("*/api/v1/governance/overrides", () => {
         overrideCalls();
         return HttpResponse.json(overrideSummary, { status: 201 });
       }),
     );
-    renderGoverned();
+    renderGoverned({ onEdit });
     fireEvent.click(screen.getByRole("button", { name: T.edit.override }));
     fireEvent.click(screen.getByRole("button", { name: T.edit.apply }));
     expect(overrideCalls).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it("opens the override from the API and surfaces the pending state + requester", async () => {
+    const onEdit = vi.fn();
     server.use(
       http.post("*/api/v1/governance/overrides", () =>
         HttpResponse.json(overrideSummary, { status: 201 }),
       ),
     );
-    renderGoverned();
+    renderGoverned({ onEdit });
     openOverride();
     expect(await screen.findByText(S.override.pendingTitle)).toBeTruthy();
     // Four-eyes: the requester is surfaced so approver ≠ requester is checkable.
     expect(screen.getByText(S.override.requester("user-requester"))).toBeTruthy();
     expect(screen.getByRole("button", { name: S.override.approve })).toBeTruthy();
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it("drops a late override-open response after authority replacement", async () => {
     const opened = deferred<HttpResponse>();
     const api = createConsoleApiClient();
     const descriptor = createObjectCardStub();
+    const onEdit = vi.fn();
     const gateA: PolicyGate = { can: () => true };
     const gateB: PolicyGate = { can: () => false };
     server.use(http.post("*/api/v1/governance/overrides", () => opened.promise));
-    const view = renderGovernedWith(api, descriptor, gateA);
+    const view = renderGovernedWith(api, descriptor, gateA, { onEdit });
     openOverride();
     view.rerender(
       <PolicyGateProvider gate={gateB}>
-        <GovernedObjectCard api={api} descriptor={descriptor} />
+        <GovernedObjectCardResolved api={api} descriptor={descriptor} handlers={{ onEdit }} />
       </PolicyGateProvider>,
     );
     opened.resolve(HttpResponse.json(overrideSummary, { status: 201 }));
     await waitFor(() => {
       expect(screen.queryByText(S.override.pendingTitle)).toBeNull();
     });
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it("surfaces the server's self-approval rejection", async () => {
+    const onEdit = vi.fn();
     server.use(
       http.post("*/api/v1/governance/overrides", () =>
         HttpResponse.json(overrideSummary, { status: 201 }),
@@ -441,7 +540,7 @@ describe("GovernedObjectCard §20 override → four-eyes decide", () => {
         ),
       ),
     );
-    renderGoverned();
+    renderGoverned({ onEdit });
     openOverride();
     fireEvent.click(await screen.findByRole("button", { name: S.override.approve }));
     expect(
@@ -451,6 +550,7 @@ describe("GovernedObjectCard §20 override → four-eyes decide", () => {
     ).toBeTruthy();
     // Still pending — the decision did not commit.
     expect(screen.getByText(S.override.pendingTitle)).toBeTruthy();
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it("records an approval and forwards the committed override to the host seam", async () => {
@@ -500,7 +600,7 @@ describe("GovernedObjectCard §20 override → four-eyes decide", () => {
     fireEvent.click(await screen.findByRole("button", { name: S.override.approve }));
     view.rerender(
       <PolicyGateProvider gate={gateB}>
-        <GovernedObjectCard api={api} descriptor={descriptor} handlers={{ onEdit: onEditB }} />
+        <GovernedObjectCardResolved api={api} descriptor={descriptor} handlers={{ onEdit: onEditB }} />
       </PolicyGateProvider>,
     );
     decided.resolve(
@@ -595,7 +695,7 @@ describe("GovernedObjectCard lifecycle transition preflight", () => {
     });
     view.rerender(
       <PolicyGateProvider gate={allowGate}>
-        <GovernedObjectCard api={api} descriptor={changedState} />
+        <GovernedObjectCardResolved api={api} descriptor={changedState} />
       </PolicyGateProvider>,
     );
     stalePreflight.resolve(apiResult({ configured: true, config: {}, outcome: passingChain }));
@@ -631,7 +731,7 @@ describe("GovernedObjectCard lifecycle transition preflight", () => {
     });
     view.rerender(
       <PolicyGateProvider gate={allowGate}>
-        <GovernedObjectCard api={apiB} descriptor={descriptorB} />
+        <GovernedObjectCardResolved api={apiB} descriptor={descriptorB} />
       </PolicyGateProvider>,
     );
 

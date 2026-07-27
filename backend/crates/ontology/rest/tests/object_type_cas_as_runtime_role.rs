@@ -743,6 +743,7 @@ async fn migration_0169_stages_existing_live_rows_without_inventing_normalized_p
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn policy_validation_failure_response(
     service: axum::Router,
     owner_pool: &PgPool,
@@ -839,25 +840,9 @@ async fn blocker_queue_is_tenant_scoped_cascades_and_attachment_effects_are_writ
     .unwrap();
 
     let runtime_pool = runtime_role_pool(&owner_pool).await;
-    let visible_to_a: Vec<Uuid> = scope_org(org_a, async {
-        sqlx::query_scalar(
-            "SELECT catalog_entry_id FROM cedar_policy_catalog_normalization_blockers",
-        )
-        .fetch_all(&runtime_pool)
-        .await
-        .unwrap()
-    })
-    .await;
+    let visible_to_a = blockers_visible_to(&runtime_pool, org_a).await;
     assert_eq!(visible_to_a, vec![catalog_a]);
-    let visible_to_b: Vec<Uuid> = scope_org(org_b, async {
-        sqlx::query_scalar(
-            "SELECT catalog_entry_id FROM cedar_policy_catalog_normalization_blockers",
-        )
-        .fetch_all(&runtime_pool)
-        .await
-        .unwrap()
-    })
-    .await;
+    let visible_to_b = blockers_visible_to(&runtime_pool, org_b).await;
     assert_eq!(visible_to_b, vec![catalog_b]);
 
     let cross_org_blocker = sqlx::query(
@@ -1011,6 +996,29 @@ fn created_object_type_id(body: &Value) -> mnt_ontology_domain::ObjectTypeId {
     mnt_ontology_domain::ObjectTypeId::from_uuid(id)
 }
 
+/// Reads the blocker queue as `mnt_rt` with `app.current_org` armed the way a
+/// request-scoped connection arms it. The table has no Rust read path, so there
+/// is no adapter to arm the GUC here: `scope_org` alone only sets a task-local,
+/// and a raw pooled query would leave `current_setting('app.current_org')` empty
+/// and read zero rows for every tenant — passing a "no cross-tenant rows"
+/// assertion while proving nothing.
+async fn blockers_visible_to(runtime_pool: &PgPool, org: OrgId) -> Vec<Uuid> {
+    let mut tx = runtime_pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('app.current_org', $1, true)")
+        .bind(org.as_uuid().to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let visible = sqlx::query_scalar(
+        "SELECT catalog_entry_id FROM cedar_policy_catalog_normalization_blockers",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap();
+    tx.rollback().await.unwrap();
+    visible
+}
+
 async fn seed_object_type(
     owner_pool: &PgPool,
     org: OrgId,
@@ -1029,7 +1037,29 @@ async fn seed_object_type(
                     backing_kind: mnt_ontology_domain::BackingKind::Instance,
                     backing_table: None,
                     primary_key_property: None,
-                    properties: Vec::new(),
+                    // Mirrors `policy_draft`: the cross-tenant instance seeded into this
+                    // type carries `owner`/`flagged`, and instance writes reject attributes
+                    // the object type does not declare.
+                    properties: vec![
+                        mnt_ontology_adapter_postgres::PropertyDefInput {
+                            key: "owner".to_owned(),
+                            title: "Owner".to_owned(),
+                            field_type: "text".to_owned(),
+                            config: json!({}),
+                            backing_column: None,
+                            required: true,
+                            in_property_policy: false,
+                        },
+                        mnt_ontology_adapter_postgres::PropertyDefInput {
+                            key: "flagged".to_owned(),
+                            title: "Flagged".to_owned(),
+                            field_type: "boolean".to_owned(),
+                            config: json!({}),
+                            backing_column: None,
+                            required: false,
+                            in_property_policy: false,
+                        },
+                    ],
                     links: Vec::new(),
                     actions: Vec::new(),
                     analytics: Vec::new(),
@@ -1111,6 +1141,7 @@ async fn attach_enforced_policy(
     .await;
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn attach_enforced_policy_with_attachment_effect(
     owner_pool: &PgPool,
     org: OrgId,

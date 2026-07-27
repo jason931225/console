@@ -11,26 +11,59 @@ const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
 const ciPreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs";
 const consoleRouteInventoryTestCommand = "node --test scripts/console/route-inventory.test.mjs";
+const consoleTruthLedgerCommand = "npm run check:console-truth-ledger";
+const consoleAuthorityTrainTestCommand = "node --test scripts/console/verify-console-authority-train.test.mjs";
 const consoleTruthLedgerTestCommand = "node --test scripts/console/validate-console-truth-ledger.test.mjs";
 const consoleFanoutPlannerTestCommand = "node --test scripts/console/plan-fanout.test.mjs";
+const consoleFanoutPlannerAdmissionCommand = 'node scripts/console/plan-fanout.mjs --candidate "$CONSOLE_CANDIDATE_SHA" --authority-tip "$CONSOLE_AUTHORITY_TIP_SHA" --synthetic-merge "$CONSOLE_SYNTHETIC_MERGE_SHA"';
+const consolePrCondition = "${{ github.event_name == 'pull_request' }}";
+const consoleTrainDerivation = [
+  "set -euo pipefail",
+  'CONSOLE_SYNTHETIC_MERGE_SHA="$(git rev-parse "$GITHUB_SHA^{commit}")"',
+  'test "$(git rev-parse HEAD)" = "$CONSOLE_SYNTHETIC_MERGE_SHA"',
+  'CONSOLE_AUTHORITY_TIP_SHA="$(git rev-parse "$CONSOLE_SYNTHETIC_MERGE_SHA^2")"',
+  'CONSOLE_CANDIDATE_SHA="$(git rev-parse "$CONSOLE_AUTHORITY_TIP_SHA^")"',
+  "{",
+  "printf 'CONSOLE_CANDIDATE_SHA=%s\\n' \"$CONSOLE_CANDIDATE_SHA\"",
+  "printf 'CONSOLE_AUTHORITY_TIP_SHA=%s\\n' \"$CONSOLE_AUTHORITY_TIP_SHA\"",
+  "printf 'CONSOLE_SYNTHETIC_MERGE_SHA=%s\\n' \"$CONSOLE_SYNTHETIC_MERGE_SHA\"",
+  '} >> "$GITHUB_ENV"',
+];
 const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
 const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
-const consoleIntegrationTipEnv = "CONSOLE_INTEGRATION_TIP_SHA: ${{ github.sha }}";
 const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:mnt-support-domain-unit";
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
-  "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch \\",
-  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution \\",
-  "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency",
+  "//tools/buck:dispatch-p1-postgres \\",
+  "//tools/buck:attendance-cancel-substitution-postgres \\",
+  "//tools/buck:attendance-concurrency-postgres",
 ];
+const postgresWrapperContracts = [
+  ["dispatch-p1-postgres", "//backend/crates/dispatch/adapter-postgres:mnt-dispatch-adapter-postgres-itest-p1_dispatch"],
+  ["attendance-cancel-substitution-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-cancel_substitution"],
+  ["attendance-concurrency-postgres", "//backend/crates/attendance/adapter-postgres:mnt-attendance-adapter-postgres-itest-concurrency"],
+  ["app-inline-postgres", "//backend/app:mnt-app-itest-inline-postgres"],
+  ["app-dev-auth-persona-guard-postgres", "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature"],
+  ["auth-rest-dev-auth-inline-postgres", "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev-auth-postgres"],
+  ["auth-rest-dev-auth-session-postgres", "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-dev_auth_session"],
+  ["auth-rest-dev-auth-group-admin-postgres", "//backend/crates/platform/auth-rest:mnt-platform-auth-rest-itest-group_admin_tenant_context"],
+  ["provisioning-dev-principal-upsert-race-postgres", "//backend/crates/platform/provisioning:mnt-platform-provisioning-itest-dev_principal_upsert_race"],
+  ["app-evaluation-cycle-api-postgres", "//backend/app:mnt-app-itest-evaluation_cycle_api"],
+  ["ontology-builtin-catalog-additive-upgrade-postgres", "//backend/crates/ontology/adapter-postgres:mnt-ontology-adapter-postgres-itest-builtin_catalog_additive_upgrade_as_runtime_role"],
+  ["app-org-change-api-postgres", "//backend/app:mnt-app-itest-org_change_api"],
+  ["app-purchase-request-collection-api-postgres", "//backend/app:mnt-app-itest-purchase_request_collection_api"],
+  ["app-workflow-object-context-api-postgres", "//backend/app:mnt-app-itest-workflow_object_context_api"],
+  ["equipment-3r-http-postgres", "//backend/crates/equipment/rest:mnt-equipment-rest-itest-equipment_3r_http"],
+  ["app-equipment-3r-api-postgres", "//backend/app:mnt-app-itest-equipment_3r_api"],
+];
+const postgresWrapperLoader = "run_test_with_postgres_env.sh";
+const postgresWrapperLabels = '["test.integration", "resource.postgres", "needs-postgres"]';
+const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", import.meta.url), "utf8");
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
-  "npm run check:console-truth-ledger",
   ciPreflightTestCommand,
   consoleRouteInventoryTestCommand,
-  consoleTruthLedgerTestCommand,
-  consoleFanoutPlannerTestCommand,
   buckPostgresEnvironmentTestCommand,
   buckPostgresHarnessTestCommand,
   "npm run check:ci-preflight",
@@ -99,8 +132,214 @@ function multilineRunCommands(step) {
     .filter(Boolean);
 }
 
-function hasEnvironment(step, entry) {
-  return step.includes(`        env:\n          ${entry}\n`);
+function runScript(step) {
+  const scalar = runScalar(step);
+  if (scalar && scalar !== "|") return scalar;
+  const multiline = step.match(/^        run: \|\n((?:          [^\n]*(?:\n|$))*)/m)?.[1];
+  return multiline?.replace(/^          /gm, "") ?? "";
+}
+
+function stripShellComment(line) {
+  let quote = null;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (escaped) {
+      escaped = false;
+    } else if (character === "\\") {
+      escaped = true;
+    } else if (quote) {
+      if (character === quote) quote = null;
+    } else if (character === "'" || character === '"') {
+      quote = character;
+    } else if (character === "#" && (index === 0 || /\s/.test(line[index - 1]))) {
+      return line.slice(0, index);
+    }
+  }
+  return line;
+}
+
+function shellCommandTokens(script) {
+  const commands = [];
+  let command = "";
+  for (const physicalLine of script.split(/\r?\n/)) {
+    const line = stripShellComment(physicalLine.trim());
+    if (!line) continue;
+    const continued = /\\\s*$/.test(line);
+    command += (command ? " " : "") + (continued ? line.replace(/\\\s*$/, "") : line);
+    if (!continued) {
+      commands.push(command);
+      command = "";
+    }
+  }
+  if (command) commands.push(command + "\\");
+
+  return commands.map((surface) => {
+    const tokens = [];
+    let token = "";
+    let quote = null;
+    let escaped = false;
+    const flush = () => {
+      if (token) tokens.push(token);
+      token = "";
+    };
+    for (let index = 0; index < surface.length; index += 1) {
+      const character = surface[index];
+      if (escaped) {
+        token += character;
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (quote) {
+        if (character === quote) quote = null;
+        else token += character;
+      } else if (character === "'" || character === '"') {
+        quote = character;
+      } else if (/\s/.test(character)) {
+        flush();
+      } else if (";|&".includes(character)) {
+        flush();
+        tokens.push(character);
+      } else {
+        token += character;
+      }
+    }
+    const malformed = quote !== null || escaped;
+    if (escaped) token += "\\";
+    flush();
+    return { tokens, malformed };
+  });
+}
+
+const maxExecutablePrefixDepth = 12;
+const maxExecutableTokens = 512;
+const assignmentToken = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+function mergeCargoAnalysis(left, right) {
+  for (const packageName of right.packages) left.packages.add(packageName);
+  left.malformed ||= right.malformed;
+  return left;
+}
+
+function emptyCargoAnalysis(malformed = false) {
+  return { packages: new Set(), malformed };
+}
+
+function packageArguments(tokens, index) {
+  const packages = new Set();
+  for (; index < tokens.length; index += 1) {
+    const argument = tokens[index];
+    let packageName = null;
+    if (argument === "-p" || argument === "--package") {
+      packageName = tokens[index + 1];
+      index += 1;
+    } else if (argument.startsWith("-p=")) {
+      packageName = argument.slice(3);
+    } else if (argument.startsWith("--package=")) {
+      packageName = argument.slice("--package=".length);
+    }
+    if (!packageName) continue;
+    packages.add(packageName);
+  }
+  return { packages, malformed: false };
+}
+
+function cargoTestAnalysis(tokens, depth = 0) {
+  if (depth > maxExecutablePrefixDepth || tokens.length > maxExecutableTokens) {
+    return emptyCargoAnalysis(true);
+  }
+  let index = 0;
+  while (assignmentToken.test(tokens[index] ?? "")) index += 1;
+  if (index === tokens.length) return emptyCargoAnalysis();
+
+  if (tokens[index] === "command") {
+    index += 1;
+    while (tokens[index]?.startsWith("-")) {
+      const option = tokens[index];
+      if (option === "--") {
+        index += 1;
+        break;
+      }
+      if (option === "-v" || option === "-V") return emptyCargoAnalysis();
+      if (option === "-p") {
+        index += 1;
+        continue;
+      }
+      return emptyCargoAnalysis(true);
+    }
+    return index < tokens.length
+      ? cargoTestAnalysis(tokens.slice(index), depth + 1)
+      : emptyCargoAnalysis(true);
+  }
+
+  if (tokens[index] === "env") {
+    index += 1;
+    while (tokens[index]) {
+      const option = tokens[index];
+      if (option === "--") {
+        index += 1;
+        break;
+      }
+      if (option === "-S" || option === "--split-string") {
+        const payload = tokens[index + 1];
+        if (!payload || index + 2 !== tokens.length) return emptyCargoAnalysis(true);
+        const payloads = shellCommandTokens(payload);
+        if (payloads.length === 0) return emptyCargoAnalysis(true);
+        return payloads.reduce(
+          (analysis, surface) => mergeCargoAnalysis(
+            analysis,
+            surface.malformed
+              ? emptyCargoAnalysis(true)
+              : cargoTestAnalysis(surface.tokens, depth + 1),
+          ),
+          emptyCargoAnalysis(),
+        );
+      }
+      if (["-u", "--unset", "-C", "--chdir"].includes(option)) {
+        if (!tokens[index + 1]) return emptyCargoAnalysis(true);
+        index += 2;
+      } else if (["-i", "--ignore-environment", "-v", "--debug"].includes(option)) {
+        index += 1;
+      } else if (assignmentToken.test(option)) {
+        index += 1;
+      } else if (option.startsWith("-")) {
+        return emptyCargoAnalysis(true);
+      } else {
+        break;
+      }
+    }
+    return index < tokens.length
+      ? cargoTestAnalysis(tokens.slice(index), depth + 1)
+      : emptyCargoAnalysis(true);
+  }
+
+  if (tokens[index] !== "cargo") return emptyCargoAnalysis();
+  index += 1;
+  if (tokens[index] === "test") return packageArguments(tokens, index + 1);
+  if (tokens[index] === "nextest" && tokens[index + 1] === "run") {
+    return packageArguments(tokens, index + 2);
+  }
+  return emptyCargoAnalysis();
+}
+
+function cargoTestAnalysisInStep(step) {
+  const analysis = emptyCargoAnalysis();
+  for (const surface of shellCommandTokens(runScript(step))) {
+    if (surface.malformed) {
+      mergeCargoAnalysis(analysis, emptyCargoAnalysis(true));
+      continue;
+    }
+    let segment = [];
+    for (const token of [...surface.tokens, ";"]) {
+      if (token === ";" || token === "|" || token === "&") {
+        mergeCargoAnalysis(analysis, cargoTestAnalysis(segment));
+        segment = [];
+      } else {
+        segment.push(token);
+      }
+    }
+  }
+  return analysis;
 }
 
 function requireUnconditionalRun(steps, command, job, failures) {
@@ -109,6 +348,47 @@ function requireUnconditionalRun(steps, command, job, failures) {
     failures.push(`${job} must run ${command}`);
   } else if (matchingSteps.some((step) => !isUnconditional(step))) {
     failures.push(`${job} must run ${command} unconditionally without if or continue-on-error`);
+  }
+}
+
+function requireConsoleExactMergeProof(workflow, steps, failures) {
+  const derive = steps.filter((step) => stepName(step) === "Derive exact console C/T/M train");
+  if (derive.length !== 1 || !hasOnlyExpectedCondition(derive[0], consolePrCondition) || multilineRunCommands(derive[0]).join("\n") !== consoleTrainDerivation.join("\n")) {
+    failures.push("preflight must derive exact C/T/M from the pull-request synthetic merge");
+  }
+  for (const command of [consoleTruthLedgerCommand, consoleFanoutPlannerAdmissionCommand]) {
+    const matching = steps.filter((step) => runScalar(step) === command);
+    if (matching.length !== 1 || !hasOnlyExpectedCondition(matching[0], consolePrCondition)) failures.push(`preflight must run ${command} only after exact C/T/M derivation on pull requests`);
+  }
+  for (const command of [consoleAuthorityTrainTestCommand, consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
+    const matching = steps.filter((step) => runScalar(step) === command);
+    if (matching.length !== 1 || !isUnconditional(matching[0])) failures.push(`preflight must run ${command} unconditionally on pull requests and main`);
+  }
+  if (workflow.includes("CONSOLE_INTEGRATION_TIP_SHA")) failures.push("preflight must not reference legacy CONSOLE_INTEGRATION_TIP_SHA");
+}
+
+function requirePostgresWrapperContracts(buildFile, failures) {
+  for (const [name, binary] of postgresWrapperContracts) {
+    const block = buildFile.match(new RegExp(`sh_test\\(\\n    name = "${name}",[\\s\\S]*?\\n\\)`, "m"))?.[0];
+    if (!block) {
+      failures.push(`tools/buck/BUCK must define PostgreSQL wrapper ${name}`);
+      continue;
+    }
+    const expectedArgs = `args = ["$(location ${binary})"],`;
+    const expectedDeps = `deps = ["${binary}"],`;
+    const hasExactAttribute = (attribute) => (
+      [...block.matchAll(new RegExp(`^    ${attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "gm"))].length === 1
+    );
+    const hasExactlyOneField = (field) => (
+      [...block.matchAll(new RegExp(`^    ${field} = .+$`, "gm"))].length === 1
+    );
+    if (!hasExactAttribute(`test = "${postgresWrapperLoader}",`)
+      || !hasExactAttribute(expectedArgs)
+      || !hasExactAttribute(expectedDeps)
+      || !hasExactAttribute(`labels = ${postgresWrapperLabels},`)
+      || !["test", "args", "deps", "labels"].every(hasExactlyOneField)) {
+      failures.push(`tools/buck/BUCK must bind PostgreSQL wrapper ${name} to the loader and exact Rust binary`);
+    }
   }
 }
 
@@ -137,6 +417,10 @@ function stepName(step) {
   return step.match(/^name: ([^\n]+)$/m)?.[1] ?? null;
 }
 
+function stepWorkingDirectory(step) {
+  return step.match(/^        working-directory: ([^\n]+)$/m)?.[1]?.trim() ?? null;
+}
+
 function hasOnlyExpectedCondition(step, expectedIf) {
   const conditions = [...step.matchAll(/^        if: ([^\n]+)$/gm)].map((match) => match[1]);
   return (expectedIf === null
@@ -153,6 +437,8 @@ function requireOrderedStepContracts(steps, contracts, job, failures) {
       .filter(({ step }) => stepName(step) === contract.name);
     if (matches.length !== 1
       || (contract.run !== undefined && runCommand(matches[0]?.step) !== contract.run)
+      || (contract.workingDirectory !== undefined
+        && stepWorkingDirectory(matches[0]?.step ?? "") !== contract.workingDirectory)
       || !hasOnlyExpectedCondition(matches[0]?.step ?? "", contract.if)) {
       failures.push(`${job} must preserve the locked fail-fast step multiset and failure semantics`);
       indexes.push(-1);
@@ -177,7 +463,7 @@ const apiContractAllowedSteps = [
   "name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7",
   "name: Install pinned DotSlash runtime\n        run: tools/buck/install_dotslash.sh",
   "name: Free runner disk for API contract\n        uses: ./.github/actions/free-runner-disk",
-  "name: Install Rust toolchain (pinned via rust-toolchain.toml)\n        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable\n        with:\n          toolchain: \"1.96.0\"",
+  "name: Install Rust toolchain (pinned via rust-toolchain.toml)\n        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable\n        with:\n          toolchain: \"1.97.1\"",
   "name: Cache Rust dependencies + build artifacts\n        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1\n        with:\n          workspaces: backend",
   "name: Set up Node.js\n        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0\n        with:\n          node-version: \"24\"\n          cache: npm",
   "name: Install client tooling\n        run: npm ci",
@@ -295,7 +581,7 @@ function requireEffectiveDotSlashBootstrap(block, job, failures) {
   }
 }
 
-export function evaluateCiPreflight(workflow) {
+export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBuildFile) {
   const failures = [];
   for (const trigger of ["push", "pull_request"]) {
     if (!triggerPathEntries(workflow, trigger).includes("toolchains/**")) {
@@ -328,19 +614,15 @@ export function evaluateCiPreflight(workflow) {
   for (const command of requiredPreflightCommands) {
     requireUnconditionalRun(preflightSteps, command, "preflight", failures);
   }
-  for (const command of ["npm run check:console-truth-ledger", consoleTruthLedgerTestCommand, consoleFanoutPlannerTestCommand]) {
-    const step = preflightSteps.find((candidate) => runScalar(candidate) === command);
-    if (!step || !hasEnvironment(step, consoleIntegrationTipEnv)) {
-      failures.push(`preflight must pass ${consoleIntegrationTipEnv} to ${command}`);
-    }
-  }
-
+  requireConsoleExactMergeProof(workflow, preflightSteps, failures);
   const supportDomainUnit = jobBlock(workflow, "support-domain-unit");
   if (supportDomainUnit) {
     const steps = stepBlocks(supportDomainUnit);
     requireUnconditionalRun(steps, supportDomainUnitCommand, "support-domain-unit", failures);
     requireOnlyLockedRuns(steps, [dotSlashBootstrap, supportDomainUnitCommand], "support-domain-unit", failures);
   }
+
+  requirePostgresWrapperContracts(buckBuildFile, failures);
 
   const postgresDomainReachability = jobBlock(workflow, "postgres-domain-reachability");
   if (postgresDomainReachability) {
@@ -396,20 +678,50 @@ export function evaluateCiPreflight(workflow) {
     requireOrderedStepContracts(
       steps,
       [
-        { name: "Buck2 mnt-app unit suite", run: "env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit", if: failFastIf },
+        {
+          name: "Buck2 dev-auth feature PostgreSQL suites",
+          run: [
+            "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+            "//tools/buck:auth-rest-dev-auth-inline-postgres \\",
+            "//tools/buck:auth-rest-dev-auth-session-postgres \\",
+            "//tools/buck:auth-rest-dev-auth-group-admin-postgres \\",
+            "//tools/buck:provisioning-dev-principal-upsert-race-postgres",
+          ].join("\n"),
+          workingDirectory: ".",
+          if: failFastIf,
+        },
+        {
+          name: "Buck2 mnt-app unit suite",
+          run: "env -u DATABASE_URL tools/buck2 test //backend/app:mnt-app-unit",
+          workingDirectory: ".",
+          if: failFastIf,
+        },
         {
           name: "Buck2 mnt-app inline PostgreSQL suites",
           run: [
-            "tools/buck/test_needs_postgres.sh \\",
-            "//backend/app:mnt-app-itest-inline-postgres \\",
-            "//backend/app:mnt-app-itest-dev_auth_persona_guard_feature",
+            "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+            "//tools/buck:app-inline-postgres \\",
+            "//tools/buck:app-dev-auth-persona-guard-postgres",
           ].join("\n"),
+          workingDirectory: ".",
           if: failFastIf,
         },
       ],
       "backend",
       failures,
     );
+    const directCargoTestAnalysis = steps.reduce(
+      (analysis, step) => mergeCargoAnalysis(analysis, cargoTestAnalysisInStep(step)),
+      emptyCargoAnalysis(),
+    );
+    if (directCargoTestAnalysis.malformed) {
+      failures.push("backend must not contain a malformed executable shell surface");
+    }
+    for (const packageName of ["mnt-platform-auth-rest", "mnt-platform-provisioning"]) {
+      if (directCargoTestAnalysis.packages.has(packageName)) {
+        failures.push("backend must not run direct Cargo PostgreSQL tests for " + packageName);
+      }
+    }
   }
 
   const devUpSmoke = jobBlock(workflow, "dev-up-smoke");

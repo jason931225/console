@@ -3,6 +3,7 @@
 //! This crate owns the process boundary: 12-factor configuration, health and
 //! readiness endpoints, telemetry, database dependency wiring, and graceful
 //! shutdown. Domain behavior lands in narrower crates and is composed here.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use std::collections::{BTreeSet, HashMap};
 use std::env;
@@ -43,6 +44,8 @@ use mnt_docs_adapter_postgres::PgDocsStore;
 use mnt_docs_rest::DocsRestState;
 use mnt_equipment_adapter_postgres::PgEquipment3rStore;
 use mnt_equipment_rest::EquipmentRestState;
+use mnt_evaluation_adapter_postgres::PgEvaluationStore;
+use mnt_evaluation_rest::EvaluationRestState;
 use mnt_facilities_rest::FacilitiesRestState;
 use mnt_finance_gl_adapter_postgres::PgVoucherStore;
 use mnt_finance_gl_rest::FinanceGlRestState;
@@ -246,6 +249,10 @@ pub const CONFIGURED_ROUTE_SURFACES: &[ConfiguredRouteSurface] = &[
     ConfiguredRouteSurface {
         name: "financial",
         paths: mnt_financial_rest::FINANCIAL_ROUTE_PATHS,
+    },
+    ConfiguredRouteSurface {
+        name: "evaluation",
+        paths: mnt_evaluation_rest::EVALUATION_ROUTE_PATHS,
     },
     ConfiguredRouteSurface {
         name: "inspection",
@@ -2892,6 +2899,7 @@ pub fn build_router(state: AppState) -> Router {
             let todo_store = PgTodoStore::new(pool.clone());
             let registry_store = PgRegistryStore::new(pool.clone());
             let financial_store = PgFinancialStore::new(pool.clone());
+            let evaluation_store = PgEvaluationStore::new(pool.clone());
             let inspection_store = PgInspectionStore::new(pool.clone());
             let compliance_store = PgComplianceStore::new(pool.clone());
             let integrity_store = PgIntegrityStore::new(pool.clone());
@@ -3019,6 +3027,10 @@ pub fn build_router(state: AppState) -> Router {
                 }))
                 .merge(mnt_recruiting_rest::router(RecruitingRestState::new(
                     PgRecruitingStore::new(pool.clone()),
+                    state.jwt_verifier.clone(),
+                )))
+                .merge(mnt_evaluation_rest::router(EvaluationRestState::new(
+                    evaluation_store,
                     state.jwt_verifier.clone(),
                 )))
                 // The hire handshake stays app-level: it shares one transaction
@@ -4651,7 +4663,9 @@ mod trusted_ingress_tests {
     }
 }
 
-#[cfg(test)]
+// Every test in this module is `#[cfg(feature = "test-postgres")]`, so without
+// that feature the whole module is helpers and imports with no consumer.
+#[cfg(all(test, feature = "test-postgres"))]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod readiness_tests {
     use axum::extract::State;
@@ -5034,6 +5048,9 @@ mod migration_database_budget_tests {
         reset_migration_database_connection,
     };
 
+    // Consumed only by the `test-postgres` test below; this module also holds
+    // non-featured tests, so it cannot be gated wholesale.
+    #[allow(dead_code)]
     fn isolated_owner_budget_pool_options() -> PgPoolOptions {
         PgPoolOptions::new()
             .max_connections(1)
@@ -5046,6 +5063,7 @@ mod migration_database_budget_tests {
             })
     }
 
+    #[allow(dead_code)]
     async fn cluster_identity_snapshot(pool: &PgPool) -> String {
         sqlx::query_scalar(
             r#"SELECT jsonb_build_object(
@@ -5099,6 +5117,7 @@ mod migration_database_budget_tests {
         .expect("cluster identity snapshot reads")
     }
 
+    #[allow(dead_code)]
     async fn assert_migration_session(pool: &PgPool, expected_user: &str) {
         let (session_user, current_user, lock_timeout, statement_timeout): (
             String,
@@ -5192,7 +5211,9 @@ mod migration_database_budget_tests {
     }
 }
 
-#[cfg(test)]
+// As with `readiness_tests`: the single test here is feature-gated, so the
+// module has no non-featured content to compile.
+#[cfg(all(test, feature = "test-postgres"))]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod serving_database_timeout_tests {
     use std::time::Duration;

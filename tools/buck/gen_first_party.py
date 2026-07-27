@@ -67,6 +67,10 @@ OPENAPI_DRIFT_SOURCE_PACKAGES = [
     "backend/crates/payroll/rest",
     "backend/crates/analytics-quant/rest",
     "backend/crates/equipment/rest",
+    "backend/crates/evaluation/rest",
+    "backend/crates/notifications/rest",
+    "backend/crates/orgchange/rest",
+    "backend/crates/recruiting/rest",
 ]
 
 
@@ -81,6 +85,23 @@ OPENAPI_DRIFT_EXTERNAL = {
 OPENAPI_DRIFT_EXTERNAL["//backend/openapi:openapi.yaml"] = (
     "backend/openapi/openapi.yaml"
 )
+OPENAPI_DRIFT_EXTERNAL.update({
+    "//clients:kotlin-dispatch-queue-status": (
+        "clients/kotlin/src/main/kotlin/com/maintenance/api/client/model/"
+        "DispatchQueueStatus.kt"
+    ),
+    "//clients:kotlin-p1-dispatches-api": (
+        "clients/kotlin/src/main/kotlin/com/maintenance/api/client/api/"
+        "P1DispatchesApi.kt"
+    ),
+    "//clients:swift-client": (
+        "clients/swift/Sources/MaintenanceAPIClient/Generated/Client.swift"
+    ),
+    "//clients:swift-types": (
+        "clients/swift/Sources/MaintenanceAPIClient/Generated/Types.swift"
+    ),
+    "//clients:ts-schema": "clients/ts/src/schema.d.ts",
+})
 
 # Compile-time and runtime fixture inputs outside a crate package. Labels expose
 # the authoritative bytes; mapped destinations preserve the checkout topology.
@@ -94,6 +115,9 @@ RESOURCE_CONFIG = {
             "tests/openapi_drift.rs": {
                 "srcs": ["src/**/*.rs"],
                 "external": OPENAPI_DRIFT_EXTERNAL,
+            },
+            "tests/workbench_api.rs": {
+                "srcs": ["src/workbench.rs"],
             },
             "tests/dev_seed_notification_links.rs": {
                 "external": {
@@ -159,6 +183,7 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/audit_api.rs': 'postgres',
             'tests/auth_rest.rs': 'postgres',
             'tests/benefit_catalog_api.rs': 'postgres',
+            'tests/board_ack_api.rs': 'postgres',
             'tests/cedar_freshness_mint.rs': 'postgres',
             'tests/cedar_parity_shadow.rs': 'postgres',
             'tests/cedar_shadow_role_manage.rs': 'postgres',
@@ -173,7 +198,9 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/dev_seed_notification_links.rs': 'none',
             'tests/dispatch_pipeline_api.rs': 'postgres',
             'tests/equipment_3r_api.rs': 'postgres',
+            'tests/evaluation_cycle_api.rs': 'postgres',
             'tests/facilities_pilot_story.rs': 'postgres',
+            'tests/field_visit_api.rs': 'postgres',
             'tests/finance_gl_voucher_sod.rs': 'postgres',
             'tests/health_readiness.rs': 'postgres',
             'tests/hr_attendance_manager_scope.rs': 'postgres',
@@ -182,7 +209,9 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/hr_people_create_api.rs': 'postgres',
             'tests/logistics_pilot_story.rs': 'postgres',
             'tests/m2_real_engine_drive.rs': 'postgres',
+            'tests/maintenance_chain_api.rs': 'postgres',
             'tests/mobile_api.rs': 'postgres',
+            'tests/notif_routing_api.rs': 'postgres',
             'tests/notifications_api.rs': 'postgres',
             'tests/object_graph_api.rs': 'postgres',
             'tests/object_links_api.rs': 'postgres',
@@ -191,9 +220,11 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/office_versions.rs': 'postgres',
             'tests/openapi_drift.rs': 'none',
             'tests/openslo_files.rs': 'none',
+            'tests/org_change_api.rs': 'postgres',
             'tests/platform_onboarding_e2e.rs': 'postgres',
             'tests/purchase_request_collection_api.rs': 'postgres',
             'tests/realtime_ws.rs': 'postgres',
+            'tests/recruiting_pipeline_api.rs': 'postgres',
             'tests/registry_api.rs': 'postgres',
             'tests/router_layers.rs': 'postgres',
             'tests/search_api.rs': 'postgres',
@@ -240,6 +271,9 @@ TEST_RESOURCE_REQUIREMENTS = {
         'unit': 'none',
     },
     'mnt-evaluation-application': {
+        'unit': 'none',
+    },
+    'mnt-evaluation-adapter-postgres': {
         'unit': 'none',
     },
     'mnt-evaluation-domain': {
@@ -571,6 +605,7 @@ TEST_RESOURCE_REQUIREMENTS = {
     'mnt-ontology-adapter-postgres': {
         'unit': 'none',
         'integration': {
+            'tests/builtin_catalog_additive_upgrade_as_runtime_role.rs': 'postgres',
             'tests/c_chain_as_runtime_role.rs': 'postgres',
             'tests/config_object_types_as_runtime_role.rs': 'postgres',
             'tests/instances_residual_filter_as_runtime_role.rs': 'postgres',
@@ -598,8 +633,13 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/publish_auto_create_action_as_runtime_role.rs': 'postgres',
         },
     },
+    'mnt-orgchange-domain': {
+        'unit': 'none',
+    },
     'mnt-payroll-adapter-postgres': {
+        'unit': 'none',
         'integration': {
+            'tests/payroll_lifecycle_rls_as_runtime_role.rs': 'postgres',
             'tests/payroll_rls_surfaces_as_runtime_role.rs': 'postgres',
         },
     },
@@ -610,6 +650,7 @@ TEST_RESOURCE_REQUIREMENTS = {
         'unit': 'none',
         'integration': {
             'tests/api.rs': 'postgres',
+            'tests/run_lifecycle_api.rs': 'postgres',
         },
     },
     'mnt-platform-audit-chain': {
@@ -658,6 +699,7 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/attendance_console_migration_contract.rs': 'postgres',
             'tests/code_issuance.rs': 'postgres',
             'tests/group_resolvers.rs': 'postgres',
+            'tests/lifecycle_maker_checker.rs': 'postgres',
             'tests/m2_flag_on_runtime_drain.rs': 'postgres',
             'tests/period_locks_and_lifecycle.rs': 'postgres',
             'tests/rls_isolation.rs': 'postgres',
@@ -761,6 +803,12 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/equipment_admin.rs': 'postgres',
         },
     },
+    'mnt-recruiting-application': {
+        'unit': 'none',
+    },
+    'mnt-recruiting-domain': {
+        'unit': 'none',
+    },
     'mnt-reporting-adapter-postgres': {
         'unit': 'none',
         'integration': {
@@ -841,6 +889,7 @@ TEST_RESOURCE_REQUIREMENTS = {
         'integration': {
             'tests/approval_and_assignment.rs': 'none',
             'tests/serde_roundtrips.rs': 'none',
+            'tests/settlement_fsm.rs': 'none',
             'tests/workorder_fsm.rs': 'none',
         },
     },
@@ -865,6 +914,14 @@ INLINE_TEST_VARIANTS = {
         "feature": "test-postgres",
         "resource": "postgres",
     },),
+    # Cargo's dev-auth suite includes the auth-rest crate's inline PostgreSQL
+    # tests. Emit that feature graph explicitly so CI can run it through the
+    # disposable PostgreSQL harness instead of a direct Cargo invocation.
+    "mnt-platform-auth-rest": ({
+        "name": "itest-dev-auth-postgres",
+        "feature": "dev-auth",
+        "resource": "postgres",
+    },),
 }
 
 INTEGRATION_TEST_FEATURES = {
@@ -873,6 +930,7 @@ INTEGRATION_TEST_FEATURES = {
     },
     "mnt-platform-auth-rest": {
         "tests/dev_auth_session.rs": ("dev-auth",),
+        "tests/group_admin_tenant_context.rs": ("dev-auth",),
     },
 }
 

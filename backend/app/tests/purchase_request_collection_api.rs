@@ -35,7 +35,9 @@ async fn purchase_request_collection_is_branch_scoped_requester_safe_and_tenant_
         .unwrap();
     let org_a = OrgId::knl();
     let org_b = OrgId::new();
-    seed_org(&owner_pool, org_a, "knl", "KNL").await;
+    // The migration set owns the canonical KNL tenant row. Re-inserting it
+    // makes this otherwise isolated sqlx test fail on the primary key before
+    // the collection contract is exercised.
     seed_org(&owner_pool, org_b, "other", "Other tenant").await;
     let branch_a = seed_branch(&owner_pool, org_a, "A").await;
     let branch_b = seed_branch(&owner_pool, org_a, "B").await;
@@ -562,6 +564,7 @@ async fn seed_purchase_line(
     .unwrap();
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn seed_purchase_attachment(
     pool: &PgPool,
     org: OrgId,

@@ -379,7 +379,15 @@ describe("PayrollPage audited close integration", () => {
     expect(
       await screen.findByRole("heading", { name: "급여 마감 명부" }),
     ).toBeVisible();
-    expect(runRequests).toBe(1);
+    // The heading paints when the workspace mounts, which is not the same
+    // moment its runs request is counted. Asserting the count bare made this
+    // test race the fetch and fail with `expected +0 to be 1` whenever the
+    // render won. The sibling cases above already wait; they assert a count
+    // that is satisfied at zero, so their bare form was harmless and this one
+    // was not.
+    await waitFor(() => {
+      expect(runRequests).toBe(1);
+    });
   });
 
   it("renders the audited close workspace only for an org-wide payroll reader", async () => {

@@ -32,7 +32,7 @@ import kotlinx.serialization.Contextual
  *
  *
  * @param recipientName
- * @param evidenceReference
+ * @param evidenceObjectId
  * @param handedOverAt
  */
 @Serializable
@@ -42,8 +42,8 @@ data class HandoverEquipment3rCaseRequest (
     @SerialName(value = "recipientName")
     val recipientName: kotlin.String,
 
-    @SerialName(value = "evidenceReference")
-    val evidenceReference: kotlin.String,
+    @Contextual @SerialName(value = "evidenceObjectId")
+    val evidenceObjectId: java.util.UUID,
 
     @Contextual @SerialName(value = "handedOverAt")
     val handedOverAt: java.time.OffsetDateTime

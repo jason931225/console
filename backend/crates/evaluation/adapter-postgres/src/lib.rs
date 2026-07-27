@@ -400,6 +400,45 @@ impl PgEvaluationStore {
         .await
     }
 
+    /// Load a subject for a submit-capable actor only when that actor holds a
+    /// canonical, current relationship to it. The subject, identity, and
+    /// detail are handled in one RLS-armed transaction: a concurrent employee
+    /// relink or unlink cannot slip between the relationship predicate and
+    /// the response body.
+    pub async fn get_subject_for_review_actor(
+        &self,
+        actor: UserId,
+        subject_id: Uuid,
+    ) -> Result<Option<SubjectDetail>, PgEvaluationError> {
+        let org = current_org().map_err(KernelError::from)?;
+        with_org_conn(&self.pool, org, move |tx| {
+            Box::pin(async move {
+                let Some(subject) = lock_subject(tx, subject_id).await? else {
+                    return Ok(None);
+                };
+                let actor_employee_id = lock_actor_employee_id(tx, actor).await?;
+                let allowed = review_relationship_allows(
+                    actor,
+                    actor_employee_id,
+                    subject.employee_id,
+                    subject.manager_user_id,
+                    ReviewKind::SelfReview,
+                ) || review_relationship_allows(
+                    actor,
+                    actor_employee_id,
+                    subject.employee_id,
+                    subject.manager_user_id,
+                    ReviewKind::Manager,
+                );
+                if !allowed {
+                    return Ok(None);
+                }
+                load_subject_detail(tx, subject_id).await
+            })
+        })
+        .await
+    }
+
     pub async fn replace_goals(
         &self,
         actor: UserId,
@@ -484,6 +523,7 @@ impl PgEvaluationStore {
                 let locked = lock_subject(tx, subject_id)
                     .await?
                     .ok_or_else(|| KernelError::not_found("evaluation subject was not found"))?;
+                require_review_relationship(tx, actor, &locked, kind).await?;
                 if locked.cycle_stage != CycleStage::Open {
                     return Err(KernelError::conflict(
                         "reviews are recorded only while the cycle is open",
@@ -580,6 +620,7 @@ impl PgEvaluationStore {
                 let locked = lock_subject(tx, subject_id)
                     .await?
                     .ok_or_else(|| KernelError::not_found("evaluation subject was not found"))?;
+                require_review_relationship(tx, actor, &locked, kind).await?;
                 if locked.cycle_stage != CycleStage::Open {
                     return Err(KernelError::conflict(
                         "reviews are submitted only while the cycle is open",
@@ -757,6 +798,13 @@ impl PgEvaluationStore {
         let org = current_org().map_err(KernelError::from)?;
         with_org_conn(&self.pool, org, move |tx| {
             Box::pin(async move {
+                // A task is an authorization result, not a cacheable view of
+                // a JWT claim. Lock the current user-to-employee relation in
+                // this request transaction before selecting SELF work so an
+                // unlink or relink cannot race the returned assignment.
+                let Some(actor_employee_id) = lock_actor_employee_id(tx, caller).await? else {
+                    return Ok(TaskPage { items: Vec::new() });
+                };
                 let rows = sqlx::query(
                     "SELECT s.id AS subject_id, c.id AS cycle_id, c.name AS cycle_name, \
                             c.due_date, s.employee_id, e.name AS employee_name, \
@@ -766,10 +814,12 @@ impl PgEvaluationStore {
                      JOIN employees e ON e.id = s.employee_id \
                      CROSS JOIN (VALUES ('SELF'), ('MANAGER')) AS k(kind) \
                      LEFT JOIN evaluation_reviews r ON r.subject_id = s.id AND r.kind = k.kind \
-                     WHERE s.manager_user_id = $1 \
+                     WHERE ((k.kind = 'SELF' AND s.employee_id = $1) \
+                         OR (k.kind = 'MANAGER' AND s.manager_user_id = $2)) \
                        AND (r.id IS NULL OR r.status = 'DRAFT') \
                      ORDER BY c.due_date, e.name, k.kind",
                 )
+                .bind(actor_employee_id)
                 .bind(*caller.as_uuid())
                 .fetch_all(tx.as_mut())
                 .await?;
@@ -860,6 +910,8 @@ impl PgEvaluationStore {
 
 struct LockedSubject {
     cycle_stage: CycleStage,
+    employee_id: Uuid,
+    manager_user_id: UserId,
 }
 
 /// Lock the subject row and its owning cycle row together so a concurrent
@@ -869,7 +921,7 @@ async fn lock_subject(
     subject_id: Uuid,
 ) -> Result<Option<LockedSubject>, PgEvaluationError> {
     let row = sqlx::query(
-        "SELECT c.stage \
+        "SELECT c.stage, s.employee_id, s.manager_user_id \
          FROM evaluation_subjects s \
          JOIN evaluation_cycles c ON c.id = s.cycle_id \
          WHERE s.id = $1 FOR UPDATE",
@@ -883,8 +935,66 @@ async fn lock_subject(
             let stage: String = row.try_get("stage")?;
             Ok(Some(LockedSubject {
                 cycle_stage: CycleStage::from_db(&stage)?,
+                employee_id: row.try_get("employee_id")?,
+                manager_user_id: UserId::from_uuid(row.try_get("manager_user_id")?),
             }))
         }
+    }
+}
+
+/// Resolve the canonical `users.employee_id` relation in the same RLS-armed
+/// transaction as the protected review write. A missing link is never
+/// inferred from names, roles, or client-provided identity.
+async fn require_review_relationship(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: UserId,
+    subject: &LockedSubject,
+    kind: ReviewKind,
+) -> Result<(), PgEvaluationError> {
+    let actor_employee_id = lock_actor_employee_id(tx, actor).await?;
+    let permitted = review_relationship_allows(
+        actor,
+        actor_employee_id,
+        subject.employee_id,
+        subject.manager_user_id,
+        kind,
+    );
+    if permitted {
+        Ok(())
+    } else {
+        // Keep relationship denials indistinguishable from an RLS-hidden
+        // subject; a submit-capable caller must not enumerate review
+        // assignments by probing subject ids or review kinds.
+        Err(KernelError::not_found("evaluation subject was not found").into())
+    }
+}
+
+/// Lock the canonical actor identity with a mode that conflicts with the
+/// `UPDATE users SET employee_id = ...` path used for link/unlink changes.
+/// This keeps a review authorization decision and its protected operation
+/// serialized with identity relinking, without trusting a JWT employee claim.
+async fn lock_actor_employee_id(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: UserId,
+) -> Result<Option<Uuid>, PgEvaluationError> {
+    sqlx::query_scalar("SELECT employee_id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(*actor.as_uuid())
+        .fetch_optional(tx.as_mut())
+        .await
+        .map(|employee_id: Option<Option<Uuid>>| employee_id.flatten())
+        .map_err(Into::into)
+}
+
+fn review_relationship_allows(
+    actor: UserId,
+    actor_employee_id: Option<Uuid>,
+    subject_employee_id: Uuid,
+    manager_user_id: UserId,
+    kind: ReviewKind,
+) -> bool {
+    match kind {
+        ReviewKind::SelfReview => actor_employee_id == Some(subject_employee_id),
+        ReviewKind::Manager => actor_employee_id.is_some() && manager_user_id == actor,
     }
 }
 
@@ -1425,4 +1535,53 @@ fn audit_event(
     )
     .with_org(org)
     .with_snapshots(before, after))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn review_relationships_are_kind_aware_and_fail_closed_without_employee_link() {
+        let subject_employee = Uuid::new_v4();
+        let manager_employee = Uuid::new_v4();
+        let subject_user = UserId::new();
+        let manager_user = UserId::new();
+
+        assert!(review_relationship_allows(
+            subject_user,
+            Some(subject_employee),
+            subject_employee,
+            manager_user,
+            ReviewKind::SelfReview,
+        ));
+        assert!(!review_relationship_allows(
+            subject_user,
+            Some(subject_employee),
+            subject_employee,
+            manager_user,
+            ReviewKind::Manager,
+        ));
+        assert!(review_relationship_allows(
+            manager_user,
+            Some(manager_employee),
+            subject_employee,
+            manager_user,
+            ReviewKind::Manager,
+        ));
+        assert!(!review_relationship_allows(
+            manager_user,
+            Some(manager_employee),
+            subject_employee,
+            manager_user,
+            ReviewKind::SelfReview,
+        ));
+        assert!(!review_relationship_allows(
+            manager_user,
+            None,
+            subject_employee,
+            manager_user,
+            ReviewKind::Manager,
+        ));
+    }
 }

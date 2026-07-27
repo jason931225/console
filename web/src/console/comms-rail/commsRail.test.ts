@@ -18,7 +18,7 @@ const generation: CommsRailGeneration = { key: "principal-a-org-a-branch-a", pri
 
 const messenger = { items: [{ id: ID, kind: "channel", visibility: "channel", muted: false, branch_id: ID_TWO, title: "", work_order_id: null, last_message_id: ID_TWO, last_message_at: NOW, member_count: 2, unread_count: 1, created_at: NOW, updated_at: NOW }] };
 const mail = [{ id: ID, subject: "subject", last_message_at: NOW, message_count: 1, unread_count: 1, has_attachments: false, is_flagged: false }];
-const notification = { items: [{ id: ID, recipient_user_id: ID_TWO, category: "approval", kind: "assigned", text: "x", link: { type: "screen", screen: "overview" }, unread: true, created_at: NOW, read_at: null, resolved_at: null }] };
+const notification = { items: [{ id: ID, recipient_user_id: ID_TWO, category: "approval", kind: "assigned", text: "x", link: { type: "screen", screen: "notif" }, unread: true, created_at: NOW, read_at: null, resolved_at: null, muted: false }] };
 const notice = [{ id: ID, code: "NT-1", author_user_id: ID_TWO, title: "n", body: "b", status: "published", published_at: NOW, created_at: NOW }];
 
 function api(overrides: Partial<CommsRailApi> = {}): CommsRailApi {
@@ -77,6 +77,67 @@ describe("comms rail generated operation adapter", () => {
     const result = decodeNotificationRail({ status: 200, data: { items: [{ ...notification.items[0], link: { type: "object", kind: "unknown", id: ID_TWO } }] } });
     expect(result.kind).toBe("ok");
     if (result.kind === "ok") expect(result.items[0]?.target).toBeUndefined();
+  });
+
+  it("promotes only the exact notification-center screen contract", () => {
+    const canonical = decodeNotificationRail({ status: 200, data: notification });
+    const legacyAlias = decodeNotificationRail({
+      status: 200,
+      data: { items: [{ ...notification.items[0], link: { type: "screen", screen: "notifications" } }] },
+    });
+
+    expect(canonical).toMatchObject({
+      kind: "ok",
+      items: [{ target: { kind: "full-screen", source: "notifications", id: ID, route: "/console/notif" } }],
+    });
+    expect(legacyAlias).toMatchObject({ kind: "ok", items: [{ target: undefined }] });
+  });
+
+  it("maps a server-owned messenger mention to an explicit notification-origin drill target", () => {
+    const result = decodeNotificationRail({
+      status: 200,
+      data: {
+        items: [{
+          ...notification.items[0],
+          link: { type: "object", kind: "messenger_thread", id: ID_TWO },
+        }],
+      },
+    });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.items[0]?.target).toEqual({
+        kind: "messenger-thread",
+        source: "notifications",
+        id: ID_TWO,
+      });
+    }
+  });
+
+  it("keeps valid non-routable object links static and rejects non-UUID messenger routing", () => {
+    const generic = decodeNotificationRail({
+      status: 200,
+      data: {
+        items: [{
+          ...notification.items[0],
+          link: { type: "object", kind: "work_order", id: "external-work-order-42" },
+        }],
+      },
+    });
+    const unsafeMessenger = decodeNotificationRail({
+      status: 200,
+      data: {
+        items: [{
+          ...notification.items[0],
+          link: { type: "object", kind: "messenger_thread", id: "not-a-uuid" },
+        }],
+      },
+    });
+
+    expect(generic.kind).toBe("ok");
+    expect(unsafeMessenger.kind).toBe("ok");
+    if (generic.kind === "ok") expect(generic.items[0]?.target).toBeUndefined();
+    if (unsafeMessenger.kind === "ok") expect(unsafeMessenger.items[0]?.target).toBeUndefined();
   });
 
   it("accepts only published NoticeSummary rows from the generated array response", () => {
@@ -230,4 +291,3 @@ describe("comms rail generation and reconciliation", () => {
     failureStore.dispose();
   });
 });
-

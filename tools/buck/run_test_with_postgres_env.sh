@@ -9,7 +9,11 @@ if [[ ! -f "${env_file}" ]]; then
   exit 1
 fi
 
-file_mode="$(stat -f '%Lp' "${env_file}" 2>/dev/null || stat -c '%a' "${env_file}")"
+# GNU form first, BSD second. Order is load-bearing: on Linux `stat -f` means
+# --file-system, so it SUCCEEDS with a filesystem dump instead of failing, the
+# `||` fallback never fires, and the comparison below can never match "600".
+# On macOS the GNU `-c` form exits 1, so the BSD fallback is reached correctly.
+file_mode="$(stat -c '%a' "${env_file}" 2>/dev/null || stat -f '%Lp' "${env_file}")"
 if [[ "${file_mode}" != "600" ]]; then
   echo "buck-postgres: environment file must be mode 0600" >&2
   exit 1

@@ -65,8 +65,10 @@ struct FieldAuthenticatedTabs: View {
                 }
             UnobscuredTabContent {
                 NavigationStack {
+                    // The identifier is attached to the List inside
+                    // MessengerTabView, whose body root is now a VStack; the
+                    // UI tests query it as a collection view.
                     MessengerTabView(viewModel: viewModel)
-                        .accessibilityIdentifier(FieldAccessibilityID.messengerTab)
                 }
             }
                 .tabItem {
@@ -752,8 +754,14 @@ struct TodayListView: View {
 
 struct MessengerTabView: View {
     @ObservedObject var viewModel: FieldViewModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // The composer/send bar is a sibling of the List, never a row inside
+        // it: the UIKit content-layout-guide host already excludes the tab bar
+        // from this content area, so the bottom child sits above it without an
+        // ad-hoc safe-area inset (which the tab-host seam deliberately forbids).
+        VStack(spacing: 0) {
         List {
             Section {
                 HStack {
@@ -799,6 +807,14 @@ struct MessengerTabView: View {
             }
 
             Section {
+                Text("messenger_threads")
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
                 if viewModel.messengerState.threads.isEmpty {
                     Text("messenger_empty_threads")
                         .accessibilityIdentifier(FieldAccessibilityID.messengerEmptyThreads)
@@ -817,11 +833,7 @@ struct MessengerTabView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(FieldAccessibilityID.messengerThreadRow(thread.id))
                 }
-            } header: {
-                Text("messenger_threads")
-                    .foregroundStyle(.primary)
             }
-            .headerProminence(.increased)
 
             Section {
                 Text("messenger_messages")
@@ -862,28 +874,12 @@ struct MessengerTabView: View {
                             accessibilityIdentifier: FieldAccessibilityID.messengerMessageRow(message.id)
                         )
                     }
-                    HStack(alignment: .bottom) {
-                        TextField(
-                            "",
-                            text: $viewModel.messengerDraft,
-                            prompt: Text("messenger_composer").foregroundStyle(.primary),
-                            axis: .vertical
-                        )
-                            .lineLimit(2...5)
-                            .layoutPriority(1)
-                            .accessibilityLabel(Text("messenger_composer"))
-                            .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
-                        Button {
-                            Task { await viewModel.sendMessengerMessage() }
-                        } label: {
-                            Label("messenger_send", systemImage: "paperplane.fill")
-                                .labelStyle(.iconOnly)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityLabel(Text("messenger_send"))
-                        .accessibilityIdentifier(FieldAccessibilityID.messengerSendButton)
-                    }
+                    // The composer and send action deliberately do NOT live here.
+                    // Inside this lazy List they were the last rows of the
+                    // message section, so a long thread scrolled the primary
+                    // message action off-screen and it was never materialized
+                    // for accessibility queries. They are now a persistent
+                    // sibling of this List; see `messengerComposerBar`.
                 } else {
                     Text("messenger_select_thread")
                         .accessibilityIdentifier(FieldAccessibilityID.messengerSelectThreadPrompt)
@@ -894,7 +890,31 @@ struct MessengerTabView: View {
                 Text(LocalizedStringKey(messageKey))
             }
         }
+        // These stay attached to the List, not the enclosing VStack. The tab
+        // identifier must land on the collection view the UI tests query, and
+        // `safeAreaInset(edge: .top)` only reserves a scroll-safe viewport when
+        // it insets a scroll view — on a VStack it degrades to ordinary layout
+        // padding above the whole stack, which looks identical at rest.
+        .accessibilityIdentifier(FieldAccessibilityID.messengerTab)
         .navigationTitle(Text("messenger_title"))
+        // Messenger contains long, changing operational conversations. Keep the
+        // navigation title and actions on an opaque semantic surface rather
+        // than allowing scrolling content to alter their contrast.
+        .messengerNavigationBarBackground()
+        // iOS 26 can otherwise settle a selected AX5 List row underneath the
+        // persistent navigation surface. Reserve a real scroll-safe viewport;
+        // this preserves the complete thread rather than hiding or truncating it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if dynamicTypeSize == .accessibility5 {
+                Color.clear
+                    .frame(height: 56)
+                    .accessibilityHidden(true)
+            }
+        }
+            if viewModel.messengerState.selectedThreadID != nil {
+                messengerComposerBar
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -922,31 +942,118 @@ struct MessengerTabView: View {
             }
         }
     }
+
+    /// Persistent composer and send action, presented as a sibling of the List
+    /// inside a `VStack` rather than as trailing rows of the lazy message List.
+    ///
+    /// Deliberately NOT a bottom safe-area inset: `hasUnobscuredTabContentHost`
+    /// forbids that construct anywhere in this file — it scans the raw source,
+    /// so even naming it here trips the gate — because the UIKit
+    /// `contentLayoutGuide` tab-host seam owns bottom insets. Do not "fix" this
+    /// to match a mental model of a bottom inset.
+    ///
+    /// Bindings, send semantics, accessibility identifiers, the contrast-safe
+    /// placeholder and its `allowsHitTesting(false)` are carried over verbatim
+    /// from the previous in-List rows; only the placement changed.
+    ///
+    /// The composer's line limit tightens at accessibility sizes. Threads
+    /// auto-select on load — `MessengerState` falls back to `threads.first` —
+    /// so this bar is on screen from the moment Messenger appears, not only
+    /// once someone opens a conversation. At AX5 a five-line composer is tall
+    /// enough to push the first thread row's kind chip outside the List's own
+    /// frame, which is a real loss of conversation content rather than merely
+    /// a failing assertion. Two lines keeps the composer usable while leaving
+    /// the thread list legible.
+    ///
+    /// Keep prose here rather than inside the body: `opaqueUnobscuredSurface`
+    /// caps the span from `Divider()` to the `.background` at 2,200 characters
+    /// and counts comments, so body comments have a hard length budget.
+    private var messengerComposerBar: some View {
+        VStack(spacing: 0) {
+            // Opaque semantic surface: scrolling message content must never
+            // alter the contrast of the primary action, and the floating tab
+            // bar must not obscure it.
+            Divider()
+            HStack(alignment: .bottom) {
+                // Native TextField prompts retain placeholder opacity
+                // even with a primary foreground, which falls below
+                // contrast requirements at accessibility text sizes.
+                ZStack(alignment: .leading) {
+                    if viewModel.messengerDraft.isEmpty {
+                        Text("messenger_composer")
+                            .foregroundStyle(.primary)
+                            .accessibilityHidden(true)
+                            .allowsHitTesting(false)
+                    }
+                    TextField("", text: $viewModel.messengerDraft, axis: .vertical)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1...2 : 2...5)
+                        .accessibilityLabel(Text("messenger_composer"))
+                        .accessibilityIdentifier(FieldAccessibilityID.messengerComposerField)
+                }
+                    .layoutPriority(1)
+                Button {
+                    Task { await viewModel.sendMessengerMessage() }
+                } label: {
+                    Label("messenger_send", systemImage: "paperplane.fill")
+                        .labelStyle(.iconOnly)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text("messenger_send"))
+                .accessibilityIdentifier(FieldAccessibilityID.messengerSendButton)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        // Platform-neutral. This package also builds for macOS (Package.swift
+        // declares .macOS(.v14)) where `Color(_:)` resolves to Color(NSColor)
+        // and `.systemBackground` does not exist, so the bare UIKit literal
+        // fails the `ios-app` job's `swift build`. Every semantic surface in
+        // this file goes through an os-guarded helper for exactly this reason.
+        .background(Color.opaqueFieldNavigationBackground)
+    }
 }
 
 struct MessengerThreadRow: View {
     let thread: MessengerThread
     let isSelected: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(messengerThreadDisplayTitle(thread))
                     .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
                 FieldChip(key: thread.kind.fieldLabelKey)
+                memberCount
+                selectionStatus
             }
-            Text(localizedString("messenger_member_count_format", thread.memberCount))
-                .font(.footnote)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(messengerThreadDisplayTitle(thread))
+                        .font(.headline)
+                    Spacer()
+                    FieldChip(key: thread.kind.fieldLabelKey)
+                }
+                memberCount
+                selectionStatus
+            }
+        }
+    }
+
+    private var memberCount: some View {
+        Text(localizedString("messenger_member_count_format", thread.memberCount))
+            .font(.footnote)
+            .foregroundStyle(.primary)
+    }
+
+    @ViewBuilder
+    private var selectionStatus: some View {
+        if isSelected {
+            Text("messenger_selected")
+                .font(.caption)
                 .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            if isSelected {
-                Text("messenger_selected")
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 }
@@ -1135,6 +1242,11 @@ struct WorkOrderDetailView: View {
                             Label("submit_report", systemImage: "paperplane.fill")
                         }
                         .accessibilityIdentifier(FieldAccessibilityID.detailSubmitReportButton)
+
+                        if let messageKey = viewModel.messageKey {
+                            Text(LocalizedStringKey(messageKey))
+                                .accessibilityIdentifier(FieldAccessibilityID.detailMessage)
+                        }
                     }
 
                     Section {
@@ -1146,10 +1258,6 @@ struct WorkOrderDetailView: View {
                         .accessibilityIdentifier(FieldAccessibilityID.detailCaptureEvidenceButton)
                     }
 
-                    if let messageKey = viewModel.messageKey {
-                        Text(LocalizedStringKey(messageKey))
-                            .accessibilityIdentifier(FieldAccessibilityID.detailMessage)
-                    }
                 }
                 .scrollDismissesKeyboard(.immediately)
                 // Keep the audited detail text on an opaque semantic surface in
@@ -1158,6 +1266,7 @@ struct WorkOrderDetailView: View {
                 // translucent material behind the Form.
                 .scrollContentBackground(.hidden)
                 .background(Color.opaqueFieldDetailBackground)
+                .tint(.primary)
                 .accessibilityIdentifier(FieldAccessibilityID.detailView)
                 .navigationTitle(Text("detail_title"))
                 .inlineNavigationTitle()
@@ -1376,6 +1485,17 @@ struct FieldChip: View {
 
 private extension View {
     @ViewBuilder
+    func messengerNavigationBarBackground() -> some View {
+        #if os(iOS)
+        self
+            .toolbarBackground(Color.opaqueFieldNavigationBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
     func inlineNavigationTitle() -> some View {
         #if os(iOS)
         navigationBarTitleDisplayMode(.inline)
@@ -1415,6 +1535,14 @@ private extension Color {
         Color(uiColor: .systemGroupedBackground)
         #else
         .gray
+        #endif
+    }
+
+    static var opaqueFieldNavigationBackground: Color {
+        #if os(iOS)
+        Color(uiColor: .systemBackground)
+        #else
+        .white
         #endif
     }
 }

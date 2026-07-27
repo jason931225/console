@@ -301,14 +301,11 @@ pub fn transition_payroll_run(
     // A confirmed prior transition is a retry-safe no-op. In particular, a
     // later attendance correction or lock amendment must not turn a network
     // retry into a second mutation or a contradictory failure.
-    match (current, command) {
-        (PayrollRunStatus::Approved, PayrollRunCommand::Approve { .. }) => {
-            return Ok(PayrollRunTransition {
-                status: current,
-                idempotent: true,
-            });
-        }
-        _ => {}
+    if let (PayrollRunStatus::Approved, PayrollRunCommand::Approve { .. }) = (current, command) {
+        return Ok(PayrollRunTransition {
+            status: current,
+            idempotent: true,
+        });
     }
     validate_close_prerequisites(prerequisites)?;
 

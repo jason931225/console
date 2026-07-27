@@ -1,7 +1,10 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 //! Contract tests for the workbench composition seam.
 
+// Source-included rather than imported (the module is private to `mnt-app`),
+// so items this contract test does not exercise read as dead here.
 #[path = "../src/workbench.rs"]
+#[allow(dead_code)]
 mod workbench;
 
 use std::collections::BTreeSet;

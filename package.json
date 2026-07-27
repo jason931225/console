@@ -21,7 +21,7 @@
     "check:kotlin": "node --test scripts/lib/docker-copy-workspace.test.mjs scripts/lib/kotlin-discriminator-unions.test.mjs && node scripts/run-kotlin-build.mjs",
     "check:swift": "swift build --package-path clients/swift",
     "test:api-client-contract:swift": "swift run --package-path clients/swift MaintenanceAPIClientContractTests",
-    "check:ios-ui-test-fail-closed": "node --test scripts/boot-backend-port-conflict.test.mjs scripts/boot-ios-ui-backend.test.mjs scripts/check-ios-ui-test-fail-closed.test.mjs scripts/verify-xcresult-test-results.test.mjs && node scripts/check-ios-ui-test-fail-closed.mjs",
+    "check:ios-ui-test-fail-closed": "node --test scripts/boot-backend-port-conflict.test.mjs scripts/boot-ios-ui-backend.test.mjs scripts/check-ios-ui-test-fail-closed.test.mjs scripts/ios-ui-shard-config.test.mjs scripts/verify-xcresult-test-results.test.mjs && node scripts/check-ios-ui-test-fail-closed.mjs",
     "check:android-e2e-fail-closed": "node --test scripts/check-android-e2e-fail-closed.test.mjs && node scripts/check-android-e2e-fail-closed.mjs",
     "check:openapi-app": "node scripts/check-openapi-app.mjs",
     "check:k8s:render": "tmpdir=\"${RUNNER_TEMP:-/tmp}/maintenance-rendered-k8s\" && scripts/render-k8s-manifests.sh \"$tmpdir\"",
@@ -32,6 +32,10 @@
     "check:adrs": "node scripts/check-adrs.mjs",
     "check:foundation-gates": "node scripts/check-foundation-gates.mjs",
     "check:ci-preflight": "node scripts/check-ci-preflight.mjs",
+    "verify": "node scripts/verify.mjs fast",
+    "verify:db": "node scripts/verify.mjs db",
+    "verify:all": "node scripts/verify.mjs all",
+    "test:verify": "node --test scripts/verify.test.mjs",
     "check:package-lock": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund && git diff --exit-code -- package-lock.json",
     "check:root-workspaces": "node scripts/check-root-workspaces.mjs",
     "test:root-workspaces": "node --test scripts/check-root-workspaces.test.mjs",
@@ -86,15 +90,21 @@
     "kic:scrape-public-docs": "node scripts/korean-connectivity/public-doc-scraper.mjs",
     "kic:generate-nhis-loss-report-fixture": "node scripts/korean-connectivity/nhis-edi-loss-report.mjs",
     "kic:local-cert-login-fixture": "node scripts/korean-connectivity/local-certificate-agent.mjs",
-    "check:console-truth-ledger": "node scripts/console/validate-console-truth-ledger.mjs"
+    "check:console-truth-ledger": "node scripts/console/validate-console-truth-ledger.mjs",
+    "test:console-authority-bootstrap": "node --test scripts/console/verify-console-pr-authority-bootstrap.test.mjs",
+    "check:node-audit-exceptions": "node scripts/check-node-audit-exceptions.mjs",
+    "test:node-audit-exceptions": "node --test scripts/check-node-audit-exceptions.test.mjs",
+    "check:trivy-dev-codegen-exceptions": "node scripts/generate-trivy-dev-codegen-exceptions.mjs --check",
+    "test:trivy-dev-codegen-exceptions": "node --test scripts/generate-trivy-dev-codegen-exceptions.test.mjs"
   },
   "dependencies": {
     "pg": "8.21.0"
   },
   "devDependencies": {
-    "@openapitools/openapi-generator-cli": "2.38.0",
+    "@openapitools/openapi-generator-cli": "2.40.1",
     "@types/node": "25.9.3",
     "@types/pg": "8.20.0",
+    "js-yaml": "4.3.0",
     "openapi-typescript": "7.13.0",
     "tsx": "4.22.4",
     "typescript": "5.9.3"
@@ -105,6 +115,7 @@
     "@redocly/openapi-core@1.34.17": {
       "minimatch": "file:../../../tools/npm/minimatch-callable-compat"
     },
-    "brace-expansion": "5.0.8"
+    "brace-expansion": "5.0.8",
+    "postcss": "8.5.23"
   }
 }

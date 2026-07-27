@@ -14,6 +14,7 @@ use p256::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::atomic::{AtomicU16, Ordering};
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 use tower::ServiceExt;
@@ -44,6 +45,8 @@ async fn repair_lifecycle_completes_with_audits_history_and_no_finance_posting(p
         seed_actor_with_grants(&pool, OrgId::knl(), branch, &["equipment_3r_approve"]).await;
     let token = keys.token(operator, OrgId::knl(), vec!["MEMBER".into()], vec![branch]);
     let approver_token = keys.token(approver, OrgId::knl(), vec!["MEMBER".into()], vec![branch]);
+    let handover_evidence =
+        seed_eligible_handover_evidence(&pool, OrgId::knl(), branch, operator).await;
 
     let (status, unit) = send(
         &rt,
@@ -162,9 +165,55 @@ async fn repair_lifecycle_completes_with_audits_history_and_no_finance_posting(p
     assert_eq!(dispatched["status"], "DISPATCHED");
 
     let handed_over_at = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
-    let (status, handed) = send(&rt, &keys, "POST", &format!("{CASES}/{case_id}/handover"), &token, Some(json!({"recipientName": "현장 소장", "evidenceReference": "evidence://equipment-3r/handover-0001", "handedOverAt": handed_over_at})), None).await;
+    let (status, handed) = send(&rt, &keys, "POST", &format!("{CASES}/{case_id}/handover"), &token, Some(json!({"recipientName": "현장 소장", "evidenceObjectId": handover_evidence, "handedOverAt": handed_over_at})), None).await;
     assert_eq!(status, StatusCode::OK, "handover: {handed}");
     assert_eq!(handed["status"], "HANDED_OVER");
+
+    // The concealment story proves the four refusals; this is the other half of
+    // the pair — that a permitted handover actually writes the custody relation
+    // and that the read path surfaces the typed object instead of the retired
+    // `evidenceReference` string.
+    let (status, case_detail) = send(
+        &rt,
+        &keys,
+        "GET",
+        &format!("{CASES}/{case_id}"),
+        &token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "case detail: {case_detail}");
+    assert_eq!(
+        case_detail["handover"]["evidenceObjectId"],
+        json!(handover_evidence),
+        "the detail view must surface the bound evidence object: {case_detail}"
+    );
+    let original_copy: Uuid = sqlx::query_scalar(
+        "SELECT id FROM docs_evidence_copies WHERE evidence_object_id=$1 AND copy_kind='ORIGINAL'",
+    )
+    .bind(handover_evidence)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let custody: (Uuid, Uuid, Uuid, Uuid) = sqlx::query_as(
+        "SELECT evidence_object_id,original_copy_id,branch_id,created_by \
+         FROM docs_equipment_handover_custody WHERE equipment_case_id=$1",
+    )
+    .bind(case_id.parse::<Uuid>().unwrap())
+    .fetch_one(&pool)
+    .await
+    .expect("handover must bind exactly one immutable custody row");
+    assert_eq!(
+        custody,
+        (
+            handover_evidence,
+            original_copy,
+            *branch.as_uuid(),
+            *operator.as_uuid()
+        ),
+        "custody must record the object, its verified ORIGINAL copy, the case branch and the actor"
+    );
 
     let inspections_path = format!("{CASES}/{case_id}/inspections");
     let (status, pass) = send(
@@ -646,6 +695,8 @@ async fn resale_disposition_sells_unit_and_blocks_further_quotes(pool: PgPool) {
         seed_actor_with_grants(&pool, OrgId::knl(), branch, &["equipment_3r_approve"]).await;
     let token = keys.token(operator, OrgId::knl(), vec!["MEMBER".into()], vec![branch]);
     let approver_token = keys.token(approver, OrgId::knl(), vec!["MEMBER".into()], vec![branch]);
+    let handover_evidence =
+        seed_eligible_handover_evidence(&pool, OrgId::knl(), branch, operator).await;
 
     let (status, unit) = send(
         &rt,
@@ -702,7 +753,7 @@ async fn resale_disposition_sells_unit_and_blocks_further_quotes(pool: PgPool) {
     .await;
     assert_eq!(status, StatusCode::OK);
     let handed_over_at = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
-    let (status, _) = send(&rt, &keys, "POST", &format!("{CASES}/{case_id}/handover"), &token, Some(json!({"recipientName": "수령인", "evidenceReference": "evidence://equipment-3r/handover-resale", "handedOverAt": handed_over_at})), None).await;
+    let (status, _) = send(&rt, &keys, "POST", &format!("{CASES}/{case_id}/handover"), &token, Some(json!({"recipientName": "수령인", "evidenceObjectId": handover_evidence, "handedOverAt": handed_over_at})), None).await;
     assert_eq!(status, StatusCode::OK);
     let returned_at = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
     let (status, _) = send(
@@ -799,6 +850,114 @@ async fn resale_disposition_sells_unit_and_blocks_further_quotes(pool: PgPool) {
         StatusCode::CONFLICT,
         "completed disposition is terminal: {completed_again}"
     );
+}
+
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn handover_conceals_ineligible_or_foreign_evidence_and_denies_foreign_branch(pool: PgPool) {
+    let keys = Keys::generate();
+    let rt = runtime_role_pool(&pool).await;
+    let branch = seed_branch(&pool, OrgId::knl(), "equip-evidence").await;
+    let foreign_branch = seed_branch(&pool, OrgId::knl(), "equip-evidence-foreign").await;
+    let operator = seed_actor_with_grants(&pool, OrgId::knl(), branch, ALL_FEATURES).await;
+    let foreign_operator = seed_actor_with_grants(
+        &pool,
+        OrgId::knl(),
+        foreign_branch,
+        &["equipment_3r_dispatch"],
+    )
+    .await;
+    let token = keys.token(operator, OrgId::knl(), vec!["MEMBER".into()], vec![branch]);
+    let foreign_branch_token = keys.token(
+        foreign_operator,
+        OrgId::knl(),
+        vec!["MEMBER".into()],
+        vec![foreign_branch],
+    );
+
+    let org2 = OrgId::from_uuid(
+        sqlx::query_scalar("INSERT INTO organizations (slug,name) VALUES ('equipment-evidence-org-two','Equipment Evidence Org Two') RETURNING id")
+            .fetch_one(&pool).await.unwrap(),
+    );
+    let org2_branch = seed_branch(&pool, org2, "equip-evidence-org-two").await;
+    let org2_actor = seed_actor_with_grants(&pool, org2, org2_branch, &[]).await;
+
+    let rejected = [
+        (
+            "foreign-org",
+            seed_handover_evidence_variant(&pool, org2, org2_branch, org2_actor, true, false, true)
+                .await,
+        ),
+        (
+            "mutable",
+            seed_handover_evidence_variant(
+                &pool,
+                OrgId::knl(),
+                branch,
+                operator,
+                true,
+                false,
+                false,
+            )
+            .await,
+        ),
+        (
+            "disposed",
+            seed_handover_evidence_variant(&pool, OrgId::knl(), branch, operator, true, true, true)
+                .await,
+        ),
+        (
+            "non-admissible",
+            seed_handover_evidence_variant(
+                &pool,
+                OrgId::knl(),
+                branch,
+                operator,
+                false,
+                false,
+                true,
+            )
+            .await,
+        ),
+    ];
+    for (label, evidence_object_id) in rejected {
+        let case = seed_dispatched_case(&pool, OrgId::knl(), branch, operator, label).await;
+        let (status, body) = send(
+            &rt, &keys, "POST", &format!("{CASES}/{case}/handover"), &token,
+            Some(json!({"recipientName":"수령인","evidenceObjectId":evidence_object_id,"handedOverAt":OffsetDateTime::now_utc().format(&Rfc3339).unwrap()})), None,
+        ).await;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "{label} must be concealed: {body}"
+        );
+        let state: String =
+            sqlx::query_scalar("SELECT status FROM equipment_3r_rental_cases WHERE id=$1")
+                .bind(case)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(state, "DISPATCHED", "{label} must not transition the case");
+    }
+
+    let valid = seed_eligible_handover_evidence(&pool, OrgId::knl(), branch, operator).await;
+    let case = seed_dispatched_case(&pool, OrgId::knl(), branch, operator, "foreign-branch").await;
+    let (status, body) = send(
+        &rt, &keys, "POST", &format!("{CASES}/{case}/handover"), &foreign_branch_token,
+        Some(json!({"recipientName":"수령인","evidenceObjectId":valid,"handedOverAt":OffsetDateTime::now_utc().format(&Rfc3339).unwrap()})), None,
+    ).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "foreign branch must be denied: {body}"
+    );
+    let custody_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM docs_equipment_handover_custody WHERE equipment_case_id=$1",
+    )
+    .bind(case)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(custody_count, 0, "unauthorized branch cannot bind custody");
 }
 
 struct Keys {
@@ -914,6 +1073,214 @@ fn app_state(pool: PgPool, public_key: String) -> Result<AppState, mnt_app::AppE
         DatabaseDependency::Postgres(pool),
     )
 }
+async fn seed_eligible_handover_evidence(
+    pool: &PgPool,
+    org: OrgId,
+    branch: BranchId,
+    actor: UserId,
+) -> Uuid {
+    seed_handover_evidence_variant(pool, org, branch, actor, true, false, true).await
+}
+
+/// Seed one Docs/Evidence object with an ORIGINAL copy.
+///
+/// `verified_worm` is not a flag the fixture may assert: migration 0195's
+/// `docs_evidence_copies_bind_storage_attestation` trigger overwrites any
+/// caller-supplied `worm_status`/`verified_at` and promotes a copy to VERIFIED
+/// only when a tenant-matching `evidence_media` row proves the WORM replica by
+/// object key and SHA-256.  The eligible variant therefore seeds that real
+/// storage attestation; the ineligible variant simply omits it.
+async fn seed_handover_evidence_variant(
+    pool: &PgPool,
+    org: OrgId,
+    branch: BranchId,
+    actor: UserId,
+    admissible: bool,
+    disposed: bool,
+    verified_worm: bool,
+) -> Uuid {
+    let object_id = Uuid::new_v4();
+    let copy_id = Uuid::new_v4();
+    let digest = "a".repeat(64);
+    let storage_key = format!("handover-{object_id}.pdf");
+    let media = if verified_worm {
+        Some(seed_verified_worm_media(pool, org, branch, actor, &storage_key, &digest).await)
+    } else {
+        None
+    };
+    let status = if admissible {
+        "ADMISSIBLE"
+    } else {
+        "REVIEW_NEEDED"
+    };
+    let stage = if disposed {
+        "DISPOSED"
+    } else {
+        "ADMISSIBILITY_EVALUATED"
+    };
+    sqlx::query(
+        "INSERT INTO docs_evidence_objects \
+         (id,org_id,code,title,source_type,source_id,classification,admissibility_status,current_custody_stage,disposed_at,disposed_by,disposal_reason,created_by,updated_by) \
+         VALUES ($1,$2,$3,'Equipment handover evidence','external_document',$4,'GENERAL',$5,$6,$7,$8,$9,$10,$10)",
+    )
+    .bind(object_id)
+    .bind(*org.as_uuid())
+    .bind(format!("EV-EQUIP-{}", object_id.simple().to_string().to_uppercase()))
+    .bind(format!("equipment-handover-{object_id}"))
+    .bind(status)
+    .bind(stage)
+    .bind(disposed.then_some(OffsetDateTime::now_utc()))
+    .bind(disposed.then_some(*actor.as_uuid()))
+    .bind(disposed.then_some("evidence disposition test"))
+    .bind(*actor.as_uuid())
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO docs_evidence_copies \
+         (id,org_id,evidence_object_id,copy_kind,storage_provider,storage_object_id,source_evidence_media_id,digest_sha256,content_type,size_bytes,created_by) \
+         VALUES ($1,$2,$3,'ORIGINAL','seaweedfs-worm',$4,$5,$6,'application/pdf',1024,$7)",
+    )
+    .bind(copy_id)
+    .bind(*org.as_uuid())
+    .bind(object_id)
+    .bind(&storage_key)
+    .bind(media)
+    .bind(&digest)
+    .bind(*actor.as_uuid())
+    .execute(pool)
+    .await
+    .unwrap();
+    let promoted: String =
+        sqlx::query_scalar("SELECT worm_status FROM docs_evidence_copies WHERE id=$1")
+            .bind(copy_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        promoted,
+        if verified_worm { "VERIFIED" } else { "PENDING" },
+        "the storage-attestation trigger, not the fixture, decides WORM verification"
+    );
+    object_id
+}
+
+/// Seed the server-written WORM replica attestation that migration 0195 makes
+/// the sole promotion authority for an EV original.  Mirrors the fixture in
+/// `backend/crates/docs/rest/tests/evidence_rest_rls_surfaces_as_runtime_role.rs`.
+async fn seed_verified_worm_media(
+    pool: &PgPool,
+    org: OrgId,
+    branch: BranchId,
+    actor: UserId,
+    storage_key: &str,
+    digest_hex: &str,
+) -> Uuid {
+    let unique = Uuid::new_v4();
+    let customer: Uuid = sqlx::query_scalar(
+        "INSERT INTO registry_customers (branch_id,name,org_id) VALUES ($1,$2,$3) RETURNING id",
+    )
+    .bind(*branch.as_uuid())
+    .bind(format!("Equipment handover evidence customer {unique}"))
+    .bind(*org.as_uuid())
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let site: Uuid = sqlx::query_scalar(
+        "INSERT INTO registry_sites (customer_id,branch_id,name,org_id) VALUES ($1,$2,$3,$4) RETURNING id",
+    )
+    .bind(customer)
+    .bind(*branch.as_uuid())
+    .bind(format!("Equipment handover evidence site {unique}"))
+    .bind(*org.as_uuid())
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    // `equipment_no` and `request_no` have fixed 4- and 3-digit shapes, so a
+    // random suffix would collide. Count instead: each `#[sqlx::test]` gets its
+    // own database and the whole binary seeds a handful of these.
+    static SEQUENCE: AtomicU16 = AtomicU16::new(1);
+    let suffix = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let equipment: Uuid = sqlx::query_scalar(
+        "INSERT INTO registry_equipment \
+         (branch_id,customer_id,site_id,equipment_no,management_no,manufacturer_code,kind_code,power_code,status,specification,ton_text,model,source_sheet,source_row,org_id) \
+         VALUES ($1,$2,$3,$4,$5,'S','T','R','임대','좌식','2.5','Model','test',1,$6) RETURNING id",
+    )
+    .bind(*branch.as_uuid())
+    .bind(customer)
+    .bind(site)
+    .bind(format!("EVD01-{suffix:04}"))
+    .bind(format!("M{suffix:04}"))
+    .bind(*org.as_uuid())
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let work_order = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO work_orders \
+         (id,request_no,branch_id,equipment_id,customer_id,site_id,requested_by,status,priority,symptom,result_type,org_id) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'REPORT_SUBMITTED','P3','Equipment handover evidence','COMPLETED',$8)",
+    )
+    .bind(work_order)
+    .bind(format!("20260725-{suffix:03}"))
+    .bind(*branch.as_uuid())
+    .bind(equipment)
+    .bind(customer)
+    .bind(site)
+    .bind(*actor.as_uuid())
+    .bind(*org.as_uuid())
+    .execute(pool)
+    .await
+    .unwrap();
+    let media = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO evidence_media \
+         (id,work_order_id,stage,s3_key,content_type,size_bytes,checksum_sha256,uploaded_by,worm_replica_status,verified_at,retry_count,next_retry_at,org_id) \
+         VALUES ($1,$2,'REPORT',$3,'application/pdf',1024,encode(decode($4,'hex'),'base64'),$5,'VERIFIED',$6,0,$6,$7)",
+    )
+    .bind(media)
+    .bind(work_order)
+    .bind(storage_key)
+    .bind(digest_hex)
+    .bind(*actor.as_uuid())
+    .bind(OffsetDateTime::now_utc())
+    .bind(*org.as_uuid())
+    .execute(pool)
+    .await
+    .unwrap();
+    media
+}
+
+async fn seed_dispatched_case(
+    pool: &PgPool,
+    org: OrgId,
+    branch: BranchId,
+    actor: UserId,
+    suffix: &str,
+) -> Uuid {
+    let unit = Uuid::new_v4();
+    let case = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO equipment_3r_units \
+         (id,org_id,branch_id,serial_no,model_name,capacity_class,acquisition_cost_minor,availability,created_by) \
+         VALUES ($1,$2,$3,$4,'Evidence test unit','2.5t',1,'RESERVED',$5)",
+    )
+    .bind(unit).bind(*org.as_uuid()).bind(*branch.as_uuid())
+    .bind(format!("EVIDENCE-{}", Uuid::new_v4().simple())).bind(*actor.as_uuid())
+    .execute(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO equipment_3r_rental_cases \
+         (id,org_id,branch_id,unit_id,customer_name,site_reference,monthly_rate_minor,duration_months,currency_code,status,carrier_name,vehicle_reference,dispatched_at,idempotency_key,request_fingerprint,created_by) \
+         VALUES ($1,$2,$3,$4,'Evidence test customer',$5,1,1,'KRW','DISPATCHED','Test carrier','TEST-VEHICLE',now(),$6,$7,$8)",
+    )
+    .bind(case).bind(*org.as_uuid()).bind(*branch.as_uuid()).bind(unit)
+    .bind(format!("Evidence test {suffix}"))
+    .bind(format!("evidence-dispatch-{}", Uuid::new_v4()))
+    .bind("b".repeat(64)).bind(*actor.as_uuid())
+    .execute(pool).await.unwrap();
+    case
+}
+
 async fn seed_branch(pool: &PgPool, org: OrgId, name: &str) -> BranchId {
     let region: Uuid =
         sqlx::query_scalar("INSERT INTO regions (name, org_id) VALUES ($1,$2) RETURNING id")

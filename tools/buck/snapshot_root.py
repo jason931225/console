@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and clean Docker-visible, ignored archive snapshot directories."""
+"""Create and clean archive snapshots below Buck's ignored output boundary."""
 from __future__ import annotations
 import argparse, os, shutil, sys, tempfile
 from pathlib import Path
@@ -7,12 +7,12 @@ from pathlib import Path
 class SnapshotRootError(ValueError): pass
 
 def root_for(repo: Path, configured: str | None = None) -> Path:
-    repo, cache = repo.resolve(), (repo / '.cache').resolve()
-    value = configured or '.cache/buck-preflight'
+    repo, buck_out = repo.resolve(), (repo / "buck-out").resolve()
+    value = configured or "buck-out/buck-preflight-snapshots"
     candidate = Path(value)
     candidate = (repo / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
-    if candidate != cache and cache not in candidate.parents:
-        raise SnapshotRootError('snapshot root must stay below the ignored repository .cache directory')
+    if buck_out not in candidate.parents:
+        raise SnapshotRootError("snapshot root must stay below the Buck-ignored buck-out directory")
     return candidate
 
 def create(repo: Path, configured: str | None = None) -> Path:

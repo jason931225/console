@@ -83,17 +83,35 @@ printf 'buck-preflight: enumerated %s Rust test target(s)\n' "$(grep -Ec '(^|[[:
 
 scratch="$(python3 "${repo_root}/tools/buck/snapshot_root.py" --repo "${repo_root}")"
 baseline="${scratch}/baseline"
+archive="${scratch}.tar"
 cleanup() {
-  python3 "${repo_root}/tools/buck/snapshot_root.py" --repo "${repo_root}" --cleanup "${scratch}"
-}
-trap cleanup EXIT HUP INT TERM
+  local exit_status="$?"
+  local cleanup_failed=0
+  trap - EXIT HUP INT TERM
 
-# Both archives are exactly the committed candidate. Writers mutate `scratch`;
-# `baseline` remains immutable for output comparisons. Never use caller files
-# as a drift baseline: they may be dirty and newer than the candidate.
-git -C "${repo_root}" archive --format=tar HEAD | tar -x -C "${scratch}"
+  rm -f -- "${archive}" || cleanup_failed=1
+  if [[ -e "${scratch}" ]]; then
+    python3 "${repo_root}/tools/buck/snapshot_root.py" --repo "${repo_root}" --cleanup "${scratch}" || cleanup_failed=1
+  fi
+
+  if (( cleanup_failed )); then
+    echo "buck-preflight: failed to clean immutable snapshot" >&2
+    return 1
+  fi
+  return "${exit_status}"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# One immutable archive of the committed candidate is extracted independently
+# for the writable candidate and immutable baseline. Never use caller files as
+# a drift baseline: they may be dirty and newer than the candidate.
+git -C "${repo_root}" archive --format=tar HEAD >"${archive}"
+tar -xf "${archive}" -C "${scratch}"
 mkdir "${baseline}"
-git -C "${repo_root}" archive --format=tar HEAD | tar -x -C "${baseline}"
+tar -xf "${archive}" -C "${baseline}"
 # Validate the registry from the immutable candidate snapshot. This prevents a
 # dirty caller tree from supplying roots, writers, or Buck labels that do not
 # exist in the candidate we actually gate.

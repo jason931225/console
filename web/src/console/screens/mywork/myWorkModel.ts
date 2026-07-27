@@ -4,8 +4,10 @@
 // unit-testable without a DOM.
 
 import { ko } from "../../../i18n/ko";
+import { canPresentCollaborationRoute } from "../../../lib/collaborationRoutePolicy";
 import { resolveActionInboxLinkRoute } from "../../../lib/objectRegistry";
 import type { ActionInboxItem } from "../overview/overviewModel";
+import type { CalendarEventResponse, MyWorkbenchResponse, WorkbenchCalendarItem } from "./myWorkApi";
 
 export type {
   ActionInboxItem,
@@ -59,6 +61,25 @@ export interface MyWorkStrings {
     dueUnavailable: string;
   };
   kind: { approval: string; dispatch: string; work: string; support: string; unknown: string };
+  calendar: {
+    title: string;
+    empty: string;
+    unavailable: string;
+    loadFailed: string;
+    focusTitle: string;
+    startsAt: string;
+    endsAt: string;
+    schedule: string;
+    scheduleFailed: string;
+    scheduled: string;
+    invalidRange: string;
+    open: string;
+    created: string;
+    openCreated: string;
+    range: (from: string, to: string) => string;
+    partial: string;
+    truncated: string;
+  };
   error: string;
   retry: string;
   loading: string;
@@ -99,6 +120,8 @@ const FALLBACK: MyWorkStrings = {
     support: "Reply",
     unknown: "Work item unavailable",
   },
+  // Calendar copy is always product Korean, including the defensive fallback.
+  calendar: ko.console.mywork.calendar,
   error: "Could not load",
   retry: "Retry",
   loading: "Loading",
@@ -160,6 +183,66 @@ export function actionInboxDue(value: unknown): Date | undefined {
   if (typeof value !== "string" || value.trim().length === 0) return undefined;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+export type CalendarWorkbenchState =
+  | { kind: "loading" }
+  | {
+      kind: "ready";
+      items: readonly WorkbenchCalendarItem[];
+      total: number;
+      truncated: boolean;
+      partial: boolean;
+      range: MyWorkbenchResponse["range"];
+    }
+  | { kind: "denied" | "unavailable" };
+
+/**
+ * Treat non-ok aggregate envelopes as opaque.  Their codes and counts are
+ * authority-bearing server details and must never become user-visible hints.
+ */
+export function calendarWorkbenchState(
+  workbench: MyWorkbenchResponse | undefined,
+): CalendarWorkbenchState {
+  if (!workbench) return { kind: "loading" };
+  const source = workbench.calendar;
+  if (source.status !== "ok") return { kind: source.status };
+  return {
+    kind: "ready",
+    items: source.items,
+    total: source.total,
+    truncated: source.truncated,
+    partial: workbench.partial,
+    range: workbench.range,
+  };
+}
+
+/** Bounded module targets are still resolved by a browser allowlist. */
+export function calendarTargetRoute(item: WorkbenchCalendarItem): string | undefined {
+  if (item.target.module !== "overview" || item.target.id !== item.id) return undefined;
+  return "/overview";
+}
+
+/** The collaboration calendar is the authoritative owner for a freshly
+ * created event.  The returned receipt is not injected into the aggregate. */
+export function createdCalendarRoute(event: CalendarEventResponse): string | undefined {
+  return event.status === "ACTIVE" ? "/collaboration" : undefined;
+}
+
+/** A My Work receipt may advertise only a route the current UI can present. */
+export function canOpenCalendarOwner(
+  roles: readonly string[] | undefined,
+  featureGrants: readonly string[] | undefined,
+): boolean {
+  return canPresentCollaborationRoute(roles, featureGrants);
+}
+
+/** Converts a datetime-local KST entry to a real RFC3339 instant without using
+ * browser-local timezone state. */
+export function kstLocalDateTimeToIso(value: string): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return undefined;
+  const instant = new Date(`${value}:00+09:00`);
+  return Number.isNaN(instant.getTime()) ? undefined : instant.toISOString();
 }
 
 // ── week ribbon (real per-day due counts) ────────────────────────────────────

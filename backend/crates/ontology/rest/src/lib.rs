@@ -48,8 +48,11 @@ use mnt_ontology_application::{
     ActionDispatch, apply_edits, egress_evidence, evaluate_submission_criteria, evaluation_context,
     parse_control_points, validate_params,
 };
-use mnt_ontology_domain::{InstanceId, InstanceLifecycleState, LinkTypeId, ObjectTypeId};
+use mnt_ontology_domain::{
+    FieldKind, InstanceId, InstanceLifecycleState, LinkTypeId, ObjectTypeId,
+};
 use mnt_platform_auth::JwtVerifier;
+use mnt_platform_authz::cedar_pbac::authoring::DeclaredAttr;
 use mnt_platform_authz::cedar_pbac::authoring::{ConditionOp, ConditionValue, NoCodeBlocks};
 use mnt_platform_authz::cedar_pbac::evaluate_legacy_contract;
 use mnt_platform_authz::cedar_pbac::residual::{
@@ -414,9 +417,34 @@ async fn list_instances(
         .ok_or_else(|| {
             RestError::from_kernel(KernelError::not_found("object type was not found"))
         })?;
+    // The object type's own declared properties are admissible in policies
+    // scoped to it. The residual lowering already reads arbitrary instance
+    // attributes; supplying the declared set lets the authoring validator agree,
+    // with each property spliced into the Cedar schema so reads stay proven.
+    // Only Text and Boolean are representable as optional Cedar attributes; a
+    // policy over any other kind fails closed in the validator.
+    let declared: Vec<DeclaredAttr> = state
+        .registry
+        .get_object_type(&object_type.stable_key, None)
+        .await
+        .map_err(RestError::from_ontology)?
+        .properties
+        .iter()
+        .filter_map(|property| match property.field_kind {
+            FieldKind::Boolean => Some(DeclaredAttr {
+                key: property.key.clone(),
+                boolean: true,
+            }),
+            FieldKind::Text => Some(DeclaredAttr {
+                key: property.key.clone(),
+                boolean: false,
+            }),
+            _ => None,
+        })
+        .collect();
     let blocks = state
         .policies
-        .load_enforced_object_policy_blocks(query.r#type)
+        .load_enforced_object_policy_blocks(query.r#type, &declared)
         .await
         .map_err(|error| {
             tracing::error!(%error, "ontology object-policy load failed");

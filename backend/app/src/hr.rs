@@ -6860,7 +6860,9 @@ fn with_ordinary_wage_basis(
 /// in production (safe — nothing gates on it yet, and the atomic reset in every
 /// settlement UPDATE plus the digest-match honoring below hold the invariant the
 /// moment a recording path is added). It is exercised by the certification tests.
-#[cfg_attr(not(test), allow(dead_code))]
+// The certification tests that exercise it are `#[cfg(feature =
+// "test-postgres")]`, so it is unused in a plain `cfg(test)` build too.
+#[allow(dead_code)]
 fn certification_artifact_json(validation: &ProfessionalValidation) -> Value {
     let reviewer_kind = match validation.reviewer_kind {
         ProfessionalReviewerKind::LaborAttorney => "LABOR_ATTORNEY",
@@ -9989,6 +9991,7 @@ E-001,홍길동,본사,2026-07-01,abc
         );
     }
 
+    #[allow(dead_code)]
     fn sample_settlement_input() -> ExitSettlementInput {
         ExitSettlementInput {
             average_wage_period_start: "2026-04-01".to_owned(),
@@ -9999,6 +10002,7 @@ E-001,홍길동,본사,2026-07-01,abc
         }
     }
 
+    #[allow(dead_code)]
     async fn arm_mnt_rt(
         tx: &mut sqlx::Transaction<'_, Postgres>,
         org_id: Uuid,
@@ -10015,6 +10019,7 @@ E-001,홍길동,본사,2026-07-01,abc
         Ok(())
     }
 
+    #[allow(dead_code)]
     async fn seed_exit_case(pool: &sqlx::PgPool) -> Result<(Uuid, Uuid), String> {
         let org_id = Uuid::new_v4();
         let region_id = Uuid::new_v4();
@@ -10771,6 +10776,7 @@ E-001,홍길동,본사,2026-07-01,abc
         Ok(())
     }
 
+    #[allow(dead_code)]
     async fn seed_exit_confirmer(
         pool: &sqlx::PgPool,
         org_id: Uuid,
@@ -11017,6 +11023,7 @@ E-001,홍길동,본사,2026-07-01,abc
     /// org GUC armed — the ONLY correct way to exercise RLS here, since the test
     /// pool logs in as the superuser/BYPASSRLS migration role and `mnt_rt` is
     /// NOLOGIN (cannot be a login pool).
+    #[allow(dead_code)]
     async fn armed_tx(
         pool: &sqlx::PgPool,
         org_id: Uuid,
@@ -11033,6 +11040,7 @@ E-001,홍길동,본사,2026-07-01,abc
     /// the superuser pool role. Returns `(org_id, branch_id, employee_id,
     /// user_id)`. Seeding deliberately bypasses RLS; the isolation checks run in
     /// a separate `mnt_rt` transaction.
+    #[allow(dead_code)]
     async fn seed_g009_base(pool: &sqlx::PgPool) -> Result<(Uuid, Uuid, Uuid, Uuid), String> {
         let org_id = Uuid::new_v4();
         let region_id = Uuid::new_v4();
@@ -11090,6 +11098,7 @@ E-001,홍길동,본사,2026-07-01,abc
 
     /// Seed one row into each of the three G009 tenant tables for `org_id`.
     /// Returns `(alert_id, case_id, package_id)`.
+    #[allow(dead_code)]
     async fn seed_g009_rows(
         pool: &sqlx::PgPool,
         org_id: Uuid,

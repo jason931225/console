@@ -593,9 +593,25 @@ const PR473_TOPOLOGY_COMMAND = [
   "-h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1",
   '-c "DROP DATABASE IF EXISTS mnt_apalis_contract WITH (FORCE)"',
   '-c "CREATE DATABASE mnt_apalis_contract OWNER mnt_app"',
+  // Migration 0196 admits only `mnt_buck_admin` for applying migrations, so the
+  // suites built on #[sqlx::test] cannot run as the `postgres` service account.
+  // The password reaches psql through a mode-0600 file, never argv.
+  'BUCK_ADMIN_PASSWORD="$(openssl rand -hex 32)"',
+  "umask 077",
+  'printf "CREATE ROLE mnt_buck_admin SUPERUSER LOGIN PASSWORD \'%s\';\\n"',
+  '"$BUCK_ADMIN_PASSWORD" > "$RUNNER_TEMP/buck-admin.sql"',
+  "docker run --rm --network host",
+  "-e PGPASSWORD=postgres",
+  '-v "$RUNNER_TEMP/buck-admin.sql:/buck-admin.sql:ro"',
+  "--entrypoint psql",
+  "postgres:18.4@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20",
+  "-h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f /buck-admin.sql",
+  'rm -f "$RUNNER_TEMP/buck-admin.sql"',
   'echo "::add-mask::$APP_PASSWORD"',
   'echo "::add-mask::$RT_PASSWORD"',
+  'echo "::add-mask::$BUCK_ADMIN_PASSWORD"',
   "{",
+  'echo "MNT_BUCK_ADMIN_DATABASE_URL=postgres://mnt_buck_admin:${BUCK_ADMIN_PASSWORD}@localhost:5432/mnt_ci?options%5Bmnt.sqlx_test_bootstrap%5D=buck-sqlx-superuser-v1"',
   'echo "MNT_APALIS_OWNER_DATABASE_URL=postgres://mnt_app:${APP_PASSWORD}@localhost:5432/mnt_apalis_contract"',
   'echo "MNT_APALIS_RUNTIME_DATABASE_URL=postgres://mnt_rt:${RT_PASSWORD}@localhost:5432/mnt_apalis_contract"',
   'echo "MNT_APALIS_ADMIN_DATABASE_URL=postgres://postgres:postgres@localhost:5432/mnt_apalis_contract"',
@@ -1461,6 +1477,41 @@ export function evaluateWorkflowHardeningChecks(readText) {
     workflowHasRun(securityWorkflow, [/\bnpm\s+audit\s+--audit-level=high\b/]),
     "security workflow portable gate: active npm audit",
     "security workflow must actively run npm audit --audit-level=high",
+  );
+  requirement(
+    result,
+    workflowHasRun(securityWorkflow, [
+      /npm audit --omit=dev --audit-level=high --json/,
+      /check-node-audit-exceptions\.mjs --mode production/,
+    ]),
+    "security workflow portable gate: unfiltered production npm audit",
+    "security workflow must run omit-dev npm audit through the no-exception production gate",
+  );
+  requirement(
+    result,
+    workflowHasRun(securityWorkflow, [
+      /npm audit --audit-level=high --json/,
+      /check-node-audit-exceptions\.mjs --mode dev-codegen/,
+    ]),
+    "security workflow portable gate: fail-closed dev/codegen npm exceptions",
+    "security workflow must run the full npm audit through the exact dev/codegen exception gate",
+  );
+  requirement(
+    result,
+    workflowHasRun(securityWorkflow, [
+      /trivy\s+fs/,
+      /--ignorefile\s+security\/trivy-dev-codegen-exceptions\.yaml/,
+    ]),
+    "security workflow portable gate: scoped Trivy exceptions",
+    "security workflow must scope full-scan Trivy exceptions to the checked-in YAML policy",
+  );
+  requirement(
+    result,
+    workflowHasRun(securityWorkflow, [
+      /node scripts\/generate-trivy-dev-codegen-exceptions\.mjs --check/,
+    ]),
+    "security workflow portable gate: canonical Trivy exception projection",
+    "security workflow must verify canonical Trivy exception parity before the full-scan YAML policy is used",
   );
 
   return result;

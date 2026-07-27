@@ -8,7 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import type { ConsoleApiClient } from "../../api/client";
 import { payrollStrings as text } from "../../i18n/payroll";

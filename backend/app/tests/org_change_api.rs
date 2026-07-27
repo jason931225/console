@@ -19,6 +19,11 @@ use time::{Duration, OffsetDateTime, macros::offset};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+/// `(org_id, actor, anomaly, reason)` as read back from `audit_events` — every
+/// column is nullable in the table, so the row shape is wide enough that
+/// `clippy::type_complexity` (denied workspace-wide) rejects it inline.
+type RefusalAuditRow = (Option<Uuid>, Option<Uuid>, Option<bool>, Option<String>);
+
 const ISSUER: &str = "mnt-platform-auth";
 const AUDIENCE: &str = "mnt-api";
 const CHANGES: &str = "/api/v1/org-changes";
@@ -520,6 +525,61 @@ async fn dissolve_settles_then_archives_with_referential_net(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
+
+    // §3.9.1 동결 창 on the OTHER live-apply path: a DISSOLVE defers its
+    // deactivation to archive, so a lock opened after effectuate must still
+    // refuse it — and record the attempt.
+    let lock = seed_period_lock(
+        &pool,
+        org,
+        "accounting",
+        today_kst(),
+        today_kst(),
+        "결산 중",
+    )
+    .await;
+    let (status, frozen) = send(
+        &rt,
+        &keys,
+        "POST",
+        &format!("{CHANGES}/{id}/archive"),
+        &exec_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "frozen archive: {frozen}");
+    assert!(
+        frozen["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("회계 결산"),
+        "refusal names the blocking window: {frozen}"
+    );
+    let still_active: Option<OffsetDateTime> =
+        sqlx::query_scalar("SELECT deactivated_at FROM branches WHERE id = $1")
+            .bind(branch)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(still_active.is_none(), "frozen archive applied nothing");
+    let refused: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_events WHERE action = 'org_change.archive.refused' \
+         AND target_id = $1",
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(refused, 1, "the refused archive is on the record");
+    sqlx::query(
+        "UPDATE period_locks SET unlocked_at = now(), unlock_reason = '결산 완료' WHERE id = $1",
+    )
+    .bind(lock)
+    .execute(&pool)
+    .await
+    .unwrap();
+
     let (status, archived) = send(
         &rt,
         &keys,
@@ -926,6 +986,308 @@ async fn authorization_denies_without_leakage_and_conceals_other_tenants(pool: P
     .await;
     assert_eq!(status, StatusCode::OK, "outsider entities");
     assert_eq!(outsider_entities, json!([]), "no grant, no 법인 list");
+}
+
+/// §3.9.1 변경 동결 창: an APPROVED change may not be applied while the period
+/// it takes effect in is closed for 급여 마감 or 회계 결산. The refusal is
+/// fail-closed and names the blocking window, the request and the org tree are
+/// untouched, the attempt itself is audited even though its transaction rolled
+/// back, and another tenant's lock over the same window never bites.
+#[sqlx::test(migrations = "../crates/platform/db/migrations")]
+async fn effectuate_is_frozen_inside_a_locked_period_and_records_the_attempt(pool: PgPool) {
+    let keys = Keys::generate();
+    let rt = runtime_role_pool(&pool).await;
+    let org = OrgId::knl();
+    let outsider = seed_org(&pool, "freeze-outsider").await;
+    let region = seed_region(&pool, org, "리전-동결").await;
+    let drafter = seed_user(&pool, org, "ADMIN").await;
+    let approver = seed_user(&pool, org, "EXECUTIVE").await;
+    let draft_token = keys.token(drafter, org, &["ADMIN"]);
+    let exec_token = keys.token(approver, org, &["EXECUTIVE"]);
+
+    let (status, created) = send(
+        &rt,
+        &keys,
+        "POST",
+        CHANGES,
+        &draft_token,
+        Some(json!({
+            "kind": "REORG",
+            "target": {"kind": "REGION", "ref": region, "label": "동결 검증"},
+            "effectiveDate": today_kst().to_string(),
+            "reason": "동결 창 적용 확인",
+            "proposal": [
+                {"op": "CREATE_BRANCH", "regionId": region, "name": "동결지점"},
+                {"op": "RENAME_REGION", "regionId": region, "name": "동결후이름"}
+            ]
+        })),
+        Some("org-change-freeze-0001"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "create: {created}");
+    let id = created["id"].as_str().unwrap().to_owned();
+
+    // A foreign tenant's lock over the very same window must stay irrelevant,
+    // both to the preflight read and to the apply gate.
+    seed_period_lock(
+        &pool,
+        outsider,
+        "payroll",
+        today_kst(),
+        today_kst(),
+        "타 법인 급여 마감",
+    )
+    .await;
+    let window_start = today_kst() - Duration::days(3);
+    let payroll_lock = seed_period_lock(
+        &pool,
+        org,
+        "payroll",
+        window_start,
+        today_kst() + Duration::days(3),
+        "급여 마감",
+    )
+    .await;
+    let accounting_lock = seed_period_lock(
+        &pool,
+        org,
+        "accounting",
+        window_start,
+        today_kst() + Duration::days(3),
+        "회계 결산",
+    )
+    .await;
+
+    // Preflight computes the freeze signal from the same locks — it is a read,
+    // not a reminder chip, so it names the domains that would refuse the apply.
+    // With BOTH domains locked it stays ONE warning: the console keys the
+    // warning list by `code`, so a second `FREEZE_WINDOW_REVIEW` row would be a
+    // duplicate React key rather than a second signal.
+    let (status, prechecked) = send(
+        &rt,
+        &keys,
+        "POST",
+        &format!("{CHANGES}/{id}/preflight"),
+        &draft_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "preflight: {prechecked}");
+    let freeze_labels: Vec<&str> = prechecked["preflight"]["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|w| w["code"] == "FREEZE_WINDOW_REVIEW")
+        .map(|w| w["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        freeze_labels.len(),
+        1,
+        "one freeze warning however many domains block: {prechecked}"
+    );
+    assert!(
+        freeze_labels[0].contains("급여 마감") && freeze_labels[0].contains("회계 결산"),
+        "the one chip names every blocking domain, in the console's language: {}",
+        freeze_labels[0]
+    );
+
+    let (status, submitted) = send(
+        &rt,
+        &keys,
+        "POST",
+        &format!("{CHANGES}/{id}/submit"),
+        &draft_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "submit: {submitted}");
+    for step in submitted["approvalSteps"].as_array().unwrap() {
+        let step_id = step["id"].as_str().unwrap();
+        let (status, decided) = send(
+            &rt,
+            &keys,
+            "POST",
+            &format!("{CHANGES}/{id}/approval-steps/{step_id}/decision"),
+            &exec_token,
+            Some(json!({"decision": "APPROVED"})),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "decide: {decided}");
+    }
+
+    // Both freeze domains block, and each refusal names its own window. The
+    // second pass proves the accounting domain gates on its own, with the
+    // payroll lock already lifted.
+    for (domain, lock) in [("급여 마감", payroll_lock), ("회계 결산", accounting_lock)] {
+        let (status, frozen) = send(
+            &rt,
+            &keys,
+            "POST",
+            &format!("{CHANGES}/{id}/effectuate"),
+            &exec_token,
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT, "{domain} freeze: {frozen}");
+        let message = frozen["error"]["message"].as_str().unwrap();
+        assert!(
+            message.contains(domain) && message.contains(&today_kst().to_string()),
+            "refusal names the blocking {domain} window in the console's language: {message}"
+        );
+        let (_, still) = send(
+            &rt,
+            &keys,
+            "GET",
+            &format!("{CHANGES}/{id}"),
+            &draft_token,
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(still["status"], "APPROVED", "refused apply did not advance");
+        sqlx::query(
+            "UPDATE period_locks SET unlocked_at = now(), unlock_reason = '검증 해제' \
+             WHERE id = $1",
+        )
+        .bind(lock)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    // Nothing was applied and no success audit landed.
+    let branches: i64 = sqlx::query_scalar("SELECT count(*) FROM branches WHERE name = '동결지점'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(branches, 0, "refused apply wrote no org rows");
+    let applied: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_events WHERE action = 'org_change.effectuate'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(applied, 0, "a refused apply is not an apply");
+
+    // The attempt IS on the record — its own committed transaction, anomaly
+    // flagged, reason naming the window, scoped to this tenant only.
+    let refusals: Vec<RefusalAuditRow> = sqlx::query_as(
+        "SELECT org_id, actor, anomaly, reason FROM audit_events \
+             WHERE action = 'org_change.effectuate.refused' AND target_id = $1 \
+             ORDER BY occurred_at",
+    )
+    .bind(&id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(refusals.len(), 2, "one detection row per refused attempt");
+    for (index, domain) in ["급여 마감", "회계 결산"].iter().enumerate() {
+        let (row_org, actor, anomaly, reason) = &refusals[index];
+        assert_eq!(row_org.as_ref(), Some(org.as_uuid()), "tenant-scoped");
+        assert_eq!(actor.as_ref(), Some(approver.as_uuid()), "actor recorded");
+        assert_eq!(*anomaly, Some(true), "freeze refusal is an anomaly");
+        assert!(
+            reason.as_deref().unwrap().contains(domain),
+            "reason names the blocking domain: {reason:?}"
+        );
+    }
+
+    // Outside every lock the legitimate path is preserved — even with an
+    // ACTIVE own-tenant lock over a different period and the outsider's lock
+    // still covering today.
+    seed_period_lock(
+        &pool,
+        org,
+        "payroll",
+        today_kst() - Duration::days(40),
+        today_kst() - Duration::days(10),
+        "지난달 급여 마감",
+    )
+    .await;
+    let (status, applied) = send(
+        &rt,
+        &keys,
+        "POST",
+        &format!("{CHANGES}/{id}/effectuate"),
+        &exec_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "outside the window: {applied}");
+    assert_eq!(applied["status"], "APPLIED");
+    let renamed: String = sqlx::query_scalar("SELECT name FROM regions WHERE id = $1")
+        .bind(region)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(renamed, "동결후이름", "the unfrozen apply really ran");
+
+    // …and with those same two locks still ACTIVE, a fresh draft whose
+    // effective date falls outside them carries NO freeze warning: the signal
+    // is computed per effective date, not pushed on every preflight.
+    let (_, clean) = send(
+        &rt,
+        &keys,
+        "POST",
+        CHANGES,
+        &draft_token,
+        Some(json!({
+            "kind": "REORG",
+            "target": {"kind": "REGION", "ref": region, "label": "동결 외"},
+            "effectiveDate": today_kst().to_string(),
+            "reason": "동결창 밖 확인",
+            "proposal": []
+        })),
+        Some("org-change-freeze-0002"),
+    )
+    .await;
+    let clean_id = clean["id"].as_str().unwrap();
+    let (status, clean_report) = send(
+        &rt,
+        &keys,
+        "POST",
+        &format!("{CHANGES}/{clean_id}/preflight"),
+        &draft_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "clean preflight: {clean_report}");
+    assert!(
+        !clean_report["preflight"]["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w["code"] == "FREEZE_WINDOW_REVIEW"),
+        "no lock covers this effective date: {clean_report}"
+    );
+}
+
+async fn seed_period_lock(
+    pool: &PgPool,
+    org: OrgId,
+    domain: &str,
+    start: time::Date,
+    end: time::Date,
+    reason: &str,
+) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO period_locks (org_id, domain, period_start, period_end, reason) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(*org.as_uuid())
+    .bind(domain)
+    .bind(start)
+    .bind(end)
+    .bind(reason)
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 struct Keys {
