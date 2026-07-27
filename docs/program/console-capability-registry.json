@@ -902,7 +902,7 @@
       "backend/openapi/openapi.yaml",
       "clients/ts/src/schema.d.ts",
       "clients/kotlin/**",
-      "clients/swift/Sources/MaintenanceAPIClient/Generated/**",
+      "clients/swift/Sources/ConsoleAPIClient/Generated/**",
       "web/**"
      ]
     },
@@ -920,7 +920,7 @@
       "web/src/console/screens/registry.ts",
       "clients/ts/src/schema.d.ts",
       "clients/kotlin/**",
-      "clients/swift/Sources/MaintenanceAPIClient/Generated/**"
+      "clients/swift/Sources/ConsoleAPIClient/Generated/**"
      ]
     },
     "consolidation": {
@@ -931,7 +931,7 @@
       "backend/openapi/openapi.yaml",
       "clients/ts/src/schema.d.ts",
       "clients/kotlin/**",
-      "clients/swift/Sources/MaintenanceAPIClient/Generated/**",
+      "clients/swift/Sources/ConsoleAPIClient/Generated/**",
       "web/src/i18n/ko.ts",
       "web/src/console/shell/nav.ts",
       "web/src/console/screens/registry.ts",
@@ -2281,12 +2281,12 @@
      "npm --prefix web run test -- src/console/equipment/EquipmentScreen.test.tsx src/console/equipment/equipmentApi.test.ts src/console/equipment/equipmentCapabilities.test.ts src/console/equipment/quoteDraft.test.ts",
      "npm --prefix web run lint",
      "npm --prefix web run build",
-     "tools/buck2 test --local-only //backend/crates/equipment/domain:mnt-equipment-domain-unit",
+     "tools/buck2 test --local-only //backend/crates/equipment/domain:console-equipment-domain-unit",
      "tools/buck/test_needs_postgres.sh //tools/buck:equipment-3r-http-postgres //tools/buck:app-equipment-3r-api-postgres",
      "git diff --check"
     ],
     "buck2_targets": [
-     "//backend/crates/equipment/domain:mnt-equipment-domain-unit",
+     "//backend/crates/equipment/domain:console-equipment-domain-unit",
      "//tools/buck:equipment-3r-http-postgres",
      "//tools/buck:app-equipment-3r-api-postgres"
     ]
@@ -2295,7 +2295,7 @@
     "design_contract": "committed_contract",
     "backend": "integrated_dark_review_remediation_pending",
     "frontend": "integrated_dark_contract_drifted_from_server",
-    "e2e": "mnt_rt_story_and_focused_tests_passed_browser_replay_pending",
+    "e2e": "console_rt_story_and_focused_tests_passed_browser_replay_pending",
     "runtime": "blocked",
     "independent_review": "request_changes_2026_07_23",
     "production_exposure": "dark"
@@ -2312,7 +2312,7 @@
     "design_contract": "committed_contract",
     "backend": "integrated_dark_review_remediation_pending",
     "frontend": "integrated_dark_review_remediation_pending",
-    "e2e": "mnt_rt_story_and_focused_tests_passed_browser_replay_pending",
+    "e2e": "console_rt_story_and_focused_tests_passed_browser_replay_pending",
     "runtime": "blocked",
     "independent_review": "request_changes_2026_07_23",
     "production_exposure": "dark"
@@ -2332,7 +2332,7 @@
     "id": "DU-EQUIPMENT-3R-PILOT",
     "kind": "module_capability",
     "buck2_targets": [
-     "//backend/crates/equipment/domain:mnt-equipment-domain-unit",
+     "//backend/crates/equipment/domain:console-equipment-domain-unit",
      "//tools/buck:equipment-3r-http-postgres",
      "//tools/buck:app-equipment-3r-api-postgres"
     ],
@@ -3096,7 +3096,7 @@
     "b2535498"
    ],
    "wave23_consolidation": {
-    "backend": "merged b2535498, run_lifecycle_api 4/4 + adapter/domain, mnt-app compiles",
+    "backend": "merged b2535498, run_lifecycle_api 4/4 + adapter/domain, console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -3393,8 +3393,8 @@
     "id": "DU-ATTENDANCE-CONSOLE",
     "kind": "module_capability",
     "buck2_targets": [
-     "//backend/crates/attendance/domain:mnt-attendance-domain-unit",
-     "//backend/crates/attendance/rest:mnt-attendance-rest-unit"
+     "//backend/crates/attendance/domain:console-attendance-domain-unit",
+     "//backend/crates/attendance/rest:console-attendance-rest-unit"
     ],
     "reason": "Exact Buck2 target labels were queried at the current candidate worktree; completion evidence remains HOLD.",
     "rust_status": "REQUIRED"
@@ -3660,7 +3660,7 @@
     "8a99f4c9"
    ],
    "wave23_consolidation": {
-    "backend": "merged 8a99f4c9, recruiting_pipeline_api 2/2, mnt-app compiles",
+    "backend": "merged 8a99f4c9, recruiting_pipeline_api 2/2, console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -3935,7 +3935,7 @@
     "a4ae5ab5"
    ],
    "wave23_consolidation": {
-    "backend": "merged a4ae5ab5, org_change_api 3/3, mnt-app compiles",
+    "backend": "merged a4ae5ab5, org_change_api 3/3, console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -4217,7 +4217,7 @@
     "d5a2ba73"
    ],
    "wave23_consolidation": {
-    "backend": "merged d5a2ba73, evaluation_cycle_api 2/2 (dark, no app mount), mnt-app compiles",
+    "backend": "merged d5a2ba73, evaluation_cycle_api 2/2 (dark, no app mount), console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -5049,7 +5049,7 @@
     "7921b36e"
    ],
    "wave23_consolidation": {
-    "backend": "merged 7921b36e, maintenance_chain_api 4/4, mnt-app compiles",
+    "backend": "merged 7921b36e, maintenance_chain_api 4/4, console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -5324,7 +5324,7 @@
     "11cbdc59"
    ],
    "wave23_consolidation": {
-    "backend": "merged 11cbdc59, field_visit_api 3/3, mnt-app compiles",
+    "backend": "merged 11cbdc59, field_visit_api 3/3, console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -5872,7 +5872,7 @@
     "fe1e8b91"
    ],
    "wave23_consolidation": {
-    "backend": "merged fe1e8b91, notif_routing_api 1/1, mnt-app compiles",
+    "backend": "merged fe1e8b91, notif_routing_api 1/1, console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -6147,7 +6147,7 @@
     "d1fbf660"
    ],
    "wave23_consolidation": {
-    "backend": "merged d1fbf660, board_ack_api 1/1, mnt-app compiles",
+    "backend": "merged d1fbf660, board_ack_api 1/1, console-app compiles",
     "frontend": "body merged + MOUNTED_SCREEN_KEYS/SCREEN_REGISTRY (dark), web tsc green; d165dab2"
    },
    "truth": {
@@ -7000,7 +7000,7 @@
       "id": "CAP-SALES-CRM-N2",
       "persona_scenario": "Sales owner advancing a deal",
       "action_workflow": "stage advance is refused server-side without the stage's required evidence",
-      "measurable_assertion": "CAP-SALES-CRM: stage advance fails closed as mnt_rt when per-stage evidence is absent",
+      "measurable_assertion": "CAP-SALES-CRM: stage advance fails closed as console_rt when per-stage evidence is absent",
       "required_receipts": "docs/evidence/console/CAP-SALES-CRM/native-2.json",
       "status": "HOLD"
      },
