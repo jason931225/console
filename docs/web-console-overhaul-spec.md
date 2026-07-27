@@ -415,7 +415,7 @@ Role-gating: the shell component reads `session.role` from `useAuth()` and filte
 </header>
 ```
 
-**Page title injection:** Each page sets its title using a `usePageTitle(title: string)` hook that writes to a `React.Context<string>` or uses the react-router v7 `<meta handle>` mechanism. The Topbar reads this context to render the `<h1>` for the current page (avoids duplicating `<h1>` inside each feature component).
+**Page title injection:** Each page sets its title using a `usePageTitle(title: string)` hook that writes to a `React.Context<string>` or uses the react-router v8 `<meta handle>` mechanism. The Topbar reads this context to render the `<h1>` for the current page (avoids duplicating `<h1>` inside each feature component).
 
 **UserMenu (dropdown):**
 
