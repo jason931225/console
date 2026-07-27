@@ -515,3 +515,16 @@ The rename landed on `main` while the budget and grace fix was open, and the two
 The three authority documents took the binding from `main`, and this ledger keeps both candidate entries rather than one. A ledger is a record; resolving a conflict by dropping half of it would falsify the history it exists to hold.
 
 Evidence on this exact base: the iOS UI hermetic workflow guard passes 52 of 52 and its mutation suite 41 of 41 on the merged tree, with the budget, the grace and the rename all present and verified by direct inspection of the merged workflow. Hosted verification of the full iOS suite is not claimed. `audit-adaptive` remains red for the AX5 contrast finding and is not addressed here. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
+## CANDIDATE REBIND (2026-07-27, release 0.2.2 re-created as a signed candidate)
+Candidate advanced to signed commit `35685d1621ada3d129def0c35db1790b11221485`.
+
+The generated release branch cannot land as generated, for two independent reasons, and both are structural rather than incidental.
+
+Its commit is an unsigned bot commit. The console authority train installed one candidate ago requires a signed candidate `C` and a signed authority tip `T` that is `C`'s direct single-parent child touching exactly the three authority documents. An unsigned commit cannot be `C`, so every release pull request fails `authenticate-console-authority` and, through `validate-console-truth-ledger`, the CI preflight as well. The release content here — the manifest, the changelog and the web version — is therefore re-created as one signed candidate rather than amended onto the generated commit.
+
+It also bumps `web/package.json` without updating the `web` workspace entry in `package-lock.json`. `check:package-lock` is `npm install --package-lock-only` followed by `git diff --exit-code`, so a version bump that does not reach the lockfile fails the preflight on its own, independently of signing. The lockfile is regenerated here: 821 packages before and after, with only the version field moving.
+
+This will recur on every release. release-please regenerates its branch from scratch, which discards any signed child committed onto it — an earlier lockfile repair on this same pull request was destroyed exactly that way. Reconciling the release automation with the trust bootstrap is recorded here as outstanding work and is not done: either the release commits are signed at source, or the release branch pattern is exempted from the train by policy. Nothing in this candidate makes that choice.
+
+Evidence on this exact base: `check:package-lock` passes, and the candidate carries a valid signature from the trusted authority. No release is published and no tag is moved by this candidate. Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
