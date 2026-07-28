@@ -6,7 +6,6 @@ resources:
   - configmap.yaml
   - migrate-job.yaml
   - backend.yaml
-  - web.yaml
   - worker.yaml
   - mox.yaml
   - analysis.yaml

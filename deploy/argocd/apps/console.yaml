@@ -28,14 +28,6 @@ spec:
       name: console-app-preview
       namespace: console
       jqPathExpressions: [.spec.selector]
-    - kind: Service
-      name: console-web
-      namespace: console
-      jqPathExpressions: [.spec.selector]
-    - kind: Service
-      name: console-web-preview
-      namespace: console
-      jqPathExpressions: [.spec.selector]
     # CNPG's admission/controller layer materializes CRD defaults into the
     # Cluster spec. Keep Git focused on intentional app/DB settings and ignore
     # only those defaulted fields so Argo can stay clean without copying the

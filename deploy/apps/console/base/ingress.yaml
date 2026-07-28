@@ -27,11 +27,12 @@ spec:
               service:
                 name: console-app
                 port: { number: 8080 }
-          # Everything else → the SPA (which does client-side routing).
+          # Everything else → the backend, which serves the Leptos SSR + islands
+          # frontend from the same binary (no separate web tier).
           # Native app-link association docs (Apple AASA + Android assetlinks) are
           # served by the backend at the fixed /.well-known/* path (Apple/Google
           # require this exact location, so it cannot move under /api). Longest-
-          # prefix match means this wins over the `/` →SPA rule below.
+          # prefix match means this wins over the `/` → app rule below.
           - path: /.well-known
             pathType: Prefix
             backend:
@@ -42,10 +43,10 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: console-web
+                name: console-app
                 port: { number: 8080 }
     # Public storefront apex (the #6 KNL landing). prod: knllogistic.com.
-    # Same SPA + API: "/" is the storefront home; the public storefront calls the
+    # Same app + API: "/" is the storefront home; the public storefront calls the
     # unauthenticated /api/v1/storefront/* endpoints, so /api must route here too.
     - host: apex.example.com
       http:
@@ -59,7 +60,7 @@ spec:
           # Native app-link association docs (Apple AASA + Android assetlinks) are
           # served by the backend at the fixed /.well-known/* path (Apple/Google
           # require this exact location, so it cannot move under /api). Longest-
-          # prefix match means this wins over the `/` →SPA rule below.
+          # prefix match means this wins over the `/` → app rule below.
           - path: /.well-known
             pathType: Prefix
             backend:
@@ -70,7 +71,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: console-web
+                name: console-app
                 port: { number: 8080 }
     # www → same storefront (canonical points at the apex for SEO de-dup).
     # prod: www.knllogistic.com.
@@ -86,7 +87,7 @@ spec:
           # Native app-link association docs (Apple AASA + Android assetlinks) are
           # served by the backend at the fixed /.well-known/* path (Apple/Google
           # require this exact location, so it cannot move under /api). Longest-
-          # prefix match means this wins over the `/` →SPA rule below.
+          # prefix match means this wins over the `/` → app rule below.
           - path: /.well-known
             pathType: Prefix
             backend:
@@ -97,7 +98,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: console-web
+                name: console-app
                 port: { number: 8080 }
     # Legacy console host. prod: fsm.knllogistic.com. The fsm-console-redirect
     # Middleware (301 → console.knllogistic.com, attached ingress-wide via the
@@ -117,7 +118,7 @@ spec:
           # Native app-link association docs (Apple AASA + Android assetlinks) are
           # served by the backend at the fixed /.well-known/* path (Apple/Google
           # require this exact location, so it cannot move under /api). Longest-
-          # prefix match means this wins over the `/` →SPA rule below.
+          # prefix match means this wins over the `/` → app rule below.
           - path: /.well-known
             pathType: Prefix
             backend:
@@ -128,5 +129,5 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: console-web
+                name: console-app
                 port: { number: 8080 }
