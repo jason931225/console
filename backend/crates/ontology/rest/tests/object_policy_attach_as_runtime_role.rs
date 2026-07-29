@@ -2075,42 +2075,78 @@ async fn the_command_credential_holds_no_direct_write_on_the_tables_the_definer_
     owner_pool: PgPool,
 ) {
     let fx = Fixture::build(&owner_pool, "cmd-no-table-write").await;
-    let type_id = fx
-        .publish("cmdnowrite", instance_type_draft("cmdnowrite"))
+    fx.publish("cmdnowrite", instance_type_draft("cmdnowrite"))
         .await;
-    let type_uuid = *type_id.as_uuid();
+    let victim = fx
+        .publish("cmdnowriteb", instance_type_draft("cmdnowriteb"))
+        .await;
+    let victim_uuid = *victim.as_uuid();
     let org = *fx.org.as_uuid();
+
+    // A REAL enforced catalog row, authored through the audited route, so the bare
+    // statement below is the genuine attack and not an FK violation wearing its
+    // clothes: it binds an existing permit to a SECOND object type that never had
+    // one, with no definer, no envelope checks and no audit row.
+    let authored = fx
+        .post(
+            &policies_path("cmdnowrite"),
+            json!({ "effect": "permit", "conditions": [owner_is_subject()] }),
+        )
+        .await;
+    assert_eq!(authored.status, StatusCode::CREATED, "{:?}", authored.body);
+    let policy_id: Uuid = authored.body["id"].as_str().unwrap().parse().unwrap();
 
     // EXECUTED, not inferred. `0154:105` granted `console_rt` this exact INSERT and
     // `0205:183` took it back; nothing ever asked the same question of the command
-    // role. One bare statement here binds any enforced catalog policy to any object
-    // type with no definer, no envelope checks and no audit row.
+    // role.
+    //
+    // `VALUES` and not `INSERT ... SELECT FROM cedar_policy_catalog_entries`, which
+    // is how the `console_rt` twin of this probe is written and is WRONG here: the
+    // command role holds no SELECT on the catalog either, so that form is refused
+    // 42501 for the read and never reaches the INSERT privilege check at all. It
+    // was written that way first and stayed green with `GRANT INSERT ON
+    // ont_object_policies TO console_ontology_cmd` applied.
     let bare_attachment = fx
         .as_command_role(move |tx| {
             Box::pin(async move {
                 sqlx::query(
                     "INSERT INTO ont_object_policies (org_id, object_type_id, cedar_policy_id, effect) \
-                     SELECT $1, $2, id, 'permit' FROM cedar_policy_catalog_entries LIMIT 1",
+                     VALUES ($1, $2, $3, 'permit')",
                 )
                 .bind(org)
-                .bind(type_uuid)
+                .bind(victim_uuid)
+                .bind(policy_id)
                 .execute(&mut **tx)
                 .await
                 .err()
-                .and_then(|error| {
-                    error
+                .map(|error| {
+                    let code = error
                         .as_database_error()
                         .and_then(|db| db.code().map(|code| code.into_owned()))
+                        .unwrap_or_default();
+                    (code, error.to_string())
                 })
             })
         })
         .await;
-    assert_eq!(
-        bare_attachment.as_deref(),
-        Some("42501"),
+    let (bare_sqlstate, bare_message) = bare_attachment.expect(
         "console_ontology_cmd must hold no INSERT on ont_object_policies: with it, \
          the audited definer is optional for the ONE credential the attach route \
-         holds, which is the whole of 0206 undone"
+         holds, which is the whole of 0206 undone",
+    );
+    assert_eq!(bare_sqlstate, "42501", "got {bare_message}");
+    // THE GRANT, not the floor. `new row violates row-level security policy` is
+    // ALSO 42501, and it is what this statement raises once the INSERT privilege is
+    // granted -- so the code alone reads green against exactly the grant this test
+    // exists to forbid (observed: the assertion above passed with `GRANT INSERT ON
+    // ont_object_policies TO console_ontology_cmd` applied). Only `permission
+    // denied for table` says the credential holds no write at all.
+    assert!(
+        bare_message.contains("permission denied for table \"ont_object_policies\"")
+            || bare_message.contains("permission denied for table ont_object_policies"),
+        "the refusal must be the missing GRANT, not the RLS floor: an org-scoped \
+         floor still lets the command role attach anything WITHIN its own org, \
+         which is every attachment that matters. Got: {bare_message}"
     );
 
     // TOTAL over the three tables the definer writes, so a privilege nobody
