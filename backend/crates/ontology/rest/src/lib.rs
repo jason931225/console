@@ -103,7 +103,16 @@ impl OntologyRestState {
         governance: PgGovernanceStore,
         jwt_verifier: Option<JwtVerifier>,
     ) -> Self {
-        let policies = PgCedarPolicyStore::new(registry.pool().clone());
+        // The attach route reaches `ont_policy_api.attach_object_policy` as
+        // `console_ontology_cmd` (migration 0206), so the policy store needs the
+        // SAME command credential the registry was built with. Derived from
+        // `registry` rather than taken as a parameter: every composition root and
+        // fixture that already wires the ontology command pool gets the policy one
+        // for free, and none of them changes arity.
+        let mut policies = PgCedarPolicyStore::new(registry.pool().clone());
+        if let Some(command_pool) = registry.command_pool_opt() {
+            policies = policies.with_command_pool(command_pool.clone());
+        }
         Self {
             registry,
             // The public parameter stays a `PgInstanceStore`: sealing is internal

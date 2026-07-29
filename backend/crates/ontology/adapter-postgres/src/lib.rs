@@ -361,6 +361,15 @@ impl PgOntologyStore {
         &self.pool
     }
 
+    /// The attached command pool, if any — read-only, and `None` on a read-only
+    /// store. `OntologyRestState::new` uses it to wire the object-policy attach
+    /// path with the SAME `console_ontology_cmd` credential the caller already
+    /// supplied here, so no composition root or fixture has to pass it twice.
+    #[must_use]
+    pub fn command_pool_opt(&self) -> Option<&PgPool> {
+        self.command_pool.as_ref()
+    }
+
     fn command_pool(&self) -> Result<&PgPool, PgOntologyError> {
         self.command_pool
             .as_ref()
