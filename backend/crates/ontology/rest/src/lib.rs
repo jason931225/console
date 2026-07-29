@@ -2336,13 +2336,22 @@ impl RestError {
         }
     }
 
-    /// The Cedar policy store's two-arm error surface. `Domain` already carries
-    /// the kernel `ErrorKind`, so a validation failure at attach maps to 422 with
-    /// the validator's own message and needs no new mapping.
+    /// The Cedar policy store's error surface. `Domain` already carries the
+    /// kernel `ErrorKind`, so a validation failure at attach maps to 422 with the
+    /// validator's own message and needs no new mapping. `CommandUnavailable` is
+    /// a deployment fault and maps to 503, exactly like
+    /// `PgOntologyError::CommandUnavailable`: a 500 would be indistinguishable
+    /// from a real database fault.
     fn from_cedar(error: PgCedarError) -> Self {
         match error {
             PgCedarError::Domain(error) => Self::from_kernel(error),
             PgCedarError::Db(error) => Self::from_db(error),
+            PgCedarError::CommandUnavailable => Self {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                code: "ontology_command_unavailable",
+                message: "ontology command database is not configured or unavailable".to_owned(),
+                current: None,
+            },
         }
     }
 

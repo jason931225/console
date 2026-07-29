@@ -28,6 +28,15 @@ pub enum PgCedarError {
     Db(#[from] DbError),
     #[error(transparent)]
     Domain(#[from] KernelError),
+    /// The audited attach path needs the command-role pool and no store was
+    /// wired with one. RED-PHASE STUB: nothing constructs this variant yet, so
+    /// the test that demands it is red. The implementing phase adds the
+    /// `command_pool` field, `with_command_pool`, and the
+    /// `.ok_or(PgCedarError::CommandUnavailable)` accessor that mirrors
+    /// `PgOntologyStore::command_pool` — never `.unwrap_or(&self.pool)`, which
+    /// would restore the exact capability 0206 removes with every test green.
+    #[error("cedar policy command database capability is unavailable")]
+    CommandUnavailable,
 }
 
 impl From<sqlx::Error> for PgCedarError {
