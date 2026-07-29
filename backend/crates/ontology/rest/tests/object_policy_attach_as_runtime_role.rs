@@ -38,6 +38,14 @@ use uuid::Uuid;
 const TEST_ISSUER: &str = "console-platform-auth";
 const TEST_AUDIENCE: &str = "console-api";
 
+/// The trace context every RAW definer probe below supplies as 0206's 7th and 8th
+/// arguments. The audited entrypoint writes them straight onto the audit row
+/// (`audit_events.trace_id CHAR(32)`, `span_id CHAR(16)`); the route supplies a
+/// freshly generated pair instead, which is what the audit-row pin in the first
+/// test measures the length of.
+const PROBE_TRACE_ID: &str = "0123456789abcdef0123456789abcdef";
+const PROBE_SPAN_ID: &str = "0123456789abcdef";
+
 /// The audited writer this slice ships. Every path in this file is spelled as a
 /// literal rather than imported from the crate, so the file pins the wire
 /// contract a client depends on and not the name the crate happens to give it.
@@ -1442,7 +1450,7 @@ async fn the_attach_definer_is_owned_by_a_non_bypassrls_role_under_a_pinned_sear
                     .await
                     .unwrap();
                 sqlx::query_scalar::<_, Uuid>(
-                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6)",
+                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6,$7,$8)",
                 )
                 .bind(foreign_org)
                 .bind(Uuid::new_v4())
@@ -1450,6 +1458,8 @@ async fn the_attach_definer_is_owned_by_a_non_bypassrls_role_under_a_pinned_sear
                 .bind("permit")
                 .bind(canonical_normalized_row("permit", "policyfloor", vec![]))
                 .bind("ontology-runtime-filter-v1")
+                .bind(PROBE_TRACE_ID)
+                .bind(PROBE_SPAN_ID)
                 .fetch_one(&mut **tx)
                 .await
                 .err()
@@ -1573,38 +1583,36 @@ async fn the_attach_definer_refuses_every_forgery_the_route_would_have_refused(o
     // object type's own key and a fresh discriminator, `bundle_digest` is the
     // SHA-256 of the normalized row actually stored beside it, and no Cedar
     // source is stored at all. None of the three was supplied.
-    let actor = fx.actor;
+    // `forge_attach_persisted`, i.e. the SAME hand-crafted call as every forgery
+    // below with the SAME real actor (`created_by` carries a composite FK to
+    // `users(id, org_id)` — 0150:41 — so `Uuid::nil()` would assert only that
+    // referential integrity works), but COMMITTING, because the row has to be
+    // read back on a different connection.
+    let accepted_id = fx
+        .forge_attach_persisted(
+            type_uuid,
+            "permit",
+            canonical_normalized_row("permit", "definerhard", vec![owner_is_subject()]),
+        )
+        .await
+        .expect("a canonical attach must still be accepted");
+    // Read back as `console_rt`, not as the command credential. The command role
+    // is EXECUTE-only by construction (0165's shape: no table privileges at all,
+    // pinned by the `command_audit_table_access` assertion in
+    // `key_revision_migration_upgrade.rs`), so it cannot SELECT the catalog and
+    // must not be granted the ability. `console_rt` holds SELECT and no INSERT
+    // (0150:117-118), which makes this read the stronger statement anyway: a row
+    // the runtime role can see and could never have written.
     let (accepted_key, digest_is_self_consistent, stored_text): (String, bool, Option<String>) = fx
-        .as_command_role(move |tx| {
+        .as_runtime_role(move |tx| {
             Box::pin(async move {
-                let id: Uuid = sqlx::query_scalar(
-                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6)",
-                )
-                .bind(*OrgId::knl().as_uuid())
-                // A REAL actor, not `Uuid::nil()`: `created_by` carries a
-                // composite FK to `users(id, org_id)` (0150:41), so a nil id can
-                // never satisfy it under ANY implementation of the definer. With
-                // it, this positive control asserted nothing about the
-                // hardening — it asserted that referential integrity works.
-                .bind(*actor.as_uuid())
-                .bind(type_uuid)
-                .bind("permit")
-                .bind(canonical_normalized_row(
-                    "permit",
-                    "definerhard",
-                    vec![owner_is_subject()],
-                ))
-                .bind("ontology-runtime-filter-v1")
-                .fetch_one(&mut **tx)
-                .await
-                .expect("a canonical attach must still be accepted");
                 sqlx::query_as(
                     "SELECT stable_key, \
                             bundle_digest = 'sha256:' || encode(sha256(convert_to(normalized_row::text, 'UTF8')), 'hex'), \
                             generated_policy_text \
                      FROM cedar_policy_catalog_entries WHERE id = $1",
                 )
-                .bind(id)
+                .bind(accepted_id)
                 .fetch_one(&mut **tx)
                 .await
                 .unwrap()
@@ -1809,7 +1817,7 @@ async fn console_rt_cannot_execute_the_attach_definer_at_all(owner_pool: PgPool)
         .as_runtime_role(move |tx| {
             Box::pin(async move {
                 sqlx::query_scalar::<_, Uuid>(
-                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6)",
+                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6,$7,$8)",
                 )
                 .bind(org)
                 .bind(actor)
@@ -1821,6 +1829,8 @@ async fn console_rt_cannot_execute_the_attach_definer_at_all(owner_pool: PgPool)
                     vec![owner_is_subject()],
                 ))
                 .bind("ontology-runtime-filter-v1")
+                .bind(PROBE_TRACE_ID)
+                .bind(PROBE_SPAN_ID)
                 .fetch_one(&mut **tx)
                 .await
                 .err()
@@ -3265,7 +3275,7 @@ impl Fixture {
         self.as_command_role(move |tx| {
             Box::pin(async move {
                 sqlx::query_scalar::<_, Uuid>(
-                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6)",
+                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6,$7,$8)",
                 )
                 .bind(org)
                 .bind(actor)
@@ -3273,6 +3283,8 @@ impl Fixture {
                 .bind(effect)
                 .bind(normalized_row)
                 .bind("ontology-runtime-filter-v1")
+                .bind(PROBE_TRACE_ID)
+                .bind(PROBE_SPAN_ID)
                 .fetch_one(&mut **tx)
                 .await
                 .map_err(|error| error.to_string())
@@ -3300,7 +3312,7 @@ impl Fixture {
             .await
             .unwrap();
         let forged = sqlx::query_scalar::<_, Uuid>(
-            "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6)",
+            "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6,$7,$8)",
         )
         .bind(*self.org.as_uuid())
         .bind(*self.actor.as_uuid())
@@ -3308,6 +3320,8 @@ impl Fixture {
         .bind(effect)
         .bind(normalized_row)
         .bind("ontology-runtime-filter-v1")
+        .bind(PROBE_TRACE_ID)
+        .bind(PROBE_SPAN_ID)
         .fetch_one(&mut *tx)
         .await
         .map_err(|error| error.to_string());
