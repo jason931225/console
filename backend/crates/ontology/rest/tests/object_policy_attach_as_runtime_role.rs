@@ -1720,9 +1720,11 @@ async fn the_attach_definer_refuses_every_forgery_the_route_would_have_refused(o
          append-only, so an oversized list is permanent work charged to every read",
     );
 
-    // The definer is not even needed today: `0154:105` grants `console_rt` INSERT
-    // on the attachment table outright, so an attacker can bind an existing
-    // enforced catalog policy to any object type with one bare statement.
+    // `0154:105` granted `console_rt` INSERT on the attachment table outright, so
+    // an attacker holding the runtime role could bind an existing enforced catalog
+    // policy to any object type with one bare statement and the definer was not
+    // needed at all. 0205:183 took it back; this asserts it stays taken back,
+    // because with it every check in the definer is optional again.
     let bare_attachment = fx
         .as_runtime_role(move |tx| {
             Box::pin(async move {
@@ -2166,8 +2168,10 @@ async fn a_definer_minted_row_cannot_choose_the_cedar_that_decides_policy_author
         .await;
 
     // A hand-crafted definer call carrying permit-everything Cedar, exactly the
-    // capability `console_rt` holds. The normalized row is canonical, so every
-    // in-definer envelope check passes and the row really is written.
+    // capability `console_ontology_cmd` holds after 0206 — a leak of that
+    // credential still buys this, which is why the definer stays a boundary in its
+    // own right. The normalized row is canonical, so every in-definer envelope
+    // check passes and the row really is written.
     let forged = fx
         .forge_attach_persisted(
             *type_id.as_uuid(),
@@ -2279,7 +2283,7 @@ async fn a_definer_minted_row_cannot_choose_the_cedar_that_decides_policy_author
          FROM cedar_policy_catalog_entries WHERE id = $1",
     )
     .bind(forged)
-    // rls-arming: ok, reads back the row the console_rt definer call just wrote.
+    // rls-arming: ok, reads back the row the command-role definer call just wrote.
     .fetch_one(&owner_pool)
     .await
     .unwrap();
@@ -2317,10 +2321,17 @@ async fn a_definer_minted_row_cannot_choose_the_cedar_that_decides_policy_author
 /// masks the second and deleting either check alone leaves this green — a probe
 /// that cannot say which arm is load-bearing is not evidence that both are.
 ///
-/// The effect-agreement arm is deliberately absent: `0205:216-219` now refuses a
-/// blocks/attachment effect disagreement in the definer, so it is no longer
-/// reachable from `console_rt` at all. Seeding one as the owning superuser would
-/// test the loader against a row no attacker can mint.
+/// The effect-agreement arm is deliberately absent: the definer refuses a
+/// blocks/attachment effect disagreement, so it is unreachable through the only
+/// credential that can attach. Seeding one as the owning superuser would test the
+/// loader against a row no attacker can mint.
+///
+/// THIS IS THE RESIDUAL 0206 DOES NOT CLOSE, and the reason the on-every-read
+/// re-validation stays. Both forgeries below are minted through the definer as
+/// `console_ontology_cmd` and both SUCCEED: 0206 narrowed WHICH credential can
+/// mint a validator-invalid or non-canonical row from `console_rt` to the command
+/// role, and made the minting audited, but it did not make one unmintable. The
+/// loader still has to refuse it on every read.
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn a_forged_enforced_row_the_read_path_cannot_re_validate_fails_closed(owner_pool: PgPool) {
     let fx = Fixture::build(&owner_pool, "loader-revalidation").await;
@@ -2357,8 +2368,9 @@ async fn a_forged_enforced_row_the_read_path_cannot_re_validate_fails_closed(own
     assert_instance_titles(&honest_list.body, &["honest-and-visible"]);
 
     // The residual capability 0205 names, actually exercised. Both rows are minted
-    // as the genuine `console_rt` through the definer and COMMITTED: `forge_attach`
-    // rolls back, and a forgery that never persists cannot be read back.
+    // as the genuine `console_ontology_cmd` through the definer and COMMITTED:
+    // `forge_attach` rolls back, and a forgery that never persists cannot be read
+    // back.
     //
     // The definer accepting these is the POINT, not a defect: its envelope checks
     // `resource_type`, `action`, `effect` and the condition-list shape, and all
