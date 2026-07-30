@@ -27,13 +27,39 @@
 -- The audit row is written by the same NOBYPASSRLS `console_ontology_writer` that
 -- writes the policy, in the CALLER's transaction, so an attach and its audit
 -- claim commit or roll back together. `console_ontology_writer` already holds
--- INSERT on `audit_events` (`0165:226`); no new table grant, and
--- `console_ontology_cmd` deliberately gets none — the
--- `ELSIF v_invoker <> 'console_ontology_cmd'` branch of 0165's
+-- INSERT on `audit_events` (0165's `GRANT SELECT, INSERT ON ... audit_events ...
+-- TO console_ontology_writer`); no new table grant, and `console_ontology_cmd`
+-- deliberately gets none: an INSERT privilege there would let the one credential
+-- that may attach also write an audit row for an attach that never happened, and
+-- the absent grant is the ONLY thing that stops it. Asserted by
+-- `the_command_credential_holds_no_direct_write_on_the_tables_the_definer_writes`,
+-- whose `has_table_privilege` vector over the three tables this routine writes
+-- must stay empty.
+--
+-- NOT by a trigger, and an earlier version of this header said otherwise. 0165's
 -- `ontology_api.protected_audit_writer_guard()` (trigger
--- `trg_audit_events_ontology_command_only`), which raises
--- `ontology_audit.command_required`, would turn a direct INSERT privilege there
--- into a forgery channel.
+-- `trg_audit_events_ontology_command_only`) `RETURN NEW`s immediately for any
+-- action outside its four `ontology.object_type.*` entries, and
+-- `ontology.object_policy.attach` is not one of them, so the
+-- `ELSIF v_invoker <> 'console_ontology_cmd'` branch that raises
+-- `ontology_audit.command_required` is never reached on this path. Measured on a
+-- database with this migration applied: as `console_rt`, an INSERT of an
+-- `ontology.object_policy.attach` row succeeds (`INSERT 0 1`), while the same
+-- INSERT with `action = 'ontology.object_type.builtin_install'` raises
+-- `ontology_audit.command_required` from that guard. The guard is live; it does
+-- not cover this action.
+--
+-- RESIDUAL, therefore, and it is not what this migration set out to close: the
+-- audit row is UNSKIPPABLE by the credential that can attach, because that
+-- credential cannot reach `attach_object_policy_rows`. It is not UNFORGEABLE by
+-- `console_rt`, which holds INSERT on `audit_events` because every other route's
+-- audit row needs it. Closing that means adding this action to 0165's protected
+-- list — reachable (`ontology_api.invoker_role()` reads `current_setting('role')`
+-- and falls back to SESSION_USER, so the definer path presents
+-- `console_ontology_cmd` and passes the ELSIF, while a direct `console_rt` INSERT
+-- would hit the `NEW.target_type <> 'ont_object_types'` raise) but it is a change
+-- to a shared guard for one action out of every audited action in the system, so
+-- it is escalated here rather than smuggled in.
 --
 -- `ontology_api.write_audit` is NOT reused: its INSERT hardcodes
 -- `target_type = 'ont_object_types'`, which is a lie about what was mutated here.
