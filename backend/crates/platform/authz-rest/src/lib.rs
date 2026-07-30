@@ -523,9 +523,9 @@ impl RestError {
             PgCedarError::Db(error) => Self::from_db(error),
             // A missing command pool is a deployment fault, not a client fault.
             // 500 would be indistinguishable from a real database error.
-            PgCedarError::CommandUnavailable => Self::unavailable(
-                "cedar policy command database is not configured or unavailable",
-            ),
+            PgCedarError::CommandUnavailable => {
+                Self::unavailable("cedar policy command database is not configured or unavailable")
+            }
         }
     }
 
