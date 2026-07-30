@@ -142,7 +142,12 @@ GRANT USAGE ON SCHEMA ont_policy_api TO console_ontology_cmd;
 -- 3. 0205's body becomes the row-writer. RENAME rather than DROP + re-CREATE:
 --    a second copy of ~100 lines of security-critical SQL in this file would
 --    leave 0205's copy dead but authoritative-looking, and the two would drift.
---    RENAME preserves `prosecdef`, `proconfig`, `proowner` and the ACL.
+--    RENAME preserves `prosecdef`, `proconfig`, `proowner` and the ACL. Asserted
+--    rather than assumed: the definer-attribute probe in
+--    `object_policy_attach_as_runtime_role.rs` compares those attributes as a TOTAL
+--    vector over this schema, so `attach_object_policy_rows` keeps its
+--    `SET search_path = pg_catalog` — the only thing between 0205 §4's eight
+--    unqualified `pg_catalog` calls and a caller choosing what they resolve to.
 --
 --    If this statement is ever dropped, §5's REVOKE/ALTER on
 --    `attach_object_policy_rows` errors "function does not exist" and the
