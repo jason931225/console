@@ -1302,44 +1302,56 @@ async fn a_row_survives_a_revision_of_its_object_type(owner_pool: PgPool) {
 /// leaves the migration applier as owner -- `console_app` in production and the
 /// sqlx superuser locally, both `BYPASSRLS`. The org floor would be gone and
 /// every other test in this file would stay green.
+///
+/// TOTAL over the schema, like 0206's owner pin and like
+/// `the_attach_schema_grants_exactly_the_audited_command_credential`, and it was
+/// NOT: this query filtered `proname = 'attach_object_policy'`, so it pinned the
+/// 8-argument entrypoint and said nothing about `attach_object_policy_rows` --
+/// the routine that holds 0205's entire envelope and performs both policy
+/// INSERTs. That body calls EIGHT unqualified `pg_catalog` functions
+/// (`gen_random_uuid`, `replace`, `left`, `sha256`, `convert_to`, `encode`,
+/// `jsonb_typeof`, `jsonb_array_length`; `0205` §4's INSERT and its shape
+/// checks), so its `SET search_path = pg_catalog` is the only thing standing
+/// between a SECURITY DEFINER owned by the writer role and a caller-controlled
+/// resolution of those eight names. `ALTER FUNCTION ... RENAME` preserves
+/// `proconfig`, which is why it holds today -- and a later
+/// `CREATE OR REPLACE FUNCTION ont_policy_api.attach_object_policy_rows(...)`
+/// that omitted the two SET clauses would pass every other test in this file.
+/// Measured, not argued: with `ALTER FUNCTION ont_policy_api
+/// .attach_object_policy_rows(...) RESET search_path` appended to 0206, this
+/// assertion fails on `attach_object_policy_rows|true|console_ontology_writer|
+/// false|true` and the other 26 tests in this file all pass. The per-name query
+/// this replaced could not fail on it at all.
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn the_attach_definer_is_owned_by_a_non_bypassrls_role_under_a_pinned_search_path(
     owner_pool: PgPool,
 ) {
-    let definer: (bool, String, Option<Vec<String>>, bool, bool) = sqlx::query_as(
+    let attributes: Vec<String> = sqlx::query_scalar(
         r#"
-        SELECT p.prosecdef,
-               r.rolname,
-               p.proconfig,
-               r.rolsuper,
-               r.rolbypassrls
+        SELECT p.proname || '|' || p.prosecdef::TEXT || '|' || r.rolname || '|'
+               || (COALESCE(p.proconfig, '{}') @> ARRAY['search_path=pg_catalog'])::TEXT || '|'
+               || (COALESCE(p.proconfig, '{}') @> ARRAY['row_security=on'])::TEXT
         FROM pg_proc p
         JOIN pg_namespace n ON n.oid = p.pronamespace
         JOIN pg_roles r ON r.oid = p.proowner
-        WHERE n.nspname = 'ont_policy_api' AND p.proname = 'attach_object_policy'
+        WHERE n.nspname = 'ont_policy_api'
+        ORDER BY p.proname
         "#,
     )
-    .fetch_one(&owner_pool)
+    .fetch_all(&owner_pool)
     .await
-    .expect("the attach definer must exist");
-    let (security_definer, owner, config, owner_is_super, owner_bypasses_rls) = definer;
-    assert!(
-        security_definer,
-        "the attach routine must be SECURITY DEFINER"
-    );
-    assert_eq!(owner, "console_ontology_writer");
-    assert!(
-        !owner_is_super && !owner_bypasses_rls,
-        "a superuser/BYPASSRLS definer owner evaporates the org floor with every test green"
-    );
-    let config = config.unwrap_or_default();
-    assert!(
-        config.iter().any(|entry| entry == "search_path=pg_catalog"),
-        "definer must pin search_path, got {config:?}"
-    );
-    assert!(
-        config.iter().any(|entry| entry == "row_security=on"),
-        "definer must keep row security on, got {config:?}"
+    .unwrap();
+    assert_eq!(
+        attributes,
+        vec![
+            "attach_object_policy|true|console_ontology_writer|true|true".to_owned(),
+            "attach_object_policy_rows|true|console_ontology_writer|true|true".to_owned(),
+        ],
+        "every routine in ont_policy_api must be SECURITY DEFINER, owned by the \
+         NOBYPASSRLS writer role, with search_path AND row_security pinned. A \
+         routine here that resolves unqualified names through the CALLER's \
+         search_path is a definer hijack, and the row-writer is the one with a \
+         body full of unqualified pg_catalog calls"
     );
 
     // Total over the new schema, so a future routine added beside it cannot
@@ -2302,6 +2314,93 @@ async fn the_definer_writes_the_audit_row_itself_carrying_the_supplied_trace(own
     assert_eq!(
         attached, 1,
         "the audited attachment must be the one on disk"
+    );
+}
+
+/// An audit row that cannot be written must take the policy rows down with it.
+///
+/// "an attach and its audit claim commit or roll back together" is asserted in
+/// prose three times — 0206's header, 0205's §4 header after this lane rewrote it,
+/// and the ledger — and was executed nowhere. Every other probe in this file sees
+/// the two together only when BOTH succeed, which is the one case that cannot
+/// distinguish an atomic pair from an audit INSERT whose failure is swallowed.
+///
+/// The mutation that survives the entire suite is one plausible defensive edit to
+/// 0206 §4 — wrap the audit INSERT in `BEGIN ... EXCEPTION WHEN OTHERS THEN NULL;
+/// END` so an attach never fails on audit trouble — and it re-creates exactly the
+/// residual this slice retires: a policy row that no audit event describes.
+/// Measured with that mutation applied: the call below returns Ok — the definer
+/// accepted an attach it could not audit — and this test is the ONLY one of the 27
+/// in this file that fails. The other 26 never make the audit INSERT fail, so none
+/// of them can tell a swallowed failure from an atomic pair.
+///
+/// The transaction is COMMITTED, not rolled back like `as_command_role` does: on a
+/// rollback the counts are zero whatever the definer did, which is the vacuous
+/// green this file exists to refuse. A NULL `p_trace_id` is the forcing input
+/// because `audit_events.trace_id` is `CHAR(32) NOT NULL` (`0003:16`) and nothing
+/// in the row-writer reads arguments 7 or 8 — so the policy INSERTs have already
+/// happened when the audit INSERT raises, which is the ordering the claim is about.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn an_unwritable_audit_row_rolls_the_policy_rows_back_with_it(owner_pool: PgPool) {
+    let fx = Fixture::build(&owner_pool, "audit-atomic").await;
+    let type_id = fx
+        .publish("auditatomic", instance_type_draft("auditatomic"))
+        .await;
+
+    let mut tx = fx.command_pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('app.current_org', $1, true)")
+        .bind(fx.org.as_uuid().to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let outcome = sqlx::query_scalar::<_, Uuid>(
+        "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6,$7,$8)",
+    )
+    .bind(*fx.org.as_uuid())
+    .bind(*fx.actor.as_uuid())
+    .bind(*type_id.as_uuid())
+    .bind("permit")
+    .bind(canonical_normalized_row(
+        "permit",
+        "auditatomic",
+        vec![owner_is_subject()],
+    ))
+    .bind("ontology-runtime-filter-v1")
+    .bind(Option::<String>::None)
+    .bind(PROBE_SPAN_ID)
+    .fetch_one(&mut *tx)
+    .await;
+    let error = outcome
+        .err()
+        .map(|error| error.to_string())
+        .expect(
+            "an attach whose audit row cannot be written must be REFUSED. Accepting \
+             it is the retired residual restored: a policy attached with no audit \
+             event naming who attached it",
+        );
+    // A COMMIT of an aborted transaction rolls back at the server, so this is a
+    // no-op on the correct implementation and the persisting write on a mutated
+    // one. Committing anyway is what makes the counts below evidence.
+    let _ = tx.commit().await;
+
+    let written: (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT COUNT(*) FROM ont_object_policies \
+                   WHERE org_id = $1 AND object_type_id = $2), \
+                (SELECT COUNT(*) FROM audit_events WHERE org_id = $1 \
+                   AND action = 'ontology.object_policy.attach')",
+    )
+    .bind(*fx.org.as_uuid())
+    .bind(type_id.as_uuid())
+    .fetch_one(&owner_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        written,
+        (0, 0),
+        "the policy rows the row-writer already INSERTed must be gone: the audit \
+         INSERT is the LAST statement in the definer, so this is the only ordering \
+         where a swallowed audit failure leaves an untraced attachment. Refusal \
+         was: {error}"
     );
 }
 
