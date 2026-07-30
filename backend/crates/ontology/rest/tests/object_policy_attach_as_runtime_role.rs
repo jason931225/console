@@ -2859,6 +2859,273 @@ async fn a_forged_enforced_row_the_read_path_cannot_re_validate_fails_closed(own
 }
 
 // ---------------------------------------------------------------------------
+// 5b-bis. The two arms of the SAME re-validation that executed nowhere
+// ---------------------------------------------------------------------------
+//
+// MEASURED, not estimated. Region coverage over the whole green suite
+// (`cargo llvm-cov report`, per-segment execution counts) puts two of the four
+// fail-closed arms of `PgCedarPolicyStore::load_enforced_object_policy_blocks` at
+// ZERO executions: the deserialization refusal and the effect-agreement
+// comparison. The other two -- validator verdict and canonicality -- ran 3 times
+// each, from `a_forged_enforced_row_the_read_path_cannot_re_validate_fails_closed`.
+//
+// Either uncovered arm could be deleted today with all 24 tests still green,
+// which is precisely what 0205's header says must never be true of this
+// re-validation ("Delete this re-validation and a forged row is served while
+// every test here stays green"). That header claim was two-thirds accurate and is
+// now fully so.
+//
+// WHY the existing forgery test cannot reach them, and rightly does not try: it
+// mints every forgery through the definer as `console_ontology_cmd`, and 0206
+// binds catalog effect, attachment effect and `normalized_row.effect` from ONE
+// parameter it also cross-checks, so a definer-minted row can disagree with
+// nothing. Neither arm is reachable by any credential.
+//
+// They are reachable by every OTHER surface that writes these two tables -- the
+// policy studio, a fixture, a backfill migration. That is the case
+// `attach_enforced_policy` exists for and the case
+// `a_row_hidden_from_the_list_is_refused_by_id_as_of_history_traverse_acting_and_resolve`
+// already names ("the permanent guard for policies attached by any other
+// surface"). Two tests and not one loop: each arm is an independent claim, and an
+// arm sitting behind another arm's failing assert never executes.
+
+/// A `forbid` in the catalog and in the attachment whose stored blocks say
+/// `permit` must fail every read closed.
+///
+/// 0170's trigger compares the ATTACHMENT to the CATALOG only, and 0205 says so
+/// where it declines to re-check that pair inside the definer. Both are `forbid`
+/// here, so the trigger is satisfied and the disagreement is invisible to the
+/// database. The loader's comparison is the only thing that sees it.
+///
+/// The consequence of deleting that comparison is not a wrong error message: the
+/// loader hands the gate `Effect::Permit` with an empty condition list, which
+/// permits every row of the type. A forbid inverts into a blanket permit and the
+/// rows it exists to hide are served, with the catalog still reading `forbid` to
+/// anyone who audits the table.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn a_catalog_row_whose_blocks_disagree_with_its_effect_is_refused_on_every_read(
+    owner_pool: PgPool,
+) {
+    let fx = Fixture::build(&owner_pool, "effect-drift").await;
+    let honest = fx
+        .publish("driftcontrol", instance_type_draft("driftcontrol"))
+        .await;
+    let drifted = fx
+        .publish("effectdrift", instance_type_draft("effectdrift"))
+        .await;
+    fx.seed_instance(honest, "honest-and-visible", "CODE-DRIFT-OK")
+        .await;
+    let hidden = fx
+        .seed_instance(drifted, "behind-an-inverted-forbid", "CODE-DRIFT-BAD")
+        .await;
+
+    // POSITIVE CONTROL, first and through the real route. Every 5xx below is also
+    // produced by a read path that has stopped serving anything at all.
+    let attached = fx
+        .post(
+            &policies_path("driftcontrol"),
+            json!({ "effect": "permit", "conditions": [owner_is_subject()] }),
+        )
+        .await;
+    assert_eq!(attached.status, StatusCode::CREATED, "{:?}", attached.body);
+    let control = fx
+        .get(&format!("/api/v1/ontology/instances?type={honest}"))
+        .await;
+    assert_instance_titles(&control.body, &["honest-and-visible"]);
+
+    // `forbid` for the catalog row AND the attachment -- so 0170's trigger passes
+    // -- with a normalized row that is canonical and validator-valid for `permit`.
+    // Canonical and valid on purpose: the loader checks the validator verdict and
+    // canonicality BEFORE the effect comparison, so a row that failed either would
+    // be refused by an arm that already has coverage and this test would prove
+    // nothing about the arm it names.
+    attach_enforced_policy(
+        &owner_pool,
+        fx.org,
+        drifted,
+        "object_policy.effectdrift.inverted",
+        "forbid",
+        canonical_normalized_row("permit", "effectdrift", vec![]),
+    )
+    .await;
+
+    let list = fx
+        .get(&format!("/api/v1/ontology/instances?type={drifted}"))
+        .await;
+    assert!(
+        list.status.is_server_error(),
+        "a stored `permit` under a `forbid` catalog row and a `forbid` attachment \
+         must fail the whole load. Serving rows here is the forbid inverted into a \
+         blanket permit -- the loader would lower `Effect::Permit` with no \
+         conditions while the catalog still reads `forbid` to anyone auditing the \
+         table. An empty 200 would be indistinguishable from the forbid working. \
+         Got {}: {:?}",
+        list.status,
+        list.body
+    );
+
+    // By id as well, so the refusal is the LOADER and not the list query: the two
+    // routes share only `load_enforced_object_policy_blocks`.
+    let by_id = fx
+        .get(&format!("/api/v1/ontology/instances/{hidden}"))
+        .await;
+    assert!(
+        by_id.status.is_server_error(),
+        "reading by id must fail the same way the list does, got {}: {:?}",
+        by_id.status,
+        by_id.body
+    );
+    for (route, body) in [("list", &list.body), ("by id", &by_id.body)] {
+        let text = body_text(body);
+        assert!(
+            !text.contains("behind-an-inverted-forbid") && !text.contains(&hidden.to_string()),
+            "the {route} failure discloses the row it could not decide on: {text}"
+        );
+    }
+
+    // SCOPED to the type carrying the drifted row. A loader that 500s the whole
+    // tenant satisfies every assertion above.
+    let control_after = fx
+        .get(&format!("/api/v1/ontology/instances?type={honest}"))
+        .await;
+    assert_eq!(
+        control_after.status,
+        StatusCode::OK,
+        "an honestly authored type must survive a drifted row on another type: {:?}",
+        control_after.body
+    );
+    assert_instance_titles(&control_after.body, &["honest-and-visible"]);
+}
+
+/// A `normalized_row` that is not a `NoCodeBlocks` at all must fail every read
+/// closed, never be skipped.
+///
+/// The arm is one `map_err(...)?`, and the mutation that kills it is the ordinary
+/// defensive one: skip the row you cannot understand, or substitute a default. A
+/// skipped `forbid` is a served row. The loader has to hard-error the whole load
+/// instead, and no other test supplies a row it cannot deserialize -- every
+/// forgery reachable through the definer is well-formed JSONB by construction,
+/// because the definer's own checks read `normalized_row ->> 'effect'`,
+/// `'action'`, `'resource_type'` and `jsonb_array_length(... -> 'conditions')`.
+///
+/// `conditions` as a STRING and not a missing key: a missing key would also be
+/// refused by the definer's `jsonb_typeof(...) IS DISTINCT FROM 'array'` check,
+/// while this row is one the shape checks of 0205 would pass and only serde
+/// rejects -- so the arm under test is the deserialization arm and not a
+/// re-statement of an envelope check.
+///
+/// The unreadable row is attached BESIDE an honest `permit` on the SAME type, and
+/// that is what makes this a security test rather than a message test. Measured on
+/// the two obvious defensive mutations:
+///
+///   * substituting a default block for the one that would not parse is caught
+///     DOWNSTREAM by the canonicality arm, which already has coverage -- so this
+///     test correctly stays green and the arm is not what saved it;
+///   * SKIPPING the row it cannot read serves every row on the type, because the
+///     honest permit beside it survives. That is the mutation this test exists to
+///     fail on, and with only one policy on the type it would instead produce a
+///     deny-by-default `200 []` -- a refusal by accident, which would have made
+///     the red indistinguishable from a fail-closed loader.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn a_catalog_row_whose_normalized_row_is_unparseable_is_refused_on_every_read(
+    owner_pool: PgPool,
+) {
+    let fx = Fixture::build(&owner_pool, "unparseable-row").await;
+    let scoping = fx
+        .publish("parsecontrol", instance_type_draft("parsecontrol"))
+        .await;
+    let unparseable = fx
+        .publish("unparseable", instance_type_draft("unparseable"))
+        .await;
+    fx.seed_instance(scoping, "honest-and-visible", "CODE-PARSE-OK")
+        .await;
+    let hidden = fx
+        .seed_instance(unparseable, "behind-an-unreadable-policy", "CODE-PARSE-BAD")
+        .await;
+
+    // Two honest permits through the real route: one on the type that will carry
+    // the unreadable row, one on a second type that must survive it.
+    for key in ["parsecontrol", "unparseable"] {
+        let attached = fx
+            .post(
+                &policies_path(key),
+                json!({ "effect": "permit", "conditions": [owner_is_subject()] }),
+            )
+            .await;
+        assert_eq!(
+            attached.status,
+            StatusCode::CREATED,
+            "{key}: {:?}",
+            attached.body
+        );
+    }
+    // POSITIVE CONTROL on the type under test, before the forgery lands: the row
+    // IS served while the policy set is readable, so the 5xx below is the
+    // unreadable row and not a fixture that never served anything.
+    let control = fx
+        .get(&format!("/api/v1/ontology/instances?type={unparseable}"))
+        .await;
+    assert_instance_titles(&control.body, &["behind-an-unreadable-policy"]);
+
+    attach_enforced_policy(
+        &owner_pool,
+        fx.org,
+        unparseable,
+        "object_policy.unparseable.blocks",
+        "permit",
+        json!({
+            "effect": "permit",
+            "action": "view",
+            "resource_type": "unparseable",
+            "conditions": "not-an-array"
+        }),
+    )
+    .await;
+
+    let list = fx
+        .get(&format!("/api/v1/ontology/instances?type={unparseable}"))
+        .await;
+    assert!(
+        list.status.is_server_error(),
+        "an enforced row the loader cannot deserialize must fail the WHOLE load. \
+         Skipping it drops a policy that may be the `forbid` hiding these rows \
+         while the honest permit beside it keeps serving them -- measured: with the \
+         skip applied this route returns 200 carrying \
+         `behind-an-unreadable-policy`. Got {}: {:?}",
+        list.status,
+        list.body
+    );
+
+    let by_id = fx
+        .get(&format!("/api/v1/ontology/instances/{hidden}"))
+        .await;
+    assert!(
+        by_id.status.is_server_error(),
+        "reading by id must fail the same way the list does, got {}: {:?}",
+        by_id.status,
+        by_id.body
+    );
+    for (route, body) in [("list", &list.body), ("by id", &by_id.body)] {
+        let text = body_text(body);
+        assert!(
+            !text.contains("behind-an-unreadable-policy") && !text.contains(&hidden.to_string()),
+            "the {route} failure discloses the row it could not decide on: {text}"
+        );
+    }
+
+    let control_after = fx
+        .get(&format!("/api/v1/ontology/instances?type={scoping}"))
+        .await;
+    assert_eq!(
+        control_after.status,
+        StatusCode::OK,
+        "an honestly authored type must survive an unreadable row on another type: {:?}",
+        control_after.body
+    );
+    assert_instance_titles(&control_after.body, &["honest-and-visible"]);
+}
+
+// ---------------------------------------------------------------------------
 // 5c. The condition bound, at its edge
 // ---------------------------------------------------------------------------
 
