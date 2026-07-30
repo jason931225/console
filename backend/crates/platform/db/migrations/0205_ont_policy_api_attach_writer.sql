@@ -60,12 +60,22 @@
 --
 -- >> LIVE CONSTRAINT, not a general safety claim: that remaining residual is
 -- >> bounded by `PgCedarPolicyStore::load_enforced_object_policy_blocks`
--- >> (`platform/authz-rest/src/store.rs`), which re-runs the validator, the
--- >> canonicality comparison and the effect agreement on EVERY read and errors
--- >> the whole load. It is DEFENCE IN DEPTH after 0206 rather than the sole
--- >> justification it was before, and it stays: 0206 narrowed who may mint a
--- >> non-canonical row, it did not make one readable. Delete this re-validation
--- >> and a forged row is served while every test here stays green.
+-- >> (`platform/authz-rest/src/store.rs`), whose FOUR arms — the stored row
+-- >> deserializes, the validator verdict, the canonicality comparison, and the
+-- >> effect agreement across blocks, catalog row and attachment — all run on EVERY
+-- >> read and error the whole load. It is DEFENCE IN DEPTH after 0206 rather than
+-- >> the sole justification it was before, and it stays: 0206 narrowed who may
+-- >> mint a non-canonical row, it did not make one readable. Delete any one of the
+-- >> four and a forged row is served.
+-- >>
+-- >> All four are now EXECUTED, which two of them were not when this paragraph
+-- >> was written: the deserialization and effect-agreement arms measured ZERO with
+-- >> the whole suite green, so either could have been deleted without a red test.
+-- >> They are unreachable through the definer and reachable by every other writer
+-- >> of these two tables, and
+-- >> `a_catalog_row_whose_blocks_disagree_with_its_effect_is_refused_on_every_read`
+-- >> plus `a_catalog_row_whose_normalized_row_is_unparseable_is_refused_on_every_read`
+-- >> are what make this paragraph true rather than intended.
 --
 -- DISCLOSURE (owner reuse): `console_ontology_writer` also owns the eleven
 -- `ontology_api` routines, so those inherit the grants below: INSERT on the
