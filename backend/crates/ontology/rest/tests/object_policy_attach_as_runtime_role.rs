@@ -1865,13 +1865,7 @@ async fn console_rt_cannot_execute_the_attach_definer_at_all(owner_pool: PgPool)
                 .fetch_one(&mut **tx)
                 .await
                 .err()
-                .map(|error| {
-                    let code = error
-                        .as_database_error()
-                        .and_then(|db| db.code().map(|code| code.into_owned()))
-                        .unwrap_or_default();
-                    (code, error.to_string())
-                })
+                .map(refusal)
             })
         })
         .await;
@@ -1936,13 +1930,7 @@ async fn the_command_credential_cannot_skip_the_audit_row(owner_pool: PgPool) {
                 .fetch_one(&mut **tx)
                 .await
                 .err()
-                .map(|error| {
-                    let code = error
-                        .as_database_error()
-                        .and_then(|db| db.code().map(|code| code.into_owned()))
-                        .unwrap_or_default();
-                    (code, error.to_string())
-                })
+                .map(refusal)
             })
         })
         .await;
@@ -2177,13 +2165,7 @@ async fn the_command_credential_holds_no_direct_write_on_the_tables_the_definer_
                 .execute(&mut **tx)
                 .await
                 .err()
-                .map(|error| {
-                    let code = error
-                        .as_database_error()
-                        .and_then(|db| db.code().map(|code| code.into_owned()))
-                        .unwrap_or_default();
-                    (code, error.to_string())
-                })
+                .map(refusal)
             })
         })
         .await;
@@ -2347,6 +2329,12 @@ async fn an_unwritable_audit_row_rolls_the_policy_rows_back_with_it(owner_pool: 
         .publish("auditatomic", instance_type_draft("auditatomic"))
         .await;
 
+    // Inline, and neither `forge_attach_persisted` nor `armed_tx`: the NULL trace
+    // below is the forcing input, and this probe's refusal must depend on nothing
+    // but the statement written here. Measured: with `armed_tx` mutated to stop
+    // arming the org, five probes in this file go red and this one stays GREEN on a
+    // refusal it does not assert (`unknown object type`), because zero rows is also
+    // what it expects. Five lines of duplication buys immunity to that.
     let mut tx = fx.command_pool.begin().await.unwrap();
     sqlx::query("SELECT set_config('app.current_org', $1, true)")
         .bind(fx.org.as_uuid().to_string())
@@ -2370,14 +2358,11 @@ async fn an_unwritable_audit_row_rolls_the_policy_rows_back_with_it(owner_pool: 
     .bind(PROBE_SPAN_ID)
     .fetch_one(&mut *tx)
     .await;
-    let error = outcome
-        .err()
-        .map(|error| error.to_string())
-        .expect(
-            "an attach whose audit row cannot be written must be REFUSED. Accepting \
+    let error = outcome.err().map(|error| error.to_string()).expect(
+        "an attach whose audit row cannot be written must be REFUSED. Accepting \
              it is the retired residual restored: a policy attached with no audit \
              event naming who attached it",
-        );
+    );
     // A COMMIT of an aborted transaction rolls back at the server, so this is a
     // no-op on the correct implementation and the persisting write on a mutated
     // one. Committing anyway is what makes the counts below evidence.
@@ -3932,10 +3917,25 @@ impl Fixture {
         .await;
     }
 
-    /// Runs a closure on a `console_rt` connection, the way a request-scoped
-    /// connection arms it. `scope_org` alone only sets a task-local: without the
-    /// GUC every RLS read returns zero rows and passes any "no rows" assertion
-    /// while proving nothing.
+    /// A transaction on `pool` with `app.current_org` armed the way a
+    /// request-scoped connection arms it. `scope_org` alone only sets a task-local:
+    /// without the GUC every RLS read returns zero rows and passes any "no rows"
+    /// assertion while proving nothing.
+    ///
+    /// The disposition is the CALLER's: the role runners below roll back, and the
+    /// two probes that have to read their own write back afterwards commit.
+    async fn armed_tx(&self, pool: &PgPool) -> sqlx::Transaction<'static, sqlx::Postgres> {
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query("SELECT set_config('app.current_org', $1, true)")
+            .bind(self.org.as_uuid().to_string())
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        tx
+    }
+
+    /// Runs a closure on a `console_rt` connection with the org armed, rolled back
+    /// afterwards. See [`Self::armed_tx`] for why the GUC is not optional.
     async fn as_runtime_role<T, F>(&self, body: F) -> T
     where
         F: for<'c> FnOnce(
@@ -3943,12 +3943,7 @@ impl Fixture {
         )
             -> std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'c>>,
     {
-        let mut tx = self.runtime_pool.begin().await.unwrap();
-        sqlx::query("SELECT set_config('app.current_org', $1, true)")
-            .bind(self.org.as_uuid().to_string())
-            .execute(&mut *tx)
-            .await
-            .unwrap();
+        let mut tx = self.armed_tx(&self.runtime_pool).await;
         let out = body(&mut tx).await;
         tx.rollback().await.unwrap();
         out
@@ -3968,12 +3963,7 @@ impl Fixture {
         )
             -> std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'c>>,
     {
-        let mut tx = self.command_pool.begin().await.unwrap();
-        sqlx::query("SELECT set_config('app.current_org', $1, true)")
-            .bind(self.org.as_uuid().to_string())
-            .execute(&mut *tx)
-            .await
-            .unwrap();
+        let mut tx = self.armed_tx(&self.command_pool).await;
         let out = body(&mut tx).await;
         tx.rollback().await.unwrap();
         out
@@ -3997,49 +3987,49 @@ impl Fixture {
         effect: &str,
         normalized_row: Value,
     ) -> Result<Uuid, String> {
-        let org = *self.org.as_uuid();
-        let actor = *self.actor.as_uuid();
-        let effect = effect.to_owned();
-        self.as_command_role(move |tx| {
-            Box::pin(async move {
-                sqlx::query_scalar::<_, Uuid>(
-                    "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6,$7,$8)",
-                )
-                .bind(org)
-                .bind(actor)
-                .bind(object_type_id)
-                .bind(effect)
-                .bind(normalized_row)
-                .bind("ontology-runtime-filter-v1")
-                .bind(PROBE_TRACE_ID)
-                .bind(PROBE_SPAN_ID)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(|error| error.to_string())
-            })
-        })
-        .await
+        let mut tx = self.armed_tx(&self.command_pool).await;
+        let forged = self
+            .attach_via_definer(&mut tx, object_type_id, effect, normalized_row)
+            .await;
+        tx.rollback().await.unwrap();
+        forged
     }
 
     /// [`Self::forge_attach`] that COMMITS on success.
     ///
-    /// `as_command_role` rolls back, which is right for a probe that only reads
-    /// the refusal and useless for one that has to read the forged row back over
-    /// HTTP afterwards. Same role, same armed org, same parameters — only the
-    /// disposition of the transaction differs.
+    /// Rolling back is right for a probe that only reads the refusal and useless
+    /// for one that has to read the forged row back over HTTP afterwards. Same
+    /// role, same armed org, same statement — only the disposition differs.
     async fn forge_attach_persisted(
         &self,
         object_type_id: Uuid,
         effect: &str,
         normalized_row: Value,
     ) -> Result<Uuid, String> {
-        let mut tx = self.command_pool.begin().await.unwrap();
-        sqlx::query("SELECT set_config('app.current_org', $1, true)")
-            .bind(self.org.as_uuid().to_string())
-            .execute(&mut *tx)
-            .await
-            .unwrap();
-        let forged = sqlx::query_scalar::<_, Uuid>(
+        let mut tx = self.armed_tx(&self.command_pool).await;
+        let forged = self
+            .attach_via_definer(&mut tx, object_type_id, effect, normalized_row)
+            .await;
+        if forged.is_ok() {
+            tx.commit().await.unwrap();
+        } else {
+            tx.rollback().await.unwrap();
+        }
+        forged
+    }
+
+    /// The 8-argument audited entrypoint, with this fixture's org and actor and this
+    /// file's probe trace pair. ONE statement, shared by the rolled-back and the
+    /// committed probe above, so the two cannot drift apart in what they call —
+    /// which is the same reason 0206 renames 0205's body instead of copying it.
+    async fn attach_via_definer(
+        &self,
+        tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
+        object_type_id: Uuid,
+        effect: &str,
+        normalized_row: Value,
+    ) -> Result<Uuid, String> {
+        sqlx::query_scalar::<_, Uuid>(
             "SELECT ont_policy_api.attach_object_policy($1,$2,$3,$4,$5,$6,$7,$8)",
         )
         .bind(*self.org.as_uuid())
@@ -4050,15 +4040,9 @@ impl Fixture {
         .bind("ontology-runtime-filter-v1")
         .bind(PROBE_TRACE_ID)
         .bind(PROBE_SPAN_ID)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await
-        .map_err(|error| error.to_string());
-        if forged.is_ok() {
-            tx.commit().await.unwrap();
-        } else {
-            tx.rollback().await.unwrap();
-        }
-        forged
+        .map_err(|error| error.to_string())
     }
 
     async fn get(&self, uri: &str) -> HttpResponse {
@@ -4362,6 +4346,20 @@ fn canonical_normalized_row(effect: &str, resource_type: &str, conditions: Vec<V
         "resource_type": resource_type,
         "conditions": conditions
     })
+}
+
+/// The SQLSTATE **and** the message of a refusal, because in this file neither
+/// alone discriminates: `42501` is raised alike for a missing function grant, a
+/// missing schema USAGE and a missing table grant, from the identical internal site
+/// (`aclcheck_error, aclchk.c:2795`). Which one it was lives only in the message, so
+/// every caller asserts on both — each with the measurement that forced it recorded
+/// at the call site.
+fn refusal(error: sqlx::Error) -> (String, String) {
+    let code = error
+        .as_database_error()
+        .and_then(|db| db.code().map(|code| code.into_owned()))
+        .unwrap_or_default();
+    (code, error.to_string())
 }
 
 /// A refusal must name the violation it refused. `is_err()` alone is satisfied by
