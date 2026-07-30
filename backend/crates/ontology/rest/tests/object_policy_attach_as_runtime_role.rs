@@ -1795,11 +1795,27 @@ async fn the_attach_definer_refuses_every_forgery_the_route_would_have_refused(o
 /// the definer as `console_rt` persisted one enforced attachment with zero audit
 /// rows. It is now refused at the PERMISSION layer, before the body runs.
 ///
-/// SQLSTATE, never a message substring. `console_rt` reaching the body and being
-/// refused by an envelope check (`P0001`, `exec_stmt_raise`) is the exploit's
-/// PRECONDITION, and the two are trivially confusable in prose: both are "an
-/// error from the attach call". `42501` / `aclcheck_error` is the only outcome
-/// that says the credential never got in.
+/// BOTH the SQLSTATE and the message, because neither alone discriminates.
+///
+/// The SQLSTATE separates "never got in" from "got in and was stopped by the
+/// body": `console_rt` reaching an envelope check raises `P0001` at
+/// `exec_stmt_raise, pl_exec.c:3923` (measured), which is the exploit's
+/// PRECONDITION, not its closure.
+///
+/// The message separates WHICH permission was missing, and an earlier version of
+/// this comment argued AGAINST asserting it, on the grounds that `42501` /
+/// `aclcheck_error` already proves the credential never got in. Executed against
+/// a migrated database, that is false. Revoking `console_rt`'s USAGE on the
+/// schema yields `42501: permission denied for schema ont_policy_api` from the
+/// IDENTICAL internal raise site, `aclcheck_error, aclchk.c:2795` — the same code
+/// and the same location as the function-level refusal this test exists to pin,
+/// but a different topology from the one 0206 asserts, and one 0206 explicitly
+/// declined. This probe stayed green against it until the message assertion below
+/// existed.
+///
+/// Known ceiling: that substring also prefix-matches `attach_object_policy_rows`.
+/// It cannot arise here, because the call names the 8-argument entrypoint by its
+/// argument list; the sibling probe below carries the same ceiling.
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn console_rt_cannot_execute_the_attach_definer_at_all(owner_pool: PgPool) {
     let fx = Fixture::build(&owner_pool, "rt-definer-revoked").await;
@@ -1856,6 +1872,14 @@ async fn console_rt_cannot_execute_the_attach_definer_at_all(owner_pool: PgPool)
         "the refusal must come from the PERMISSION layer. P0001 means console_rt \
          reached the definer body and was stopped by an envelope check -- which is \
          the exploit's precondition, not its closure. Got {sqlstate}: {message}"
+    );
+    assert!(
+        message.contains("permission denied for function attach_object_policy"),
+        "the refusal must name the FUNCTION. `permission denied for schema \
+         ont_policy_api` is ALSO 42501 and is raised from the same internal site \
+         (`aclcheck_error, aclchk.c:2795`, measured both ways), so the code alone \
+         reads green when console_rt has merely lost schema USAGE -- a topology \
+         0206 declined, not the one it asserts. Got: {message}"
     );
 }
 
@@ -1934,12 +1958,22 @@ async fn the_command_credential_cannot_skip_the_audit_row(owner_pool: PgPool) {
 /// EXECUTE with no schema USAGE — under which every real call fails 42501 naming
 /// the SCHEMA while the probe stays green. `aclexplode(proacl)` over the whole
 /// schema plus an explicit `has_schema_privilege` pair closes both.
+///
+/// `COALESCE(proacl, acldefault(...))` closes a third, which `aclexplode(proacl)`
+/// alone did not: a routine left at DEFAULT privileges has `proacl IS NULL`, which
+/// means EXECUTE to PUBLIC — and `aclexplode(NULL)` returns ZERO rows, so the
+/// vector below matched unchanged with two PUBLIC-executable routines added to the
+/// schema (measured: `has_function_privilege('console_rt', ...)` read `t` for both
+/// while this assertion stayed green). `acldefault` materialises the grant
+/// PostgreSQL implies, so the implied grant is measured like any other. A
+/// PROCEDURE is the same hole with an extra edge: `REVOKE ALL ON ALL FUNCTIONS IN
+/// SCHEMA` does not cover `prokind = 'p'` at all.
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn the_attach_schema_grants_exactly_the_audited_command_credential(owner_pool: PgPool) {
     let acl: Vec<String> = sqlx::query_scalar(
         "SELECT p.proname || '|' || a.grantee::regrole::text || '|' || a.privilege_type \
          FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace, \
-              aclexplode(p.proacl) a \
+              aclexplode(COALESCE(p.proacl, pg_catalog.acldefault('f', p.proowner))) a \
          WHERE n.nspname = 'ont_policy_api' \
          ORDER BY p.proname, a.grantee::regrole::text, a.privilege_type",
     )
@@ -1953,9 +1987,19 @@ async fn the_attach_schema_grants_exactly_the_audited_command_credential(owner_p
             "attach_object_policy|console_ontology_writer|EXECUTE".to_owned(),
             "attach_object_policy_rows|console_ontology_writer|EXECUTE".to_owned(),
         ],
-        "the whole ont_policy_api ACL, so a fourth grantee or a surviving \
-         overload cannot hide behind a per-role probe. console_rt must appear \
-         nowhere, and only the OWNER may call the unaudited row-writer"
+        "the whole ont_policy_api ACL, so a fourth grantee, a surviving overload, \
+         or a routine left at default privileges cannot hide behind a per-role \
+         probe. console_rt must appear nowhere, and only the OWNER may call the \
+         unaudited row-writer.\n\
+         \n\
+         A LATER MIGRATION ADDING ANY ROUTINE TO ont_policy_api FAILS HERE BY \
+         DESIGN, including a PROCEDURE, which `REVOKE ALL ON ALL FUNCTIONS IN \
+         SCHEMA` does not reach. The correct repair is to REVOKE the implied \
+         PUBLIC grant on the new routine and add the exact row it should have. \
+         Widening this vector to admit `-|EXECUTE` re-opens the hole the COALESCE \
+         exists to close, and `ALTER DEFAULT PRIVILEGES` does not close it either \
+         (measured twice on PG 18.4: pg_default_acl records nothing and the next \
+         routine still lands with proacl NULL)."
     );
 
     let schema_usage: (bool, bool) = sqlx::query_as(
@@ -2135,18 +2179,22 @@ async fn the_command_credential_holds_no_direct_write_on_the_tables_the_definer_
          holds, which is the whole of 0206 undone",
     );
     assert_eq!(bare_sqlstate, "42501", "got {bare_message}");
-    // THE GRANT, not the floor. `new row violates row-level security policy` is
-    // ALSO 42501, and it is what this statement raises once the INSERT privilege is
-    // granted -- so the code alone reads green against exactly the grant this test
-    // exists to forbid (observed: the assertion above passed with `GRANT INSERT ON
-    // ont_object_policies TO console_ontology_cmd` applied). Only `permission
-    // denied for table` says the credential holds no write at all.
+    // THIS table's missing GRANT, not any other 42501. Measured with `GRANT INSERT
+    // ON ont_object_policies TO console_ontology_cmd` applied, the same statement
+    // raises `42501: permission denied for table cedar_policy_catalog_entries`,
+    // from `enforce_ont_object_policy_effect_matches_catalog()` -- a BEFORE INSERT
+    // ROW trigger with `prosecdef = false`, so it reads the catalog as the caller
+    // and fires BEFORE RLS is evaluated. RLS is unreachable for THIS role; the
+    // tenancy floor is not what refuses it. Same SQLSTATE, same internal raise site
+    // (`aclcheck_error, aclchk.c:2795`), a different table -- so the code alone
+    // reads green against exactly the grant this test exists to forbid.
     assert!(
         bare_message.contains("permission denied for table \"ont_object_policies\"")
             || bare_message.contains("permission denied for table ont_object_policies"),
-        "the refusal must be the missing GRANT, not the RLS floor: an org-scoped \
-         floor still lets the command role attach anything WITHIN its own org, \
-         which is every attachment that matters. Got: {bare_message}"
+        "the refusal must name ont_object_policies, the table whose INSERT is being \
+         forbidden. A 42501 naming any other table means the command role got past \
+         the write check on this one and was stopped somewhere downstream, which \
+         proves nothing about the grant. Got: {bare_message}"
     );
 
     // TOTAL over the three tables the definer writes, so a privilege nobody
