@@ -28,25 +28,32 @@
 -- writes the policy, in the CALLER's transaction, so an attach and its audit
 -- claim commit or roll back together. `console_ontology_writer` already holds
 -- INSERT on `audit_events` (`0165:226`); no new table grant, and
--- `console_ontology_cmd` deliberately gets none — `0165:317-320`'s
--- `ELSIF v_invoker <> 'console_ontology_cmd'` branch would turn a direct INSERT
--- privilege there into a forgery channel.
+-- `console_ontology_cmd` deliberately gets none — the
+-- `ELSIF v_invoker <> 'console_ontology_cmd'` branch of 0165's
+-- `ontology_api.protected_audit_writer_guard()` (trigger
+-- `trg_audit_events_ontology_command_only`), which raises
+-- `ontology_audit.command_required`, would turn a direct INSERT privilege there
+-- into a forgery channel.
 --
--- `ontology_api.write_audit` is NOT reused: `0165:725-738` hardcodes
+-- `ontology_api.write_audit` is NOT reused: its INSERT hardcodes
 -- `target_type = 'ont_object_types'`, which is a lie about what was mutated here.
 -- `ontology_api.assert_write_context` is NOT called: its
 -- `app.current_org <> p_org_id` raise pre-empts RLS and makes the cross-org proof
--- unsatisfiable (`0205:203-209` forbids exactly this).
+-- unsatisfiable — 0205 forbids exactly this where it declines to re-implement the
+-- org floor inside the writer, because the `row-level security policy` assertion
+-- in `object_policy_attach_as_runtime_role.rs` is the only proof the floor still
+-- applies inside a definer.
 --
 -- No `CREATE ROLE` anywhere: cluster-global roles are infrastructure-owned and
--- this migration fails closed on drift (0165:4-8, 0165:18-23).
+-- this migration fails closed on drift, exactly as 0165's
+-- `ontology_role_topology.roles_not_preprovisioned` precondition does.
 --
 -- No routine is added to `ontology_api`: its routine count and namespace ACL are
 -- pinned by ontology/adapter-postgres/tests/key_revision_migration_upgrade.rs.
 
 -- ---------------------------------------------------------------------------
--- 1. Preconditions. 0205:98-129 plus the command role this migration hands the
---    attach capability to.
+-- 1. Preconditions. 0205's `object-policy writer precondition failed: …` DO block
+--    re-run, plus the command role this migration hands the attach capability to.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -93,8 +100,9 @@ END
 $$;
 
 -- ---------------------------------------------------------------------------
--- 2. Schema USAGE for the command role. 0205:165 granted USAGE to `console_rt`
---    alone; `has_function_privilege` does not consult schema USAGE, so without
+-- 2. Schema USAGE for the command role. 0205's
+--    `GRANT USAGE ON SCHEMA ont_policy_api TO console_rt` is the only USAGE grant
+--    on this schema; `has_function_privilege` does not consult schema USAGE, so without
 --    this every attach fails 42501 naming the SCHEMA while any per-role grant
 --    probe reads true.
 --
@@ -171,10 +179,12 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 5. Owner and ACL. Mirrors 0165:1224-1236 rather than 0205:313-324: one
---    blanket REVOKE over the whole schema, so the argument type list is written
---    once per routine instead of four times. It also strips any accidentally
---    surviving overload, which is the failure 0205:313-315 could only warn about.
+-- 5. Owner and ACL. Mirrors 0165:1224-1236 rather than 0205's per-overload
+--    `REVOKE ALL ON FUNCTION … FROM PUBLIC` / `GRANT EXECUTE … TO console_rt`
+--    pair: one blanket REVOKE over the whole schema, so the argument type list is
+--    written once per routine instead of four times. It also strips any
+--    accidentally surviving overload, which is the hazard 0205's comment about its
+--    four-times-repeated argument type list could only warn about.
 --
 --    ALTER OWNER precedes the REVOKE deliberately: revoking from PUBLIC is what
 --    materializes a NULL `proacl`, and the materialized default names the CURRENT
@@ -195,8 +205,9 @@ GRANT EXECUTE ON FUNCTION ont_policy_api.attach_object_policy(
 ) TO console_ontology_cmd;
 
 -- ---------------------------------------------------------------------------
--- 6. Owner pin, widened from 0205:332-347 to EVERY routine in the schema: there
---    are two now, and 0205's version filtered on one `proname`. A dropped
+-- 6. Owner pin, widened from 0205's `object-policy writer definer owner is %`
+--    DO block to EVERY routine in the schema: there are two now, and 0205's
+--    version filtered on `p.proname = 'attach_object_policy'`. A dropped
 --    ALTER FUNCTION … OWNER TO leaves the applier as owner (console_app in
 --    production, the bootstrap superuser under sqlx::test — both BYPASSRLS): the
 --    org floor would be gone and every functional test would still pass. Fail

@@ -1723,8 +1723,9 @@ async fn the_attach_definer_refuses_every_forgery_the_route_would_have_refused(o
     // `0154:105` granted `console_rt` INSERT on the attachment table outright, so
     // an attacker holding the runtime role could bind an existing enforced catalog
     // policy to any object type with one bare statement and the definer was not
-    // needed at all. 0205:183 took it back; this asserts it stays taken back,
-    // because with it every check in the definer is optional again.
+    // needed at all. 0205's `REVOKE INSERT ON public.ont_object_policies FROM
+    // console_rt` took it back; this asserts it stays taken back, because with it
+    // every check in the definer is optional again.
     let bare_attachment = fx
         .as_runtime_role(move |tx| {
             Box::pin(async move {
@@ -2011,9 +2012,10 @@ async fn the_attach_schema_grants_exactly_the_audited_command_credential(owner_p
     .unwrap();
     assert!(
         schema_usage.0,
-        "0205:165 grants schema USAGE to console_rt only. Without USAGE for the \
-         command role, has_function_privilege above still reads true while every \
-         attach fails 42501 naming the SCHEMA"
+        "0205's `GRANT USAGE ON SCHEMA ont_policy_api TO console_rt` grants schema \
+         USAGE to that role only. Without USAGE for the command role, \
+         has_function_privilege above still reads true while every attach fails \
+         42501 naming the SCHEMA"
     );
     assert!(
         schema_usage.1,
@@ -2141,8 +2143,8 @@ async fn the_command_credential_holds_no_direct_write_on_the_tables_the_definer_
     let policy_id: Uuid = authored.body["id"].as_str().unwrap().parse().unwrap();
 
     // EXECUTED, not inferred. `0154:105` granted `console_rt` this exact INSERT and
-    // `0205:183` took it back; nothing ever asked the same question of the command
-    // role.
+    // 0205's `REVOKE INSERT ON public.ont_object_policies FROM console_rt` took it
+    // back; nothing ever asked the same question of the command role.
     //
     // `VALUES` and not `INSERT ... SELECT FROM cedar_policy_catalog_entries`, which
     // is how the `console_rt` twin of this probe is written and is WRONG here: the
@@ -2220,8 +2222,10 @@ async fn the_command_credential_holds_no_direct_write_on_the_tables_the_definer_
         writable,
         Vec::<String>::new(),
         "console_ontology_cmd must be EXECUTE-only. An INSERT on audit_events in \
-         particular is a forgery channel 0165:317-320 explicitly reasons about, \
-         and an INSERT on either policy table bypasses the definer entirely"
+         particular is a forgery channel 0165's protected_audit_writer_guard() \
+         explicitly reasons about, in the ELSIF branch that raises \
+         ontology_audit.command_required, and an INSERT on either policy table \
+         bypasses the definer entirely"
     );
 }
 
