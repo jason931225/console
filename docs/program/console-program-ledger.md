@@ -1033,3 +1033,13 @@ No new required context is introduced, so there is no sequencing problem to solv
 One honest negative for whoever runs these locally. The offline-query target that the Buck test depends on lists the Cargo target directory, so a `cargo` build running at the same time as a Buck test deletes temporary directories underneath it and the Buck build fails with a missing-file error that looks like a broken graph and is not. It cost one wasted run here. In the workflow these are separate jobs on separate runners, so it cannot happen there; locally, run them one at a time.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, legal state, release state, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, release, production-exposure, legal-qualification, or Korea claim.
+
+## 2026-07-30 — the candidate binding for the attach-capability topology
+
+The registers rebind from `f19f963b3` to `f9ea7b7e0`: 220 references in the capability registry, 170 in the jurisdiction register, and the candidate SHA itself. The registers had been bound to the previous candidate, so this rebind was owed independently of what the candidate contains.
+
+What the candidate contains is recorded in its own seven entries above and is not restated here. What this child asserts is narrower: the binding is mechanical, and nothing in it moves a capability's truth, a jurisdiction binding, or a Korea control.
+
+One property is worth recording at the authority layer, because a green train invites an inference it does not support. The candidate retires the residual `0205` escalated by name — the runtime credential can no longer attach an object policy untraced — and it does **not** retire the second residual, which the lane found was untested rather than untestable. A green authority train records that the candidate is bound. It does not record that the candidate's claims are proven, and the distinction matters most exactly when the candidate is a security change.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and exposure state remains `HOLD`; this authority-only child makes no completion, deployment, or production-exposure claim.
