@@ -2082,3 +2082,30 @@ times today.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — a never-executed RLS proof could not build its own fixture, and the cost model was wrong
+
+Rebind after CI ran the tranche-1 PostgreSQL tests for the first time.
+
+**Seven of eight passed. One failed before reaching an assertion.**
+`evidence_acceptance_is_tenant_invisible_and_does_not_leak_audit_as_runtime_role` died in setup on
+`23514 new row for relation "organizations" violates check constraint "organizations_slug_check"` —
+`seed_org` lowercased its tag but did not remove spaces, so `"Evidence A"` became the slug
+`org-evidence a`, and `0026_create_organizations.sql:18` CHECKs `^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$`.
+
+Nothing was broken in production. The test was **stale**: the constraint could be added and the
+fixture silently stop satisfying it, because the test executed in no workflow step and so could not
+report it. A test named for an audit property had been unable to run at all.
+
+**The cost model in the candidate's own pull-request body was refuted by the run it predicted.**
+That body reasoned per-wrapper cost is "roughly linear" and 175 in one job "is not viable".
+Measured: 11 wrappers 996s, 19 wrappers 1032s — **4.5s marginal per wrapper**. The dominant cost is
+the shared dependency build, 2773 commands at 0% cache, paid once regardless of how many test
+binaries hang off it. The remaining 167 project to roughly +750s: one job, not twenty pull
+requests. A lower bound rather than a guarantee, since these eight are small.
+
+Recorded because the estimate was stated confidently and was wrong, and the correction came only
+from executing it.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
