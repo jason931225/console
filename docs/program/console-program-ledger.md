@@ -1412,3 +1412,29 @@ completion, deployment, or production-exposure claim.
 
 Mechanical rebind. #531 merged, producing a new squash tip and invalidating this branch's
 train. No claim in the candidate changes.
+
+## 2026-07-31 — the candidate binding for the finite backup window
+
+The registers rebind to the retention candidate. The backup ObjectStore gains a finite
+90d retention policy, and ADR-0037 gains the research and one corrected citation.
+
+Two properties are worth recording at the authority layer.
+
+**The change was free only because it was made before deployment.** Verified: no CNPG
+cluster in the tenancy declares a backup, the barmancloud ObjectStore CRD is not installed,
+and the target namespace does not exist. There are no backups for the policy to prune.
+ADR-0037 had said this was cheap to resolve before a person's data is in the system and
+expensive afterwards; that window was still open, and is now used rather than merely
+observed.
+
+**A cited article was wrong, and the correction strengthened the finding.** The record had
+grounded 복구 또는 재생 in 법 제21조제2항 alone. The owner pointed at the deletion-request
+path and named 시행령 제43조제2항, which on fetch is procedural and carries no such wording —
+but 법 제36조제3항 does, for subject-requested deletion, alongside a 단서 barring deletion
+where another statute designates the data for collection. The substance held, the location
+moved, and the standard turns out to bind on both the 파기 and the request paths. Recorded
+because a citation corrected upward is worth as much as one retracted.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
