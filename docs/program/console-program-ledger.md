@@ -1717,3 +1717,24 @@ disposition, and exposure state remains `HOLD`.
 ## 2026-07-31 — rebind after #537 under the harness-relocation candidate
 
 Mechanical rebind. No claim in the candidate changes.
+
+## 2026-07-31 — "the tests pass" answered a different question than "the graph resolves"
+
+Rebind after repairing the harness relocation.
+
+The relocation was described as a pure move and verified by running the harness's own bash
+suites, which invoke the scripts directly. It was not pure: `tools/buck/BUCK`'s 28 sh_test
+wrappers name the loader as a **package-relative** source, so once the file moved buck2
+could not parse the package and every PostgreSQL wrapper target became unresolvable.
+
+The verification was real and the wrong shape. Running a script's own tests establishes
+that the script works; it establishes nothing about whether the build graph that references
+it still resolves. For a move out of a build-system directory those are different
+questions, and only one of them was asked. CI asked the other.
+
+Recorded because the failure is not carelessness but a category error in what counts as
+proof — the same shape as a test that passes while executing nowhere, or a gate that is
+green because its assertion matched a comment.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
