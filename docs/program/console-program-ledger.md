@@ -1713,3 +1713,7 @@ inside the very commit that creates it. Fixed in the same commit rather than aft
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
 ||||||| da8cc4011
+
+## 2026-07-31 — rebind after #537 under the harness-relocation candidate
+
+Mechanical rebind. No claim in the candidate changes.
