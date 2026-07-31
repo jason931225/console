@@ -983,7 +983,10 @@ fn required_url(name: &str) -> String {
 async fn reassert_serving_role_passwords(owner_url: &str, runtime_url: &str) {
     fn password_of(url: &str) -> String {
         let after_scheme = url.split("://").nth(1).expect("database URL has a scheme");
-        let credentials = after_scheme.split('@').next().expect("database URL has credentials");
+        let credentials = after_scheme
+            .split('@')
+            .next()
+            .expect("database URL has credentials");
         credentials
             .split_once(':')
             .expect("database URL carries a password")
