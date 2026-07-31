@@ -74,16 +74,21 @@ BEGIN
           -- hand-ordered child-first block below can run.
           AND child.relname NOT IN (
               'audit_events', 'employees', 'users', 'branches', 'regions',
-              -- The 0193 equipment-maintenance family. Every table below is the target of a
-              -- COMPOSITE RESTRICT foreign key from a 0193 child, and `cardinality(fk.conkey) = 1`
-              -- below makes those children structurally invisible to this sweep — so deleting any
-              -- of these here raises 23001 while its children still reference it. All five are
-              -- already deleted, child-first, by the hand-ordered block in 0196, which is where
-              -- they belong. Naming the whole family rather than the one member that happened to
-              -- fail first: fixing `equipment_cost_ledger` alone simply moved the failure to
-              -- `evidence_media` on the next run.
-              'equipment_cost_ledger', 'evidence_media',
-              'equipment_maintenance_history', 'registry_equipment', 'work_orders'
+              -- Two more roots, for the same specialized-ordering reason. Each is the target of
+              -- a COMPOSITE RESTRICT foreign key from a 0193 child, and `cardinality(fk.conkey) = 1`
+              -- below makes those children invisible to this sweep — so deleting either here
+              -- raises 23001 while its children still reference it. Both are already deleted,
+              -- child-first, by the hand-ordered block in 0196.
+              --
+              -- ONLY these two. An earlier attempt excluded the whole 0193 family —
+              -- registry_equipment, work_orders and equipment_maintenance_history as well — on the
+              -- theory that every composite-FK target belonged here. That REGRESSED
+              -- platform-rest remove_tenant, which had been passing: this sweep deletes
+              -- registry_equipment before registry_sites, and removing it from the sweep left
+              -- registry_sites blocked by `registry_equipment_site_id_fkey`. The sweep's
+              -- OID-descending order is load-bearing for those three, and only the two named here
+              -- are actually reached before their invisible children.
+              'equipment_cost_ledger', 'evidence_media'
           )
           AND cardinality(fk.conkey) = 1
           AND child_attr.attname = 'org_id'
