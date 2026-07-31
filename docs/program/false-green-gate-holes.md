@@ -63,6 +63,40 @@ CI step is unprotected: deleting its `run:` line yields zero
 `check:ci-preflight` failures. The flagship drift test is one line from silent
 removal.
 
+**2026-07-31, later the same day — CORRECTION: the verdict above is already
+stale, in this document's characteristic direction. H-1 is CLOSED.** The
+paragraph beginning "The gate is deliberately **not** wired" was true when
+written and false within hours. `4e7da6b52 fix(openapi): the consume-item
+request body 422s every conformant caller` fixed the spec, so the gate's only
+true finding is gone and it now passes: `request body contract gate passed
+(resolved 51, skipped 172)`. It is wired as `check:request-body-contract` in
+`repo-gates`, and its step is locked in
+`scripts/check-ci-preflight.mjs:requireOrderedStepContracts`. The original text
+stays above because the correction is the point.
+
+**The gate itself carried a false-green path, found only in the coverage pass.**
+`scripts/check-request-body-contract.mjs:renameField` reproduces serde's
+`rename_all`, and the whole comparison is that one function. Two of its eight
+rules were guessed rather than read: serde's `LowerCase` is `field.to_owned()`
+and its `UpperCase` is `field.to_ascii_uppercase()`, both keeping the
+underscores, while the gate's `words.join("")` form dropped them — `very_tasty`
+became `verytasty`. The quiet direction of that error is a spec publishing
+`verytasty`, a guaranteed 422 under `deny_unknown_fields`, read as correct.
+`rename_all = "lowercase"` already appears twice in `backend/**`. The
+replacement is checked against serde's own `rename_fields` fixture table rather
+than against a derivation.
+
+**Two things in this slice were green for a reason unrelated to their name**,
+which is the meta-finding at the size of a single test. The undeclared-import
+suite's "does not mistake prose or SQL inside a string literal" case contained
+no line that matched the import patterns at all, so it passed with the
+suppression stubbed out; and
+`scripts/check-request-body-contract.mjs:evaluateRequestBodyContract` could not
+reach its own success branch while the spec was broken — the exit-0 path had
+never executed. Both now have assertions that go red when the behaviour is
+removed. Coverage on the two gates moved from 85.88%/84.78% branch to
+95.40%/87.23%, measured with `node --test --experimental-test-coverage`.
+
 ## H-2 · Hand-written client types bypass the generated ones entirely
 
 `web/src/console/equipment/**` declares its own local interfaces instead of
