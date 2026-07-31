@@ -1533,3 +1533,18 @@ completion, deployment, or production-exposure claim.
 ## 2026-07-31 — rebind after #534 moved the tip under the golden-case candidate
 
 Mechanical rebind. No claim in the candidate changes.
+
+## 2026-07-31 — rebind after the adapter half was given somewhere to run
+
+The registers rebind. The candidate adds `console-payroll-adapter-postgres` to the
+consolidated unit job, because 12 pure `#[test]` cases — the `parse_release_gate` half of
+the release gate, including the removal of the silent-zero default — executed in no
+workflow at all.
+
+Worth recording: this was caught by an assertion the slice itself wrote to prevent it, and
+broken by a consolidation in a different pull request by the same hand. Two changes, each
+correct alone, produced a gap neither would have produced by itself. The assertion is the
+only reason it surfaced before merge rather than after.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
