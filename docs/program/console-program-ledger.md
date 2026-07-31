@@ -1962,3 +1962,30 @@ an absent `jurisdiction.candidate.sha` — are now caught. Rebind cost 390 -> 38
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and
 exposure state remains `HOLD`.
+
+## 2026-07-31 — a third dark-test tranche, and a false positive in the tool that counts them
+
+Rebind onto the tranche-3 candidate.
+
+13 further test files under `tests/` executed in no workflow step and needed no database.
+Measured with `--no-fail-fast` before wiring: 59 tests, 13 suites, 0 failed. `executed nowhere`
+falls **188 -> 175**.
+
+**`check-executed-tests.mjs` pairs `-p` and `--test` on a line as a cross product.** ci.yml
+carried one line with two packages and two test names, generating four candidate pairs where two
+were real. Verified not firing — neither cross file exists, so every count reported to date was
+sound, and cargo resolved that line correctly. It fires the moment either file is added, and it
+would report a test as executed when it is not.
+
+That direction is worse than the one the tool was built to catch. Its own header warns about
+silently under-reporting coverage; a cross-product false positive silently over-reports it. Fixed
+at the source — one `-p` per cargo invocation wherever `--test` appears — rather than by making
+the parser cleverer.
+
+The same rule handles `well_known`, which is a test name in both `console-platform-auth` and
+`console-app`. `domainUnitTestFiles` holds bare names and cannot distinguish them, so that entry
+is weaker than it looks; the comment beside it records that rather than implying coverage it does
+not have.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
