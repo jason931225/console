@@ -1526,13 +1526,31 @@ mod tests {
         })
     }
 
+    /// `Value` indexes into a nested object but cannot delete through the
+    /// index, so every removal below needs this same `as_object_mut` step.
+    fn remove_key(object: &mut Value, key: &str) {
+        object
+            .as_object_mut()
+            .expect("a JSON object to remove a key from")
+            .remove(key);
+    }
+
     fn without_golden_case_key(key: &str) -> Value {
         let mut record = release_gate_record();
-        record["release_gate"]["golden_cases"][0]
-            .as_object_mut()
-            .unwrap()
-            .remove(key);
+        remove_key(&mut record["release_gate"]["golden_cases"][0], key);
         record
+    }
+
+    fn with_golden_case_key(key: &str, value: Value) -> Value {
+        let mut record = release_gate_record();
+        record["release_gate"]["golden_cases"][0][key] = value;
+        record
+    }
+
+    fn gate_refusal(record: &Value) -> String {
+        validate_run_release_gate(record)
+            .expect_err("this release-gate record must be refused")
+            .to_string()
     }
 
     #[test]
@@ -1549,12 +1567,11 @@ mod tests {
             "professionally_validated",
         ] {
             assert_eq!(
-                validate_run_release_gate(&without_golden_case_key(key))
-                    .map_err(|err| err.to_string()),
-                Err(format!(
+                gate_refusal(&without_golden_case_key(key)),
+                format!(
                     "payslip release gate is not satisfied: \
                      release-gate record is missing {key}"
-                )),
+                ),
                 "a stored golden case with no {key} must be REFUSED, not defaulted"
             );
         }
@@ -1570,26 +1587,11 @@ mod tests {
             json!(373_303);
 
         assert_eq!(
-            validate_run_release_gate(&off_by_one).map_err(|err| err.to_string()),
-            Err(
-                "payslip release gate is not satisfied: golden case GC-2026-06-A \
-                 expects total employee deductions 373303 \
-                 but the payroll kernel computed 373302"
-                    .to_owned()
-            )
+            gate_refusal(&off_by_one),
+            "payslip release gate is not satisfied: golden case GC-2026-06-A \
+             expects total employee deductions 373303 \
+             but the payroll kernel computed 373302"
         );
-    }
-
-    fn with_golden_case_key(key: &str, value: Value) -> Value {
-        let mut record = release_gate_record();
-        record["release_gate"]["golden_cases"][0][key] = value;
-        record
-    }
-
-    fn gate_refusal(record: &Value) -> String {
-        validate_run_release_gate(record)
-            .expect_err("this release-gate record must be refused")
-            .to_string()
     }
 
     #[test]
@@ -1632,10 +1634,10 @@ mod tests {
             "local_income_tax_won",
         ] {
             let mut record = release_gate_record();
-            record["release_gate"]["golden_cases"][0]["nts_tax_row"]
-                .as_object_mut()
-                .unwrap()
-                .remove(key);
+            remove_key(
+                &mut record["release_gate"]["golden_cases"][0]["nts_tax_row"],
+                key,
+            );
 
             assert_eq!(
                 gate_refusal(&record),
@@ -1719,10 +1721,7 @@ mod tests {
         }
 
         let mut absent = release_gate_record();
-        absent["release_gate"]
-            .as_object_mut()
-            .unwrap()
-            .remove("golden_cases");
+        remove_key(&mut absent["release_gate"], "golden_cases");
         assert_eq!(
             gate_refusal(&absent),
             "payslip release gate is not satisfied: \
