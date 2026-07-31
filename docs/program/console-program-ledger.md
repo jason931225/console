@@ -2015,3 +2015,13 @@ not have.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — rebind after #546 under the tranche-3 candidate
+
+Mechanical rebind. No claim in the candidate changes.
+
+**38 references, not 390** — the first conflict resolution since the denormalisation landed, and
+the registers no longer carry a per-row copy of the candidate for every lane to rewrite.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
