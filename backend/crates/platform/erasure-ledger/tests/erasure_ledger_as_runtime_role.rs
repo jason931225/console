@@ -913,7 +913,10 @@ async fn restore_detection_fires_when_entries_above_the_witness_are_lost(owner_p
     // Everything the witness alone can check still agrees: the head is past it
     // and its own entry is untouched.
     let head_seq = head(&rt, org).await.unwrap().expect("entry 3 survives").seq;
-    assert_eq!(head_seq, 3, "the fixture must leave the head above the witness");
+    assert_eq!(
+        head_seq, 3,
+        "the fixture must leave the head above the witness"
+    );
     assert_eq!(
         entries_since(&rt, org, 0).await.unwrap()[0].entry_hash,
         witness.entry_hash,
