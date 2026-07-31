@@ -24,6 +24,17 @@
 -- predecessor's hash, and an external holder of one (org_id, seq, entry_hash)
 -- triple can tell the three cases apart.
 --
+-- AND ONE THING A WITNESS ALONE STILL CANNOT SEE, which is why the schema owes
+-- the reader a second invariant: a restore that loses entries ABOVE the witness
+-- leaves the head past it and the witnessed row byte-identical, so every check
+-- anchored at that one point agrees while recorded entries are gone. Measured
+-- before it was closed: entries 1..3, witness at 1, entry 2 lost, verdict
+-- `Consistent { head_seq: 3 }`. The trigger below assigns `seq` as
+-- `max(seq) + 1` starting at 1 and nothing can remove a row, so a live ledger
+-- always satisfies `count(*) = max(seq)` PER ORG. That identity is a contract
+-- this file owes `classify`, which reads it to catch exactly this case; changing
+-- how `seq` is assigned breaks a caller that cannot see this comment.
+--
 -- WHAT IT DOES NOT SOLVE, stated here because a design that claims to survive a
 -- restore without saying how is the failure mode:
 --   1. Nothing outside PostgreSQL holds a witness yet, so the mechanism is

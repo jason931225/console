@@ -140,6 +140,15 @@ pub enum RestoreVerdict {
     /// rolled back and then written forward again. A sequence-only comparison
     /// reads this as healthy, which is the failure this variant exists to name.
     Forked { witness_seq: i64 },
+    /// The ledger holds fewer entries than its own head sequence, so entries it
+    /// once recorded are gone — even though the witness itself survived and
+    /// every check anchored at the witness agrees.
+    ///
+    /// Migration 0207's trigger assigns `seq` as `max(seq) + 1` starting at 1 and
+    /// nothing can delete a row, so a live ledger always satisfies
+    /// `count(*) = max(seq)`. That identity is what sees a loss ABOVE the
+    /// witness, which no comparison anchored at one point can.
+    Gapped { head_seq: i64, entry_count: i64 },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -320,11 +329,18 @@ pub async fn entries_since(
 
 /// Compare a held witness against the live ledger.
 ///
-/// One query, two facts: where the head is now, and what content the witnessed
-/// sequence holds now. Comparing sequences alone is not enough — a restore
-/// followed by continued operation drives the head back up to the witnessed
-/// sequence carrying different entries, and that is the case
-/// [`RestoreVerdict::Forked`] exists to name.
+/// One query, three facts: where the head is now, how many entries the ledger
+/// actually holds, and what content the witnessed sequence holds now.
+///
+/// Comparing sequences alone is not enough — a restore followed by continued
+/// operation drives the head back up to the witnessed sequence carrying
+/// different entries, and that is the case [`RestoreVerdict::Forked`] names.
+/// Comparing the witness alone is not enough either: a restore that loses
+/// entries ABOVE the witness leaves the head past it and the witnessed row
+/// untouched, so every check anchored at the witness agrees while recorded
+/// entries are gone. The count catches that, because `seq` is assigned
+/// contiguously from 1 and no row can be removed — see
+/// [`RestoreVerdict::Gapped`].
 pub async fn classify(
     pool: &PgPool,
     org: OrgId,
@@ -332,10 +348,11 @@ pub async fn classify(
 ) -> Result<RestoreVerdict, ErasureLedgerError> {
     let org_id = *org.as_uuid();
     let witness_seq = witness.seq;
-    let (head_seq, witnessed_hash) = with_org_conn(pool, org, move |tx| {
+    let (head_seq, entry_count, witnessed_hash) = with_org_conn(pool, org, move |tx| {
         Box::pin(async move {
-            sqlx::query_as::<_, (i64, Option<Vec<u8>>)>(
+            sqlx::query_as::<_, (i64, i64, Option<Vec<u8>>)>(
                 "SELECT COALESCE((SELECT max(seq) FROM erasure_ledger WHERE org_id = $1), 0), \
+                 (SELECT count(*) FROM erasure_ledger WHERE org_id = $1), \
                  (SELECT entry_hash FROM erasure_ledger WHERE org_id = $1 AND seq = $2)",
             )
             .bind(org_id)
@@ -354,8 +371,17 @@ pub async fn classify(
         });
     }
     match witnessed_hash {
+        // A mismatched or absent witnessed entry is the sharper statement — it
+        // invalidates the witness itself — so it is reported ahead of the count.
         Some(hash) if hash32(&hash, witness.seq)? == witness.entry_hash => {
-            Ok(RestoreVerdict::Consistent { head_seq })
+            if entry_count == head_seq {
+                Ok(RestoreVerdict::Consistent { head_seq })
+            } else {
+                Ok(RestoreVerdict::Gapped {
+                    head_seq,
+                    entry_count,
+                })
+            }
         }
         _ => Ok(RestoreVerdict::Forked {
             witness_seq: witness.seq,

@@ -879,6 +879,70 @@ async fn restore_detection_fires_when_the_witnessed_sequence_is_a_hole(owner_poo
     );
 }
 
+/// The hole the witness comparison alone cannot see, and the reason this test
+/// exists: a restore that loses entries ABOVE the witness while leaving both the
+/// witness and a later head intact. `head_seq >= witness.seq`, and the witnessed
+/// row is byte-for-byte the one that was witnessed, so every check the witness
+/// itself can make passes — and entries the ledger recorded are gone. That is
+/// the "reads as evidence while being empty" failure the whole slice exists to
+/// make detectable, and it is invisible to a comparison anchored at one point.
+///
+/// It is detectable from a whole-ledger invariant instead: migration 0207's
+/// trigger assigns `seq` as `max(seq) + 1` starting at 1 and nothing can delete
+/// a row, so a live ledger always satisfies `count(*) = max(seq)`. A gap breaks
+/// that identity no matter where the witness sits.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn restore_detection_fires_when_entries_above_the_witness_are_lost(owner_pool: PgPool) {
+    seed_org_and_super_admin(&owner_pool, ORG_A, "A").await;
+    let rt = runtime_role_pool(&owner_pool).await;
+    let org = OrgId::from_uuid(ORG_A);
+
+    let mut witnesses: Vec<LedgerWitness> = Vec::new();
+    for n in 1..=3 {
+        witnesses.push(
+            append(&rt, org, &facts(&format!("id = {n}")))
+                .await
+                .unwrap(),
+        );
+    }
+    let witness = witnesses[0];
+    assert_eq!(witness.seq, 1);
+
+    simulate_restore_losing_only(&owner_pool, ORG_A, 2).await;
+
+    // Everything the witness alone can check still agrees: the head is past it
+    // and its own entry is untouched.
+    let head_seq = head(&rt, org).await.unwrap().expect("entry 3 survives").seq;
+    assert_eq!(head_seq, 3, "the fixture must leave the head above the witness");
+    assert_eq!(
+        entries_since(&rt, org, 0).await.unwrap()[0].entry_hash,
+        witness.entry_hash,
+        "the witnessed entry itself must survive, or this is the plain fork case"
+    );
+
+    assert_eq!(
+        classify(&rt, org, &witness).await.unwrap(),
+        RestoreVerdict::Gapped {
+            head_seq: 3,
+            entry_count: 2
+        },
+        "a ledger holding fewer entries than its own head must not read as consistent"
+    );
+
+    // And the replay set the re-applier would act on is short by exactly the
+    // entry that vanished — which is why the verdict has to fire before it.
+    assert_eq!(
+        entries_since(&rt, org, witness.seq)
+            .await
+            .unwrap()
+            .iter()
+            .map(|entry| entry.seq)
+            .collect::<Vec<_>>(),
+        vec![3],
+        "the replay set silently skips the lost entry, so the verdict is the only guard"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // TRUNCATE. The one statement that empties a table without firing a row trigger.
 // ---------------------------------------------------------------------------
