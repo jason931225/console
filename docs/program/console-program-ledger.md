@@ -1863,3 +1863,11 @@ any system processing 고유식별정보, which `개인정보 보호법 시행�
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — rebind after #542 under the retention candidate
+
+Mechanical rebind. No claim in the candidate changes, and no Korean legal conclusion is
+asserted by it.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
