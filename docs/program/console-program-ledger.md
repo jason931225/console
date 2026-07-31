@@ -2165,3 +2165,38 @@ rooted in one line of `platform/test-support/src/lib.rs`.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — wiring 167 dark tests found a production defect
+
+Rebind after the first execution of the newly wired PostgreSQL targets.
+
+CI reached 86 of 186 targets before the 35-minute ceiling: 82 passed, 4 failed. Three failures were
+fixture rot that had accumulated precisely because nothing executed those files. **One was a defect
+in a production path.**
+
+`platform_force_remove_organization` calls its catalog-driven closure (0196:192) before the
+hand-ordered deletes at 0196:228-231. The closure sweeps `equipment_cost_ledger` — single-column
+`org_id` FK, ON DELETE RESTRICT (0034:85) — while that table's children are invisible to the same
+closure by two independent filters: a COMPOSITE FK against `cardinality(conkey) = 1`, and ON DELETE
+CASCADE against `confdeltype IN ('a','r')`. So force-removing an organization that holds equipment
+maintenance costs raises 23001. Migration 0208 adds the ledger to the exclusion list 0196 already
+maintains for exactly this class of root.
+
+The two apalis failures were **cross-test poisoning of a cluster-global credential**: four sibling
+files rewrite `console_app`'s password to a hardcoded literal and none restores it, so every later
+target authenticating from the harness URL fails 28P01 for a reason having nothing to do with
+itself. Each apalis test now re-asserts the passwords it needs before connecting, which is correct
+regardless of sibling order or panic.
+
+**The ceiling was raised 35 -> 80 minutes rather than sharded.** Measured: 240s of build and setup,
+then 21.8s per target serialized, so 186 targets need ~71 minutes. Sharding is the better answer and
+was rejected deliberately — this job's display name is the literal string branch protection matches
+on, a matrix reports as "name (shard)", and that would silently un-require the check and restore the
+false green the job's own comment describes. It also retracts the 4.5s marginal figure recorded
+earlier today, which was measured across 11->19 wrappers while the fixed build cost still dominated.
+
+`executed nowhere` is 0 in the candidate. That is wiring, not proof, and this is what the first
+proof produced.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
