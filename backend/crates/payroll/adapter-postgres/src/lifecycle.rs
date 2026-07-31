@@ -1567,4 +1567,166 @@ mod tests {
             )
         );
     }
+
+    fn with_golden_case_key(key: &str, value: Value) -> Value {
+        let mut record = release_gate_record();
+        record["release_gate"]["golden_cases"][0][key] = value;
+        record
+    }
+
+    fn gate_refusal(record: &Value) -> String {
+        validate_run_release_gate(record)
+            .expect_err("this release-gate record must be refused")
+            .to_string()
+    }
+
+    #[test]
+    fn release_gate_record_whose_golden_case_amounts_are_not_json_integers_is_refused() {
+        // `Value::as_i64` / `as_bool` ARE the whole type check, and line
+        // coverage cannot see this: an absent key and a wrong-typed one leave
+        // through the same `ok_or_else`, so the omission test above keeps these
+        // lines green either way. Only this test stands between the signed
+        // money figures and a "helpful" `as_f64()` fallback that would truncate
+        // 373302.9 into a passing gate, or a truthy-string fallback that would
+        // turn `"professionally_validated": "no"` into a sign-off.
+        for (key, wrong_type) in [
+            ("monthly_gross_pay_won", json!(3_000_000.0)),
+            ("monthly_gross_pay_won", json!("3000000")),
+            ("expected_total_employee_deductions_won", json!(373_302.0)),
+            ("expected_total_employee_deductions_won", json!("373302")),
+            ("professionally_validated", json!("true")),
+            ("professionally_validated", json!(1)),
+        ] {
+            assert_eq!(
+                gate_refusal(&with_golden_case_key(key, wrong_type.clone())),
+                format!(
+                    "payslip release gate is not satisfied: \
+                     release-gate record is missing {key}"
+                ),
+                "{wrong_type} is not an acceptable {key} and must be REFUSED, not coerced"
+            );
+        }
+    }
+
+    #[test]
+    fn release_gate_record_whose_nts_tax_row_omits_a_field_is_refused() {
+        // The 간이세액표 row is the professionally verified half of the case.
+        // A zero-defaulted 근로소득세 would understate the recomputed total by
+        // exactly the tax and still be compared against something, so the
+        // refusal has to happen at the parse, not at the arithmetic.
+        for key in [
+            "table_version",
+            "monthly_income_tax_won",
+            "local_income_tax_won",
+        ] {
+            let mut record = release_gate_record();
+            record["release_gate"]["golden_cases"][0]["nts_tax_row"]
+                .as_object_mut()
+                .unwrap()
+                .remove(key);
+
+            assert_eq!(
+                gate_refusal(&record),
+                format!(
+                    "payslip release gate is not satisfied: \
+                     release-gate record is missing {key}"
+                ),
+                "an NTS tax row with no {key} must be REFUSED, not defaulted"
+            );
+        }
+    }
+
+    #[test]
+    fn release_gate_record_whose_golden_case_pay_date_is_unparseable_is_refused() {
+        // The only branch in the parser with its own error text, and the only
+        // required input whose refusal is not a missing key. A fallback date
+        // here would silently move the case into a different effective-rate
+        // window and recompute a figure nobody signed.
+        for bad in ["2026-06-31", "30/06/2026", "2026-06", ""] {
+            let message = gate_refusal(&with_golden_case_key("pay_date", json!(bad)));
+            assert!(
+                message.starts_with(
+                    "payslip release gate is not satisfied: invalid golden case pay_date: "
+                ),
+                "expected a pay_date parse refusal for {bad:?}, got: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn release_gate_record_carries_a_declared_pension_standard_monthly_income_into_the_kernel() {
+        // The one OPTIONAL kernel input, and the only one that moves a figure
+        // without moving the gross. 2,000,000 is inside the 2026-06 국민연금
+        // base window (400,000..6,370,000) so the clamp does not erase it: the
+        // pension line drops by 47,500 and the total lands on 325,802. A parser
+        // that dropped the key would recompute 373,302 here.
+        let mut declared =
+            with_golden_case_key("pension_standard_monthly_income_won", json!(2_000_000));
+        declared["release_gate"]["golden_cases"][0]["expected_total_employee_deductions_won"] =
+            json!(325_802);
+        validate_run_release_gate(&declared).unwrap();
+
+        // An explicit JSON null is the ABSENT case — the kernel falls back to
+        // the gross, so the record's own 373,302 still holds.
+        validate_run_release_gate(&with_golden_case_key(
+            "pension_standard_monthly_income_won",
+            json!(null),
+        ))
+        .unwrap();
+
+        // Present but not an integer is REFUSED, never quietly ignored:
+        // ignoring it recomputes on a basis the reviewer did not sign.
+        assert_eq!(
+            gate_refusal(&with_golden_case_key(
+                "pension_standard_monthly_income_won",
+                json!("2000000")
+            )),
+            "payslip release gate is not satisfied: \
+             release-gate record is missing pension_standard_monthly_income_won"
+        );
+    }
+
+    #[test]
+    fn release_gate_record_with_no_parseable_golden_case_list_is_refused() {
+        // `golden_cases` itself is still `.unwrap_or_default()`-ed, so an
+        // absent, empty, null or non-array list parses as ZERO cases and the
+        // recomputation loop iterates over nothing. The domain's non-empty
+        // check is the only thing that keeps that fail-closed rather than
+        // "passed, having compared nothing" — this pins the composition, which
+        // neither crate's own tests can see.
+        for cases in [json!([]), json!(null), json!("GC-2026-06-A"), json!({})] {
+            let mut record = release_gate_record();
+            record["release_gate"]["golden_cases"] = cases.clone();
+
+            assert_eq!(
+                gate_refusal(&record),
+                "payslip release gate is not satisfied: \
+                 at least one payroll golden case is required",
+                "a {cases} golden-case list must be REFUSED"
+            );
+        }
+
+        let mut absent = release_gate_record();
+        absent["release_gate"]
+            .as_object_mut()
+            .unwrap()
+            .remove("golden_cases");
+        assert_eq!(
+            gate_refusal(&absent),
+            "payslip release gate is not satisfied: \
+             at least one payroll golden case is required"
+        );
+    }
+
+    #[test]
+    fn a_run_with_no_release_gate_record_at_all_is_refused() {
+        // The outermost fail-closed, and it had no test: everything above
+        // assumes a `release_gate` key exists. An unregistered gate must be a
+        // refusal, never an empty-but-satisfied one.
+        assert_eq!(
+            gate_refusal(&json!({"other_basis": {"note": "무관한 근거"}})),
+            "payslip release gate is not satisfied: no release-gate record is \
+             registered for this run (노무사/세무사 검증 필요)"
+        );
+    }
 }
