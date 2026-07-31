@@ -1438,3 +1438,26 @@ because a citation corrected upward is worth as much as one retracted.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
+
+## 2026-07-31 — a retraction the owner caught, and the rule it broke
+
+The registers rebind after ADR-0037 retracted a claim of its own making.
+
+The record had argued that Korea's 복구 또는 재생 wording made the European deferred-overwrite
+package a poor fit, and elevated crypto-shredding accordingly. The owner disputed it. The
+statute settles it against the record: 법 제21조제1항 and 법 제36조제2항 both say 지체 없이,
+not 즉시 — the same 'without undue delay' standard the European position is built on.
+
+The rule that was broken is worth stating because this program keeps meeting it from both
+directions. The research had already found that Korea's silence on backups is **an absence,
+not a permission**. The retracted draft converted the same silence into a **prohibition**.
+Both are the same error wearing opposite signs: treating the absence of authority as
+authority. The uncertainty_rule says missing or unqualified authority is HOLD — not
+permissive, not restrictive, HOLD.
+
+No gate could have caught this either. The record was structurally valid and every citation
+resolved; what was wrong was an inference drawn from correctly quoted text.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
