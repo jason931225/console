@@ -1380,6 +1380,131 @@ mod tests {
         validate_release_gate(&validated).unwrap();
     }
 
+    /// A gate input that satisfies every condition. Each test below mutates
+    /// EXACTLY ONE field of it, so a failure names one defect.
+    fn satisfied_release_gate() -> PayrollReleaseGateInput {
+        PayrollReleaseGateInput {
+            rate_table_version: "KR-2026-official-rates-v1".to_string(),
+            official_source_urls: vec![nps_source().url.to_string(), nhis_source().url.to_string()],
+            golden_cases: vec![GoldenPayrollCase {
+                case_id: "GC-FIXTURE-A".to_string(),
+                rate_table_version: "KR-2026-official-rates-v1".to_string(),
+                professionally_validated: true,
+                inputs: golden_case_inputs(),
+                expected_total_employee_deductions_won: 373_302,
+            }],
+            professional_validation: Some(ProfessionalValidation {
+                reviewer_kind: ProfessionalReviewerKind::LaborAttorney,
+                reviewed_on: date!(2026 - 06 - 27),
+                // Placeholder digest, and it STAYS a placeholder.
+                artifact_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                    .to_string(),
+                reviewer_reference: "licensed-reviewer-record".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn release_gate_rejects_a_golden_case_total_the_kernel_does_not_recompute() {
+        // THE LOAD-BEARING TEST. Until this passes, a golden case is a stored
+        // assertion that cannot fail: the professionals' signed figure is never
+        // compared to anything the kernel produces. Only the EXPECTATION moves;
+        // the declared inputs are the ones that really compute 373,302.
+        let mut disagrees = satisfied_release_gate();
+        disagrees.golden_cases[0].expected_total_employee_deductions_won = 373_303;
+
+        let error = validate_release_gate(&disagrees).unwrap_err();
+
+        assert_eq!(
+            error.message,
+            "golden case GC-FIXTURE-A expects total employee deductions 373303 \
+             but the payroll kernel computed 373302"
+        );
+    }
+
+    #[test]
+    fn release_gate_accepts_a_golden_case_whose_declared_inputs_recompute_to_its_expected_total() {
+        validate_release_gate(&satisfied_release_gate()).unwrap();
+    }
+
+    #[test]
+    fn release_gate_rejects_a_blank_rate_table_version() {
+        let mut blank = satisfied_release_gate();
+        blank.rate_table_version = "  ".to_string();
+        blank.golden_cases[0].rate_table_version = "  ".to_string();
+
+        assert_eq!(
+            validate_release_gate(&blank).unwrap_err().message,
+            "payroll rate table version is required"
+        );
+    }
+
+    #[test]
+    fn release_gate_rejects_an_empty_official_source_url_list() {
+        let mut no_urls = satisfied_release_gate();
+        no_urls.official_source_urls = vec![];
+
+        assert_eq!(
+            validate_release_gate(&no_urls).unwrap_err().message,
+            "at least one official source URL is required"
+        );
+    }
+
+    #[test]
+    fn release_gate_rejects_a_case_marked_not_professionally_validated() {
+        let mut unvalidated = satisfied_release_gate();
+        unvalidated.golden_cases[0].professionally_validated = false;
+
+        assert_eq!(
+            validate_release_gate(&unvalidated).unwrap_err().message,
+            "golden case GC-FIXTURE-A lacks professional validation"
+        );
+    }
+
+    #[test]
+    fn release_gate_rejects_an_absent_professional_validation() {
+        let mut unsigned = satisfied_release_gate();
+        unsigned.professional_validation = None;
+
+        assert_eq!(
+            validate_release_gate(&unsigned).unwrap_err().message,
+            "노무사/세무사 professional validation is required"
+        );
+    }
+
+    #[test]
+    fn release_gate_rejects_an_artifact_digest_that_is_not_64_hex() {
+        let mut not_hex = satisfied_release_gate();
+        not_hex
+            .professional_validation
+            .as_mut()
+            .unwrap()
+            .artifact_sha256 = "z".repeat(64);
+
+        assert_eq!(
+            validate_release_gate(&not_hex).unwrap_err().message,
+            "professional validation artifact_sha256 must be a 64-character hex digest"
+        );
+    }
+
+    #[test]
+    fn release_gate_names_the_case_whose_declared_inputs_cannot_be_recomputed() {
+        // 2027-03-01 is inside the pension base-limit window (ends 2027-07-01)
+        // but outside the contribution-rate window (ends 2027-01-01), so the
+        // kernel refuses rather than mismatching. The gate must attribute that
+        // refusal to a case_id; only the gate-owned prefix is pinned here, not
+        // the inner kernel text.
+        let mut unrecomputable = satisfied_release_gate();
+        unrecomputable.golden_cases[0].inputs.pay_date = date!(2027 - 03 - 01);
+
+        let message = validate_release_gate(&unrecomputable).unwrap_err().message;
+
+        assert!(
+            message.starts_with("golden case GC-FIXTURE-A could not be recomputed: "),
+            "expected a case-attributed recomputation failure, got: {message}"
+        );
+    }
+
     #[test]
     fn builds_severance_pay_from_moel_average_wage_formula() {
         // Ordinary daily wage (90,000) is BELOW the average daily wage (100,000),

@@ -1438,4 +1438,92 @@ mod tests {
             Some("SOURCE_AMOUNTS_CONFLICTING")
         );
     }
+
+    /// The release-gate record shape written by the REST fixture
+    /// (`payroll/rest/tests/run_lifecycle_api.rs`), hand-copied key for key.
+    /// That file needs PostgreSQL 17 and runs in no workflow, so a key typo or
+    /// a bad date form in it has no execution proof of its own — this copy is
+    /// the only thing that catches one.
+    fn release_gate_record() -> Value {
+        json!({
+            "release_gate": {
+                "rate_table_version": "statutory-rates-2026-06-27",
+                "official_source_urls": [
+                    "https://www.nps.or.kr/pnsinfo/ntpsklg/getOHAF0038M0.do",
+                ],
+                "golden_cases": [{
+                    "case_id": "GC-2026-06-A",
+                    "rate_table_version": "statutory-rates-2026-06-27",
+                    "professionally_validated": true,
+                    "pay_date": "2026-06-30",
+                    "monthly_gross_pay_won": 3_000_000,
+                    "nts_tax_row": {
+                        "table_version": "NTS-간이세액표-fixture-row-v1",
+                        "monthly_income_tax_won": 74_350,
+                        "local_income_tax_won": 7_430,
+                    },
+                    "expected_total_employee_deductions_won": 373_302,
+                }],
+                "professional_validation": {
+                    "reviewer_kind": "labor_attorney",
+                    "reviewed_on": "2026-07-01",
+                    "artifact_sha256":
+                        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    "reviewer_reference": "노무법인 검증 2026-07",
+                },
+            },
+        })
+    }
+
+    fn without_golden_case_key(key: &str) -> Value {
+        let mut record = release_gate_record();
+        record["release_gate"]["golden_cases"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove(key);
+        record
+    }
+
+    #[test]
+    fn release_gate_record_whose_golden_case_omits_calculation_inputs_is_refused() {
+        // A case that cannot be recomputed must never read as satisfied. Each
+        // key is pinned to its own refusal message, which is strictly stronger
+        // than "some error": a silent zero relocated into a different failure
+        // (or into the arithmetic comparison) fails this assertion too.
+        for key in [
+            "monthly_gross_pay_won",
+            "pay_date",
+            "nts_tax_row",
+            "expected_total_employee_deductions_won",
+            "professionally_validated",
+        ] {
+            assert_eq!(
+                validate_run_release_gate(&without_golden_case_key(key))
+                    .map_err(|err| err.to_string()),
+                Err(format!(
+                    "payslip release gate is not satisfied: \
+                     release-gate record is missing {key}"
+                )),
+                "a stored golden case with no {key} must be REFUSED, not defaulted"
+            );
+        }
+    }
+
+    #[test]
+    fn release_gate_record_copied_from_the_rest_fixture_parses_and_has_its_expected_total_compared()
+    {
+        validate_run_release_gate(&release_gate_record()).unwrap();
+
+        let mut off_by_one = release_gate_record();
+        off_by_one["release_gate"]["golden_cases"][0]
+            ["expected_total_employee_deductions_won"] = json!(373_303);
+
+        assert_eq!(
+            validate_run_release_gate(&off_by_one).map_err(|err| err.to_string()),
+            Err("payslip release gate is not satisfied: golden case GC-2026-06-A \
+                 expects total employee deductions 373303 \
+                 but the payroll kernel computed 373302"
+                .to_owned())
+        );
+    }
 }
