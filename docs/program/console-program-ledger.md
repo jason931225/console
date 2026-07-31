@@ -2212,3 +2212,34 @@ run, which is the gate working rather than failing.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — eleven shipped features could not be granted to anyone
+
+Rebind onto the feature-catalog candidate.
+
+`policy_role_permissions.feature_key` FKs to `feature_catalog` (0065), so a `Feature` with no
+catalog row is unreachable through the tenant grant path whatever the compile-time matrix permits.
+Eleven of the 96 keys in `Feature::as_str` had no row, and the failure is silent in both
+directions — nothing panics, the capability simply cannot be held.
+
+Among them: `payroll_run_read` and `payroll_run_manage`, which together are payroll's
+separation-of-duties split, so no reviewer-who-cannot-pay role could exist; `approval_finalize`,
+which the matrix permits ADMIN and above and nobody could hold; and the entire 퇴직 flow.
+
+Migration 0209 seeds the rows. It grants nothing — `feature_catalog` is the set of keys a grant may
+NAME, so a row makes a feature expressible rather than held.
+`feature_catalog_covers_every_feature` asserts the coverage against a migrated database and is
+wired into the required PostgreSQL job, with a second case ensuring the first cannot pass on a
+truncated catalog.
+
+**An earlier count of 19 was wrong**, derived by naive snake_case conversion of the variant names,
+which produces `equipment3r_approve` where the real key is `equipment_3r_approve` and invents eight
+phantom gaps. The serialization function is the authority, not the variant name. Recomputed against
+the arms of `as_str`: exactly 11.
+
+Thirteen catalog rows with no `Feature` are deliberately left alone. Deleting one would break the FK
+of any grant already naming it, and a row no code reads is inert; a MISSING row removes capability.
+Only that direction is asserted.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
