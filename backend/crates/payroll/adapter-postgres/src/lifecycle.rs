@@ -1171,15 +1171,29 @@ fn gate_bool(gate: &Value, key: &str) -> Result<bool, LifecycleError> {
 
 fn parse_release_gate(gate: &Value) -> Result<PayrollReleaseGateInput, LifecycleError> {
     let rate_table_version = gate_str(gate, "rate_table_version")?;
+    // ARGUED, not done quietly: this was `.filter_map(Value::as_str)`, the last
+    // silent coercion left in this parser. A mixed list SHRANK instead of
+    // failing — `["https://…", 12345]` parsed as one source, so a record that
+    // declared two official sources satisfied the domain's "at least one" check
+    // while the second silently did not exist. Strictly stricter: a non-string
+    // entry is now refused by name, and nothing that used to be refused is now
+    // accepted.
     let official_source_urls = gate
         .get("official_source_urls")
         .and_then(Value::as_array)
         .map(|urls| {
             urls.iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
+                .map(|url| {
+                    url.as_str().map(str::to_owned).ok_or_else(|| {
+                        LifecycleError::LegalGate(
+                            "release-gate record has a non-string official_source_urls entry"
+                                .to_owned(),
+                        )
+                    })
+                })
+                .collect::<Result<Vec<_>, LifecycleError>>()
         })
+        .transpose()?
         .unwrap_or_default();
     let golden_cases = gate
         .get("golden_cases")
@@ -1716,6 +1730,30 @@ mod tests {
             "payslip release gate is not satisfied: \
              at least one payroll golden case is required"
         );
+    }
+
+    #[test]
+    fn release_gate_record_whose_official_source_url_list_holds_a_non_string_is_refused() {
+        // The list SHRANK silently rather than failing, and the domain gate only
+        // counts it — so a record naming two official sources satisfied "at
+        // least one" while the second was never parsed at all. Not reachable
+        // through an empty list: this needs a list that still has a survivor,
+        // which is precisely why counting could not notice.
+        let mut two_sources = release_gate_record();
+        two_sources["release_gate"]["official_source_urls"] = json!([
+            "https://www.nps.or.kr/pnsinfo/ntpsklg/getOHAF0038M0.do",
+            12345,
+        ]);
+
+        assert_eq!(
+            gate_refusal(&two_sources),
+            "payslip release gate is not satisfied: \
+             release-gate record has a non-string official_source_urls entry"
+        );
+
+        // ...and a list whose entries are all strings still parses, so this is
+        // strictly a refusal of the malformed entry and not of the key.
+        validate_run_release_gate(&release_gate_record()).unwrap();
     }
 
     #[test]
