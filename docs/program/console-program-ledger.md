@@ -2054,3 +2054,31 @@ refactor.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — eight tenant-isolation and PII proofs that executed nowhere
+
+Rebind onto the PostgreSQL tranche-1 candidate.
+
+52 of the 175 remaining dark files are RLS surface proofs — the evidence an audit asks for first,
+and none of it ran. The eight highest-value are wired here: `platform/db` rls_isolation and
+rls_rollout_isolation, `platform/audit-chain` audit_chain_rls, `platform/provisioning`
+rls_auth_chain, `platform-rest` remove_tenant, `compliance` location_consent_status_rls and
+location_store, and `payroll` payroll_rls_surfaces. `executed nowhere` falls **175 -> 167**.
+
+**Measured: all 175 remaining dark files already have a `rust_test` target carrying
+`needs-postgres`.** The gap is wiring, not authoring. Each needs a `//tools/buck` sh_test wrapper,
+a reachability line, and a `postgresWrapperContracts` pair — and the wrapper indirection is itself
+the credential control, since `test_needs_postgres.sh` refuses a raw `//backend/...` target.
+
+**CI is the first execution of these eight**, stated rather than implied: the Docker daemon is
+unavailable here, so the harness could not run locally. The reachability job is required, so a
+failure blocks the pull request rather than reaching main. Verified locally instead: every target
+resolves with the right label, the dark count falls by exactly eight, and the preflight guard
+bites when a wrapper line is deleted.
+
+Sized at eight to **measure** the marginal cost against the 996s / 11-wrapper baseline before
+sharding the remaining 167. Estimating it was the alternative, and estimates have been wrong three
+times today.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
