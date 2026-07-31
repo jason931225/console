@@ -1451,3 +1451,44 @@ Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
 ||||||| 18a21d7cd
+
+## 2026-07-31 — the candidate binding for the executable golden case
+
+The registers rebind to the golden-case candidate. It closes ONE of the nineteen blocking
+gaps recorded in `docs/ideas/payroll-goldencase-gaps.md` — B-03/M-02 — and does not close
+the other eighteen.
+
+Before this candidate, `expected_total_employee_deductions_won` was declared, parsed, and
+compared to nothing. A golden case was a stored assertion that **could not fail**: no gross,
+no pay date, no NTS row, so no code could recompute the figure a professional signed. If a
+rate constant or a rounding rule changed, nothing detected that the kernel no longer
+reproduced the approved numbers.
+
+The case now carries `LineCalculationInput` whole rather than field-by-field, and the gate
+re-executes `build_line_calculation` for every case, failing closed and naming the case, the
+expected figure and the computed one.
+
+Three properties are worth recording at the authority layer.
+
+**The comparison is load-bearing, proven by mutation.** Neutering it to `if false` fails
+three tests, not one. A single failing test would have left open the possibility that the
+others passed for unrelated reasons.
+
+**The silent-zero path is gone, and that was the load-bearing requirement rather than the
+arithmetic.** `parse_release_gate` previously defaulted an absent expectation to `0` with
+`.unwrap_or(0)`, so a stored case that could not be recomputed read as satisfied. It now
+errors. Arithmetic that runs on cases nobody can supply would have been decoration.
+
+**This does not make payroll releasable and must not be read that way.** The gate is still
+consulted in exactly one place — inside payslip issuance, after the run reaches `PAID` — so
+the lifecycle through payment remains ungated and the gate withholds the 임금명세서 rather
+than the money. Eighteen blocking gaps remain, including the absent pay-item model, which
+means a case can still only express a single scalar gross. What changed is that a signed
+figure can now fail; what did not change is how much of payroll a signed figure covers.
+
+Asserts no Korean legal conclusion: the candidate makes an arithmetic comparison executable
+and decides nothing about which figures are correct.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
