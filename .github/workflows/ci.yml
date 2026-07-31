@@ -186,6 +186,12 @@ jobs:
           # same workspace and evicted each other out of the 10GB LRU budget.
           shared-key: backend-cargo
           cache-all-crates: "true"
+          # RESTORE-ONLY. This job compiles three crates; `backend` compiles the whole
+          # workspace. Under a shared key without this, whichever finishes first wins —
+          # so a three-crate target dir could become the cache `backend` then restores.
+          # Sharing a key without deciding who writes it is the same poisoning bug as
+          # letting a Buck2 job save a directory it never populated, one level down.
+          save-if: false
 
       - name: Domain crate unit tests
         # cargo, not buck2. MEASURED 2026-07-31 on this crate: buck2 cold 118.4s
@@ -433,6 +439,11 @@ jobs:
           # same workspace and evicted each other out of the 10GB LRU budget.
           shared-key: backend-cargo
           cache-all-crates: "true"
+          # The ONLY writer. `backend` runs clippy --all-targets over the whole
+          # workspace, a strict superset of every other cargo job, so its target dir
+          # is the one worth sharing. Saving only from main keeps PR branches from
+          # publishing a cache shaped by their own diff.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: rustfmt check
         run: cargo fmt --all -- --check

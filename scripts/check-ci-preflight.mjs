@@ -932,6 +932,22 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       failures.push(`${job} must set cache-all-crates: "true" on rust-cache`);
     }
   }
+  // Exactly ONE writer. Sharing a key without deciding who saves it means whichever job
+  // finishes first publishes the cache — so domain-unit's three crates could become the
+  // entry `backend` restores for a whole-workspace clippy. `backend` runs
+  // clippy --all-targets, a strict superset, so it is the writer and every other cargo
+  // job is restore-only.
+  {
+    const writers = ["domain-unit", "backend"].filter((job) => {
+      const block = jobBlock(workflow, job);
+      return block && !/save-if:\s*false/.test(block);
+    });
+    if (writers.length !== 1 || writers[0] !== "backend") {
+      failures.push(
+        `exactly one cargo job may write the shared rust-cache and it must be backend; found: ${writers.join(", ") || "none"}`,
+      );
+    }
+  }
   // Buck2 never writes backend/target, so a rust-cache step on a Buck2-only job is pure
   // transfer cost and an LRU slot taken from the jobs that do use it.
   for (const job of ["postgres-domain-reachability", "company-conformance", "dev-up-smoke", "api-contract"]) {
