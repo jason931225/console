@@ -1633,3 +1633,28 @@ disposition, and exposure state remains `HOLD`.
 ## 2026-07-31 — rebind after #536 moved the tip under the ADR-0037 candidate
 
 Mechanical rebind. No claim in the candidate changes.
+
+## 2026-07-31 — the PostgreSQL harness moves out of tools/buck, and only that
+
+The registers rebind to the harness-relocation candidate. Both scripts are byte-identical
+to their originals and the credential control is proven intact after the move.
+
+Two properties are worth recording at the authority layer.
+
+**The candidate is smaller than the plan that produced it, deliberately.** A migration plan
+folded an argv restructure into this move so cargo could be invoked directly. Its own
+adversarial review found that deleting the buck-target guard widens the contract to "any
+command, credentialed". The relocation shipped; the semantic change did not. A move whose
+diff is provably empty of behaviour is reviewable in a way a mixed commit is not.
+
+**The plan's one original security contribution was a no-op and is recorded as such.**
+`env -u DATABASE_URL` cannot close an ambient-inheritance gap when the loader
+unconditionally exports every key from its environment file. Verified by reading the
+loader. Recorded so it is not re-proposed by the next reader of that plan.
+
+Also worth noting: `tools/buck/**` sat in both workflow path filters and `tools/pg/**` did
+not, so this move would have created a directory where harness changes trigger no CI —
+inside the very commit that creates it. Fixed in the same commit rather than after.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
