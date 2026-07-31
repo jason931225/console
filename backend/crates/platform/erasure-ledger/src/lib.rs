@@ -39,6 +39,11 @@
 //!    nothing else. Do not call it tamper-proof.
 //! 4. **It records only.** It does not erase, authorise or re-apply. No
 //!    retention period, no automatic deletion, no data-subject-request workflow.
+//! 5. **The scope it hands back is DATA, not a statement.**
+//!    [`ErasureFacts::erased_relation`] and [`ErasureFacts::erased_selector`]
+//!    are unvalidated free text from whoever held `INSERT`. A re-applier that
+//!    concatenates them into SQL makes every appender an author of statements
+//!    it executes later — and no `UPDATE` can take a bad one back out.
 //!
 //! Every Korea control remains HOLD. This crate asserts no Korean legal
 //! conclusion; `authority` is free text precisely so that enumerating legal
@@ -100,6 +105,12 @@ pub struct ErasureFacts {
     pub erased_relation: String,
     /// The predicate that selected them, precise enough that a later reader can
     /// tell WHAT was erased rather than merely that something was.
+    ///
+    /// Free text written by whoever holds `INSERT`, and READ BACK AS DATA ONLY.
+    /// It is not validated, not parsed and not bound to any relation's real
+    /// columns. A re-applier that concatenates this and [`Self::erased_relation`]
+    /// into SQL turns every appender into an author of statements it will run
+    /// later, against a ledger no `UPDATE` can correct.
     pub erased_selector: String,
     /// How many rows the selector matched.
     pub erased_row_count: i64,
