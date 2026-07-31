@@ -272,6 +272,116 @@ describe("request body contract gate", () => {
     assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
     assert.match(`${result.stdout}${result.stderr}`, /resolved 0 /);
   });
+
+  // The exit-0 branch had never executed. While the spec still published snake_case this gate
+  // could not pass, and an unpassable gate is the meta-finding's sharper case: it occupies its
+  // slot and reads as coverage. The floor of 45 resolved operations means only the real
+  // repository can reach this branch — no fixture is large enough — so the assertion lives here.
+  it("exits 0 stating what it compared, against this repository", () => {
+    const result = spawnSync(process.execPath, [cli, repoRoot], { encoding: "utf8" });
+
+    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+    assert.match(result.stdout, /request body contract gate passed \(resolved \d+, skipped \d+\)/);
+  });
+
+  it("lets an explicit #[serde(rename)] override rename_all", () => {
+    const root = widgetFixture({
+      derive: camelDeny,
+      fields: '    #[serde(rename = "qty")]\n    quantity_consumed_milli: i64,',
+      required: ["qty"],
+      properties: "qty: { type: integer }",
+    });
+
+    const { resolved, findings } = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.deepEqual(findings, []);
+    assert.equal(resolved, 1);
+  });
+
+  it("treats #[serde(default)] on a non-Option field as optional", () => {
+    // Two things are load-bearing in this fixture. The Option case above short-circuits before
+    // `hasDefault` is ever read, so the field must not be an Option; and the name must be
+    // multi-word, or the rust-name escape hatch in the required loop suppresses the finding for
+    // an unrelated reason and the assertion proves nothing.
+    const root = widgetFixture({
+      derive: camelDeny,
+      fields: "    quantity_consumed_milli: i64,\n    #[serde(default)]\n    memo_text: String,",
+      required: ["quantityConsumedMilli"],
+      properties: "quantityConsumedMilli: { type: integer }, memoText: { type: string }",
+    });
+
+    const { resolved, findings } = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.deepEqual(findings, []);
+    assert.equal(resolved, 1);
+  });
+
+  // 32 of the 284 json request bodies in backend/openapi/openapi.yaml are inline rather than
+  // $ref — PATCH /api/work-orders/{workOrderId}/priority and POST /api/v1/hr/exit-cases among
+  // them — and the inline branch of jsonRequestSchema had never been exercised. A regression
+  // there is silent: the operation lands in `skipped`, and skipped operations are not compared.
+  it("resolves and compares an inline requestBody schema, not only a $ref", () => {
+    const root = fixture({
+      "backend/crates/widget/rest/src/lib.rs": widgetCrate({
+        derive: camelDeny,
+        fields: "    quantity_consumed_milli: i64,",
+      }),
+      "backend/openapi/openapi.yaml": `openapi: 3.1.0
+info:
+  title: Fixture
+  version: 0.0.1
+paths:
+  /api/v1/widgets/{widget_id}/consumptions:
+    post:
+      operationId: consumeWidget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [quantity_consumed_milli]
+              properties: { quantity_consumed_milli: { type: integer } }
+      responses:
+        '200':
+          description: ok
+`,
+    });
+
+    const { resolved, findings } = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(resolved, 1, "an inline schema must resolve, not land in skipped");
+    assert.equal(findings.length, 1, JSON.stringify(findings, null, 2));
+    assert.match(findings[0].message, /quantity_consumed_milli/);
+  });
+
+  // The bare-name fallback exists because a handler may bind a struct declared elsewhere, but it
+  // returns the first struct of that name found anywhere in backend/**. `AssignBody` exists in two
+  // crates. If the fallback ever outranks the handler's own file the gate compares a real request
+  // body against an unrelated struct, and the answer it prints is arbitrary in both directions.
+  it("binds the struct in the handler's own file, not a same-named one in another crate", () => {
+    const root = fixture({
+      "backend/crates/aaa-other/rest/src/lib.rs": `${camelDeny}
+struct ConsumeWidgetBody {
+    totally_different_field: i64,
+}
+`,
+      "backend/crates/widget/rest/src/lib.rs": widgetCrate({
+        derive: camelDeny,
+        fields: "    quantity_consumed_milli: i64,",
+      }),
+      "backend/openapi/openapi.yaml": widgetSpec({
+        required: ["quantityConsumedMilli"],
+        properties: "quantityConsumedMilli: { type: integer }",
+      }),
+    });
+
+    const { resolved, findings } = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.deepEqual(findings, []);
+    assert.equal(resolved, 1);
+  });
 });
 
 // The wire name is the whole comparison: get it wrong and the gate reads a real mismatch as a
