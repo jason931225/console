@@ -315,18 +315,38 @@ providing processor, and a 10-day result notice. It carries no 복구 또는 재
 
 Two architectural consequences, stated as observations rather than legal conclusions:
 
-**The standard is phrased in terms of RECOVERABILITY, not of scheduled expiry.** That is a poor
-fit for the European package priced below, whose load-bearing element is a finite, written,
-scheduled backup cycle. A finite window narrows the exposure but leaves the row recoverable
-*for the duration of the window*. Whatever weight that carries is for counsel; the engineering
-consequence is that a bounded window alone does not achieve unrecoverability, and any option
-relying on expiry alone should be read with that in mind.
+**Correction, same day: an earlier draft of this section overstated.** It argued that because
+the standard is phrased as 복구 또는 재생, the European package — deferral to a scheduled
+overwrite — "maps poorly" to Korea, and that crypto-shredding was therefore the better-fitting
+mechanism. The owner disputed it, and the statute supports the owner.
 
-**This raises crypto-shredding relative to the other options.** Option A is the only one that
-makes archived content unrecoverable without editing the archive, so it is the only one whose
-effect is expressed in the same terms the statute uses. That is an argument about mechanism
-fit, not about sufficiency — and it is limited by the plaintext-already-archived problem
-already recorded: key destruction cannot reach what was written before it was adopted.
+**The trigger standard is 지체 없이, not 즉시.** 법 제21조제1항 and 법 제36조제2항 both require
+action 지체 없이 — without undue delay. That is the same standard as GDPR Art. 17(1), and it is
+the standard the European position is built on. 시행령 제43조제3항's ten-day result-notice window
+points the same way: deletion is treated as a process with an operational horizon, not an
+instant. Nothing found requires immediate unrecoverability in every copy.
+
+So **both readings are available and neither is established:**
+
+- *A scheduled overwrite satisfies it.* 지체 없이 admits a reasonable operational window; 복구
+  또는 재생되지 아니하도록 describes the measures taken when deleting, not a requirement that
+  every replica become unrecoverable in the same instant. On this reading the European package
+  — erase live, backup expires on a finite written cycle, erasure log kept outside it and
+  re-applied on restore — is a coherent answer, and the finite window is the load-bearing part.
+- *Recoverability is the test.* The standard is written about the state of the data rather than
+  the schedule, and the PIPC 안내서 treats backup media as a place where destruction is
+  performed, with no grace period stated.
+
+The earlier draft asserted the second and dismissed the first. That was the mirror image of the
+error this record's research warned against: the Korean material's silence on backups is **an
+absence, not a permission** — and equally, it is not a prohibition. Converting silence into
+either is the mistake.
+
+**What this changes about the options: nothing is reordered.** Option B (a finite window) is
+not subordinate to option A. It is the element the only articulated international position
+depends on, and it remains the cheapest thing that moves this system from unbounded to bounded.
+A and B are complementary rather than competing — B bounds the exposure, A shortens it further
+where the archive already exists. Which combination is adequate is for counsel.
 
 **제36조제1항 단서 confirms the retention dimension** recorded above from 제21조제1항 단서, and
 sharpens it: where another statute designates the data as subject to collection, the subject
