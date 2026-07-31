@@ -244,6 +244,60 @@ the cheapest option to adopt and the most expensive to rely on.
   conflict is survivable technically; it cannot say the acceptance is available. Choosing
   D without that authority is the failure the `uncertainty_rule` names.
 
+### The dimension this record first omitted: data we are obliged to KEEP
+
+The first draft framed a two-force problem — a destruction duty against a recovery
+capability. It missed a third force, and for an HR and payroll product that third force is
+dominant: much of this data is data someone is **obliged to retain**. Raised by the owner;
+recorded here rather than corrected silently.
+
+Quoted verbatim from the official legislation portal, 개인정보 보호법 법률 제20897호, 시행
+2025-10-02, retrieved 2026-07-31 from `https://www.law.go.kr/법령/개인정보보호법`:
+
+> **제21조(개인정보의 파기)**
+> ① 개인정보처리자는 보유기간의 경과, 개인정보의 처리 목적 달성, 가명정보의 처리 기간 경과 등 그
+> 개인정보가 불필요하게 되었을 때에는 지체 없이 그 개인정보를 파기하여야 한다. **다만, 다른 법령에
+> 따라 보존하여야 하는 경우에는 그러하지 아니하다.**
+> ② 개인정보처리자가 제1항에 따라 개인정보를 파기할 때에는 **복구 또는 재생되지 아니하도록** 조치하여야 한다.
+> ③ 개인정보처리자가 제1항 단서에 따라 개인정보를 파기하지 아니하고 보존하여야 하는 경우에는 해당
+> 개인정보 또는 개인정보파일을 **다른 개인정보와 분리하여서 저장ㆍ관리**하여야 한다.
+> ④ 개인정보의 파기방법 및 절차 등에 필요한 사항은 대통령령으로 정한다.
+
+**This record states no conclusion about what that text requires of us.** It quotes the
+instrument and observes that its vocabulary lands on architectural questions this record
+already had open. Whether and how it applies is for qualified counsel, and every Korea
+control remains `HOLD`.
+
+Three observations, all architectural rather than legal:
+
+**A blanket erase-on-request design would be wrong for this product.** The 제1항 단서 carves
+out data retained under other statutes, and payroll is dense with such duties — the register
+in `docs/ideas/payroll-statutory-sources.md` already tracks nine statutory items for
+contribution and withholding purposes alone, without yet touching record-retention periods.
+So the operative primitive is not "delete on request" but **retention-class-aware disposal**:
+a data class, a duty that pins it, and a disposal action that becomes available only when the
+pin lifts. This system has neither the classes nor the pins — no retention table exists in
+any migration.
+
+**The statute's disposal wording and our PITR posture use the same vocabulary.** 제2항 speaks
+of 복구 또는 재생 — restoration or reproduction. That is what point-in-time recovery is for.
+This record's central observation was already that a `DELETE` is not destruction while the
+archive can reconstruct it; the instrument's own language describes that same distinction.
+Noted as a convergence, not as a finding of compliance or its absence.
+
+**Segregation appears in the text, which bears on option C.** 제3항 addresses data kept under
+the 단서 and uses 분리하여서 저장ㆍ관리. Option C below was priced as one of four neutral
+alternatives. It should be re-read knowing that separation is the shape the instrument
+describes for retained data — which may make C serve two purposes at once rather than one,
+and changes its cost/benefit relative to A and B. **This record does not adopt it on that
+basis**; it flags that the option was priced without this input and should be re-priced with
+it.
+
+What this adds to the counsel engagement below: the question is not only *how do we erase
+against an unbounded archive*, but *which data may we erase at all, when does each duty lift,
+and what does separating retained data mean for a system whose backups are one undifferentiated
+stream*. The last of those is squarely architectural, and it is unanswered here.
+
 ## What this record does not know
 
 Stated rather than papered over, because two of the four options cannot be fully costed
