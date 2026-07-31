@@ -31,8 +31,8 @@ const consoleTrainDerivation = [
 ];
 const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
 const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
-const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:console-support-domain-unit";
-const payrollDomainUnitCommand = "tools/buck2 test //backend/crates/payroll/domain:console-payroll-domain-unit";
+const supportDomainUnitCommand = "SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain";
+const payrollDomainUnitCommand = "SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-payroll-domain";
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
   "//tools/buck:dispatch-p1-postgres \\",
@@ -475,7 +475,7 @@ function runCommand(step) {
 function requireOnlyLockedRuns(steps, commands, job, failures) {
   const actual = steps.map(runCommand).filter(Boolean);
   if (actual.length !== commands.length || actual.some((command, index) => command !== commands[index])) {
-    failures.push(`${job} must contain only the locked ordered Buck2 run steps`);
+    failures.push(`${job} must contain only the locked ordered run steps`);
   }
 }
 
@@ -684,7 +684,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   if (supportDomainUnit) {
     const steps = stepBlocks(supportDomainUnit);
     requireUnconditionalRun(steps, supportDomainUnitCommand, "support-domain-unit", failures);
-    requireOnlyLockedRuns(steps, [dotSlashBootstrap, supportDomainUnitCommand], "support-domain-unit", failures);
+    requireOnlyLockedRuns(steps, [supportDomainUnitCommand], "support-domain-unit", failures);
   }
   // The job's existence is already mandatory via protectedJobs; this pins WHAT it
   // runs, so the job cannot survive as a green no-op with its test command removed.
@@ -692,7 +692,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   if (payrollDomainUnit) {
     const steps = stepBlocks(payrollDomainUnit);
     requireUnconditionalRun(steps, payrollDomainUnitCommand, "payroll-domain-unit", failures);
-    requireOnlyLockedRuns(steps, [dotSlashBootstrap, payrollDomainUnitCommand], "payroll-domain-unit", failures);
+    requireOnlyLockedRuns(steps, [payrollDomainUnitCommand], "payroll-domain-unit", failures);
   }
 
   requirePostgresWrapperContracts(buckBuildFile, failures);
