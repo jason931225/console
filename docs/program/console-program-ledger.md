@@ -1814,3 +1814,25 @@ count and the gate that stops it growing are a separate change.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — 47 test files in 40 domain crates executed nowhere and needed no infrastructure
+
+Rebind onto the domain-coverage candidate.
+
+`check:executed-tests` reported 276 files reachable from no workflow step after #540. 47 of
+them sit in `domain` and `application` crates — no database, no fixture, no wrapper target.
+The only thing keeping them dark was that no `-p` flag named them.
+
+All 47 were **run before being wired**, not assumed: 36 crates via `--lib` gave 224 tests
+across 36 suites with 0 failed, and 11 files via `--test` gave 41 tests across 11 suites with
+0 failed. 265 tests that could not previously fail can now fail. `executed nowhere` falls
+**276 -> 229** and the baseline moves with it, so the ratchet holds the gain.
+
+Two lists, not one: a crate named in `domainUnitPackages` does not imply its `tests/` files
+run, because `--lib` does not reach an integration test under `tests/`.
+
+`--json` on the measuring tool was not emitting JSON — the ratchet's informational line
+followed the document on stdout. Moved to stderr.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
