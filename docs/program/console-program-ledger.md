@@ -2295,3 +2295,28 @@ distinguishes them.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — delete the invisible subtree before the sweep, not tables from it
+
+Rebind onto the subtree pre-delete.
+
+Pass 176, Fail 1. The `remove_tenant` regression is gone and `workorder use_cases` failed on the
+THIRD constraint of the same family. Chasing members one per run cost four cycles at ~71 minutes
+each.
+
+The maintenance-history subtree is invisible to `platform_force_remove_direct_org_children` by two
+independent filters — its parent is ON DELETE CASCADE where the sweep admits only 'a'/'r', and its
+children reach their parents by COMPOSITE FK where the sweep requires `cardinality(conkey) = 1`.
+Migration 0193 declares four such RESTRICT foreign keys and CI surfaced them one at a time.
+
+The fix is the one the original diagnosis recommended and this work first declined: three DELETEs,
+child-first, at the top of the function, before the sweep can reach anything they reference.
+Nothing is excluded and the sweep's ordering is untouched.
+
+Both earlier attempts are recorded in the migration header. Excluding `equipment_cost_ledger` moved
+the failure to the next constraint; excluding the whole family regressed a passing test. **Presence
+in 0196's hand-ordered block is not correct order** — that block runs after the sweep, so excluding
+a table moves it later, which is wrong for anything the sweep already handled correctly.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
