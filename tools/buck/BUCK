@@ -1743,3 +1743,11 @@ sh_test(
     deps = ["//backend/crates/workorder/rest:console-workorder-rest-itest-mobile_sync"],
     labels = ["test.integration", "resource.postgres", "needs-postgres"],
 )
+
+sh_test(
+    name = "platform-db-feature-catalog-coverage",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/db:console-platform-db-itest-feature_catalog_covers_every_feature)"],
+    deps = ["//backend/crates/platform/db:console-platform-db-itest-feature_catalog_covers_every_feature"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)

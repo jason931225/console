@@ -356,6 +356,7 @@ jobs:
             //tools/buck:compliance-location-consent-status-rls \
             //tools/buck:compliance-location-store \
             //tools/buck:payroll-rls-surfaces \
+            //tools/buck:platform-db-feature-catalog-coverage \
             //tools/buck:app-action-inbox-api-pg \
             //tools/buck:app-audit-api-pg \
             //tools/buck:app-auth-rest-pg \

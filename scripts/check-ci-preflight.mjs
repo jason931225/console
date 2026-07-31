@@ -192,6 +192,7 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:compliance-location-consent-status-rls \\",
   "//tools/buck:compliance-location-store \\",
   "//tools/buck:payroll-rls-surfaces \\",
+  "//tools/buck:platform-db-feature-catalog-coverage \\",
   "//tools/buck:app-action-inbox-api-pg \\",
   "//tools/buck:app-audit-api-pg \\",
   "//tools/buck:app-auth-rest-pg \\",
@@ -361,6 +362,8 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:workorder-rest-mobile-sync-pg",
 ];
 const postgresWrapperContracts = [
+  ["platform-db-feature-catalog-coverage", "//backend/crates/platform/db:console-platform-db-itest-feature_catalog_covers_every_feature"],
+
   // The remaining 167, 2026-07-31.
   ["app-action-inbox-api-pg", "//backend/app:console-app-itest-action_inbox_api"],
   ["app-audit-api-pg", "//backend/app:console-app-itest-audit_api"],
