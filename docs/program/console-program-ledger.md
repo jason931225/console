@@ -1177,7 +1177,6 @@ synthetic merge — because each one skipped is a full rebind later.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
-||||||| 18a21d7cd
 
 ## 2026-07-30 — fourth rebind, and the merge that proves the mechanism works as designed
 
@@ -1369,7 +1368,6 @@ the next push fails and costs a rebind either way.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
-||||||| 0d895e79d
 
 ## 2026-07-31 — the candidate binding for the gate-integrity adjudication
 
@@ -1406,7 +1404,6 @@ floor rather than a claim; two further unowned escalations are named in the hole
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
-||||||| dbae0352f
 
 ## 2026-07-31 — rebind after #531 moved the tip under the gate-integrity candidate
 
@@ -1486,7 +1483,6 @@ candidate exists to stop repeating.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
-||||||| 18a21d7cd
 
 ## 2026-07-31 — the candidate binding for the executable golden case
 
@@ -1528,7 +1524,6 @@ and decides nothing about which figures are correct.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
-||||||| f41cc847b
 
 ## 2026-07-31 — rebind after #534 moved the tip under the golden-case candidate
 
@@ -1597,7 +1592,6 @@ resolved; what was wrong was an inference drawn from correctly quoted text.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
-||||||| f41cc847b
 
 ## 2026-07-31 — the live GitOps inputs are frozen, and nothing said so
 
@@ -1628,7 +1622,6 @@ rather than the assertion.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
-||||||| 0f7e71baa
 
 ## 2026-07-31 — rebind after #536 moved the tip under the ADR-0037 candidate
 
@@ -1682,7 +1675,6 @@ you.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
-||||||| bec30abaa
 
 ## 2026-07-31 — rebind after an upstream merge under the cache-shape candidate
 
@@ -1719,7 +1711,6 @@ here makes any currently-dark test execute. It makes the count visible and monot
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
-||||||| da8cc4011
 
 ## 2026-07-31 — rebind after #537 under the executed-tests candidate
 
