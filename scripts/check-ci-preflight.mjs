@@ -852,6 +852,13 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
         name: "Undeclared imports — every bare specifier must be declared",
         run: "npm run check:undeclared-imports",
         if: "${{ !cancelled() }}",
+      }, {
+        // Wired in 4e7da6b52 and unprotected until now: deleting this step returned zero
+        // preflight failures, which is the same one-line-from-silent-removal state the
+        // undeclared-imports step above was added to escape.
+        name: "Request-body contract — spec fields must exist on the handler",
+        run: "npm run check:request-body-contract",
+        if: "${{ !cancelled() }}",
       }],
       "repo-gates",
       failures,

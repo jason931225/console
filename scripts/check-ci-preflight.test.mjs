@@ -860,4 +860,27 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       "repo-gates must preserve the locked fail-fast step multiset and failure semantics",
     );
   });
+
+  // Wired by 4e7da6b52 and unprotected until this lock: with the step present, deleting it
+  // returned zero preflight failures. Being wired into ci.yml is not the same as being protected.
+  it("locks the request-body-contract gate step in repo-gates", () => {
+    const step = "      - name: Request-body contract — spec fields must exist on the handler\n"
+      + "        if: ${{ !cancelled() }}\n"
+      + "        run: npm run check:request-body-contract\n";
+    assert.ok(workflow.includes(step), "repo-gates does not run the request-body-contract gate");
+
+    expectFailure(
+      workflow.replace(step, ""),
+      "repo-gates must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    // The order matters as much as the presence: this gate must not be moved above the cheap
+    // undeclared-imports scan that fails in under a second.
+    expectFailure(
+      workflow.replace(step, "").replace(
+        "      - name: Undeclared imports — every bare specifier must be declared\n",
+        `${step}      - name: Undeclared imports — every bare specifier must be declared\n`,
+      ),
+      "repo-gates must preserve the locked fail-fast step order",
+    );
+  });
 });
