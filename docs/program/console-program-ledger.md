@@ -1797,3 +1797,20 @@ its target, the crate compiles, and six gates pass.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — rebind after #540 moved the tip under the erasure-ledger candidate
+
+Mechanical rebind. No claim in the candidate changes.
+
+The merge that moved the tip resolved the three authority documents as a **union**: the two
+registers were taken from `main` and rebound, and the ledger keeps every entry from both
+sides. `assertAuthorityDiff` verifies that these documents changed, never what they say, so
+a `--theirs` resolution would have deleted entries with no gate noticing.
+
+Git could not parse the conflict hunks in this file during that merge, because the file
+already carries unresolved `|||||||` marker lines from earlier union resolutions — ten of
+them on `main` as of this merge, up from nine before #540. This candidate adds none. The
+count and the gate that stops it growing are a separate change.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
