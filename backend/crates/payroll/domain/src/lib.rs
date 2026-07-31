@@ -1460,9 +1460,15 @@ mod tests {
 
     #[test]
     fn release_gate_rejects_a_blank_rate_table_version() {
+        // ONE field, like every other test here. Blanking the golden case's
+        // copy too was unreachable setup — the blank check returns before the
+        // mismatch check is reached — and it cost the test its grip on that
+        // precedence: with both blank they matched, so a reordering that put
+        // the mismatch check first went unnoticed. Leaving the case's version
+        // intact makes this record mismatched as well as blank, so the pinned
+        // message now asserts WHICH refusal wins.
         let mut blank = satisfied_release_gate();
         blank.rate_table_version = "  ".to_string();
-        blank.golden_cases[0].rate_table_version = "  ".to_string();
 
         assert_eq!(
             validate_release_gate(&blank).unwrap_err().message,
