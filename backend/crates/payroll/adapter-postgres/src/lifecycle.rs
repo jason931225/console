@@ -1211,10 +1211,10 @@ fn parse_release_gate(gate: &Value) -> Result<PayrollReleaseGateInput, Lifecycle
                         inputs: LineCalculationInput {
                             pay_date: Date::parse(&gate_str(case, "pay_date")?, &Iso8601::DEFAULT)
                                 .map_err(|err| {
-                                LifecycleError::LegalGate(format!(
-                                    "invalid golden case pay_date: {err}"
-                                ))
-                            })?,
+                                    LifecycleError::LegalGate(format!(
+                                        "invalid golden case pay_date: {err}"
+                                    ))
+                                })?,
                             gross_won: gate_i64(case, "monthly_gross_pay_won")?,
                             // The one OPTIONAL input, because the kernel itself
                             // treats it as optional: absent means "use the gross".
@@ -1554,15 +1554,17 @@ mod tests {
         validate_run_release_gate(&release_gate_record()).unwrap();
 
         let mut off_by_one = release_gate_record();
-        off_by_one["release_gate"]["golden_cases"][0]
-            ["expected_total_employee_deductions_won"] = json!(373_303);
+        off_by_one["release_gate"]["golden_cases"][0]["expected_total_employee_deductions_won"] =
+            json!(373_303);
 
         assert_eq!(
             validate_run_release_gate(&off_by_one).map_err(|err| err.to_string()),
-            Err("payslip release gate is not satisfied: golden case GC-2026-06-A \
+            Err(
+                "payslip release gate is not satisfied: golden case GC-2026-06-A \
                  expects total employee deductions 373303 \
                  but the payroll kernel computed 373302"
-                .to_owned())
+                    .to_owned()
+            )
         );
     }
 }
