@@ -1762,3 +1762,7 @@ its target, the crate compiles, and six gates pass.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
 ||||||| 52a3e234f
+
+## 2026-07-31 — rebind after an upstream merge
+
+Mechanical rebind. No claim in the candidate changes.
