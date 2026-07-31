@@ -32,10 +32,47 @@
 //! bases does not smuggle one in.
 
 use console_kernel_core::OrgId;
-use console_platform_db::DbError;
+use console_platform_db::{DbError, with_org_conn};
 use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
+
+/// The replay read, columns in the order [`LedgerEntry`] names them.
+const ENTRIES_SINCE_SQL: &str = "SELECT org_id, seq, subject_kind, subject_digest, \
+     erased_relation, erased_selector, erased_row_count, effective_at, actor, authority, \
+     prev_entry_hash, entry_hash FROM erasure_ledger \
+     WHERE org_id = $1 AND seq > $2 ORDER BY seq";
+
+/// `seq`, `prev_entry_hash` and `entry_hash` are placeholders. Migration 0207's
+/// `BEFORE INSERT` trigger overwrites all three, which is what makes the chain
+/// something a caller holding only `INSERT` cannot forge — so this crate carries
+/// no crypto and no canonical encoding of its own.
+const APPEND_SQL: &str = "INSERT INTO erasure_ledger (\
+     org_id, seq, subject_kind, subject_digest, erased_relation, erased_selector, \
+     erased_row_count, effective_at, actor, authority, prev_entry_hash, entry_hash) \
+     VALUES ($1, 0, $2, erasure_ledger_subject_digest($1, $2, $3), $4, $5, $6, $7, $8, $9, \
+     decode(repeat('00', 32), 'hex'), decode(repeat('00', 32), 'hex')) \
+     RETURNING seq, entry_hash, encode(entry_hash, 'hex')";
+
+/// How many times a losing appender re-reads the head before giving up. Two
+/// concurrent appends collide on `(org_id, seq)` or `(org_id, prev_entry_hash)`
+/// and the loser sees `23505`; a fresh transaction then reads the winner's head.
+const APPEND_ATTEMPTS: u32 = 5;
+
+type EntryRow = (
+    Uuid,
+    i64,
+    String,
+    Vec<u8>,
+    String,
+    String,
+    i64,
+    OffsetDateTime,
+    String,
+    String,
+    Vec<u8>,
+    Vec<u8>,
+);
 
 /// The fact set a single erasure entry records. Every field is required: an
 /// entry that cannot say WHAT was erased is not evidence.
@@ -106,41 +143,217 @@ pub enum ErasureLedgerError {
     Db(#[from] DbError),
     #[error("erasure ledger append lost the race for the next sequence")]
     Contention,
+    #[error("erasure ledger seq {seq} carries a {len}-byte hash where 32 are required")]
+    MalformedHash { seq: i64, len: usize },
+}
+
+/// Migration 0207 CHECKs `octet_length(...) = 32` on every hash column, so this
+/// only fires against a ledger whose constraints have been removed — which is
+/// worth an error rather than a truncation that reads like a hash.
+fn hash32(bytes: &[u8], seq: i64) -> Result<[u8; 32], ErasureLedgerError> {
+    <[u8; 32]>::try_from(bytes).map_err(|_| ErasureLedgerError::MalformedHash {
+        seq,
+        len: bytes.len(),
+    })
+}
+
+fn is_unique_violation(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|db| db.code())
+        .is_some_and(|code| code == "23505")
 }
 
 /// Append one entry to `org`'s ledger, returning the witness it produced.
+///
+/// The witness is the whole point: an external holder that records
+/// `(org_id, seq, entry_hash)` is what makes [`classify`] able to say anything
+/// at all after a restore. Nothing in this repository holds one yet.
 pub async fn append(
     pool: &PgPool,
     org: OrgId,
     facts: &ErasureFacts,
 ) -> Result<LedgerWitness, ErasureLedgerError> {
-    let _ = (pool, org, facts);
-    unimplemented!("erasure ledger append: migration 0207 and this body are the next phase")
+    for _ in 0..APPEND_ATTEMPTS {
+        match append_once(pool, org, facts).await {
+            Err(ErasureLedgerError::Db(DbError::Sqlx(error))) if is_unique_violation(&error) => {}
+            outcome => return outcome,
+        }
+    }
+    Err(ErasureLedgerError::Contention)
+}
+
+async fn append_once(
+    pool: &PgPool,
+    org: OrgId,
+    facts: &ErasureFacts,
+) -> Result<LedgerWitness, ErasureLedgerError> {
+    let org_id = *org.as_uuid();
+    // Cloned, not borrowed: `with_org_conn`'s closure is `for<'tx>`, so anything
+    // the future captures by reference is forced to `'static`.
+    let facts = facts.clone();
+    let (seq, entry_hash, entry_hash_hex) = with_org_conn(pool, org, move |tx| {
+        Box::pin(async move {
+            sqlx::query_as::<_, (i64, Vec<u8>, String)>(APPEND_SQL)
+                .bind(org_id)
+                .bind(facts.subject_kind)
+                .bind(facts.subject_id)
+                .bind(facts.erased_relation)
+                .bind(facts.erased_selector)
+                .bind(facts.erased_row_count)
+                .bind(facts.effective_at)
+                .bind(facts.actor)
+                .bind(facts.authority)
+                .fetch_one(tx.as_mut())
+                .await
+                .map_err(|error| ErasureLedgerError::Db(DbError::Sqlx(error)))
+        })
+    })
+    .await?;
+
+    let entry_hash = hash32(&entry_hash, seq)?;
+    // The one copy of the witness that leaves the PITR domain without a
+    // deploy/** change. It is NOT a holder: log retention is not under this
+    // crate's control, the line is not tamper-evident, and nothing reads it
+    // back. Naming it here so it is not mistaken for the external anchor the
+    // crate docs say is missing.
+    tracing::info!(
+        target: "console.erasure_ledger.witness",
+        org_id = %org_id,
+        seq,
+        entry_hash = %entry_hash_hex,
+        "erasure ledger entry appended"
+    );
+    Ok(LedgerWitness {
+        org_id,
+        seq,
+        entry_hash,
+    })
 }
 
 /// The current head of `org`'s ledger, or `None` if it has never been written.
 pub async fn head(pool: &PgPool, org: OrgId) -> Result<Option<LedgerWitness>, ErasureLedgerError> {
-    let _ = (pool, org);
-    unimplemented!("erasure ledger head: migration 0207 and this body are the next phase")
+    let org_id = *org.as_uuid();
+    let row = with_org_conn(pool, org, move |tx| {
+        Box::pin(async move {
+            sqlx::query_as::<_, (i64, Vec<u8>)>(
+                "SELECT seq, entry_hash FROM erasure_ledger \
+                 WHERE org_id = $1 ORDER BY seq DESC LIMIT 1",
+            )
+            .bind(org_id)
+            .fetch_optional(tx.as_mut())
+            .await
+            .map_err(|error| ErasureLedgerError::Db(DbError::Sqlx(error)))
+        })
+    })
+    .await?;
+
+    match row {
+        None => Ok(None),
+        Some((seq, entry_hash)) => Ok(Some(LedgerWitness {
+            org_id,
+            seq,
+            entry_hash: hash32(&entry_hash, seq)?,
+        })),
+    }
 }
 
 /// Every entry after `after_seq`, in sequence order. The read path a re-applier
-/// replays once a restore has been detected.
+/// replays once a restore has been detected: it carries the SCOPE — relation,
+/// selector, row count — because "something was erased" cannot be re-applied.
 pub async fn entries_since(
     pool: &PgPool,
     org: OrgId,
     after_seq: i64,
 ) -> Result<Vec<LedgerEntry>, ErasureLedgerError> {
-    let _ = (pool, org, after_seq);
-    unimplemented!("erasure ledger entries_since: migration 0207 and this body are the next phase")
+    let org_id = *org.as_uuid();
+    let rows = with_org_conn(pool, org, move |tx| {
+        Box::pin(async move {
+            sqlx::query_as::<_, EntryRow>(ENTRIES_SINCE_SQL)
+                .bind(org_id)
+                .bind(after_seq)
+                .fetch_all(tx.as_mut())
+                .await
+                .map_err(|error| ErasureLedgerError::Db(DbError::Sqlx(error)))
+        })
+    })
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let (
+                org_id,
+                seq,
+                subject_kind,
+                subject_digest,
+                erased_relation,
+                erased_selector,
+                erased_row_count,
+                effective_at,
+                actor,
+                authority,
+                prev_entry_hash,
+                entry_hash,
+            ) = row;
+            Ok(LedgerEntry {
+                org_id,
+                seq,
+                subject_kind,
+                subject_digest: hash32(&subject_digest, seq)?,
+                erased_relation,
+                erased_selector,
+                erased_row_count,
+                effective_at,
+                actor,
+                authority,
+                prev_entry_hash: hash32(&prev_entry_hash, seq)?,
+                entry_hash: hash32(&entry_hash, seq)?,
+            })
+        })
+        .collect()
 }
 
 /// Compare a held witness against the live ledger.
+///
+/// One query, two facts: where the head is now, and what content the witnessed
+/// sequence holds now. Comparing sequences alone is not enough — a restore
+/// followed by continued operation drives the head back up to the witnessed
+/// sequence carrying different entries, and that is the case
+/// [`RestoreVerdict::Forked`] exists to name.
 pub async fn classify(
     pool: &PgPool,
     org: OrgId,
     witness: &LedgerWitness,
 ) -> Result<RestoreVerdict, ErasureLedgerError> {
-    let _ = (pool, org, witness);
-    unimplemented!("erasure ledger classify: migration 0207 and this body are the next phase")
+    let org_id = *org.as_uuid();
+    let witness_seq = witness.seq;
+    let (head_seq, witnessed_hash) = with_org_conn(pool, org, move |tx| {
+        Box::pin(async move {
+            sqlx::query_as::<_, (i64, Option<Vec<u8>>)>(
+                "SELECT COALESCE((SELECT max(seq) FROM erasure_ledger WHERE org_id = $1), 0), \
+                 (SELECT entry_hash FROM erasure_ledger WHERE org_id = $1 AND seq = $2)",
+            )
+            .bind(org_id)
+            .bind(witness_seq)
+            .fetch_one(tx.as_mut())
+            .await
+            .map_err(|error| ErasureLedgerError::Db(DbError::Sqlx(error)))
+        })
+    })
+    .await?;
+
+    if head_seq < witness.seq {
+        return Ok(RestoreVerdict::RolledBack {
+            head_seq,
+            witness_seq: witness.seq,
+        });
+    }
+    match witnessed_hash {
+        Some(hash) if hash32(&hash, witness.seq)? == witness.entry_hash => {
+            Ok(RestoreVerdict::Consistent { head_seq })
+        }
+        _ => Ok(RestoreVerdict::Forked {
+            witness_seq: witness.seq,
+        }),
+    }
 }
