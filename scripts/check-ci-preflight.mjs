@@ -31,7 +31,29 @@ const consoleTrainDerivation = [
 ];
 const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
 const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
-const domainUnitCommand = "SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres --lib";
+// The domain-unit step is now a multi-line run. What must be asserted is not the exact
+// text but that every audit-relevant package added on 2026-07-31 is still named — dropping
+// one silently returns its tests to executing nowhere, which is the condition
+// check:executed-tests exists to measure and this assertion exists to prevent.
+const domainUnitPackages = [
+  "console-support-domain",
+  "console-payroll-domain",
+  "console-payroll-adapter-postgres",
+  "console-attendance-application",
+  "console-compliance-domain",
+  "console-governance-domain",
+  "console-platform-audit-chain",
+  "console-platform-authz",
+  "console-policy-application",
+  "console-policy-domain",
+];
+const domainUnitTestFiles = [
+  "attendance_policy",
+  "location_consent_fsm",
+  "location_ping_policy",
+  "cedar_pbac_readiness_cases",
+  "cedar_pbac_legacy_only_observe_and_record",
+];
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
   "//tools/buck:dispatch-p1-postgres \\",
@@ -43,7 +65,8 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:ontology-object-policy-attach-postgres \\",
   "//tools/buck:ontology-action-execute-postgres \\",
   "//tools/buck:ontology-gaps-postgres \\",
-  "//tools/buck:ontology-projected-dispatch-postgres",
+  "//tools/buck:ontology-projected-dispatch-postgres \\",
+  "//tools/buck:platform-erasure-ledger-postgres",
 ];
 const postgresWrapperContracts = [
   ["dispatch-p1-postgres", "//backend/crates/dispatch/adapter-postgres:console-dispatch-adapter-postgres-itest-p1_dispatch"],
@@ -69,6 +92,7 @@ const postgresWrapperContracts = [
   ["ontology-action-execute-postgres", "//backend/crates/ontology/rest:console-ontology-rest-itest-action_execute_as_runtime_role"],
   ["ontology-gaps-postgres", "//backend/crates/ontology/rest:console-ontology-rest-itest-ont_gaps_as_runtime_role"],
   ["ontology-projected-dispatch-postgres", "//backend/crates/ontology/rest:console-ontology-rest-itest-projected_dispatch_as_runtime_role"],
+  ["platform-erasure-ledger-postgres", "//backend/crates/platform/erasure-ledger:console-platform-erasure-ledger-itest-erasure_ledger_as_runtime_role"],
 ];
 const postgresWrapperLoader = "run_test_with_postgres_env.sh";
 const postgresWrapperLabels = '["test.integration", "resource.postgres", "needs-postgres"]';
@@ -684,8 +708,26 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   const domainUnit = jobBlock(workflow, "domain-unit");
   if (domainUnit) {
     const steps = stepBlocks(domainUnit);
-    requireUnconditionalRun(steps, domainUnitCommand, "domain-unit", failures);
-    requireOnlyLockedRuns(steps, [domainUnitCommand], "domain-unit", failures);
+    const block = domainUnit;
+    for (const pkg of domainUnitPackages) {
+      if (!block.includes(`-p ${pkg}`)) failures.push(`domain-unit must run -p ${pkg}`);
+    }
+    for (const t of domainUnitTestFiles) {
+      if (!block.includes(`--test ${t}`)) failures.push(`domain-unit must run --test ${t}`);
+    }
+    // Match the INVOCATION, not the block. `/--lib/` alone is satisfied by the comment
+    // above the step explaining why --lib is load-bearing — the third time in this
+    // repository that prose has silently satisfied a code assertion.
+    if (!/cargo test[^\n]*--lib/.test(block)) {
+      failures.push("domain-unit must pass --lib on its first cargo invocation");
+    }
+    // The step list stays locked. Rewriting the command assertion to check packages
+    // rather than an exact string dropped requireOnlyLockedRuns, which would have let
+    // anyone ADD an arbitrary run step to this job unnoticed. One `run:` and no more.
+    const runCount = (block.match(/^        run: /gm) || []).length;
+    if (runCount !== 1) {
+      failures.push(`domain-unit must contain only the locked ordered run steps; found ${runCount} run steps`);
+    }
   }
 
   requirePostgresWrapperContracts(buckBuildFile, failures);
