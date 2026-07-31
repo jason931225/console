@@ -1537,6 +1537,98 @@ mod tests {
     }
 
     #[test]
+    fn release_gate_recomputes_every_golden_case_and_not_only_the_first() {
+        // Line coverage cannot see this: the loop body's lines are already
+        // executed by every single-case test. `for case in &input.golden_cases`
+        // narrowed to `.first()` or `[0]` would keep them green while every
+        // case after the first went unchecked — a signed batch where only the
+        // first figure is ever re-derived.
+        let mut two_cases = satisfied_release_gate();
+        let mut second = two_cases.golden_cases[0].clone();
+        second.case_id = "GC-FIXTURE-B".to_string();
+        second.expected_total_employee_deductions_won = 373_303;
+        two_cases.golden_cases.push(second);
+
+        assert_eq!(
+            validate_release_gate(&two_cases).unwrap_err().message,
+            "golden case GC-FIXTURE-B expects total employee deductions 373303 \
+             but the payroll kernel computed 373302"
+        );
+    }
+
+    #[test]
+    fn release_gate_rejects_a_gate_carrying_no_golden_case_at_all() {
+        // The recomputation loop is VACUOUS over an empty list — it iterates
+        // nothing and returns Ok. This check is therefore the only thing
+        // between "the gate re-executes the signed figures" and "the gate
+        // passed having compared nothing", and it had no test of its own.
+        let mut caseless = satisfied_release_gate();
+        caseless.golden_cases.clear();
+
+        assert_eq!(
+            validate_release_gate(&caseless).unwrap_err().message,
+            "at least one payroll golden case is required"
+        );
+    }
+
+    #[test]
+    fn release_gate_rejects_a_case_signed_against_a_different_rate_table_version() {
+        // Recomputation cannot catch this. `rate_table_version` is a label: it
+        // reaches no kernel input, so a case signed against last year's table
+        // still recomputes to its own expected total and passes the arithmetic.
+        // Only this string compare notices.
+        let mut mismatched = satisfied_release_gate();
+        mismatched.golden_cases[0].rate_table_version = "KR-2025-official-rates-v1".to_string();
+
+        assert_eq!(
+            validate_release_gate(&mismatched).unwrap_err().message,
+            "golden case GC-FIXTURE-A uses mismatched rate table version"
+        );
+    }
+
+    #[test]
+    fn release_gate_rejects_a_blank_reviewer_reference() {
+        // The remaining unexercised pre-existing condition. A 노무사/세무사
+        // sign-off whose reviewer cannot be identified is an anonymous one.
+        let mut anonymous = satisfied_release_gate();
+        anonymous
+            .professional_validation
+            .as_mut()
+            .unwrap()
+            .reviewer_reference = "   ".to_string();
+
+        assert_eq!(
+            validate_release_gate(&anonymous).unwrap_err().message,
+            "professional validation reviewer reference is required"
+        );
+    }
+
+    #[test]
+    fn release_gate_recomputes_a_case_on_its_declared_pension_standard_monthly_income() {
+        // `pension_standard_monthly_income_won` is the one optional kernel
+        // input, and it is the only one that changes a figure without changing
+        // the gross. 2,000,000 sits inside the 2026-06 base window
+        // (400,000..6,370,000), so the clamp does not erase it: the 국민연금
+        // line drops by 47,500 and the total with it. A gate that ignored the
+        // declared basis would compute 373,302 here.
+        let mut capped = satisfied_release_gate();
+        capped.golden_cases[0]
+            .inputs
+            .pension_standard_monthly_income_won = Some(2_000_000);
+        capped.golden_cases[0].expected_total_employee_deductions_won = 325_802;
+
+        validate_release_gate(&capped).unwrap();
+
+        // ...and the gross-based figure is now the WRONG answer for this case.
+        capped.golden_cases[0].expected_total_employee_deductions_won = 373_302;
+        assert_eq!(
+            validate_release_gate(&capped).unwrap_err().message,
+            "golden case GC-FIXTURE-A expects total employee deductions 373302 \
+             but the payroll kernel computed 325802"
+        );
+    }
+
+    #[test]
     fn builds_severance_pay_from_moel_average_wage_formula() {
         // Ordinary daily wage (90,000) is BELOW the average daily wage (100,000),
         // so the average-wage path governs and the historical figures must be
