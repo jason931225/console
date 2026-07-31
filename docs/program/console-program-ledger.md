@@ -1206,3 +1206,31 @@ caused by an upstream merge rather than by a fix here, which is the unavoidable 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — the candidate binding for two comments that miscounted a carve-out set
+
+The registers rebind to the audit carve-out candidate. The candidate changes two comments
+and no logic: both said the audit-coverage carve-out set had a single member —
+*"the only carve-out is LocationPing ingestion"* — against a gate whose
+`allowed_audit_exclusions()` returns two and whose own test asserts `len() == 2`.
+
+Nothing in the candidate changes what any capability may do. No gate logic, no assertion,
+no threshold. The set was already two and the test already proved it; only the prose was
+wrong.
+
+One property is worth recording at the authority layer. This closes the last of ten
+findings from an ADR acceptance-verification pass, and it belongs to a class that
+recurred all day: **four comments outlived the problem they described, and three were
+written by the hand that then closed the gap.** A comment is the one artifact in this
+repository with no gate behind it — `check:doc-citations` now verifies that documents
+cite code that exists, but nothing verifies that a comment still describes the code
+beneath it. The counts here were falsifiable only because someone thought to count.
+
+Fifth and final rebind of the day. The candidate is two comments; the binding cost 390
+references. That ratio is the mechanism working as designed, not a complaint — but it is
+the strongest argument yet for batching small corrections rather than landing them one at
+a time.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
