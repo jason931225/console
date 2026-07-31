@@ -26,6 +26,7 @@ use console_platform_erasure_ledger::{
 };
 use console_platform_test_support::{runtime_role_pool, seed_org_and_super_admin};
 use sqlx::PgPool;
+use std::ops::RangeInclusive;
 use std::time::Duration;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -62,6 +63,17 @@ fn facts(selector: &str) -> ErasureFacts {
         actor: "tester".to_owned(),
         authority: "record-only; no legal conclusion asserted".to_owned(),
     }
+}
+
+/// Append one entry per sequence in `seqs` through the shipped Rust path,
+/// returning the witness each one produced. The selector carries the sequence
+/// because several tests below assert on it.
+async fn append_run(rt: &PgPool, org: OrgId, seqs: RangeInclusive<i64>) -> Vec<LedgerWitness> {
+    let mut witnesses = Vec::new();
+    for n in seqs {
+        witnesses.push(append(rt, org, &facts(&format!("id = {n}"))).await.unwrap());
+    }
+    witnesses
 }
 
 /// Seed one ledger entry as the migration owner, bypassing the runtime role
@@ -135,17 +147,22 @@ async fn simulate_restore_losing_only(owner_pool: &PgPool, org: Uuid, lost: i64)
 }
 
 // ---------------------------------------------------------------------------
-// (a) An UPDATE against a ledger row is refused BY THE DATABASE.
+// (a) An UPDATE and (b) a DELETE against a ledger row are refused BY THE
+// DATABASE. One body: the two statements differ only in the verb, and a refusal
+// that stops being asserted for one of them is exactly what a divergent copy
+// would hide.
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "../db/migrations")]
-async fn update_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
-    seed_org_and_super_admin(&owner_pool, ORG_A, "A").await;
-    seed_entry(&owner_pool, ORG_A, "id = 1").await;
-    let rt = runtime_role_pool(&owner_pool).await;
+/// `statement` must bind `$1` to the org and target the seeded row. Both layers
+/// are asserted for it — see the module header for why either alone is a table
+/// that is mutable in one of the two environments.
+async fn both_layers_refuse(owner_pool: &PgPool, statement: &'static str) {
+    seed_org_and_super_admin(owner_pool, ORG_A, "A").await;
+    seed_entry(owner_pool, ORG_A, "id = 1").await;
+    let rt = runtime_role_pool(owner_pool).await;
 
     // Layer 1 — the REVOKE. The GUC is armed to the row's OWN org so the row is
-    // VISIBLE: under FORCE RLS an UPDATE against an invisible row affects zero
+    // VISIBLE: under FORCE RLS a mutation against an invisible row affects zero
     // rows and returns Ok, and a bare `expect_err` would then pass for a reason
     // that has nothing to do with append-only.
     let mut tx = rt.begin().await.unwrap();
@@ -157,18 +174,17 @@ async fn update_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
         .expect("console_rt must be granted SELECT on erasure_ledger");
     assert_eq!(
         visible, 1,
-        "the row the UPDATE targets must be visible to console_rt"
+        "the row `{statement}` targets must be visible to console_rt"
     );
-    let runtime_error =
-        sqlx::query("UPDATE erasure_ledger SET actor = 'rewritten' WHERE org_id = $1")
-            .bind(ORG_A)
-            .execute(&mut *tx)
-            .await
-            .expect_err("console_rt must not hold UPDATE on erasure_ledger");
+    let runtime_error = sqlx::query(statement)
+        .bind(ORG_A)
+        .execute(&mut *tx)
+        .await
+        .expect_err("console_rt must not hold this privilege on erasure_ledger");
     assert_eq!(
         database_error_code(&runtime_error).as_deref(),
         Some("42501"),
-        "console_rt's UPDATE must be refused as a privilege violation, got: {runtime_error}"
+        "console_rt's `{statement}` must be refused as a privilege violation, got: {runtime_error}"
     );
     drop(tx);
 
@@ -179,67 +195,30 @@ async fn update_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
         .execute(&mut *owner_tx)
         .await
         .unwrap();
-    let owner_error =
-        sqlx::query("UPDATE erasure_ledger SET actor = 'rewritten' WHERE org_id = $1")
-            .bind(ORG_A)
-            .execute(&mut *owner_tx)
-            .await
-            .expect_err("the append-only trigger must refuse UPDATE even for the table owner");
+    let owner_error = sqlx::query(statement)
+        .bind(ORG_A)
+        .execute(&mut *owner_tx)
+        .await
+        .expect_err("the append-only trigger must refuse this even for the table owner");
     assert_eq!(
         database_error_code(&owner_error).as_deref(),
         Some("P0001"),
-        "the owner's UPDATE must be refused by the append-only trigger, got: {owner_error}"
+        "the owner's `{statement}` must be refused by the append-only trigger, got: {owner_error}"
     );
 }
 
-// ---------------------------------------------------------------------------
-// (b) A DELETE against a ledger row is refused BY THE DATABASE.
-// ---------------------------------------------------------------------------
+#[sqlx::test(migrations = "../db/migrations")]
+async fn update_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
+    both_layers_refuse(
+        &owner_pool,
+        "UPDATE erasure_ledger SET actor = 'rewritten' WHERE org_id = $1",
+    )
+    .await;
+}
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn delete_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
-    seed_org_and_super_admin(&owner_pool, ORG_A, "A").await;
-    seed_entry(&owner_pool, ORG_A, "id = 1").await;
-    let rt = runtime_role_pool(&owner_pool).await;
-
-    let mut tx = rt.begin().await.unwrap();
-    arm_org(&mut tx, ORG_A).await;
-    let visible: i64 = sqlx::query_scalar("SELECT count(*) FROM erasure_ledger WHERE org_id = $1")
-        .bind(ORG_A)
-        .fetch_one(&mut *tx)
-        .await
-        .expect("console_rt must be granted SELECT on erasure_ledger");
-    assert_eq!(
-        visible, 1,
-        "the row the DELETE targets must be visible to console_rt"
-    );
-    let runtime_error = sqlx::query("DELETE FROM erasure_ledger WHERE org_id = $1")
-        .bind(ORG_A)
-        .execute(&mut *tx)
-        .await
-        .expect_err("console_rt must not hold DELETE on erasure_ledger");
-    assert_eq!(
-        database_error_code(&runtime_error).as_deref(),
-        Some("42501"),
-        "console_rt's DELETE must be refused as a privilege violation, got: {runtime_error}"
-    );
-    drop(tx);
-
-    let mut owner_tx = owner_pool.begin().await.unwrap();
-    sqlx::query("SET LOCAL row_security = off")
-        .execute(&mut *owner_tx)
-        .await
-        .unwrap();
-    let owner_error = sqlx::query("DELETE FROM erasure_ledger WHERE org_id = $1")
-        .bind(ORG_A)
-        .execute(&mut *owner_tx)
-        .await
-        .expect_err("the append-only trigger must refuse DELETE even for the table owner");
-    assert_eq!(
-        database_error_code(&owner_error).as_deref(),
-        Some("P0001"),
-        "the owner's DELETE must be refused by the append-only trigger, got: {owner_error}"
-    );
+    both_layers_refuse(&owner_pool, "DELETE FROM erasure_ledger WHERE org_id = $1").await;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,22 +233,14 @@ async fn restore_detection_stays_silent_in_normal_operation(owner_pool: PgPool) 
     let rt = runtime_role_pool(&owner_pool).await;
     let org = OrgId::from_uuid(ORG_A);
 
-    for n in 1..=3 {
-        append(&rt, org, &facts(&format!("id = {n}")))
-            .await
-            .unwrap();
-    }
+    append_run(&rt, org, 1..=3).await;
     let witness = head(&rt, org)
         .await
         .unwrap()
         .expect("a written ledger has a head");
     assert_eq!(witness.seq, 3);
 
-    for n in 4..=5 {
-        append(&rt, org, &facts(&format!("id = {n}")))
-            .await
-            .unwrap();
-    }
+    append_run(&rt, org, 4..=5).await;
 
     assert_eq!(
         classify(&rt, org, &witness).await.unwrap(),
@@ -285,11 +256,7 @@ async fn restore_detection_fires_when_the_ledger_falls_behind_its_witness(owner_
     let rt = runtime_role_pool(&owner_pool).await;
     let org = OrgId::from_uuid(ORG_A);
 
-    for n in 1..=3 {
-        append(&rt, org, &facts(&format!("id = {n}")))
-            .await
-            .unwrap();
-    }
+    append_run(&rt, org, 1..=3).await;
     let witness = head(&rt, org)
         .await
         .unwrap()
@@ -321,11 +288,7 @@ async fn restore_detection_fires_when_the_witnessed_sequence_holds_other_content
     let rt = runtime_role_pool(&owner_pool).await;
     let org = OrgId::from_uuid(ORG_A);
 
-    for n in 1..=3 {
-        append(&rt, org, &facts(&format!("id = {n}")))
-            .await
-            .unwrap();
-    }
+    append_run(&rt, org, 1..=3).await;
     let witness = head(&rt, org)
         .await
         .unwrap()
@@ -497,14 +460,7 @@ async fn entries_since_returns_the_replay_set_in_order_with_its_scope(owner_pool
     let rt = runtime_role_pool(&owner_pool).await;
     let org = OrgId::from_uuid(ORG_A);
 
-    let mut witnesses: Vec<LedgerWitness> = Vec::new();
-    for n in 1..=3 {
-        witnesses.push(
-            append(&rt, org, &facts(&format!("id = {n}")))
-                .await
-                .unwrap(),
-        );
-    }
+    let witnesses = append_run(&rt, org, 1..=3).await;
 
     let replay = entries_since(&rt, org, 1).await.unwrap();
     assert_eq!(
@@ -830,11 +786,7 @@ async fn restore_detection_fires_when_the_entire_ledger_is_lost(owner_pool: PgPo
     let rt = runtime_role_pool(&owner_pool).await;
     let org = OrgId::from_uuid(ORG_A);
 
-    for n in 1..=3 {
-        append(&rt, org, &facts(&format!("id = {n}")))
-            .await
-            .unwrap();
-    }
+    append_run(&rt, org, 1..=3).await;
     let witness = head(&rt, org)
         .await
         .unwrap()
@@ -871,14 +823,7 @@ async fn restore_detection_fires_when_the_witnessed_sequence_is_a_hole(owner_poo
     let rt = runtime_role_pool(&owner_pool).await;
     let org = OrgId::from_uuid(ORG_A);
 
-    let mut witnesses: Vec<LedgerWitness> = Vec::new();
-    for n in 1..=3 {
-        witnesses.push(
-            append(&rt, org, &facts(&format!("id = {n}")))
-                .await
-                .unwrap(),
-        );
-    }
+    let witnesses = append_run(&rt, org, 1..=3).await;
     let witness = witnesses[1];
     assert_eq!(witness.seq, 2);
 
@@ -915,14 +860,7 @@ async fn restore_detection_fires_when_entries_above_the_witness_are_lost(owner_p
     let rt = runtime_role_pool(&owner_pool).await;
     let org = OrgId::from_uuid(ORG_A);
 
-    let mut witnesses: Vec<LedgerWitness> = Vec::new();
-    for n in 1..=3 {
-        witnesses.push(
-            append(&rt, org, &facts(&format!("id = {n}")))
-                .await
-                .unwrap(),
-        );
-    }
+    let witnesses = append_run(&rt, org, 1..=3).await;
     let witness = witnesses[0];
     assert_eq!(witness.seq, 1);
 
