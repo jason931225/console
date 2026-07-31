@@ -181,6 +181,17 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: backend
+          # One shared entry, not one per job. rust-cache keys on job name by
+          # default, so these two maintained separate near-duplicate copies of the
+          # same workspace and evicted each other out of the 10GB LRU budget.
+          shared-key: backend-cargo
+          cache-all-crates: "true"
+          # RESTORE-ONLY. This job compiles three crates; `backend` compiles the whole
+          # workspace. Under a shared key without this, whichever finishes first wins —
+          # so a three-crate target dir could become the cache `backend` then restores.
+          # Sharing a key without deciding who writes it is the same poisoning bug as
+          # letting a Buck2 job save a directory it never populated, one level down.
+          save-if: false
 
       - name: Domain crate unit tests
         # cargo, not buck2. MEASURED 2026-07-31 on this crate: buck2 cold 118.4s
@@ -192,9 +203,20 @@ jobs:
         # So every buck2 job here was a cold build, every run, with no cache to
         # restore. cargo's target/ does survive, via rust-cache below.
         #
+        # --lib is load-bearing: the adapter crate also carries tests/ integration
+        # suites that need PostgreSQL (payroll_lifecycle_rls_as_runtime_role), and
+        # this job has no database. Those belong to postgres-domain-reachability.
+        # All three crates keep their unit tests inside src/lib.rs, so --lib loses
+        # nothing here.
+        #
+        # The adapter crate is here because its 12 pure #[test] cases — the
+        # parse_release_gate half that decides what a stored gate record may parse
+        # INTO — ran in NO workflow. The domain half decides whether a parsed gate
+        # is satisfied; without the adapter half the release gate is half-proven.
+        # They need no database (zero #[sqlx::test]), so they belong in this job.
         # Runs the SAME 15 tests as the retired Buck2 target, verified by count.
         # --locked so a drifted Cargo.lock fails rather than silently resolving.
-        run: SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain
+        run: SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres --lib
 
   postgres-domain-reachability:
     # REQUIRED as of 2026-07-29: a red here blocks the merge. It was promoted
@@ -227,10 +249,6 @@ jobs:
         with:
           toolchain: "1.97.1"
 
-      - name: Cache Rust dependencies + build artifacts
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          workspaces: backend
 
       - name: Serialized disposable PostgreSQL integration targets
         run: |
@@ -284,10 +302,6 @@ jobs:
         with:
           toolchain: "1.97.1"
 
-      - name: Cache Rust dependencies + build artifacts
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          workspaces: backend
 
       - name: Company conformance against disposable PostgreSQL
         run: |
@@ -421,6 +435,16 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: backend
+          # One shared entry, not one per job. rust-cache keys on job name by
+          # default, so these two maintained separate near-duplicate copies of the
+          # same workspace and evicted each other out of the 10GB LRU budget.
+          shared-key: backend-cargo
+          cache-all-crates: "true"
+          # The ONLY writer. `backend` runs clippy --all-targets over the whole
+          # workspace, a strict superset of every other cargo job, so its target dir
+          # is the one worth sharing. Saving only from main keeps PR branches from
+          # publishing a cache shaped by their own diff.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: rustfmt check
         run: cargo fmt --all -- --check
@@ -716,10 +740,6 @@ jobs:
         with:
           toolchain: "1.97.1"
 
-      - name: Cache Rust dependencies + build artifacts
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          workspaces: backend
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -884,10 +904,6 @@ jobs:
         with:
           toolchain: "1.97.1"
 
-      - name: Cache Rust dependencies + build artifacts
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          workspaces: backend
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
