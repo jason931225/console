@@ -2109,3 +2109,27 @@ from executing it.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — the same never-executed proof was stale in three places
+
+Rebind after the second and third fixture defects in the same file.
+
+The organizations-slug fix let the fixture reach one insert further and fail on the next:
+`compliance_frameworks.code` is CHECKed `^FW-[0-9]{4,}$` (0148:122) and the test bound the literal
+`RLS-EVIDENCE-A`, which has never been legal for that column.
+
+Rather than spend a third CI round-trip discovering the next one, every INSERT in the file was
+checked against its table's constraints at once. That found a **third** defect before CI did:
+`control_key` is `^[A-Z0-9][A-Z0-9._-]{0,63}$`, and its single caller satisfies it only by luck.
+All three helpers now sanitise, verified against the real regexes for five tag shapes.
+
+**Three constraint violations in one file, none a production defect, none detectable while the
+test executed nowhere.** The migrations moved and the fixture did not. A test that reads as
+coverage of an audit property — tenant-invisible evidence acceptance that does not leak audit —
+has never reached a single one of its assertions.
+
+That is the expectation to carry into the remaining 167: some will not run on first execution
+either, and each such failure is a proof that was believed and never held.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
