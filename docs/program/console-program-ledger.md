@@ -1529,3 +1529,7 @@ Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
 ||||||| f41cc847b
+
+## 2026-07-31 — rebind after #534 moved the tip under the golden-case candidate
+
+Mechanical rebind. No claim in the candidate changes.
