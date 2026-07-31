@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -141,6 +141,10 @@ describe("undeclared import gate", () => {
   });
 
   it("does not mistake prose or SQL inside a string literal for an import specifier", () => {
+    // The first three forms below never reach isQuotedOrCommented at all — none of them matches
+    // SPECIFIER_PATTERNS, so on their own this test passed for a reason unrelated to its name and
+    // stayed green with the suppression stubbed out. The last two do match, and are the only
+    // lines here that exercise the comment check and the quote-parity check respectively.
     const root = fixture({
       "package.json": emptyManifest,
       "scripts/thing.mjs": [
@@ -149,6 +153,12 @@ describe("undeclared import gate", () => {
         "`;",
         'export const note = "import the roster from HR before payroll runs";',
         'export const sentinel = "RAW_GIT_SENTINEL_DO_NOT_LEAK";',
+        '// import legacy from "phantom-commented";',
+        // Written with the quotes escaped rather than as a template literal: as a template
+        // literal this very line matched, and the gate reported "phantom-in-a-string" against
+        // its own test file. That is the ceiling isQuotedOrCommented documents — a match on a
+        // line whose quote count is even is not suppressed — and it fails loud, as claimed.
+        'const quoted = "import x from \'phantom-in-a-string\'";',
         "",
       ].join("\n"),
     });
@@ -156,6 +166,47 @@ describe("undeclared import gate", () => {
     const { findings } = evaluateUndeclaredImports(root);
 
     assert.deepEqual(findings, []);
+  });
+
+  // The exclusion is this gate's only escape hatch, and its edge is the one place a real finding
+  // can vanish without anything being printed. A prefix of "docs/evidence" rather than
+  // "docs/evidence/" silently takes the sibling with it.
+  it("excludes docs/evidence/ without swallowing a sibling directory", () => {
+    const root = fixture({
+      "package.json": emptyManifest,
+      "docs/evidence/archived.mjs": 'import { chromium } from "playwright";\n',
+      "docs/evidence-notes/live.mjs": 'import { chromium } from "playwright";\n',
+    });
+
+    const { excluded, findings } = evaluateUndeclaredImports(root);
+
+    assert.deepEqual(excluded, ["docs/evidence/archived.mjs"]);
+    assert.deepEqual(findings, [{ file: "docs/evidence-notes/live.mjs", line: 1, specifier: "playwright" }]);
+  });
+
+  // A manifest ABOVE the scan root must not declare a finding away. `stop = resolve(root)` is the
+  // only thing preventing that, and no other fixture could reach it: they all carry a root
+  // package.json, so the walk always terminates before it can escape. This is the gate's one
+  // false-GREEN vector — the directory above a checkout very often does have a package.json, and
+  // a finding suppressed from outside the tree is suppressed silently.
+  it("does not resolve a specifier against a package.json above the scan root", () => {
+    const outer = mkdtempSync(join(tmpdir(), "undeclared-imports-outer-"));
+    fixtureRoots.push(outer);
+    writeFileSync(
+      join(outer, "package.json"),
+      JSON.stringify({ name: "outside-the-tree", devDependencies: { "openapi-typescript": "7.10.0" } }),
+    );
+    const root = join(outer, "repo");
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    writeFileSync(join(root, "scripts/thing.mjs"), 'import openapiTS from "openapi-typescript";\n');
+    const init = spawnSync("git", ["-c", "init.defaultBranch=main", "init", "-q", root], { encoding: "utf8" });
+    assert.equal(init.status, 0, init.stderr);
+    const add = spawnSync("git", ["-C", root, "add", "--", "scripts/thing.mjs"], { encoding: "utf8" });
+    assert.equal(add.status, 0, add.stderr);
+
+    const { findings } = evaluateUndeclaredImports(root);
+
+    assert.deepEqual(findings, [{ file: "scripts/thing.mjs", line: 1, specifier: "openapi-typescript" }]);
   });
 
   it("counts the files it scanned, so an empty scan cannot read as coverage", () => {
@@ -210,6 +261,24 @@ describe("undeclared import gate", () => {
       `the classification must name what it excludes, got ${JSON.stringify(excluded)}`,
     );
     assert.deepEqual(findings, []);
+  });
+
+  // The header of check-undeclared-imports.mjs names the condition that makes the exclusion safe:
+  // "the class is safe only because nothing under docs/evidence/ is invoked by any workflow —
+  // check that before adding a prefix". That was an instruction to a human. The set has already
+  // grown from the single file the header names to two — verify-new-rows.mjs arrived without
+  // anyone re-checking the condition — so the condition is enforced here instead of asked for.
+  it("excludes only evidence artifacts that no workflow executes", () => {
+    const { excluded } = evaluateUndeclaredImports(repoRoot);
+    const workflowDirectory = join(repoRoot, ".github/workflows");
+    const invoked = [];
+    for (const workflow of readdirSync(workflowDirectory)) {
+      const source = readFileSync(join(workflowDirectory, workflow), "utf8");
+      for (const file of excluded) if (source.includes(file)) invoked.push(`${workflow} runs ${file}`);
+    }
+
+    assert.ok(excluded.length > 0, "the exclusion matches nothing; delete it rather than leave it unproven");
+    assert.deepEqual(invoked, [], "an excluded evidence artifact that CI executes is a real hole, not an exception");
   });
 
   it("goes red on the archived artifact the moment the classification is removed", () => {
