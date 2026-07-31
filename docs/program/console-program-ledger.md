@@ -1234,3 +1234,24 @@ a time.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — sixth rebind, and the update-branch button as a train breaker
+
+The registers rebind again. A branch-update merge reached the remote while this train was
+being built locally, so the tip this branch's registers had just been bound to was no
+longer the tip. Its content was redundant with the local merge — the same two commits,
+verified by diff — but including it was still required to push without force.
+
+This is the second time today the same shape occurred: a second writer produces a
+content-identical merge, and the cost is a full 390-reference rebind because the candidate
+SHA moved. The first instance was a subagent, this one an interface button.
+
+The observation the ledger should carry forward is that **the train binds a SHA, so
+anything that changes the tip invalidates it, including operations that change no
+content.** A no-op merge is not a no-op to this mechanism. Where a branch has a train
+built, the update-branch button should not be used — refresh by rebuilding the train, or
+the next push fails and costs a rebind either way.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
