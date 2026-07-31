@@ -285,6 +285,11 @@ CREATE TRIGGER trg_erasure_ledger_assign_chain
 CREATE FUNCTION erasure_ledger_append_only()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
+    -- Statement-level: there is no OLD row to name, and referencing one here
+    -- would raise "record old is not assigned yet" instead of the refusal.
+    IF TG_OP = 'TRUNCATE' THEN
+        RAISE EXCEPTION 'erasure_ledger is append-only: TRUNCATE is forbidden';
+    END IF;
     RAISE EXCEPTION
         'erasure_ledger is append-only: % is forbidden (org_id=%, seq=%)',
         TG_OP, OLD.org_id, OLD.seq;
@@ -298,6 +303,16 @@ CREATE TRIGGER trg_erasure_ledger_no_update
 CREATE TRIGGER trg_erasure_ledger_no_delete
     BEFORE DELETE ON erasure_ledger
     FOR EACH ROW EXECUTE FUNCTION erasure_ledger_append_only();
+
+-- TRUNCATE is the one statement that empties the table without producing a row
+-- for a row trigger to object to, so the two triggers above do not see it at
+-- all. The REVOKE below stops console_rt; MEASURED before this trigger existed,
+-- the OWNER's `TRUNCATE erasure_ledger` returned `rows_affected: 0` — success —
+-- and left the ledger empty. A record whose stated property is that it cannot be
+-- silently emptied has to refuse the statement whose purpose is to empty it.
+CREATE TRIGGER trg_erasure_ledger_no_truncate
+    BEFORE TRUNCATE ON erasure_ledger
+    FOR EACH STATEMENT EXECUTE FUNCTION erasure_ledger_append_only();
 
 -- ---------------------------------------------------------------------------
 -- 7. Grants. BOTH lines are load-bearing and they fail in opposite

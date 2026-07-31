@@ -880,6 +880,58 @@ async fn restore_detection_fires_when_the_witnessed_sequence_is_a_hole(owner_poo
 }
 
 // ---------------------------------------------------------------------------
+// TRUNCATE. The one statement that empties a table without firing a row trigger.
+// ---------------------------------------------------------------------------
+
+/// `DELETE` is refused twice over — by the REVOKE for `console_rt` and by the
+/// row trigger for the owner. `TRUNCATE` is refused only once: the REVOKE stops
+/// `console_rt`, and `BEFORE DELETE ... FOR EACH ROW` does not fire for it at
+/// all, so the owner who keeps the privilege can empty the ledger in one
+/// statement and leave no row for any trigger to object to. An evidence table
+/// whose stated property is that it cannot be silently emptied has to refuse the
+/// statement whose entire purpose is to silently empty it.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn truncate_of_the_ledger_is_refused_by_the_database(owner_pool: PgPool) {
+    seed_org_and_super_admin(&owner_pool, ORG_A, "A").await;
+    seed_entry(&owner_pool, ORG_A, "id = 1").await;
+    let rt = runtime_role_pool(&owner_pool).await;
+
+    // Layer 1 — the REVOKE, as the runtime role.
+    let mut tx = rt.begin().await.unwrap();
+    arm_org(&mut tx, ORG_A).await;
+    let runtime_error = sqlx::query("TRUNCATE erasure_ledger")
+        .execute(&mut *tx)
+        .await
+        .expect_err("console_rt must not hold TRUNCATE on erasure_ledger");
+    assert_eq!(
+        database_error_code(&runtime_error).as_deref(),
+        Some("42501"),
+        "console_rt's TRUNCATE must be refused as a privilege violation, got: {runtime_error}"
+    );
+    drop(tx);
+
+    // Layer 2 — the trigger, as the owner who keeps the privilege. Without a
+    // statement-level guard this succeeds and the ledger is empty.
+    let mut owner_tx = owner_pool.begin().await.unwrap();
+    let owner_error = sqlx::query("TRUNCATE erasure_ledger")
+        .execute(&mut *owner_tx)
+        .await
+        .expect_err("the append-only trigger must refuse TRUNCATE even for the table owner");
+    assert_eq!(
+        database_error_code(&owner_error).as_deref(),
+        Some("P0001"),
+        "the owner's TRUNCATE must be refused by the append-only trigger, got: {owner_error}"
+    );
+    drop(owner_tx);
+
+    let surviving: i64 = sqlx::query_scalar("SELECT count(*) FROM erasure_ledger")
+        .fetch_one(&owner_pool)
+        .await
+        .unwrap();
+    assert_eq!(surviving, 1, "the entry must still be there");
+}
+
+// ---------------------------------------------------------------------------
 // Concurrent appends. The retry is what stands between a lost erasure record
 // and a caller that believes it recorded one.
 // ---------------------------------------------------------------------------
