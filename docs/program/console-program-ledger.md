@@ -1919,3 +1919,16 @@ any system processing 고유식별정보, which `개인정보 보호법 시행�
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — rebind after #543 under the retention candidate
+
+Mechanical rebind. No claim in the candidate changes, and no Korean legal conclusion is
+asserted by it.
+
+Fifth rebind of the day across three landed pull requests. Each rewrites the same ~390
+denormalised leaves, every one of which carries the single value declared at
+`registry.candidate.sha`. Recorded as a measurement, not a complaint: it is the cost the
+next change is expected to reduce.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
