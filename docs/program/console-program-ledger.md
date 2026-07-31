@@ -1804,3 +1804,26 @@ count and the gate that stops it growing are a separate change.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — the ledger carried unresolved merge markers, and nothing looked
+
+Rebind onto the merge-hygiene candidate.
+
+`docs/program/console-program-ledger.md` carried ten lines beginning `|||||||`, with zero
+`<<<<<<<` and zero `>>>>>>>`. The asymmetry is the diagnosis: the authority documents
+conflict on nearly every merge, the correct resolution is a **union** — nothing verifies
+what this file SAYS, only that it changed — and a union done by hand strips two markers out
+of three. Every one of the ten sat on a clean boundary between two complete entries, so the
+resolutions were right and only the litter was wrong.
+
+The count grew by one per merge. Nine at `810f7c81a`, ten after #540. Git failed to parse
+the conflict hunks while merging #541, because the markers already in the file are not
+valid conflict syntax — so the litter had begun to break the machinery that produces it.
+
+`assertNoUnresolvedMerge` now reads the three authority documents at the integration tip and
+refuses any line starting `<<<<<<<`, `|||||||` or `>>>>>>>`. It runs inside train validation,
+which is already unconditional on every PR. `=======` is deliberately exempt: it is a Markdown
+setext heading rule, and that exemption is proven by a test rather than asserted in a comment.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
