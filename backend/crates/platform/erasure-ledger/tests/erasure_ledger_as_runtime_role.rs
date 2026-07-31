@@ -43,7 +43,10 @@ const SEED_ENTRY_SQL: &str = "INSERT INTO erasure_ledger (\
      decode(repeat('00', 32), 'hex'), decode(repeat('00', 32), 'hex'))";
 
 fn database_error_code(error: &sqlx::Error) -> Option<String> {
-    error.as_database_error()?.code().map(|code| code.into_owned())
+    error
+        .as_database_error()?
+        .code()
+        .map(|code| code.into_owned())
 }
 
 fn facts(selector: &str) -> ErasureFacts {
@@ -126,12 +129,16 @@ async fn update_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
         .fetch_one(&mut *tx)
         .await
         .expect("console_rt must be granted SELECT on erasure_ledger");
-    assert_eq!(visible, 1, "the row the UPDATE targets must be visible to console_rt");
-    let runtime_error = sqlx::query("UPDATE erasure_ledger SET actor = 'rewritten' WHERE org_id = $1")
-        .bind(ORG_A)
-        .execute(&mut *tx)
-        .await
-        .expect_err("console_rt must not hold UPDATE on erasure_ledger");
+    assert_eq!(
+        visible, 1,
+        "the row the UPDATE targets must be visible to console_rt"
+    );
+    let runtime_error =
+        sqlx::query("UPDATE erasure_ledger SET actor = 'rewritten' WHERE org_id = $1")
+            .bind(ORG_A)
+            .execute(&mut *tx)
+            .await
+            .expect_err("console_rt must not hold UPDATE on erasure_ledger");
     assert_eq!(
         database_error_code(&runtime_error).as_deref(),
         Some("42501"),
@@ -146,11 +153,12 @@ async fn update_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
         .execute(&mut *owner_tx)
         .await
         .unwrap();
-    let owner_error = sqlx::query("UPDATE erasure_ledger SET actor = 'rewritten' WHERE org_id = $1")
-        .bind(ORG_A)
-        .execute(&mut *owner_tx)
-        .await
-        .expect_err("the append-only trigger must refuse UPDATE even for the table owner");
+    let owner_error =
+        sqlx::query("UPDATE erasure_ledger SET actor = 'rewritten' WHERE org_id = $1")
+            .bind(ORG_A)
+            .execute(&mut *owner_tx)
+            .await
+            .expect_err("the append-only trigger must refuse UPDATE even for the table owner");
     assert_eq!(
         database_error_code(&owner_error).as_deref(),
         Some("P0001"),
@@ -175,7 +183,10 @@ async fn delete_of_a_ledger_row_is_refused_by_the_database(owner_pool: PgPool) {
         .fetch_one(&mut *tx)
         .await
         .expect("console_rt must be granted SELECT on erasure_ledger");
-    assert_eq!(visible, 1, "the row the DELETE targets must be visible to console_rt");
+    assert_eq!(
+        visible, 1,
+        "the row the DELETE targets must be visible to console_rt"
+    );
     let runtime_error = sqlx::query("DELETE FROM erasure_ledger WHERE org_id = $1")
         .bind(ORG_A)
         .execute(&mut *tx)
@@ -218,13 +229,20 @@ async fn restore_detection_stays_silent_in_normal_operation(owner_pool: PgPool) 
     let org = OrgId::from_uuid(ORG_A);
 
     for n in 1..=3 {
-        append(&rt, org, &facts(&format!("id = {n}"))).await.unwrap();
+        append(&rt, org, &facts(&format!("id = {n}")))
+            .await
+            .unwrap();
     }
-    let witness = head(&rt, org).await.unwrap().expect("a written ledger has a head");
+    let witness = head(&rt, org)
+        .await
+        .unwrap()
+        .expect("a written ledger has a head");
     assert_eq!(witness.seq, 3);
 
     for n in 4..=5 {
-        append(&rt, org, &facts(&format!("id = {n}"))).await.unwrap();
+        append(&rt, org, &facts(&format!("id = {n}")))
+            .await
+            .unwrap();
     }
 
     assert_eq!(
@@ -242,16 +260,24 @@ async fn restore_detection_fires_when_the_ledger_falls_behind_its_witness(owner_
     let org = OrgId::from_uuid(ORG_A);
 
     for n in 1..=3 {
-        append(&rt, org, &facts(&format!("id = {n}"))).await.unwrap();
+        append(&rt, org, &facts(&format!("id = {n}")))
+            .await
+            .unwrap();
     }
-    let witness = head(&rt, org).await.unwrap().expect("a written ledger has a head");
+    let witness = head(&rt, org)
+        .await
+        .unwrap()
+        .expect("a written ledger has a head");
     assert_eq!(witness.seq, 3);
 
     simulate_restore_losing_entries_after(&owner_pool, ORG_A, 1).await;
 
     assert_eq!(
         classify(&rt, org, &witness).await.unwrap(),
-        RestoreVerdict::RolledBack { head_seq: 1, witness_seq: 3 },
+        RestoreVerdict::RolledBack {
+            head_seq: 1,
+            witness_seq: 3
+        },
         "a head behind the witness must be reported as a rollback"
     );
 }
@@ -270,17 +296,29 @@ async fn restore_detection_fires_when_the_witnessed_sequence_holds_other_content
     let org = OrgId::from_uuid(ORG_A);
 
     for n in 1..=3 {
-        append(&rt, org, &facts(&format!("id = {n}"))).await.unwrap();
+        append(&rt, org, &facts(&format!("id = {n}")))
+            .await
+            .unwrap();
     }
-    let witness = head(&rt, org).await.unwrap().expect("a written ledger has a head");
+    let witness = head(&rt, org)
+        .await
+        .unwrap()
+        .expect("a written ledger has a head");
     assert_eq!(witness.seq, 3);
 
     simulate_restore_losing_entries_after(&owner_pool, ORG_A, 2).await;
-    append(&rt, org, &facts("id = 99 (a different erasure, same position)"))
-        .await
-        .unwrap();
+    append(
+        &rt,
+        org,
+        &facts("id = 99 (a different erasure, same position)"),
+    )
+    .await
+    .unwrap();
 
-    let resumed = head(&rt, org).await.unwrap().expect("a written ledger has a head");
+    let resumed = head(&rt, org)
+        .await
+        .unwrap()
+        .expect("a written ledger has a head");
     assert_eq!(
         resumed.seq, witness.seq,
         "the fixture must recreate the witnessed SEQUENCE, or this proves nothing a rollback test does not"
@@ -417,7 +455,11 @@ async fn entries_since_returns_the_replay_set_in_order_with_its_scope(owner_pool
 
     let mut witnesses: Vec<LedgerWitness> = Vec::new();
     for n in 1..=3 {
-        witnesses.push(append(&rt, org, &facts(&format!("id = {n}"))).await.unwrap());
+        witnesses.push(
+            append(&rt, org, &facts(&format!("id = {n}")))
+                .await
+                .unwrap(),
+        );
     }
 
     let replay = entries_since(&rt, org, 1).await.unwrap();
