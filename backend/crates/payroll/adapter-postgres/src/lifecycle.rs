@@ -1154,6 +1154,21 @@ fn gate_str(gate: &Value, key: &str) -> Result<String, LifecycleError> {
         .ok_or_else(|| LifecycleError::LegalGate(format!("release-gate record is missing {key}")))
 }
 
+/// The i64 twin of [`gate_str`]. `Value::as_i64` is `None` for a JSON float and
+/// for a numeric string, so this refuses `373302.0` and `"373302"` — not merely
+/// an absent key. A key-presence check would leave that hole open.
+fn gate_i64(gate: &Value, key: &str) -> Result<i64, LifecycleError> {
+    gate.get(key)
+        .and_then(Value::as_i64)
+        .ok_or_else(|| LifecycleError::LegalGate(format!("release-gate record is missing {key}")))
+}
+
+fn gate_bool(gate: &Value, key: &str) -> Result<bool, LifecycleError> {
+    gate.get(key)
+        .and_then(Value::as_bool)
+        .ok_or_else(|| LifecycleError::LegalGate(format!("release-gate record is missing {key}")))
+}
+
 fn parse_release_gate(gate: &Value) -> Result<PayrollReleaseGateInput, LifecycleError> {
     let rate_table_version = gate_str(gate, "rate_table_version")?;
     let official_source_urls = gate
@@ -1173,34 +1188,58 @@ fn parse_release_gate(gate: &Value) -> Result<PayrollReleaseGateInput, Lifecycle
             cases
                 .iter()
                 .map(|case| {
+                    let tax = case.get("nts_tax_row").ok_or_else(|| {
+                        LifecycleError::LegalGate(
+                            "release-gate record is missing nts_tax_row".to_owned(),
+                        )
+                    })?;
                     Ok(GoldenPayrollCase {
                         case_id: gate_str(case, "case_id")?,
                         rate_table_version: gate_str(case, "rate_table_version")?,
-                        professionally_validated: case
-                            .get("professionally_validated")
-                            .and_then(Value::as_bool)
-                            .unwrap_or(false),
-                        // RED-PHASE STUB — deliberately NOT the implementation.
-                        // The field exists so the golden case can carry its own
-                        // inputs; READING them out of the stored record, and
-                        // REFUSING a case that cannot supply them, is what the
-                        // next commit adds. Until then this preserves the exact
-                        // defect under test: a stored case that cannot be
-                        // recomputed still parses.
+                        // ARGUED, not done quietly: this was `.unwrap_or(false)`.
+                        // Leaving one silent default beside the one being deleted
+                        // below is the exact defect this change exists to kill — a
+                        // typo'd key became a silent `false` that then failed
+                        // downstream for the WRONG reason. Strictly stricter: a
+                        // record that used to be accepted-then-refused is now
+                        // refused by name, and none that used to be refused is
+                        // now accepted.
+                        professionally_validated: gate_bool(case, "professionally_validated")?,
+                        // The stored case now carries the facts needed to
+                        // RE-EXECUTE it. Every field is required: a case that
+                        // cannot be recomputed must never read as satisfied.
                         inputs: LineCalculationInput {
-                            pay_date: Date::MIN,
-                            gross_won: 0,
-                            pension_standard_monthly_income_won: None,
+                            pay_date: Date::parse(&gate_str(case, "pay_date")?, &Iso8601::DEFAULT)
+                                .map_err(|err| {
+                                LifecycleError::LegalGate(format!(
+                                    "invalid golden case pay_date: {err}"
+                                ))
+                            })?,
+                            gross_won: gate_i64(case, "monthly_gross_pay_won")?,
+                            // The one OPTIONAL input, because the kernel itself
+                            // treats it as optional: absent means "use the gross".
+                            // Present-but-wrong-typed is still refused.
+                            pension_standard_monthly_income_won: match case
+                                .get("pension_standard_monthly_income_won")
+                            {
+                                None | Some(Value::Null) => None,
+                                Some(_) => {
+                                    Some(gate_i64(case, "pension_standard_monthly_income_won")?)
+                                }
+                            },
                             tax_row: VerifiedNtsTaxRow {
-                                table_version: String::new(),
-                                monthly_income_tax_won: 0,
-                                local_income_tax_won: 0,
+                                table_version: gate_str(tax, "table_version")?,
+                                monthly_income_tax_won: gate_i64(tax, "monthly_income_tax_won")?,
+                                local_income_tax_won: gate_i64(tax, "local_income_tax_won")?,
                             },
                         },
-                        expected_total_employee_deductions_won: case
-                            .get("expected_total_employee_deductions_won")
-                            .and_then(Value::as_i64)
-                            .unwrap_or(0),
+                        // THE SILENT ZERO. Was `.unwrap_or(0)` — a stored case
+                        // with no expectation read as "expects 0" and, before
+                        // this slice, nothing ever compared it to anything.
+                        expected_total_employee_deductions_won: gate_i64(
+                            case,
+                            "expected_total_employee_deductions_won",
+                        )?,
                     })
                 })
                 .collect::<Result<Vec<_>, LifecycleError>>()
