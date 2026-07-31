@@ -1448,3 +1448,242 @@ a queued job costs more wall-clock than a serial step inside a job already holdi
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — the candidate binding for the payroll tests that ran nowhere
+
+The registers rebind to the payroll CI candidate. The candidate wires
+`//backend/crates/payroll/domain:console-payroll-domain-unit` into a workflow for the
+first time: its 16 tests were compiled by `cargo clippy --all-targets` and never
+executed, which is the fifth instance of that class this week.
+
+Nothing in the candidate changes what any capability may do. It changes which tests
+run, and it renames two of them.
+
+Three properties are worth recording at the authority layer, because a green train
+invites inferences it does not support.
+
+The candidate **renames two tests, and the rename is the load-bearing part** rather
+than cosmetic. `transition_payroll_run` has no non-test caller, and two tests were
+named for system properties this repository does not have — that calculation is
+blocked without validated release evidence, and that issuance is blocked without
+step-up. Wiring them into CI unrenamed would have converted a dormant falsehood into
+a CI-endorsed one: a green check certifying guarantees the production path does not
+implement. No assertion was deleted or weakened; both tests pin exactly what they
+pinned before.
+
+The candidate does **not** make payroll safe to release. The release gate is consulted
+in exactly one place, inside payslip issuance and after the run reaches `PAID`, so the
+lifecycle through payment remains ungated and the gate withholds the 임금명세서 rather
+than the money. A separate audit recorded 19 blocking golden-case gaps against this
+kernel on the same day. Running the unit tests proves the unit tests run.
+
+The candidate's integration coverage is **still not wired and is not claimed to be**.
+`run_lifecycle_api.rs` holds the only gate-blocks-issuance assertion, needs PostgreSQL,
+and belongs in a wrapper target under `postgres-domain-reachability`. It was left out
+because it could not be verified locally, and an unverified wrapper is the defect the
+candidate exists to stop repeating.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+||||||| 18a21d7cd
+
+## 2026-07-31 — the candidate binding for the executable golden case
+
+The registers rebind to the golden-case candidate. It closes ONE of the nineteen blocking
+gaps recorded in `docs/ideas/payroll-goldencase-gaps.md` — B-03/M-02 — and does not close
+the other eighteen.
+
+Before this candidate, `expected_total_employee_deductions_won` was declared, parsed, and
+compared to nothing. A golden case was a stored assertion that **could not fail**: no gross,
+no pay date, no NTS row, so no code could recompute the figure a professional signed. If a
+rate constant or a rounding rule changed, nothing detected that the kernel no longer
+reproduced the approved numbers.
+
+The case now carries `LineCalculationInput` whole rather than field-by-field, and the gate
+re-executes `build_line_calculation` for every case, failing closed and naming the case, the
+expected figure and the computed one.
+
+Three properties are worth recording at the authority layer.
+
+**The comparison is load-bearing, proven by mutation.** Neutering it to `if false` fails
+three tests, not one. A single failing test would have left open the possibility that the
+others passed for unrelated reasons.
+
+**The silent-zero path is gone, and that was the load-bearing requirement rather than the
+arithmetic.** `parse_release_gate` previously defaulted an absent expectation to `0` with
+`.unwrap_or(0)`, so a stored case that could not be recomputed read as satisfied. It now
+errors. Arithmetic that runs on cases nobody can supply would have been decoration.
+
+**This does not make payroll releasable and must not be read that way.** The gate is still
+consulted in exactly one place — inside payslip issuance, after the run reaches `PAID` — so
+the lifecycle through payment remains ungated and the gate withholds the 임금명세서 rather
+than the money. Eighteen blocking gaps remain, including the absent pay-item model, which
+means a case can still only express a single scalar gross. What changed is that a signed
+figure can now fail; what did not change is how much of payroll a signed figure covers.
+
+Asserts no Korean legal conclusion: the candidate makes an arithmetic comparison executable
+and decides nothing about which figures are correct.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+||||||| f41cc847b
+
+## 2026-07-31 — rebind after #534 moved the tip under the golden-case candidate
+
+Mechanical rebind. No claim in the candidate changes.
+
+## 2026-07-31 — rebind after the adapter half was given somewhere to run
+
+The registers rebind. The candidate adds `console-payroll-adapter-postgres` to the
+consolidated unit job, because 12 pure `#[test]` cases — the `parse_release_gate` half of
+the release gate, including the removal of the silent-zero default — executed in no
+workflow at all.
+
+Worth recording: this was caught by an assertion the slice itself wrote to prevent it, and
+broken by a consolidation in a different pull request by the same hand. Two changes, each
+correct alone, produced a gap neither would have produced by itself. The assertion is the
+only reason it surfaced before merge rather than after.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — the candidate binding for the finite backup window
+
+The registers rebind to the retention candidate. The backup ObjectStore gains a finite
+90d retention policy, and ADR-0037 gains the research and one corrected citation.
+
+Two properties are worth recording at the authority layer.
+
+**The change was free only because it was made before deployment.** Verified: no CNPG
+cluster in the tenancy declares a backup, the barmancloud ObjectStore CRD is not installed,
+and the target namespace does not exist. There are no backups for the policy to prune.
+ADR-0037 had said this was cheap to resolve before a person's data is in the system and
+expensive afterwards; that window was still open, and is now used rather than merely
+observed.
+
+**A cited article was wrong, and the correction strengthened the finding.** The record had
+grounded 복구 또는 재생 in 법 제21조제2항 alone. The owner pointed at the deletion-request
+path and named 시행령 제43조제2항, which on fetch is procedural and carries no such wording —
+but 법 제36조제3항 does, for subject-requested deletion, alongside a 단서 barring deletion
+where another statute designates the data for collection. The substance held, the location
+moved, and the standard turns out to bind on both the 파기 and the request paths. Recorded
+because a citation corrected upward is worth as much as one retracted.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-31 — a retraction the owner caught, and the rule it broke
+
+The registers rebind after ADR-0037 retracted a claim of its own making.
+
+The record had argued that Korea's 복구 또는 재생 wording made the European deferred-overwrite
+package a poor fit, and elevated crypto-shredding accordingly. The owner disputed it. The
+statute settles it against the record: 법 제21조제1항 and 법 제36조제2항 both say 지체 없이,
+not 즉시 — the same 'without undue delay' standard the European position is built on.
+
+The rule that was broken is worth stating because this program keeps meeting it from both
+directions. The research had already found that Korea's silence on backups is **an absence,
+not a permission**. The retracted draft converted the same silence into a **prohibition**.
+Both are the same error wearing opposite signs: treating the absence of authority as
+authority. The uncertainty_rule says missing or unqualified authority is HOLD — not
+permissive, not restrictive, HOLD.
+
+No gate could have caught this either. The record was structurally valid and every citation
+resolved; what was wrong was an inference drawn from correctly quoted text.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+||||||| f41cc847b
+
+## 2026-07-31 — the live GitOps inputs are frozen, and nothing said so
+
+Rebind after the retention change was withdrawn from this candidate.
+
+`scripts/check-command-database-wiring.test.mjs` asserts
+`git diff --exit-code origin/main` across `deploy/argocd/apps/console.yaml`,
+`deploy/apps/console/base`, `deploy/apps/console/overlays/prod` and
+`deploy/apps/secrets-management/wiring`. ArgoCD syncs those paths from `main` with
+`targetRevision: main`, so a branch change to any of them fails the gate and would take
+effect the instant it merged.
+
+**Verified: no file under `deploy/apps/console/base/` has changed since that gate landed.**
+`database.yaml`'s last change (`a17acf14f`, #495) predates the gate (`962fb98b7`, #503).
+This candidate was the first to touch those paths since, which is why the freeze surfaced
+now rather than earlier.
+
+The gate's stated purpose is keeping the DARK governed-command-database topology out of
+live wiring, and it does that with explicit `doesNotMatch` patterns. The blanket diff is a
+separate, stronger assertion that cannot distinguish a retention policy from a topology
+leak. It was not weakened to land a one-line change; the change was withdrawn instead.
+
+What this leaves open, and it is an owner decision rather than an engineering one: **there
+is no documented route by which the live GitOps inputs may legitimately change.** A control
+with no defined exception either stops all change or gets weakened by whoever needs the
+next change badly enough. Recorded so that the next person to need one finds this entry
+rather than the assertion.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
+||||||| 0f7e71baa
+
+## 2026-07-31 — rebind after #536 moved the tip under the ADR-0037 candidate
+
+Mechanical rebind. No claim in the candidate changes.
+
+## 2026-07-31 — four jobs cached a directory their build system never writes
+
+The registers rebind to the CI cache-shape candidate.
+
+Six jobs carried a Rust build cache; four of them run Buck2, which does not write
+`backend/target`. Those four restored and saved a cache they could not use, and — because
+`rust-cache` keys on job name by default and none set a shared key — the six entries were
+near-duplicates of one workspace evicting each other from a 10GB budget.
+
+Worth recording at the authority layer: **the obvious fix was worse than the defect.**
+Adding a shared key to all six would let a Buck2-only job finish first and save a
+near-empty `backend/target` under the shared key, poisoning it for the two jobs that
+actually compile. The correct shape was the opposite of the intuitive one — remove the
+cache where it is unused, share it only between the jobs that populate it.
+
+Also recorded: the candidate adds a guard for its own change. Deleting the shared key
+passed every gate before that guard existed, verified by execution, so the consolidation
+could have silently refragmented while CI stayed green. A cache optimisation with no
+protection against its own reversion is the same defect class this program keeps meeting —
+a green signal that has stopped meaning anything.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — a shared cache key with no named writer poisons itself
+
+Rebind after designating the single writer of the shared Rust build cache.
+
+The previous entry recorded that four jobs cached a directory Buck2 never writes. This one
+records the same defect one level down, inside the two jobs that DO compile: `domain-unit`
+builds three crates, `backend` builds the whole workspace. Sharing a key without deciding
+who saves it means whichever finishes first publishes the entry — so a three-crate target
+directory could become the cache a whole-workspace lint then restores.
+
+`backend` is now the only writer, and only from `main`, so a pull-request branch cannot
+publish a cache shaped by its own diff.
+
+Worth recording: this was found by an adversarial review of a separate migration plan,
+which recommended the same `save-if` discipline. The same review recommended KEEPING the
+cache on two jobs it had measured at a stale commit. Re-verified against `origin/main`
+before acting: six cache blocks rather than seven, and zero cargo references in either job
+or any npm script they invoke. **The refinement was taken and the contradicting
+recommendation was refused, both on the same re-measurement.** A review is evidence, not
+authority, and the difference is whether its claims still hold at the commit in front of
+you.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
+||||||| bec30abaa
+
+## 2026-07-31 — rebind after an upstream merge under the cache-shape candidate
+
+Mechanical rebind. No claim in the candidate changes.
