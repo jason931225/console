@@ -298,6 +298,77 @@ against an unbounded archive*, but *which data may we erase at all, when does ea
 and what does separating retained data mean for a system whose backups are one undifferentiated
 stream*. The last of those is squarely architectural, and it is unanswered here.
 
+### 복구 또는 재생: the standard appears twice, and on the request path too
+
+The record first cited only 법 제21조제2항 (파기). The owner pointed at the deletion-request
+path; verified 2026-07-31 against the official portal, the same standard appears there as
+well, in the parent Act rather than in 시행령 제43조:
+
+> **법 제36조(개인정보의 정정ㆍ삭제)**
+> ① … 정정 또는 삭제를 요구할 수 있다. **다만, 다른 법령에서 그 개인정보가 수집 대상으로
+> 명시되어 있는 경우에는 그 삭제를 요구할 수 없다.**
+> ③ 개인정보처리자가 제2항에 따라 개인정보를 삭제할 때에는 **복구 또는 재생되지 아니하도록**
+> 조치하여야 한다.
+
+시행령 제43조, which implements 제36조, is procedural only — request method, notification to a
+providing processor, and a 10-day result notice. It carries no 복구 또는 재생 wording.
+
+Two architectural consequences, stated as observations rather than legal conclusions:
+
+**The standard is phrased in terms of RECOVERABILITY, not of scheduled expiry.** That is a poor
+fit for the European package priced below, whose load-bearing element is a finite, written,
+scheduled backup cycle. A finite window narrows the exposure but leaves the row recoverable
+*for the duration of the window*. Whatever weight that carries is for counsel; the engineering
+consequence is that a bounded window alone does not achieve unrecoverability, and any option
+relying on expiry alone should be read with that in mind.
+
+**This raises crypto-shredding relative to the other options.** Option A is the only one that
+makes archived content unrecoverable without editing the archive, so it is the only one whose
+effect is expressed in the same terms the statute uses. That is an argument about mechanism
+fit, not about sufficiency — and it is limited by the plaintext-already-archived problem
+already recorded: key destruction cannot reach what was written before it was adopted.
+
+**제36조제1항 단서 confirms the retention dimension** recorded above from 제21조제1항 단서, and
+sharpens it: where another statute designates the data as subject to collection, the subject
+*cannot require* deletion. So the disposal primitive must resolve, per data class, whether a
+pin exists before it can act — which is a lookup this system cannot currently perform.
+
+### What others do — European practice and the hyperscalers
+
+Researched 2026-07-31 across regulator text, hyperscaler documentation and engineering
+write-ups, then adversarially fact-checked. Reported as what sources say.
+
+**The European consensus is narrower than it is usually quoted as.** It is not "deferral". It
+is: erase from live systems; do not surgically edit backups; hold the backup so that it is
+used for nothing but restore; let it expire on a **finite, written, scheduled cycle**; keep a
+data-minimised **erasure log outside the backup**; and **re-apply that log after any restore**.
+The UK ICO frames it as data held "beyond use" and "replaced in line with an established
+schedule". Germany's DSK Standard-Datenschutzmodell Module 60 permits deferral to a
+*planmäßiges Überschreiben* while **explicitly rejecting** policy-based non-use — a staff
+prohibition or an undertaking not to use the data does not discharge the obligation.
+
+**There is no EDPB guideline on Art. 17 and backups.** The EDPB's CEF 2025 report (adopted
+2026-02-10) is deliberately non-committal and lists further guidance as work not yet done;
+Sweden, Portugal and Hungary formally asked for it. A record citing such a guideline is citing
+a document that does not exist.
+
+**The hyperscalers' mechanism is key destruction, and the published window is a bit-lifetime
+rather than a recoverability window.** Google's data-deletion whitepaper says it outright:
+cryptographic erasure "might occur before the backup that contains customer data has expired…
+the customer data is unrecoverable even during its remaining lifespan on Google's backup
+systems." Microsoft deletes per-chunk encryption keys on hard delete. Google is the only
+vendor found that also bounds **key material itself** (≤45 days) — the loop that a
+crypto-shredding design must close, since keys backed up indefinitely defeat the shred. AWS
+publishes no deletion SLA at all and assigns backups to the customer.
+
+**Korea is not the European position, and is not established either.** 백업 appears **zero
+times** in PIPA and in its 시행령. The 「개인정보의 안전성 확보조치 기준 안내서」(2025.11) treats
+backup media as a place where destruction is *performed*, offering deletion plus supervision
+against restoration and exclusion from subsequent backups — with no grace period and no
+alternative where a backup set cannot be selectively edited. A search for a Korean equivalent
+of "beyond use" across four PIPC instruments found none; recorded as **not established**,
+which is not the same as absent.
+
 ## What this record does not know
 
 Stated rather than papered over, because two of the four options cannot be fully costed
