@@ -1719,6 +1719,69 @@ mod tests {
     }
 
     #[test]
+    fn release_gate_record_with_a_negative_stored_amount_is_refused_by_the_kernel() {
+        // `gate_i64` accepts any i64, including a negative one, so the only
+        // thing between a stored `-3000000` gross and a recomputed total is
+        // `build_line_calculation`'s own guard — and llvm-cov reported that
+        // guard (domain lib.rs:726-728) unexecuted. A negative gross now
+        // reaches it through a stored record, so the composition is pinned
+        // here rather than assumed.
+        assert_eq!(
+            gate_refusal(&with_golden_case_key(
+                "monthly_gross_pay_won",
+                json!(-3_000_000)
+            )),
+            "payslip release gate is not satisfied: golden case GC-2026-06-A \
+             could not be recomputed: monthly remuneration must be non-negative"
+        );
+    }
+
+    #[test]
+    fn release_gate_record_pins_both_reviewer_kinds_and_refuses_any_third() {
+        // 세무사 is half of the "노무사/세무사" this whole gate exists for and no
+        // test had ever constructed one: llvm-cov reported the `tax_accountant`
+        // arm and the unknown-kind refusal (lifecycle.rs:1254-1258) unexecuted.
+        // `reviewed_on` (1261-1264) was unexercised for the same reason
+        // `pay_date` was.
+        //
+        // The mapping is asserted against `parse_release_gate` directly, NOT
+        // through `validate_run_release_gate`: the gate never reads
+        // `reviewer_kind`, so an arm that mapped 세무사 to LaborAttorney would
+        // still validate. Going through the gate here would have pinned only
+        // that the STRING is accepted, which is not what this claims.
+        let mut tax_accountant = release_gate_record();
+        tax_accountant["release_gate"]["professional_validation"]["reviewer_kind"] =
+            json!("tax_accountant");
+        validate_run_release_gate(&tax_accountant).unwrap();
+        assert_eq!(
+            parse_release_gate(&tax_accountant["release_gate"])
+                .unwrap()
+                .professional_validation
+                .unwrap()
+                .reviewer_kind,
+            ProfessionalReviewerKind::TaxAccountant
+        );
+
+        let mut third_kind = release_gate_record();
+        third_kind["release_gate"]["professional_validation"]["reviewer_kind"] =
+            json!("certified_public_accountant");
+        assert_eq!(
+            gate_refusal(&third_kind),
+            "payslip release gate is not satisfied: \
+             unknown professional reviewer kind: certified_public_accountant"
+        );
+
+        let mut bad_date = release_gate_record();
+        bad_date["release_gate"]["professional_validation"]["reviewed_on"] = json!("2026-07-32");
+        let message = gate_refusal(&bad_date);
+        assert!(
+            message
+                .starts_with("payslip release gate is not satisfied: invalid reviewed_on date: "),
+            "expected a reviewed_on parse refusal, got: {message}"
+        );
+    }
+
+    #[test]
     fn a_run_with_no_release_gate_record_at_all_is_refused() {
         // The outermost fail-closed, and it had no test: everything above
         // assumes a `release_gate` key exists. An unregistered gate must be a
