@@ -170,6 +170,25 @@ describe("request body contract gate", () => {
     assert.equal(resolved, 1);
   });
 
+  // Added during implementation, not during the RED phase: the first working resolver reported
+  // `spec property "ref" is not a field of AmendCloseBody` against
+  // backend/crates/attendance/rest/src/lib.rs:1089, which declares `r#ref`. serde publishes a raw
+  // identifier under its bare name, so the field was real and the finding was false. Dropping a
+  // field is the same degradation the anchors guard, caught here in its loud direction.
+  it("reads a raw-identifier field under the name serde publishes it as", () => {
+    const root = widgetFixture({
+      derive: camelDeny,
+      fields: "    quantity_consumed_milli: i64,\n    #[serde(default)]\n    r#ref: Option<String>,",
+      required: ["quantityConsumedMilli"],
+      properties: "quantityConsumedMilli: { type: integer }, ref: { type: string, nullable: true }",
+    });
+
+    const { resolved, findings } = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.deepEqual(findings, []);
+    assert.equal(resolved, 1);
+  });
+
   it("skips a struct without deny_unknown_fields instead of counting it as compared", () => {
     // Without deny_unknown_fields an undocumented field is a maybe, not a 422. Undecidable
     // operations must land in `skipped`; folding them into `resolved` would inflate the floor
