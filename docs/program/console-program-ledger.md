@@ -2200,3 +2200,15 @@ proof produced.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — rebind after regenerating the first-party BUCK face
+
+Mechanical rebind. No claim in the candidate changes.
+
+Adding the credential re-assertion to the apalis tests introduced `sqlx::` usage, and
+`tools/buck/gen_first_party.py` correctly detected it: the generated `rust_test` now carries the
+migrations tree and `SQLX_OFFLINE`. The cheap generated-face gate caught the drift on the first CI
+run, which is the gate working rather than failing.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
