@@ -1,0 +1,14 @@
+# The disposable-PostgreSQL harness lives here rather than under tools/buck because
+# nothing about it is Buck-shaped: it provisions a database and hands the test a
+# mode-0600 environment file, and the loader reads a fixed data file rather than
+# anything build-system specific.
+#
+# Buck2 still needs the loader as a package-visible source, because the //tools/buck
+# sh_test wrappers name it as their `test`. Referencing it across packages requires an
+# export_file — a package-relative `test = "run_test_with_postgres_env.sh"` resolves
+# inside //tools/buck, which is exactly what broke when the file moved.
+export_file(
+    name = "run_test_with_postgres_env.sh",
+    src = "run_test_with_postgres_env.sh",
+    visibility = ["PUBLIC"],
+)

@@ -575,7 +575,7 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       workflow,
       "tools/buck/BUCK must bind PostgreSQL wrapper dispatch-p1-postgres to the loader and exact Rust binary",
       postgresWrapperBuildFile.replace(
-        'name = "dispatch-p1-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "dispatch-p1-postgres",\n    test = "//tools/pg:run_test_with_postgres_env.sh",',
         'name = "dispatch-p1-postgres",\n    test = "unexpected_loader.sh",',
       ),
     );
@@ -626,7 +626,7 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       workflow,
       "tools/buck/BUCK must bind PostgreSQL wrapper auth-rest-dev-auth-inline-postgres to the loader and exact Rust binary",
       postgresWrapperBuildFile.replace(
-        'name = "auth-rest-dev-auth-inline-postgres",\n    test = "run_test_with_postgres_env.sh",',
+        'name = "auth-rest-dev-auth-inline-postgres",\n    test = "//tools/pg:run_test_with_postgres_env.sh",',
         'name = "auth-rest-dev-auth-inline-postgres",\n    test = "unexpected_loader.sh",',
       ),
     );
@@ -741,16 +741,16 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       workflow,
       "tools/buck/BUCK must bind PostgreSQL wrapper app-inline-postgres to the loader and exact Rust binary",
       postgresWrapperBuildFile.replace(
-        'name = "app-inline-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:console-app-itest-inline-postgres)"],\n    deps = ["//backend/app:console-app-itest-inline-postgres"],\n    labels = ["test.integration", "resource.postgres", "needs-postgres"],',
-        'name = "app-inline-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:console-app-itest-inline-postgres)"],\n    deps = ["//backend/app:console-app-itest-inline-postgres"],\n    labels = ["owner.backend.app", "domain.app", "test.integration", "resource.postgres", "needs-postgres"],',
+        'name = "app-inline-postgres",\n    test = "//tools/pg:run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:console-app-itest-inline-postgres)"],\n    deps = ["//backend/app:console-app-itest-inline-postgres"],\n    labels = ["test.integration", "resource.postgres", "needs-postgres"],',
+        'name = "app-inline-postgres",\n    test = "//tools/pg:run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:console-app-itest-inline-postgres)"],\n    deps = ["//backend/app:console-app-itest-inline-postgres"],\n    labels = ["owner.backend.app", "domain.app", "test.integration", "resource.postgres", "needs-postgres"],',
       ),
     );
     expectFailure(
       workflow,
       "tools/buck/BUCK must bind PostgreSQL wrapper app-dev-auth-persona-guard-postgres to the loader and exact Rust binary",
       postgresWrapperBuildFile.replace(
-        'name = "app-dev-auth-persona-guard-postgres",\n    test = "run_test_with_postgres_env.sh",',
-        'name = "app-dev-auth-persona-guard-postgres",\n    test = "run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:console-app-itest-inline-postgres)"],',
+        'name = "app-dev-auth-persona-guard-postgres",\n    test = "//tools/pg:run_test_with_postgres_env.sh",',
+        'name = "app-dev-auth-persona-guard-postgres",\n    test = "//tools/pg:run_test_with_postgres_env.sh",\n    args = ["$(location //backend/app:console-app-itest-inline-postgres)"],',
       ),
     );
     expectFailure(
