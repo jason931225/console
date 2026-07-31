@@ -19,6 +19,7 @@
     "adrs:index:write": "node scripts/console/generate-adr-index.mjs --write",
     "check:foundation-gates": "node scripts/check-foundation-gates.mjs",
     "check:undeclared-imports": "node --test scripts/check-undeclared-imports.test.mjs && node scripts/check-undeclared-imports.mjs",
+    "check:request-body-contract": "node --test scripts/check-request-body-contract.test.mjs && node scripts/check-request-body-contract.mjs",
     "check:ci-preflight": "node scripts/check-ci-preflight.mjs",
     "verify": "node scripts/verify.mjs fast",
     "verify:db": "node scripts/verify.mjs db",

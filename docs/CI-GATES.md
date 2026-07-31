@@ -89,6 +89,7 @@ npm run test:adrs
 npm run check:adrs
 for s in \
   check:foundation-gates \
+  check:request-body-contract \
   check:doc-citations \
   check:package-lock \
   check:root-workspaces \
@@ -215,6 +216,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:g008-payroll-readiness`
 - `check:k8s`
 - `check:openapi-app`
+- `check:request-body-contract`
 - `check:package-lock`
 - `check:payroll-release-gate`
 - `check:people-hr-maturity`

@@ -257,21 +257,6 @@ describe("request body contract gate", () => {
     assert.ok(resolved >= 45, `resolver degraded: expected at least 45 resolved operations, got ${resolved}`);
   });
 
-  // Pins the live product defect the gate found. backend/crates/inventory/rest/src/lib.rs:231 is
-  // rename_all = "camelCase" + deny_unknown_fields; the spec publishes snake_case, so every
-  // spec-conformant request to this endpoint 422s. The spec fix is cross-slice (openapi-audit
-  // owns backend/openapi/openapi.yaml). DELETE THIS TEST when that fix lands.
-  it("reports the live inventory consumption body mismatch", () => {
-    const { findings } = evaluateRequestBodyContract({ repoRoot });
-
-    const consumption = findings.filter((finding) => finding.operation === consumptionsAnchor);
-    assert.ok(consumption.length > 0, `expected findings for ${consumptionsAnchor}, got ${JSON.stringify(findings)}`);
-    assert.ok(
-      consumption.some((finding) => /quantity_consumed_milli/.test(finding.message)),
-      JSON.stringify(consumption, null, 2),
-    );
-  });
-
   it("exits 1 naming the floor when the resolver finds nothing to compare", () => {
     // Zero resolved operations is the shape every one of the resolver bugs took: exit 0,
     // findings 0, nothing compared.
