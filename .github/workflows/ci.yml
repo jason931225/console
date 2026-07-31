@@ -241,7 +241,21 @@ jobs:
             -p console-ontology-application -p console-ontology-domain -p console-orgchange-domain \
             -p console-recruiting-application -p console-recruiting-domain -p console-reporting-application \
             -p console-reporting-domain -p console-sales-domain -p console-support-application \
-            -p console-todos-domain -p console-workflow-domain -p console-workorder-application
+            -p console-todos-domain -p console-workflow-domain -p console-workorder-application \
+            -p console-analytics-quant-service -p console-attendance-adapter-postgres -p console-attendance-rest \
+            -p console-benefit-rest -p console-comms-adapter-imap -p console-comms-adapter-mox \
+            -p console-comms-adapter-smtp -p console-comms-credential-cipher -p console-comms-mailbox \
+            -p console-comms-rest -p console-compliance-rest -p console-consulting-rest \
+            -p console-dispatch-rest -p console-docs-adapter-postgres -p console-docs-rest \
+            -p console-evaluation-adapter-postgres -p console-facilities-rest -p console-financial-rest \
+            -p console-gate-dev-auth-absence -p console-gate-iac-tier -p console-gate-layer-boundary \
+            -p console-gate-tenant-isolation -p console-gate-vendor-lockin -p console-identity-rest \
+            -p console-inventory-adapter-postgres -p console-inventory-rest -p console-leave-adapter-postgres \
+            -p console-leave-rest -p console-ontology-adapter-postgres -p console-ontology-rest \
+            -p console-payroll-rest -p console-platform-email -p console-platform-jobs \
+            -p console-platform-push -p console-platform-realtime -p console-platform-request-context \
+            -p console-production-rest -p console-reporting-adapter-postgres -p console-support-adapter-postgres \
+            -p console-workflow-runtime-adapter-postgres -p console-workorder-rest
           SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \
             -p console-attendance-application --test attendance_policy
           SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \
