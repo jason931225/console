@@ -304,7 +304,17 @@ jobs:
     name: Dispatch, attendance and ontology — disposable PostgreSQL reachability
     runs-on: ubuntu-latest
     needs: preflight
-    timeout-minutes: 35
+    # 35 -> 80. MEASURED from the run that hit the old ceiling: 240s of build and container
+    # setup, then 21.8s per target serialized, so 186 targets need ~71 minutes. The previous
+    # 19-target job finished in 17.
+    #
+    # Sharding is the better answer and is NOT taken here on purpose. This job's display name
+    # is the literal string branch protection matches on, as the comment above says. A matrix
+    # reports as "name (shard)", so sharding would change the context, silently un-require the
+    # check, and restore exactly the false-green that comment describes — and the branch
+    # protection edit that would make it safe cannot be made from inside a pull request.
+    # Raising the ceiling keeps the required context intact at the cost of wall-clock.
+    timeout-minutes: 80
 
     steps:
       - name: Checkout
