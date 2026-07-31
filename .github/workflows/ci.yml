@@ -360,21 +360,17 @@ jobs:
             //tools/buck:app-action-inbox-api-pg \
             //tools/buck:app-audit-api-pg \
             //tools/buck:app-auth-rest-pg \
-            //tools/buck:app-benefit-catalog-api-pg \
             //tools/buck:app-board-ack-api-pg \
             //tools/buck:app-cedar-freshness-mint-pg \
             //tools/buck:app-cedar-parity-shadow-pg \
             //tools/buck:app-cedar-shadow-role-manage-pg \
             //tools/buck:app-compliance-api-pg \
-            //tools/buck:app-compliance-catalog-api-pg \
             //tools/buck:app-console-kill-switch-pg \
             //tools/buck:app-console-route-telemetry-pg \
-            //tools/buck:app-consulting-engagement-api-pg \
             //tools/buck:app-dev-auth-persona-guard-pg \
             //tools/buck:app-dispatch-pipeline-api-pg \
             //tools/buck:app-equipment-3r-api-pg \
             //tools/buck:app-evaluation-cycle-api-pg \
-            //tools/buck:app-facilities-pilot-story-pg \
             //tools/buck:app-field-visit-api-pg \
             //tools/buck:app-finance-gl-voucher-sod-pg \
             //tools/buck:app-health-readiness-pg \
@@ -382,7 +378,6 @@ jobs:
             //tools/buck:app-hr-attendance-self-read-pg \
             //tools/buck:app-hr-ingest-checklist-gate-pg \
             //tools/buck:app-hr-people-create-api-pg \
-            //tools/buck:app-logistics-pilot-story-pg \
             //tools/buck:app-m2-real-engine-drive-pg \
             //tools/buck:app-maintenance-chain-api-pg \
             //tools/buck:app-mobile-api-pg \
@@ -422,7 +417,6 @@ jobs:
             //tools/buck:comms-rest-mox-webhook-pg \
             //tools/buck:comms-rest-readiness-pg \
             //tools/buck:consulting-rest-audit-atomicity-pg \
-            //tools/buck:dispatch-worker-timer-delivery-pg \
             //tools/buck:docs-rest-evidence-rest-rls-surfaces-as-runtime-role-pg \
             //tools/buck:finance-gl-adapter-postgres-voucher-rls-and-fsm-as-runtime-role-pg \
             //tools/buck:financial-adapter-postgres-lifecycle-rls-surfaces-as-runtime-role-pg \
@@ -436,7 +430,6 @@ jobs:
             //tools/buck:identity-adapter-postgres-me-workspace-layouts-rls-pg \
             //tools/buck:identity-adapter-postgres-region-branch-crud-rls-surfaces-as-runtime-role-pg \
             //tools/buck:identity-adapter-postgres-subject-authz-versions-freshness-rls-pg \
-            //tools/buck:identity-rest-org-setup-pg \
             //tools/buck:inbox-adapter-postgres-inbox-docs-rls-surfaces-as-runtime-role-pg \
             //tools/buck:inbox-rest-api-pg \
             //tools/buck:inspection-adapter-postgres-lifecycle-pg \
@@ -495,7 +488,6 @@ jobs:
             //tools/buck:platform-storage-lib-pg \
             //tools/buck:platform-storage-evidence-processing-rls-surfaces-as-runtime-role-pg \
             //tools/buck:policy-adapter-postgres-draft-storage-pg \
-            //tools/buck:production-rest-production-lifecycle-http-pg \
             //tools/buck:registry-adapter-postgres-create-rls-surfaces-as-runtime-role-pg \
             //tools/buck:registry-adapter-postgres-equipment-list-rls-as-runtime-role-pg \
             //tools/buck:registry-adapter-postgres-equipment-lookup-normalization-rls-as-runtime-role-pg \
@@ -522,7 +514,6 @@ jobs:
             //tools/buck:workorder-adapter-postgres-m2-flag-off-parity-pg \
             //tools/buck:workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg \
             //tools/buck:workorder-adapter-postgres-use-cases-pg \
-            //tools/buck:workorder-rest-mobile-evidence-pg \
             //tools/buck:workorder-rest-mobile-sync-pg
 
   company-conformance:

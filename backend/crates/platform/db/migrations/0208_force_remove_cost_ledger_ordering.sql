@@ -1,4 +1,4 @@
--- Force-removing an organization that has equipment maintenance costs fails.
+-- Force-removing an organization that has equipment maintenance history fails.
 --
 -- THIS IS A PRODUCTION DEFECT, not a test defect. It was found by wiring a test
 -- that had never executed: workorder/adapter-postgres use_cases.rs, dark until
@@ -74,7 +74,16 @@ BEGIN
           -- hand-ordered child-first block below can run.
           AND child.relname NOT IN (
               'audit_events', 'employees', 'users', 'branches', 'regions',
-              'equipment_cost_ledger'
+              -- The 0193 equipment-maintenance family. Every table below is the target of a
+              -- COMPOSITE RESTRICT foreign key from a 0193 child, and `cardinality(fk.conkey) = 1`
+              -- below makes those children structurally invisible to this sweep — so deleting any
+              -- of these here raises 23001 while its children still reference it. All five are
+              -- already deleted, child-first, by the hand-ordered block in 0196, which is where
+              -- they belong. Naming the whole family rather than the one member that happened to
+              -- fail first: fixing `equipment_cost_ledger` alone simply moved the failure to
+              -- `evidence_media` on the next run.
+              'equipment_cost_ledger', 'evidence_media',
+              'equipment_maintenance_history', 'registry_equipment', 'work_orders'
           )
           AND cardinality(fk.conkey) = 1
           AND child_attr.attname = 'org_id'
