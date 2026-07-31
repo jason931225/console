@@ -54,9 +54,22 @@ async fn runtime_role_pool(owner_pool: &PgPool) -> PgPool {
 }
 
 async fn seed_org(owner_pool: &PgPool, org: Uuid, tag: &str) {
+    // `organizations.slug` is CHECKed against `^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$`
+    // (0026_create_organizations.sql). Lowercasing alone is not enough: a tag such as
+    // "Evidence A" became the slug "org-evidence a", and the space fails the constraint
+    // during fixture setup, before a single assertion in this file runs.
+    //
+    // This test had never executed in CI, so the constraint could be added without anything
+    // reporting that the fixture no longer satisfied it. Slugifying here rather than at the
+    // two call sites that happen to contain a space, so a future tag cannot reintroduce it.
+    let slug: String = tag
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
     sqlx::query("INSERT INTO organizations (id, slug, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING")
         .bind(org)
-        .bind(format!("org-{}", tag.to_lowercase()))
+        .bind(format!("org-{slug}"))
         .bind(format!("Org {tag}"))
         .execute(owner_pool)
         .await
