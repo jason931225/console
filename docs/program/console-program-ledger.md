@@ -1629,3 +1629,7 @@ rather than the assertion.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
 ||||||| 0f7e71baa
+
+## 2026-07-31 — rebind after #536 moved the tip under the ADR-0037 candidate
+
+Mechanical rebind. No claim in the candidate changes.
