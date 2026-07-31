@@ -1683,3 +1683,7 @@ you.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
 ||||||| bec30abaa
+
+## 2026-07-31 — rebind after an upstream merge under the cache-shape candidate
+
+Mechanical rebind. No claim in the candidate changes.
