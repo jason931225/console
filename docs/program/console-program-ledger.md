@@ -1836,3 +1836,25 @@ followed the document on stdout. Moved to stderr.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — a second dark-test tranche, and four crates that proved the assumption wrong
+
+Rebind onto the extended domain-coverage candidate.
+
+41 further `--lib` unit tests in `rest`, `adapter-postgres` and CI-gate crates executed in no
+workflow step. Measured before wiring: **308 tests, 41 suites, 0 failed**. `executed nowhere`
+falls **229 -> 188**, and the baseline moves with it.
+
+**The tranche was selected on an assumption that turned out to be false.** "`--lib` means no
+database" does not hold: `console-platform-group`, `console-platform-storage`,
+`console-gate-rls-arming` and `console-support-rest` each carry a `#[sqlx::test]` in
+`src/lib.rs` and panic with `DATABASE_URL must be set`. They are excluded and belong to the
+PostgreSQL tranche. A unit test living beside the code it tests is not evidence that it needs
+no fixture, and only execution distinguished the two.
+
+The first run used cargo's default fail-fast and stopped at 34 of 45 suites, so one failure
+concealed ten crates' results. The figure above is from a `--no-fail-fast` re-run, which is
+what makes it a count rather than a lower bound.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
