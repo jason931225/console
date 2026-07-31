@@ -1162,6 +1162,61 @@ async fn a_hash_column_that_is_not_32_bytes_is_reported_not_truncated(owner_pool
 }
 
 // ---------------------------------------------------------------------------
+// Deny by default, for the inputs that are not a wrong org.
+// ---------------------------------------------------------------------------
+
+/// Test (e) proves the WRONG org is refused. Migration 0207:253 claims more
+/// than that — that an UNARMED caller "sees none and the insert then fails the
+/// policy's WITH CHECK", closed either way — and nothing asserted it. The
+/// distinction matters because the two reach the policy differently: a wrong
+/// org makes the predicate FALSE, while an absent or blank GUC makes it NULL,
+/// and a policy written with `COALESCE(..., org_id)` or a bare
+/// `current_setting('app.current_org')` would keep test (e) green while opening
+/// the unarmed path. Both are the deny-by-default input a caller reaches by
+/// forgetting `with_org_conn`, not by attacking.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn an_unarmed_caller_can_neither_read_nor_append(owner_pool: PgPool) {
+    seed_org_and_super_admin(&owner_pool, ORG_A, "A").await;
+    seed_entry(&owner_pool, ORG_A, "id = 1").await;
+    let rt = runtime_role_pool(&owner_pool).await;
+
+    // "" is the value `NULLIF` exists for; skipping `arm_org` entirely is the
+    // absent case, where `current_setting(..., true)` yields NULL.
+    for armed in [None, Some("")] {
+        let mut tx = rt.begin().await.unwrap();
+        if let Some(blank) = armed {
+            sqlx::query("SELECT set_config('app.current_org', $1, true)")
+                .bind(blank)
+                .execute(&mut *tx)
+                .await
+                .unwrap();
+        }
+
+        let visible: i64 = sqlx::query_scalar("SELECT count(*) FROM erasure_ledger")
+            .fetch_one(&mut *tx)
+            .await
+            .expect("console_rt must be granted SELECT on erasure_ledger");
+        assert_eq!(
+            visible, 0,
+            "an unarmed read must see nothing, not the whole table (armed: {armed:?})"
+        );
+
+        let refused = sqlx::query(SEED_ENTRY_SQL)
+            .bind(ORG_A)
+            .bind("appended with no tenant armed")
+            .execute(&mut *tx)
+            .await
+            .expect_err("an unarmed append must be refused");
+        assert_eq!(
+            database_error_code(&refused).as_deref(),
+            Some("42501"),
+            "an unarmed append must be refused by row-level security (armed: {armed:?}), \
+             got: {refused}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The chain assignment against a caller who controls name resolution.
 // ---------------------------------------------------------------------------
 
