@@ -1871,3 +1871,15 @@ what makes it a count rather than a lower bound.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — rebind after #542 under the domain-coverage candidate
+
+Mechanical rebind. No claim in the candidate changes.
+
+The three authority documents were resolved as a union, and for the first time since these
+merges began git parsed the conflict hunks without error — #542 removed the ten stray
+`|||||||` lines that were not valid conflict syntax. The gate it added asserts this
+resolution is clean rather than trusting that it is.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
