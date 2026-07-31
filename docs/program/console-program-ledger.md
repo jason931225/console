@@ -1407,3 +1407,8 @@ Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
 ||||||| dbae0352f
+
+## 2026-07-31 — rebind after #531 moved the tip under the gate-integrity candidate
+
+Mechanical rebind. #531 merged, producing a new squash tip and invalidating this branch's
+train. No claim in the candidate changes.
