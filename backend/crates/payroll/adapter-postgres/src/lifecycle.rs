@@ -1207,6 +1207,14 @@ fn parse_release_gate(gate: &Value) -> Result<PayrollReleaseGateInput, Lifecycle
                             "release-gate record is missing nts_tax_row".to_owned(),
                         )
                     })?;
+                    // The one OPTIONAL kernel input, because the kernel itself
+                    // treats it as optional: absent means "use the gross".
+                    // Present-but-wrong-typed is still refused.
+                    let pension_key = "pension_standard_monthly_income_won";
+                    let pension_standard_monthly_income_won = match case.get(pension_key) {
+                        None | Some(Value::Null) => None,
+                        Some(_) => Some(gate_i64(case, pension_key)?),
+                    };
                     Ok(GoldenPayrollCase {
                         case_id: gate_str(case, "case_id")?,
                         rate_table_version: gate_str(case, "rate_table_version")?,
@@ -1230,17 +1238,7 @@ fn parse_release_gate(gate: &Value) -> Result<PayrollReleaseGateInput, Lifecycle
                                     ))
                                 })?,
                             gross_won: gate_i64(case, "monthly_gross_pay_won")?,
-                            // The one OPTIONAL input, because the kernel itself
-                            // treats it as optional: absent means "use the gross".
-                            // Present-but-wrong-typed is still refused.
-                            pension_standard_monthly_income_won: match case
-                                .get("pension_standard_monthly_income_won")
-                            {
-                                None | Some(Value::Null) => None,
-                                Some(_) => {
-                                    Some(gate_i64(case, "pension_standard_monthly_income_won")?)
-                                }
-                            },
+                            pension_standard_monthly_income_won,
                             tax_row: VerifiedNtsTaxRow {
                                 table_version: gate_str(tax, "table_version")?,
                                 monthly_income_tax_won: gate_i64(tax, "monthly_income_tax_won")?,
