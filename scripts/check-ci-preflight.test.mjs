@@ -552,10 +552,10 @@ ${preflightRustToolchainSetup.trimEnd()}`,
   it("locks post-preflight Buck2 reachability targets and disallows added run surfaces", () => {
     expectFailure(
       workflow.replace(
-        "SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain",
+        "SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres --lib",
         "cargo test -p console-support-domain",
       ),
-      "domain-unit must run SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain",
+      "domain-unit must run SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres --lib",
     );
     expectFailure(
       workflow.replace(
@@ -763,51 +763,45 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
   });
 
-  it("keeps both payroll release-gate unit targets reachable from payroll-domain-unit", () => {
-    // Every mutation below was observed RED before this test was written; the
-    // rules in check-ci-preflight.mjs are themselves a probe, and a probe with
-    // no demonstrated failure mode is not evidence. The domain half decides
-    // whether a parsed gate input is satisfied and the adapter half decides
-    // what a stored record may parse INTO, so dropping either target returns
-    // the release gate to half-proven — which is what this job exists to stop.
+  // Renamed 2026-07-31: #534 consolidated support-domain-unit and domain-unit
+  // into one `domain-unit` job running both crates through a single cargo invocation,
+  // because they share console-kernel-core and were recompiling it twice across two
+  // runner startups. The assertion is unchanged in substance — the payroll release-gate
+  // targets must stay reachable from a protected job — only the job's name moved.
+  it("keeps both payroll release-gate halves reachable from domain-unit", () => {
+    // Slice A wrote this against buck2 targets; #534 moved the job to cargo, so the
+    // MECHANISM changed and the INTENT did not. The domain half decides whether a
+    // parsed gate input is satisfied; the adapter half decides what a stored record
+    // may parse INTO. Dropping either returns the release gate to half-proven, which
+    // is what this job exists to stop. The adapter half is the one that ran nowhere
+    // before 2026-07-31 — 12 pure #[test] cases, no workflow.
     expectFailure(
-      workflow.replace(/\n  payroll-domain-unit:[\s\S]*?\n  postgres-domain-reachability:/, "\n  postgres-domain-reachability:"),
-      "CI must define protected job payroll-domain-unit",
+      workflow.replace(/\n  domain-unit:[\s\S]*?\n  postgres-domain-reachability:/, "\n  postgres-domain-reachability:"),
+      "CI must define protected job domain-unit",
     );
     expectFailure(
-      workflow.replace("  payroll-domain-unit:\n", "  payroll-domain-unit:\n    needs: []\n"),
-      "payroll-domain-unit must need preflight",
+      workflow.replace("  domain-unit:\n", "  domain-unit:\n    needs: []\n"),
+      "domain-unit must need preflight",
     );
+    // Dropping EITHER package must fail, which is the whole point of the pairing.
+    expectFailure(
+      workflow.replace(" -p console-payroll-adapter-postgres", ""),
+      "domain-unit must run",
+    );
+    expectFailure(
+      workflow.replace(" -p console-payroll-domain -p console-payroll-adapter-postgres", " -p console-payroll-adapter-postgres"),
+      "domain-unit must run",
+    );
+    // --lib is load-bearing: without it the adapter's PostgreSQL integration suites
+    // are pulled into a job that has no database.
     expectFailure(
       workflow.replace(
-        "tools/buck2 test //backend/crates/payroll/domain:console-payroll-domain-unit",
-        "cargo test -p console-payroll-domain",
+        "-p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres --lib",
+        "-p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres",
       ),
-      "payroll-domain-unit must run tools/buck2 test //backend/crates/payroll/domain:console-payroll-domain-unit",
-    );
-    expectFailure(
-      workflow.replace(
-        "\n      - name: Payroll adapter-postgres unit target\n        run: tools/buck2 test //backend/crates/payroll/adapter-postgres:console-payroll-adapter-postgres-unit\n",
-        "\n",
-      ),
-      "payroll-domain-unit must run tools/buck2 test //backend/crates/payroll/adapter-postgres:console-payroll-adapter-postgres-unit",
-    );
-    expectFailure(
-      workflow.replace(
-        "      - name: Payroll domain unit target\n        run:",
-        "      - name: Payroll domain unit target\n        if: ${{ false }}\n        run:",
-      ),
-      "payroll-domain-unit must run tools/buck2 test //backend/crates/payroll/domain:console-payroll-domain-unit unconditionally",
-    );
-    expectFailure(
-      workflow.replace(
-        "      - name: Payroll domain unit target\n",
-        "      - name: Unexpected Cargo test\n        run: cargo test -p console-payroll-domain\n\n      - name: Payroll domain unit target\n",
-      ),
-      "payroll-domain-unit must contain only the locked ordered Buck2 run steps",
+      "domain-unit must run",
     );
   });
-
   it("preserves fail-fast backend and dev-up ordering", () => {
     const sourceGateDisplaced = workflow
       .replace("      - name: Layer-boundary gate\n", "      - name: Displaced source gate\n")
