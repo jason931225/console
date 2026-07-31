@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Disposable PostgreSQL for a single `cargo test` run, mirroring
-# tools/buck/test_needs_postgres.sh without going through Buck.
+# tools/pg/needs_postgres.sh without going through Buck.
 #
 # --rm is not optional: 707 orphaned volumes once filled this VM and took dev
 # Postgres down with it. The trap removes the container on every exit path.

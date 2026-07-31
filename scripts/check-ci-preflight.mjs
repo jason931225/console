@@ -29,11 +29,11 @@ const consoleTrainDerivation = [
   "printf 'CONSOLE_SYNTHETIC_MERGE_SHA=%s\\n' \"$CONSOLE_SYNTHETIC_MERGE_SHA\"",
   '} >> "$GITHUB_ENV"',
 ];
-const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_env.test.sh";
-const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
+const buckPostgresEnvironmentTestCommand = "tools/pg/run_test_with_postgres_env.test.sh";
+const buckPostgresHarnessTestCommand = "tools/pg/needs_postgres.test.sh";
 const domainUnitCommand = "SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml -p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres --lib";
 const postgresDomainReachabilityCommands = [
-  "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+  "tools/pg/needs_postgres.sh --num-threads=1 \\",
   "//tools/buck:dispatch-p1-postgres \\",
   "//tools/buck:attendance-cancel-substitution-postgres \\",
   "//tools/buck:attendance-concurrency-postgres \\",
@@ -743,7 +743,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
         {
           name: "Buck2 dev-auth feature PostgreSQL suites",
           run: [
-            "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+            "tools/pg/needs_postgres.sh --num-threads=1 \\",
             "//tools/buck:auth-rest-dev-auth-inline-postgres \\",
             "//tools/buck:auth-rest-dev-auth-session-postgres \\",
             "//tools/buck:auth-rest-dev-auth-group-admin-postgres \\",
@@ -770,7 +770,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
         {
           name: "Buck2 console-app inline PostgreSQL suites",
           run: [
-            "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+            "tools/pg/needs_postgres.sh --num-threads=1 \\",
             "//tools/buck:app-inline-postgres \\",
             "//tools/buck:app-dev-auth-persona-guard-postgres",
           ].join("\n"),

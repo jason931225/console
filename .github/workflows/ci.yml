@@ -26,6 +26,7 @@ on:
       - "scripts/**"
       - "tools/buck/**"
       - "tools/buck2"
+      - "tools/pg/**"
       - "toolchains/**"
       - "third-party/rust/**"
       - "BUCK"
@@ -52,6 +53,7 @@ on:
       - "scripts/**"
       - "tools/buck/**"
       - "tools/buck2"
+      - "tools/pg/**"
       - "toolchains/**"
       - "third-party/rust/**"
       - "BUCK"
@@ -146,10 +148,10 @@ jobs:
         run: node --test scripts/console/plan-fanout.test.mjs
 
       - name: Buck PostgreSQL environment wrapper regression
-        run: tools/buck/run_test_with_postgres_env.test.sh
+        run: tools/pg/run_test_with_postgres_env.test.sh
 
       - name: Buck disposable PostgreSQL harness regression
-        run: tools/buck/test_needs_postgres.test.sh
+        run: tools/pg/needs_postgres.test.sh
 
       - name: CI preflight contract
         run: npm run check:ci-preflight
@@ -245,7 +247,7 @@ jobs:
 
       - name: Serialized disposable PostgreSQL integration targets
         run: |
-          tools/buck/test_needs_postgres.sh --num-threads=1 \
+          tools/pg/needs_postgres.sh --num-threads=1 \
             //tools/buck:dispatch-p1-postgres \
             //tools/buck:attendance-cancel-substitution-postgres \
             //tools/buck:attendance-concurrency-postgres \
@@ -301,7 +303,7 @@ jobs:
 
       - name: Company conformance against disposable PostgreSQL
         run: |
-          tools/buck/test_needs_postgres.sh --num-threads=1 \
+          tools/pg/needs_postgres.sh --num-threads=1 \
             //tools/buck:company-conformance-postgres
 
   generated-face-authority:
@@ -655,7 +657,7 @@ jobs:
         # identity with `console.sqlx_test_bootstrap` armed, so the suites reach
         # their assertions instead of failing during migration application.
         run: |
-          tools/buck/test_needs_postgres.sh --num-threads=1 \
+          tools/pg/needs_postgres.sh --num-threads=1 \
             //tools/buck:auth-rest-dev-auth-inline-postgres \
             //tools/buck:auth-rest-dev-auth-session-postgres \
             //tools/buck:auth-rest-dev-auth-group-admin-postgres \
@@ -693,7 +695,7 @@ jobs:
       - name: Buck2 console-app inline PostgreSQL suites
         working-directory: .
         run: |
-          tools/buck/test_needs_postgres.sh --num-threads=1 \
+          tools/pg/needs_postgres.sh --num-threads=1 \
             //tools/buck:app-inline-postgres \
             //tools/buck:app-dev-auth-persona-guard-postgres
 

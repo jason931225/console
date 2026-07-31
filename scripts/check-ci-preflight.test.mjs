@@ -13,8 +13,8 @@ const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locke
 const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
 const reachabilityPreflightCommands = [
   "node --test scripts/console/route-inventory.test.mjs",
-  "tools/buck/run_test_with_postgres_env.test.sh",
-  "tools/buck/test_needs_postgres.test.sh",
+  "tools/pg/run_test_with_postgres_env.test.sh",
+  "tools/pg/needs_postgres.test.sh",
 ];
 const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Cargo.lock consistency
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
@@ -559,8 +559,8 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     );
     expectFailure(
       workflow.replace(
-        "tools/buck/test_needs_postgres.sh --num-threads=1",
-        "tools/buck/test_needs_postgres.sh",
+        "tools/pg/needs_postgres.sh --num-threads=1",
+        "tools/pg/needs_postgres.sh",
       ),
       "postgres-domain-reachability must run the locked PostgreSQL reachability targets",
     );

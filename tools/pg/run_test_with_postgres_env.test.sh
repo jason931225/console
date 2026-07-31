@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-wrapper="${repo_root}/tools/buck/run_test_with_postgres_env.sh"
+wrapper="${repo_root}/tools/pg/run_test_with_postgres_env.sh"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/console-buck-wrapper-test.XXXXXX")"
 trap 'rm -rf "${scratch}"' EXIT
 valid="${scratch}/valid.env"

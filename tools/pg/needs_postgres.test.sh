@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-harness="${repo_root}/tools/buck/test_needs_postgres.sh"
+harness="${repo_root}/tools/pg/needs_postgres.sh"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/console-buck-postgres-test.XXXXXX")"
 fake_bin="${scratch}/bin"; log="${scratch}/calls.log"; mkdir -p "${fake_bin}"
 trap 'rm -rf "${scratch}"' EXIT
