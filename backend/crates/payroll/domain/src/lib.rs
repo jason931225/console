@@ -1012,6 +1012,37 @@ pub fn validate_release_gate(input: &PayrollReleaseGateInput) -> Result<(), Kern
             "professional validation reviewer reference is required",
         ));
     }
+    // The golden case is RE-EXECUTED, not merely stored: until this loop
+    // existed the professionals' signed figure was compared to nothing, so a
+    // golden case could not fail. LAST on purpose — every check above returns
+    // on its first failure, so running the arithmetic earlier would surface a
+    // mismatch message in place of the specific pre-existing condition that
+    // actually regressed.
+    //
+    // Strictly stricter, and it admits a THIRD failure class to the gate:
+    // `build_line_calculation`'s own refusals (blank tax table_version,
+    // negative amounts, a pay_date outside the in-crate rate windows) now fail
+    // the GATE, not just line calculation. That is deliberate — a case whose
+    // declared inputs the kernel cannot execute is not a case that passed.
+    for case in &input.golden_cases {
+        // .clone() is mandatory: build_line_calculation takes its input by
+        // value and moves tax_row.table_version, while this function only
+        // borrows &PayrollReleaseGateInput.
+        let computed = build_line_calculation(case.inputs.clone()).map_err(|err| {
+            KernelError::validation(format!(
+                "golden case {} could not be recomputed: {}",
+                case.case_id, err.message
+            ))
+        })?;
+        if computed.total_employee_deductions_won != case.expected_total_employee_deductions_won {
+            return Err(KernelError::validation(format!(
+                "golden case {} expects total employee deductions {} but the payroll kernel computed {}",
+                case.case_id,
+                case.expected_total_employee_deductions_won,
+                computed.total_employee_deductions_won
+            )));
+        }
+    }
     Ok(())
 }
 
