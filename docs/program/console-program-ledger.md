@@ -2133,3 +2133,35 @@ either, and each such failure is a proof that was believed and never held.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — executed-nowhere reaches zero
+
+Rebind onto the final PostgreSQL tranche.
+
+Every remaining dark test file is wired. **`executed nowhere` 167 -> 0**, and the ratchet baseline
+goes with it: a test file added without a path from a workflow step now fails CI outright, because
+there is no slack left in the number. On 2026-07-30 that number was 287.
+
+A 32-agent audit read all 167 against the live migrations first. Three fixtures were confirmed
+broken and repaired — a helper called twice with constant identifiers colliding on three UNIQUE
+constraints, a 52-character slug against a 40-character ceiling, and an `equipment_no` that never
+matched its CHECK. Two further claims were **refuted**: they asserted no `console_rt` GRANT existed,
+on the strength of a grep, but `0035_enable_rls_rollout.sql:78-80` emits those grants dynamically
+through `EXECUTE format(...)`. A text search cannot see dynamic SQL, and without the refutation
+pass this candidate would have "fixed" a non-problem.
+
+Wired as one tranche because the marginal cost was measured — 11 wrappers 996s, 19 wrappers 1032s,
+~4.5s each — retracting this repository's earlier claim that the cost is roughly linear.
+
+**What is not claimed: that all 167 pass.** They have never executed. The audit checked fixtures
+against constraints without running anything, and reported findings without per-file CLEAN
+attestations, so 109 files carrying no finding are UNVERIFIED rather than proven clean. CI is the
+first execution, and it is a required check, so failures block the pull request rather than
+reaching main.
+
+60 FRAGILE findings are recorded and deliberately unfixed: they pass today and would break on a
+different caller. The largest is 43 verbatim copies of `format!("org-{}", tag.to_lowercase())`,
+rooted in one line of `platform/test-support/src/lib.rs`.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
