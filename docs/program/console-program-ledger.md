@@ -1548,3 +1548,27 @@ only reason it surfaced before merge rather than after.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — four jobs cached a directory their build system never writes
+
+The registers rebind to the CI cache-shape candidate.
+
+Six jobs carried a Rust build cache; four of them run Buck2, which does not write
+`backend/target`. Those four restored and saved a cache they could not use, and — because
+`rust-cache` keys on job name by default and none set a shared key — the six entries were
+near-duplicates of one workspace evicting each other from a 10GB budget.
+
+Worth recording at the authority layer: **the obvious fix was worse than the defect.**
+Adding a shared key to all six would let a Buck2-only job finish first and save a
+near-empty `backend/target` under the shared key, poisoning it for the two jobs that
+actually compile. The correct shape was the opposite of the intuitive one — remove the
+cache where it is unused, share it only between the jobs that populate it.
+
+Also recorded: the candidate adds a guard for its own change. Deleting the shared key
+passed every gate before that guard existed, verified by execution, so the consolidation
+could have silently refragmented while CI stayed green. A cache optimisation with no
+protection against its own reversion is the same defect class this program keeps meeting —
+a green signal that has stopped meaning anything.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
