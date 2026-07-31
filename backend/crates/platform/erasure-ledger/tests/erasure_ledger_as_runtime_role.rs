@@ -996,6 +996,65 @@ async fn truncate_of_the_ledger_is_refused_by_the_database(owner_pool: PgPool) {
 }
 
 // ---------------------------------------------------------------------------
+// Tenant teardown against an unconditional DELETE trigger.
+// ---------------------------------------------------------------------------
+
+/// Migration 0207's sharpest call — no `REFERENCES organizations(id)`, and no
+/// `app.platform_force_remove_org` bypass branch in the DELETE trigger — and
+/// nothing asserted it. The two are load-bearing together: 0196's closure loop
+/// selects children by FOREIGN KEY to `organizations`, so an `a`/`r` FK would
+/// put `erasure_ledger` in that loop and a CASCADE FK would be cascaded onto by
+/// `DELETE FROM organizations`. Either lands on the unconditional trigger and
+/// raises `P0001`, and `platform_force_remove_organization` — a SECURITY DEFINER
+/// that deletes some forty relations before it reaches `organizations` — fails
+/// only after it has begun, at operator time.
+///
+/// So this asserts BOTH halves of that decision at once: teardown completes, and
+/// the erasure record survives the tenant whose data it was. Add an FK to this
+/// table in any later migration and this test is what goes red.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn tenant_teardown_completes_and_the_erasure_record_outlives_the_tenant(owner_pool: PgPool) {
+    seed_org_and_super_admin(&owner_pool, ORG_A, "A").await;
+    seed_entry(&owner_pool, ORG_A, "id = 1").await;
+
+    sqlx::query("UPDATE organizations SET status = 'ARCHIVED' WHERE id = $1")
+        .bind(ORG_A)
+        // rls-arming: ok test fixture archives as owner during setup, before force removal
+        .execute(&owner_pool)
+        .await
+        .unwrap();
+
+    let outcome: String = sqlx::query_scalar("SELECT platform_force_remove_organization($1)")
+        .bind(ORG_A)
+        .fetch_one(&owner_pool)
+        .await
+        .expect("force removal must not be blocked by the append-only ledger");
+    assert_eq!(
+        outcome, "removed",
+        "the erasure ledger must not stand between a tenant and its teardown"
+    );
+
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM organizations WHERE id = $1")
+            .bind(ORG_A)
+            .fetch_one(&owner_pool)
+            .await
+            .unwrap(),
+        0,
+        "the tenant must actually be gone, or 'removed' proves nothing"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM erasure_ledger WHERE org_id = $1")
+            .bind(ORG_A)
+            .fetch_one(&owner_pool)
+            .await
+            .unwrap(),
+        1,
+        "the record that personal data was erased must outlive the tenant it was about"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Concurrent appends. The retry is what stands between a lost erasure record
 // and a caller that believes it recorded one.
 // ---------------------------------------------------------------------------
