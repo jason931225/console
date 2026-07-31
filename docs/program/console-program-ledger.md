@@ -2268,3 +2268,30 @@ than pretending, and the file records why for each.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — the class fix regressed a passing test, and is narrowed
+
+Rebind after narrowing 0208.
+
+The previous candidate excluded the whole 0193 composite-FK family from the force-removal closure.
+Fail went 8 -> 2, but one of the two is a **regression**: `platform-rest remove_tenant` had been
+passing and now fails 23001 on `registry_equipment_site_id_fkey`.
+
+The reasoning was right about which tables CAN be reached too early and wrong about which need
+excluding. The closure deletes `registry_equipment` before `registry_sites` under its
+OID-descending order; removing it from the sweep left `registry_sites` blocked by a child that no
+longer got deleted first. Presence in 0196's hand-ordered block was verified and taken as proof
+that exclusion was safe — but presence is not order, and that block runs AFTER the closure, so
+excluding a table moves it later, which is wrong for anything the sweep was already handling
+correctly.
+
+Narrowed to the two roots actually observed failing: `equipment_cost_ledger` and `evidence_media`.
+The other three were never observed failing; the generalization from two instances to a class of
+five was untested, and the test that would have caught it was already green.
+
+Recorded because this is the first change in this branch to break something that worked. An
+over-narrow fix costs a cycle; an over-broad one costs a passing test, and only execution
+distinguishes them.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
