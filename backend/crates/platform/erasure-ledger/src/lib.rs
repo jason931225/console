@@ -24,6 +24,14 @@
 //!    Log retention is not under this crate's control, the line is not
 //!    tamper-evident, nothing reads it back, and no test asserts it. Treat it as
 //!    a breadcrumb for a human, not as the anchor.
+//!
+//!    With ONE exception, stated because "structurally impossible" is otherwise
+//!    too strong: [`RestoreVerdict::Gapped`] rests on `count(*) = max(seq)`, an
+//!    identity internal to the ledger, so a restore that lands BETWEEN recorded
+//!    entries is detectable with nothing held outside the cluster at all. A
+//!    restore that truncates the ledger from its head is not — that leaves the
+//!    identity intact — and that is the case an external witness is still the
+//!    only answer to.
 //! 2. **It detects; it never prevents.** No in-database construct survives a
 //!    point-in-time restore of its own cluster.
 //! 3. **No signature.** A caller holding `INSERT` can record false facts at
