@@ -253,9 +253,29 @@ $$;
 --    read is under RLS: with `app.current_org` armed the caller sees exactly its
 --    own org's entries, and with the GUC unset it sees none and the insert then
 --    fails the policy's WITH CHECK. Fails closed either way.
+--
+--    Running as the caller is also why `SET search_path` is not optional here.
+--    Without it this function inherits the CALLER's search_path and its own
+--    unqualified `erasure_ledger` and `erasure_ledger_entry_hash` resolve
+--    through it. Nothing in this schema revokes TEMP on the database — 0168
+--    revokes only CREATE on schema `public` — so a caller holding INSERT and
+--    nothing else can put its own `erasure_ledger` in `pg_temp`, name `pg_temp`
+--    ahead of `public`, and have this trigger read the head from a table it
+--    wrote; temp tables carry no RLS, so the org floor does not narrow that read
+--    either. MEASURED before this line existed, as `console_rt`: a planted
+--    `(seq 500)` decoy produced a REAL ledger row at `seq = 501` with a
+--    caller-chosen predecessor. That is the forged chain the paragraph above
+--    says a caller holding only INSERT cannot build, and with it an attacker
+--    re-creates the exact `(seq, entry_hash)` an external holder witnessed, so
+--    `classify` answers `Consistent` for a ledger that lost entries. `public`
+--    first, so the real table always wins.
+--    (`erasure_ledger_append_only` below deliberately has no such clause: it
+--    resolves no name at all, it only RAISEs.)
 -- ---------------------------------------------------------------------------
 CREATE FUNCTION erasure_ledger_assign_chain()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+RETURNS TRIGGER LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 DECLARE
     v_genesis CONSTANT BYTEA := decode(repeat('00', 32), 'hex');
 BEGIN
