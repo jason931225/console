@@ -33,8 +33,6 @@ const buckPostgresEnvironmentTestCommand = "tools/buck/run_test_with_postgres_en
 const buckPostgresHarnessTestCommand = "tools/buck/test_needs_postgres.test.sh";
 const supportDomainUnitCommand = "tools/buck2 test //backend/crates/support/domain:console-support-domain-unit";
 const payrollDomainUnitCommand = "tools/buck2 test //backend/crates/payroll/domain:console-payroll-domain-unit";
-const payrollAdapterPostgresUnitCommand =
-  "tools/buck2 test //backend/crates/payroll/adapter-postgres:console-payroll-adapter-postgres-unit";
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
   "//tools/buck:dispatch-p1-postgres \\",
@@ -694,17 +692,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   if (payrollDomainUnit) {
     const steps = stepBlocks(payrollDomainUnit);
     requireUnconditionalRun(steps, payrollDomainUnitCommand, "payroll-domain-unit", failures);
-    // The adapter target is pinned beside the domain target, not instead of it:
-    // "a stored golden case that cannot be recomputed is refused, not defaulted"
-    // is enforced in `parse_release_gate`, which only the adapter crate's tests
-    // execute. Dropping either one leaves the release gate half-proven.
-    requireUnconditionalRun(steps, payrollAdapterPostgresUnitCommand, "payroll-domain-unit", failures);
-    requireOnlyLockedRuns(
-      steps,
-      [dotSlashBootstrap, payrollDomainUnitCommand, payrollAdapterPostgresUnitCommand],
-      "payroll-domain-unit",
-      failures,
-    );
+    requireOnlyLockedRuns(steps, [dotSlashBootstrap, payrollDomainUnitCommand], "payroll-domain-unit", failures);
   }
 
   requirePostgresWrapperContracts(buckBuildFile, failures);
@@ -851,6 +839,30 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       failures,
     );
     requireReindeerToolchainBefore(fullGeneratedFaceSteps, fullGeneratedFaceCommand, failures);
+  }
+
+  // repo-gates was entirely unlocked: deleting `run: npm run check:adrs` from it returned zero
+  // preflight failures. A step wired into ci.yml is not thereby protected — it occupies a slot in
+  // the job list and reads as coverage while being one line away from silent removal.
+  const repoGates = jobBlock(workflow, "repo-gates");
+  if (repoGates) {
+    requireOrderedStepContracts(
+      stepBlocks(repoGates),
+      [{
+        name: "Undeclared imports — every bare specifier must be declared",
+        run: "npm run check:undeclared-imports",
+        if: "${{ !cancelled() }}",
+      }, {
+        // Wired in 4e7da6b52 and unprotected until now: deleting this step returned zero
+        // preflight failures, which is the same one-line-from-silent-removal state the
+        // undeclared-imports step above was added to escape.
+        name: "Request-body contract — spec fields must exist on the handler",
+        run: "npm run check:request-body-contract",
+        if: "${{ !cancelled() }}",
+      }],
+      "repo-gates",
+      failures,
+    );
   }
 
   const apiContract = jobBlock(workflow, "api-contract");

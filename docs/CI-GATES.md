@@ -89,6 +89,8 @@ npm run test:adrs
 npm run check:adrs
 for s in \
   check:foundation-gates \
+  check:request-body-contract \
+  check:doc-citations \
   check:package-lock \
   check:root-workspaces \
   check:enterprise-ux-parity \
@@ -108,6 +110,7 @@ for s in \
   check:g008-payroll-readiness \
   check:people-hr-maturity \
   check:payroll-release-gate \
+  check:undeclared-imports \
   check:financial-maturity \
   check:cx-reporting-maturity \
   check:operations-intelligence-maturity; do
@@ -204,6 +207,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:adrs`
 - `check:ci-preflight`
 - `check:console-truth-ledger`
+- `check:doc-citations`
 - `check:foundation-gates`
 - `check:g004-identity-foundation`
 - `check:g005-workflow-lifecycle`
@@ -212,11 +216,13 @@ names only, not incidental workflow prose or runner setup text.
 - `check:g008-payroll-readiness`
 - `check:k8s`
 - `check:openapi-app`
+- `check:request-body-contract`
 - `check:package-lock`
 - `check:payroll-release-gate`
 - `check:people-hr-maturity`
 - `check:pr473-migration-operational`
 - `check:production-hardening`
+- `check:undeclared-imports`
 - `check:workflow-runtime-m2-cedar-guards`
 - `check:workflow-runtime-m2-drainer`
 - `check:workflow-runtime-m2-runtime`

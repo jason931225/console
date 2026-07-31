@@ -1091,3 +1091,363 @@ candidate exists to stop repeating.
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — the candidate binding for the ecosystem plan and its adversarial review
+
+The registers rebind to the ecosystem-plan candidate. The candidate is documentation and
+tooling: the policy/organization/user/approvals plan, its adversarial review, ten accepted
+ADRs, six experiments run rather than designed, a payroll golden-case audit, a Korean
+statutory source register, and three scripts — an additive ADR index generator, a
+doc-citation verifier now wired into the repo gates, and a client for the official
+legislation API.
+
+Nothing in the candidate changes what any capability may do. No migration, no route, no
+gate threshold, no exposure.
+
+Three properties are worth recording at the authority layer.
+
+The candidate **corrects itself in place rather than presenting a clean history.** Its own
+documents record fourteen corrections to their input, four retracted claims, and — on the
+day of this binding — a retracted staleness finding of my own: I called the kernel's 고용보험
+citation stale by matching a law's *name* instead of reading its delegation chain, and the
+rate is set in 징수법 시행령 rather than 고용보험법 시행령. The retraction is a commit, not an
+edit. A reader should treat the correction record as part of the deliverable.
+
+The candidate asserts **no Korean legal conclusion and moves no Korea control**. Its
+statutory register names instruments and quotes their dates and figures; where a document
+could not be read, it says so and leaves the row unverified. One figure was verified
+against a 고시 body — 기준소득월액 하한 410천원 / 상한 6,590천원 for the July 2026 window, which
+matches the kernel — and the adjacent window's figures were explicitly left unverified
+because the portal serves only consolidated current text. Matching the spec is not matching
+the instrument.
+
+The candidate **found a silent revert in itself before this binding.** Diffed against main
+it showed 39 deletions in the served OpenAPI contract: the branch predated the security
+schemes added for ten operations, so merging it would have removed them. The merge that
+fixes this is the candidate commit. A draft branch left red for a day accumulates reverts
+that no gate reports, because the gate never ran.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — rebind after reconciling a concurrent writer on the same branch
+
+The registers rebind again, onto the merge that reconciles a teammate's independent
+main-merge with this branch's own. Both writers had merged main to recover the OpenAPI
+security schemes the branch would otherwise have reverted; the teammate's merge carried
+no content this branch lacked.
+
+This entry exists because the rebind happened twice in one day for one candidate, and
+that is the cost the lane protocol's "one writer per lane" rule is meant to avoid. Two
+writers on one branch means 390 references are rewritten once per writer, and the only
+thing that made the second rebind cheap was that it is scripted. The protocol was not
+violated by anyone here — a subagent and its parent are one writer by intent and two by
+mechanism, which is a gap in the rule rather than a breach of it.
+
+Recorded rather than smoothed over, because the alternative was a force-push that would
+have discarded a concurrent writer's commit to produce a tidier history.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — third rebind for one candidate, and what that cost measures
+
+The registers rebind onto the commit that documents `check:doc-citations` in
+`docs/CI-GATES.md`. The foundation gate requires every npm script CI runs to appear
+there, and the candidate had wired the gate into `ci.yml` without listing it.
+
+This is the third rebind of 390 references for a single candidate in one day. The first
+followed the merge recovering the OpenAPI security schemes, the second a concurrent
+writer on the same branch, the third this one-line documentation fix. Recorded as a
+measurement rather than a complaint: **the train makes every post-hoc fix cost a
+390-reference rewrite**, because a fix cannot live in T — T may modify only the three
+authority documents — so each one becomes a new candidate.
+
+That cost is the intended shape of the mechanism and the reason `rebind-candidate.mjs`
+exists; the ledger already attributes lost work across four releases to doing it by
+hand. The observation worth keeping is narrower: the cost is paid per *fix*, not per
+*change*, so it rewards getting the candidate right before the first push and punishes
+iterating against CI. Anyone planning a lane should front-load the gates that can be run
+locally — `check:foundation-gates`, `check:ci-preflight`, `check:doc-citations`,
+`check:adrs`, and the truth-ledger validator against a `commit-tree` simulation of the
+synthetic merge — because each one skipped is a full rebind later.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+||||||| 18a21d7cd
+
+## 2026-07-30 — fourth rebind, and the merge that proves the mechanism works as designed
+
+The registers rebind onto the merge that brings #529 into this branch. #529's squash
+produced a new unsigned tip on `main`, which invalidated this branch's train — the exact
+mechanism that had this PR red for a day, now observed deliberately rather than
+discovered.
+
+Two things this merge preserved that a careless resolution would have destroyed. All
+three authority documents conflicted, because both branches had rebound them to
+different candidates; the two registers were resolved to `main`'s state and then
+rewritten wholesale by the rebind, which is safe precisely because the rebind is total.
+The **ledger was resolved as a union**: `main`'s payroll-binding entry and this branch's
+three entries all survive, ordered `main` first. A `--theirs` resolution on this file
+would have silently deleted three entries, and nothing in the gate would have noticed —
+the train checks that the ledger *changed*, never what it says.
+
+That is worth stating plainly as a limit of the mechanism. `assertAuthorityDiff` requires
+C..T to modify exactly the three documents and verifies mode and status; it does not and
+cannot verify that the ledger's prose is intact, additive, or true. The ledger is
+protected by convention, not by the gate that appears to protect it.
+
+Fourth rebind for this candidate. The three prior costs are recorded above; this one was
+caused by an upstream merge rather than by a fix here, which is the unavoidable kind.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — the candidate binding for two comments that miscounted a carve-out set
+
+The registers rebind to the audit carve-out candidate. The candidate changes two comments
+and no logic: both said the audit-coverage carve-out set had a single member —
+*"the only carve-out is LocationPing ingestion"* — against a gate whose
+`allowed_audit_exclusions()` returns two and whose own test asserts `len() == 2`.
+
+Nothing in the candidate changes what any capability may do. No gate logic, no assertion,
+no threshold. The set was already two and the test already proved it; only the prose was
+wrong.
+
+One property is worth recording at the authority layer. This closes the last of ten
+findings from an ADR acceptance-verification pass, and it belongs to a class that
+recurred all day: **four comments outlived the problem they described, and three were
+written by the hand that then closed the gap.** A comment is the one artifact in this
+repository with no gate behind it — `check:doc-citations` now verifies that documents
+cite code that exists, but nothing verifies that a comment still describes the code
+beneath it. The counts here were falsifiable only because someone thought to count.
+
+Fifth and final rebind of the day. The candidate is two comments; the binding cost 390
+references. That ratio is the mechanism working as designed, not a complaint — but it is
+the strongest argument yet for batching small corrections rather than landing them one at
+a time.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — sixth rebind, and the update-branch button as a train breaker
+
+The registers rebind again. A branch-update merge reached the remote while this train was
+being built locally, so the tip this branch's registers had just been bound to was no
+longer the tip. Its content was redundant with the local merge — the same two commits,
+verified by diff — but including it was still required to push without force.
+
+This is the second time today the same shape occurred: a second writer produces a
+content-identical merge, and the cost is a full 390-reference rebind because the candidate
+SHA moved. The first instance was a subagent, this one an interface button.
+
+The observation the ledger should carry forward is that **the train binds a SHA, so
+anything that changes the tip invalidates it, including operations that change no
+content.** A no-op merge is not a no-op to this mechanism. Where a branch has a train
+built, the update-branch button should not be used — refresh by rebuilding the train, or
+the next push fails and costs a rebind either way.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-31 — the candidate binding for the registry retry
+
+The registers rebind to the PostgreSQL image-pull candidate. The candidate adds an
+explicit digest-pinned pull with bounded retry to `tools/buck/test_needs_postgres.sh`,
+and three tests for it.
+
+Nothing in the candidate changes what any capability may do, and it weakens no pin: the
+image is fetched by digest, so a retry either resolves that exact content or fails.
+
+One property is worth recording at the authority layer. The defect was found because a
+**documentation-only** pull request went red, and the failure named the docs PR rather
+than the registry. `docker run` pulled implicitly, so an unreachable registry surfaced as
+`exit 125` from the run — indistinguishable, at a glance, from a broken harness. The
+readiness retry that already existed runs after the container exists and never covered
+the pull.
+
+That is a small instance of a pattern this program has recorded before: a red signal that
+names the wrong thing is worse than a slow one, because it spends attention on the
+innocent change. The candidate makes the registry's own error visible on exhaustion
+rather than swallowing it.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-31 — the candidate binding for the erasure-versus-PITR question
+
+The registers rebind to the ADR-0037 candidate: one `proposed` decision record, its index
+row, and a pointer from the Korean legal source notes. No code, no migration, no gate. The
+record decides nothing — its Decision section says so in its first line.
+
+Three properties are worth recording at the authority layer.
+
+**The record found a condition sharper than the one it was asked to describe.** The brief
+posed a general conflict between an erasure obligation and point-in-time recovery. The
+record established from `deploy/apps/console/base/database.yaml` that the backup
+`ObjectStore` declares **no retention policy at all** — the manifest's own comment states
+PITR *"reaches back to the first backup forever"* and that storage grows unbounded, and the
+ops runbook confirms the indefinite retention is intentional and dated. The window is not
+merely long; it is unbounded, by decision. A `DELETE` is therefore not destruction at any
+horizon, which is stronger than the question began with.
+
+**The record was incomplete on first writing, and no gate could have caught it.** It framed
+two forces — a destruction duty against a recovery capability — and omitted a third that
+dominates an HR and payroll product: data other statutes oblige the operator to keep. That
+omission was found by the owner reading the record. `check:adrs` verifies structure and
+`check:doc-citations` verifies that cited code exists; neither can observe that a record
+reasons about two forces where three apply. Both gates were green over the incomplete
+draft. That is the standing limit of this program's document gates, and it is recorded here
+so that passing gates are not read as completeness.
+
+**The review already planned does not cover this.** A 노무사 is a labour professional and a
+세무사 a tax professional; the payroll sign-off this program has scheduled is neither privacy
+counsel nor able to answer this question. The record says so explicitly so the coverage is
+not assumed.
+
+The record quotes 개인정보 보호법 제21조 verbatim from the official portal and draws only
+architectural observations from its vocabulary, concluding nothing about what it requires.
+It adopts no option, prices four against ADR-0015's restore proof, and carries `status:
+proposed`.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — the candidate binding for two comments that miscounted a carve-out set
+
+The registers rebind to the audit carve-out candidate. The candidate changes two comments
+and no logic: both said the audit-coverage carve-out set had a single member —
+*"the only carve-out is LocationPing ingestion"* — against a gate whose
+`allowed_audit_exclusions()` returns two and whose own test asserts `len() == 2`.
+
+Nothing in the candidate changes what any capability may do. No gate logic, no assertion,
+no threshold. The set was already two and the test already proved it; only the prose was
+wrong.
+
+One property is worth recording at the authority layer. This closes the last of ten
+findings from an ADR acceptance-verification pass, and it belongs to a class that
+recurred all day: **four comments outlived the problem they described, and three were
+written by the hand that then closed the gap.** A comment is the one artifact in this
+repository with no gate behind it — `check:doc-citations` now verifies that documents
+cite code that exists, but nothing verifies that a comment still describes the code
+beneath it. The counts here were falsifiable only because someone thought to count.
+
+Fifth and final rebind of the day. The candidate is two comments; the binding cost 390
+references. That ratio is the mechanism working as designed, not a complaint — but it is
+the strongest argument yet for batching small corrections rather than landing them one at
+a time.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+
+## 2026-07-30 — sixth rebind, and the update-branch button as a train breaker
+
+The registers rebind again. A branch-update merge reached the remote while this train was
+being built locally, so the tip this branch's registers had just been bound to was no
+longer the tip. Its content was redundant with the local merge — the same two commits,
+verified by diff — but including it was still required to push without force.
+
+This is the second time today the same shape occurred: a second writer produces a
+content-identical merge, and the cost is a full 390-reference rebind because the candidate
+SHA moved. The first instance was a subagent, this one an interface button.
+
+The observation the ledger should carry forward is that **the train binds a SHA, so
+anything that changes the tip invalidates it, including operations that change no
+content.** A no-op merge is not a no-op to this mechanism. Where a branch has a train
+built, the update-branch button should not be used — refresh by rebuilding the train, or
+the next push fails and costs a rebind either way.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+||||||| 0d895e79d
+
+## 2026-07-31 — the candidate binding for the gate-integrity adjudication
+
+The registers rebind to the gate-integrity candidate: four false-green holes adjudicated by
+execution, two new gates wired, and one live client-facing defect fixed.
+
+The adjudication itself is the property worth recording. `docs/program/false-green-gate-holes.md`
+asserted that H-1 through H-4 lacked checks. Re-verified against code rather than accepted,
+they resolved as **one OPEN, three MISSTATED** — and the document's claim that
+`0196_platform_force_command_and_fk_closure.sql` does not exist on `main` was itself stale,
+since it does. Two holes received checks; two received dated in-place corrections. Building
+gates for the two MISSTATED holes to reach a tidy four-of-four would have shipped exactly
+the unfalsifiable gate this work exists to eliminate — a gate with zero possible inputs
+cannot be proven red, and a gate that cannot fail is the meta-finding, not its cure.
+
+**A gate found a live defect on its first run.** `ConsumeInventoryItemRequest` published
+`quantity_consumed_milli`, `occurred_at` and `idempotency_key` while the bound handler is
+`rename_all = "camelCase"` with `deny_unknown_fields` — so every spec-conformant request to
+that endpoint was rejected with 422, not merely mis-parsed. The sibling receipt body already
+used camelCase, so the contract was the outlier and has been corrected to the shipped
+behaviour. The gate was deliberately NOT wired while red, and NOT allowlisted around the
+defect; the defect was fixed and then the gate wired.
+
+**The archived-evidence exception is named rather than hidden.** The undeclared-imports gate
+would otherwise be permanently red on an evidence artifact whose subject was deleted — a
+script cited four times by a verification record, one citation recording `10/10 checks
+passed`. Deleting an audit artifact to make a gate green trades evidence integrity for a
+green light. Instead the exclusion is a named export, its count is printed every run, and a
+test observes the gate go red when the classification is removed.
+
+Residuals recorded and not papered over: the request-body gate compares 51 of 223 bodies, a
+floor rather than a claim; two further unowned escalations are named in the holes document.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+||||||| dbae0352f
+
+## 2026-07-31 — rebind after #531 moved the tip under the gate-integrity candidate
+
+Mechanical rebind. #531 merged, producing a new squash tip and invalidating this branch's
+train. No claim in the candidate changes.
+
+## 2026-07-30 — the candidate binding for the payroll tests that ran nowhere
+
+The registers rebind to the payroll CI candidate. The candidate wires
+`//backend/crates/payroll/domain:console-payroll-domain-unit` into a workflow for the
+first time: its 16 tests were compiled by `cargo clippy --all-targets` and never
+executed, which is the fifth instance of that class this week.
+
+Nothing in the candidate changes what any capability may do. It changes which tests
+run, and it renames two of them.
+
+Three properties are worth recording at the authority layer, because a green train
+invites inferences it does not support.
+
+The candidate **renames two tests, and the rename is the load-bearing part** rather
+than cosmetic. `transition_payroll_run` has no non-test caller, and two tests were
+named for system properties this repository does not have — that calculation is
+blocked without validated release evidence, and that issuance is blocked without
+step-up. Wiring them into CI unrenamed would have converted a dormant falsehood into
+a CI-endorsed one: a green check certifying guarantees the production path does not
+implement. No assertion was deleted or weakened; both tests pin exactly what they
+pinned before.
+
+The candidate does **not** make payroll safe to release. The release gate is consulted
+in exactly one place, inside payslip issuance and after the run reaches `PAID`, so the
+lifecycle through payment remains ungated and the gate withholds the 임금명세서 rather
+than the money. A separate audit recorded 19 blocking golden-case gaps against this
+kernel on the same day. Running the unit tests proves the unit tests run.
+
+The candidate's integration coverage is **still not wired and is not claimed to be**.
+`run_lifecycle_api.rs` holds the only gate-blocks-issuance assertion, needs PostgreSQL,
+and belongs in a wrapper target under `postgres-domain-reachability`. It was left out
+because it could not be verified locally, and an unverified wrapper is the defect the
+candidate exists to stop repeating.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
+||||||| 18a21d7cd
