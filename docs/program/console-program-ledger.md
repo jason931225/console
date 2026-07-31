@@ -1330,3 +1330,39 @@ Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
 ||||||| 0d895e79d
+
+## 2026-07-31 — the candidate binding for the gate-integrity adjudication
+
+The registers rebind to the gate-integrity candidate: four false-green holes adjudicated by
+execution, two new gates wired, and one live client-facing defect fixed.
+
+The adjudication itself is the property worth recording. `docs/program/false-green-gate-holes.md`
+asserted that H-1 through H-4 lacked checks. Re-verified against code rather than accepted,
+they resolved as **one OPEN, three MISSTATED** — and the document's claim that
+`0196_platform_force_command_and_fk_closure.sql` does not exist on `main` was itself stale,
+since it does. Two holes received checks; two received dated in-place corrections. Building
+gates for the two MISSTATED holes to reach a tidy four-of-four would have shipped exactly
+the unfalsifiable gate this work exists to eliminate — a gate with zero possible inputs
+cannot be proven red, and a gate that cannot fail is the meta-finding, not its cure.
+
+**A gate found a live defect on its first run.** `ConsumeInventoryItemRequest` published
+`quantity_consumed_milli`, `occurred_at` and `idempotency_key` while the bound handler is
+`rename_all = "camelCase"` with `deny_unknown_fields` — so every spec-conformant request to
+that endpoint was rejected with 422, not merely mis-parsed. The sibling receipt body already
+used camelCase, so the contract was the outlier and has been corrected to the shipped
+behaviour. The gate was deliberately NOT wired while red, and NOT allowlisted around the
+defect; the defect was fixed and then the gate wired.
+
+**The archived-evidence exception is named rather than hidden.** The undeclared-imports gate
+would otherwise be permanently red on an evidence artifact whose subject was deleted — a
+script cited four times by a verification record, one citation recording `10/10 checks
+passed`. Deleting an audit artifact to make a gate green trades evidence integrity for a
+green light. Instead the exclusion is a named export, its count is printed every run, and a
+test observes the gate go red when the classification is removed.
+
+Residuals recorded and not papered over: the request-body gate compares 51 of 223 bodies, a
+floor rather than a claim; two further unowned escalations are named in the holes document.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`; this authority-only child makes no
+completion, deployment, or production-exposure claim.
