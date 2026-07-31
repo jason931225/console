@@ -1180,6 +1180,23 @@ fn parse_release_gate(gate: &Value) -> Result<PayrollReleaseGateInput, Lifecycle
                             .get("professionally_validated")
                             .and_then(Value::as_bool)
                             .unwrap_or(false),
+                        // RED-PHASE STUB — deliberately NOT the implementation.
+                        // The field exists so the golden case can carry its own
+                        // inputs; READING them out of the stored record, and
+                        // REFUSING a case that cannot supply them, is what the
+                        // next commit adds. Until then this preserves the exact
+                        // defect under test: a stored case that cannot be
+                        // recomputed still parses.
+                        inputs: LineCalculationInput {
+                            pay_date: Date::MIN,
+                            gross_won: 0,
+                            pension_standard_monthly_income_won: None,
+                            tax_row: VerifiedNtsTaxRow {
+                                table_version: String::new(),
+                                monthly_income_tax_won: 0,
+                                local_income_tax_won: 0,
+                            },
+                        },
                         expected_total_employee_deductions_won: case
                             .get("expected_total_employee_deductions_won")
                             .and_then(Value::as_i64)

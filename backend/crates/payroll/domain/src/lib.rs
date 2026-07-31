@@ -188,6 +188,12 @@ pub struct GoldenPayrollCase {
     pub case_id: String,
     pub rate_table_version: String,
     pub professionally_validated: bool,
+    /// The case's own declared kernel inputs, embedded WHOLE rather than
+    /// copied field-by-field: [`build_line_calculation`] consumes exactly this
+    /// type, so when the kernel's input vocabulary moves, every golden-case
+    /// construction site fails to COMPILE and must be re-signed. A copied
+    /// field set would rot silently while still reading green.
+    pub inputs: LineCalculationInput,
     pub expected_total_employee_deductions_won: i64,
 }
 
@@ -1184,6 +1190,22 @@ mod tests {
         assert_eq!(error.kind, console_kernel_core::ErrorKind::Forbidden);
     }
 
+    /// The declared kernel inputs behind the 373,302 figure every golden-case
+    /// fixture in this crate already stores. Pinned green independently by
+    /// `builds_employee_deduction_draft_from_effective_rates_and_supplied_nts_row`.
+    fn golden_case_inputs() -> LineCalculationInput {
+        LineCalculationInput {
+            pay_date: date!(2026 - 06 - 27),
+            gross_won: 3_000_000,
+            pension_standard_monthly_income_won: None,
+            tax_row: VerifiedNtsTaxRow {
+                table_version: "NTS-간이세액표-fixture-row-v1".to_owned(),
+                monthly_income_tax_won: 74_350,
+                local_income_tax_won: 7_430,
+            },
+        }
+    }
+
     fn fixture_tax_row() -> NtsWithholdingTaxRow {
         NtsWithholdingTaxRow {
             table_version: "NTS-간이세액표-fixture-row-v1",
@@ -1325,6 +1347,7 @@ mod tests {
                 case_id: "golden-fixture-unvalidated".to_string(),
                 rate_table_version: "KR-2026-official-rates-v1".to_string(),
                 professionally_validated: false,
+                inputs: golden_case_inputs(),
                 expected_total_employee_deductions_won: 373_302,
             }],
             professional_validation: None,
@@ -1343,6 +1366,7 @@ mod tests {
                 case_id: "golden-fixture-professionally-reviewed".to_string(),
                 rate_table_version: "KR-2026-official-rates-v1".to_string(),
                 professionally_validated: true,
+                inputs: golden_case_inputs(),
                 expected_total_employee_deductions_won: 373_302,
             }],
             professional_validation: Some(ProfessionalValidation {
