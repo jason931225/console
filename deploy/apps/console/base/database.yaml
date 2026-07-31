@@ -75,37 +75,10 @@ metadata:
   name: console-backups
   namespace: console
 spec:
-  # FINITE retention, set 2026-07-31. Supersedes the indefinite setting of
-  # 2026-06-23, which read: "with no retentionPolicy, barman-cloud never prunes
-  # base backups / WALs, so PITR reaches back to the first backup forever."
-  #
-  # WHY THIS IS NOT MERELY A STORAGE DECISION. ADR-0037 records that a DELETE is
-  # not destruction while an archive can reconstruct the row. Research into how
-  # European controllers and the hyperscalers handle this found that the accepted
-  # position is NOT "deferred deletion" on its own — it is erase-from-live PLUS a
-  # finite, written, scheduled expiry, PLUS an erasure log kept outside the backup
-  # and re-applied after any restore. The finiteness is the load-bearing part: a
-  # deferral with no endpoint is not a deferral. An unbounded archive therefore
-  # sits outside that position rather than behind it.
-  #
-  # 90d is this file's own previously documented intent ("re-add e.g.
-  # retentionPolicy: 90d"). It is adopted here because it is FINITE, which is the
-  # property that matters; the specific number trades disaster recovery against
-  # erasure-completion horizon and is a decision for the owner and for privacy
-  # counsel, not for this comment. Shortening it is the lever if a faster erasure
-  # horizon is required. ADR-0015 requires RPO <= 5min and RTO <= 1h, which
-  # constrain recovery SPEED and imply nothing about window LENGTH.
-  #
-  # SAFE TO SET NOW: verified 2026-07-31 that this manifest is not deployed — no
-  # CNPG cluster in the tenancy declares a backup, the barmancloud ObjectStore CRD
-  # is not installed, and the `console` namespace does not exist. There are no
-  # existing backups for this policy to prune. Setting it after a production
-  # archive exists would be a destructive change; setting it now is free.
-  #
-  # This asserts NO Korean legal conclusion. PIPA and its 시행령 do not address
-  # backups at all, and no Korean equivalent of the European position is
-  # established. Every Korea control remains HOLD.
-  retentionPolicy: "90d"
+  # Indefinite retention (user 2026-06-23): with no retentionPolicy, barman-cloud
+  # never prunes base backups / WALs, so PITR reaches back to the first backup
+  # forever. NOTE: storage grows unbounded — re-add e.g. retentionPolicy: "90d"
+  # to cap it once the DB / OCI Always-Free object-storage budget warrants it.
   configuration:
     # OCI Object Storage, S3-compatible API, Chuncheon. NAMESPACE = the tenancy
     # object-storage namespace (oci os ns get); bucket pre-created out of band.
