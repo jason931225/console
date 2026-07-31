@@ -4,16 +4,16 @@
 //! never the BYPASSRLS superuser the default `#[sqlx::test]` pool connects as,
 //! which would mask a missing REVOKE or a broken policy.
 //!
-//! Append-only is proven in TWO layers, because they fail independently and each
-//! one alone passes a test shaped for the other. PostgreSQL checks privileges
-//! BEFORE it fires triggers, so:
-//!   * as `console_rt` the refusal must be `42501` — that proves the REVOKE, and
-//!     would still pass if the trigger were dropped;
-//!   * as the table owner, who keeps the privilege, the refusal must be `P0001`
-//!     — that proves the trigger, and would still pass if the REVOKE were dropped.
-//! A table carrying only one of the two is mutable in one of the two environments
-//! (`ALTER DEFAULT PRIVILEGES` fires for the production applier and not for the
-//! `#[sqlx::test]` superuser applier), so both layers are asserted every time.
+//! Append-only is proven in TWO layers, because they fail independently and
+//! each one alone passes a test shaped for the other. PostgreSQL checks
+//! privileges BEFORE it fires triggers, so as `console_rt` the refusal must be
+//! `42501`, which proves the REVOKE and would still pass with the trigger
+//! dropped; while as the table owner, who keeps the privilege, it must be
+//! `P0001`, which proves the trigger and would still pass with the REVOKE
+//! dropped. A table carrying only one of the two is mutable in one of the two
+//! environments — `ALTER DEFAULT PRIVILEGES` fires for the production applier
+//! and not for the `#[sqlx::test]` superuser applier — so both layers are
+//! asserted every time.
 //!
 //! Wording is a constraint here: rows named by this ledger were DELETED FROM THE
 //! LIVE CLUSTER and remain reconstructable from the WAL archive. Nothing in this
