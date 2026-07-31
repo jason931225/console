@@ -198,6 +198,28 @@ describe("undeclared import gate", () => {
     assert.match(`${result.stdout}${result.stderr}`, /passed \(1 file scanned\)/);
   });
 
+  // The archived-evidence classification, tested from both sides. It is an exception, not an
+  // omission, and the difference is that an exception is itself covered by a test whose red has
+  // been observed. Added in the implementation phase after the gate found a SECOND live instance
+  // of H-4 that the RED phase had not anticipated — see the header of check-undeclared-imports.mjs.
+  it("classifies docs/evidence as archived rather than scanning it", () => {
+    const { excluded, findings } = evaluateUndeclaredImports(repoRoot);
+
+    assert.ok(
+      excluded.includes("docs/evidence/console/wave4/L-F1/browser-window-host.mjs"),
+      `the classification must name what it excludes, got ${JSON.stringify(excluded)}`,
+    );
+    assert.deepEqual(findings, []);
+  });
+
+  it("goes red on the archived artifact the moment the classification is removed", () => {
+    const { findings } = evaluateUndeclaredImports(repoRoot, []);
+
+    assert.deepEqual(findings, [
+      { file: "docs/evidence/console/wave4/L-F1/browser-window-host.mjs", line: 30, specifier: "playwright" },
+    ]);
+  });
+
   // The gate's own subject. Red today: scripts/lib/kotlin-discriminator-unions.mjs:4 imports
   // openapi-typescript, which is in neither package.json nor package-lock.json, and its sibling
   // test dies with ERR_MODULE_NOT_FOUND — a LOAD failure with zero assertion failures, which is

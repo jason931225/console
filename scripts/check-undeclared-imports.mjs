@@ -5,16 +5,36 @@
 // and a CI step that reads as a suite that ran. The gate is static: it reads the tracked script
 // surface and the manifests, never installed node_modules, so a stale local install cannot make
 // it green.
+//
+// ONE EXCEPTION, and it is named rather than hidden: ARCHIVED_EVIDENCE below. An evidence
+// snapshot under docs/evidence/ is not the test suite — it is the instrument of a recorded
+// verification result, and its imports are a historical record of tooling that WAS declared when
+// the run happened, not a live dependency claim. docs/evidence/console/wave4/L-F1/
+// browser-window-host.mjs imports `playwright`, which `web/package.json` declared until 962fb98b7
+// deleted the whole frontend; four citations (report.md:101,107 and verification.md:43,197) rest
+// on that script, one of them recording `10/10 checks passed`. Deleting it to make this gate
+// green would trade audit evidence for a green light.
+//
+// WHAT WOULD MAKE AN ENTRY IN THIS CLASS A REAL DEFECT: an archived evidence artifact that CI
+// executes. The class is safe only because nothing under docs/evidence/ is invoked by any
+// workflow — check that before adding a prefix. The exclusion is counted in every run's output
+// and is covered by two tests, one of which passes archived: [] and observes the gate go red on
+// the real artifact.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+
+export const ARCHIVED_EVIDENCE = ["docs/evidence/"];
 
 // `import x from "p"`, `export * from "p"`, `import("p")`, `require("p")`, bare `import "p";` —
 // all reduce to a quoted specifier in a position ordinary prose does not occupy.
 const SPECIFIER_PATTERNS = [
-  /\b(?:import|export)\s[\s\S]{0,400}?\bfrom\s*["']([^"']+)["']/g,
+  // `[^;]` and not `[\s\S]`: the gap may wrap lines, but never a statement boundary. With the
+  // permissive class this file's own `export const ARCHIVED_EVIDENCE = [...];` bonded to the
+  // `from "p"` two lines below it and reported a package named "p".
+  /\b(?:import|export)\s[^;]{0,400}?\bfrom\s*["']([^"']+)["']/g,
   /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
   /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
   /(?:^|[;{}\n])\s*import\s+["']([^"']+)["']\s*;/gm,
@@ -74,14 +94,22 @@ function isQuotedOrCommented(source, index) {
 
 /**
  * @param {string} root repository root to scan
- * @returns {{ scanned: number, findings: { file: string, line: number, specifier: string }[] }}
+ * @param {string[]} archived path prefixes classified as archived evidence rather than live code.
+ *   Pass [] to scan everything — that is how the test proves the classification is load-bearing.
+ * @returns {{
+ *   scanned: number,
+ *   excluded: string[],
+ *   findings: { file: string, line: number, specifier: string }[],
+ * }}
  */
-export function evaluateUndeclaredImports(root) {
+export function evaluateUndeclaredImports(root, archived = ARCHIVED_EVIDENCE) {
   const listed = execFileSync("git", ["-C", root, "ls-files", "--", "*.mjs", "*.js", "*.cjs"], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  const files = listed.split("\n").filter(Boolean).filter((file) => !file.split(sep).includes("node_modules"));
+  const tracked = listed.split("\n").filter(Boolean).filter((file) => !file.split(sep).includes("node_modules"));
+  const excluded = tracked.filter((file) => archived.some((prefix) => file.startsWith(prefix)));
+  const files = tracked.filter((file) => !excluded.includes(file));
   const manifests = new Map();
   const findings = [];
 
@@ -105,16 +133,19 @@ export function evaluateUndeclaredImports(root) {
   }
 
   findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.specifier.localeCompare(b.specifier));
-  return { scanned: files.length, findings };
+  return { scanned: files.length, excluded, findings };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = process.argv[2] ?? fileURLToPath(new URL("..", import.meta.url));
-  const { scanned, findings } = evaluateUndeclaredImports(root);
+  const { scanned, excluded, findings } = evaluateUndeclaredImports(root);
   for (const finding of findings) {
     console.error(`${finding.file}:${finding.line}: imports "${finding.specifier}", `
       + "which no package.json above it declares");
   }
+  // Printed on every run, pass or fail. Silent truncation reads as "we covered everything".
+  console.log(`excluded ${excluded.length} archived evidence file${excluded.length === 1 ? "" : "s"}`
+    + `${excluded.length > 0 ? `: ${excluded.join(", ")}` : ""}`);
   if (findings.length > 0) {
     console.error(`undeclared imports gate FAILED: ${findings.length} undeclared specifier(s) across ${scanned} files`);
     process.exit(1);
