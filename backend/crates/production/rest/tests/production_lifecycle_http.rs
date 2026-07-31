@@ -307,7 +307,14 @@ async fn seed_isolated_tenant(pool: &PgPool) -> (OrgId, BranchId, UserId) {
     let org = OrgId::from_uuid(Uuid::new_v4());
     sqlx::query("INSERT INTO organizations (id, slug, name) VALUES ($1, $2, $3)")
         .bind(*org.as_uuid())
-        .bind(format!("production-isolated-{}", Uuid::new_v4().simple()))
+        // `organizations.slug` CHECKs `^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$` — a 40-character
+        // ceiling (0026_create_organizations.sql:17-18). A full simple UUID is 32 hex chars,
+        // so `production-isolated-` + 32 was 52 and could never have inserted. Truncating the
+        // UUID keeps the per-test uniqueness this needs at 21 characters.
+        .bind(format!(
+            "prod-iso-{}",
+            &Uuid::new_v4().simple().to_string()[..12]
+        ))
         .bind("Isolated production tenant")
         .execute(pool)
         .await
