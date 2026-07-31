@@ -1498,3 +1498,33 @@ Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`; this authority-only child makes no
 completion, deployment, or production-exposure claim.
 ||||||| f41cc847b
+
+## 2026-07-31 — the live GitOps inputs are frozen, and nothing said so
+
+Rebind after the retention change was withdrawn from this candidate.
+
+`scripts/check-command-database-wiring.test.mjs` asserts
+`git diff --exit-code origin/main` across `deploy/argocd/apps/console.yaml`,
+`deploy/apps/console/base`, `deploy/apps/console/overlays/prod` and
+`deploy/apps/secrets-management/wiring`. ArgoCD syncs those paths from `main` with
+`targetRevision: main`, so a branch change to any of them fails the gate and would take
+effect the instant it merged.
+
+**Verified: no file under `deploy/apps/console/base/` has changed since that gate landed.**
+`database.yaml`'s last change (`a17acf14f`, #495) predates the gate (`962fb98b7`, #503).
+This candidate was the first to touch those paths since, which is why the freeze surfaced
+now rather than earlier.
+
+The gate's stated purpose is keeping the DARK governed-command-database topology out of
+live wiring, and it does that with explicit `doesNotMatch` patterns. The blanket diff is a
+separate, stronger assertion that cannot distinguish a retention policy from a topology
+leak. It was not weakened to land a one-line change; the change was withdrawn instead.
+
+What this leaves open, and it is an owner decision rather than an engineering one: **there
+is no documented route by which the live GitOps inputs may legitimately change.** A control
+with no defined exception either stops all change or gets weakened by whoever needs the
+next change badly enough. Recorded so that the next person to need one finds this entry
+rather than the assertion.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
