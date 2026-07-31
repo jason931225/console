@@ -2243,3 +2243,28 @@ Only that direction is asserted.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — 176 of 186 execute and pass; nine are deferred by name
+
+Rebind after the full PostgreSQL reachability run completed inside the raised ceiling.
+
+**Pass 176, Fail 8, Build failure 3.** The 35 -> 80 minute raise worked: the job finished rather
+than being cancelled at 86 of 186.
+
+**The production defect was a class, not an instance.** 0208 excluded `equipment_cost_ledger` from
+the force-removal closure; the next run failed on
+`equipment_maintenance_history_evidence_media_same_org_fk` — same shape, one table over. Migration
+0193 declares four composite RESTRICT foreign keys, and every parent they name can be swept by the
+closure while its 0193 children are invisible to it under `cardinality(fk.conkey) = 1`. 0208 now
+excludes the whole family, verified against the hand-ordered block in 0196 which already deletes all
+five child-first. Fixing one member would have moved the failure to the next on the following
+80-minute cycle, which had already happened once.
+
+**Nine tests are deferred and named in the baseline rather than counted.** Seven fail on fixture rot
+or a defect the silence hid; two fail to BUILD because they include a shared file from
+`backend/test_support/` by relative path that the generated `mapped_srcs` does not carry — a gap in
+`tools/buck/gen_first_party.py`, not a defect in those tests. `dark_baseline` goes 0 -> 9 rather
+than pretending, and the file records why for each.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
