@@ -18,7 +18,12 @@
 //!    Detection is structurally impossible in that state, not merely unfired.
 //!    This crate ships the three pieces — produce a witness ([`head`]), compare
 //!    one ([`classify`]), replay after one ([`entries_since`]) — and no holder
-//!    and no re-applier.
+//!    and no re-applier. [`append`] does emit the witness on the
+//!    `console.erasure_ledger.witness` tracing target, which is the only copy
+//!    that leaves the cluster without a `deploy/**` change; it is NOT a holder.
+//!    Log retention is not under this crate's control, the line is not
+//!    tamper-evident, nothing reads it back, and no test asserts it. Treat it as
+//!    a breadcrumb for a human, not as the anchor.
 //! 2. **It detects; it never prevents.** No in-database construct survives a
 //!    point-in-time restore of its own cluster.
 //! 3. **No signature.** A caller holding `INSERT` can record false facts at
