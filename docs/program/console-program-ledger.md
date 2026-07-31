@@ -1720,3 +1720,7 @@ here makes any currently-dark test execute. It makes the count visible and monot
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
 ||||||| da8cc4011
+
+## 2026-07-31 — rebind after #537 under the executed-tests candidate
+
+Mechanical rebind. The 287/314 measurement is unchanged.
