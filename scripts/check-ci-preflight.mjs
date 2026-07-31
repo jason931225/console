@@ -841,6 +841,23 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
     requireReindeerToolchainBefore(fullGeneratedFaceSteps, fullGeneratedFaceCommand, failures);
   }
 
+  // repo-gates was entirely unlocked: deleting `run: npm run check:adrs` from it returned zero
+  // preflight failures. A step wired into ci.yml is not thereby protected — it occupies a slot in
+  // the job list and reads as coverage while being one line away from silent removal.
+  const repoGates = jobBlock(workflow, "repo-gates");
+  if (repoGates) {
+    requireOrderedStepContracts(
+      stepBlocks(repoGates),
+      [{
+        name: "Undeclared imports — every bare specifier must be declared",
+        run: "npm run check:undeclared-imports",
+        if: "${{ !cancelled() }}",
+      }],
+      "repo-gates",
+      failures,
+    );
+  }
+
   const apiContract = jobBlock(workflow, "api-contract");
   if (apiContract) {
     const apiContractSteps = stepBlocks(apiContract);

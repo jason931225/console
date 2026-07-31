@@ -109,6 +109,7 @@ for s in \
   check:g008-payroll-readiness \
   check:people-hr-maturity \
   check:payroll-release-gate \
+  check:undeclared-imports \
   check:financial-maturity \
   check:cx-reporting-maturity \
   check:operations-intelligence-maturity; do
@@ -219,6 +220,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:people-hr-maturity`
 - `check:pr473-migration-operational`
 - `check:production-hardening`
+- `check:undeclared-imports`
 - `check:workflow-runtime-m2-cedar-guards`
 - `check:workflow-runtime-m2-drainer`
 - `check:workflow-runtime-m2-runtime`
