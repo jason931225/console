@@ -1160,3 +1160,79 @@ async fn a_hash_column_that_is_not_32_bytes_is_reported_not_truncated(owner_pool
         other => panic!("a 16-octet entry hash must be an error, got: {other:?}"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// The chain assignment against a caller who controls name resolution.
+// ---------------------------------------------------------------------------
+
+/// `the_database_and_not_the_caller_assigns_the_chain` proves the trigger
+/// overwrites a caller-supplied `seq` and `prev_entry_hash`. It proves that
+/// against a caller who sends bad VALUES. It says nothing about a caller who
+/// changes what the trigger's own unqualified `erasure_ledger` RESOLVES TO.
+///
+/// `erasure_ledger_assign_chain` is SECURITY INVOKER plpgsql, so without a
+/// `SET search_path` it inherits the caller's. Nothing in this repository
+/// revokes TEMP on the database — 0168 revokes only CREATE on schema `public` —
+/// so `console_rt`, holding INSERT and nothing else, can put its own
+/// `erasure_ledger` in `pg_temp`, name `pg_temp` ahead of `public`, and have the
+/// trigger read the head from a table it wrote. Temp tables carry no RLS, so the
+/// org floor does not narrow that read either.
+///
+/// What it buys the attacker is the whole restore-detection design: after a real
+/// rollback it re-creates the exact `(seq, entry_hash)` an external holder
+/// witnessed and `classify` answers `Consistent` for a ledger that lost entries.
+/// The cheap version is a `seq` parked far above the head, which breaks the
+/// `count(*) = max(seq)` identity permanently and leaves `classify` returning
+/// `Gapped` for a ledger nothing happened to.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn the_caller_cannot_forge_the_chain_by_controlling_name_resolution(owner_pool: PgPool) {
+    seed_org_and_super_admin(&owner_pool, ORG_A, "A").await;
+    let rt = runtime_role_pool(&owner_pool).await;
+
+    let mut tx = rt.begin().await.unwrap();
+    arm_org(&mut tx, ORG_A).await;
+
+    // A decoy head, in a schema the runtime role owns outright.
+    sqlx::query("CREATE TEMP TABLE erasure_ledger (org_id UUID, seq BIGINT, entry_hash BYTEA)")
+        .execute(&mut *tx)
+        .await
+        .expect("the attack's premise: console_rt retains the default TEMP privilege");
+    sqlx::query(
+        "INSERT INTO pg_temp.erasure_ledger VALUES ($1, 500, decode(repeat('cc', 32), 'hex'))",
+    )
+    .bind(ORG_A)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query("SET LOCAL search_path = pg_temp, public")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+    // Schema-qualified, so the INSERT itself lands on the real ledger. Only the
+    // trigger's own reads are redirected.
+    let (seq, prev): (i64, Vec<u8>) = sqlx::query_as(
+        "INSERT INTO public.erasure_ledger (\
+         org_id, seq, subject_kind, subject_digest, erased_relation, erased_selector, \
+         erased_row_count, effective_at, actor, authority, prev_entry_hash, entry_hash) \
+         VALUES ($1, 0, 'user', decode(repeat('a1', 32), 'hex'), 'users', 'id = 1', 1, \
+         now(), 'tester', 'record-only; no legal conclusion asserted', \
+         decode(repeat('00', 32), 'hex'), decode(repeat('00', 32), 'hex')) \
+         RETURNING seq, prev_entry_hash",
+    )
+    .bind(ORG_A)
+    .fetch_one(&mut *tx)
+    .await
+    .expect("console_rt must hold INSERT on erasure_ledger");
+    tx.commit().await.unwrap();
+
+    assert_eq!(
+        seq, 1,
+        "the trigger must read the head from the REAL ledger, not from a table the caller planted"
+    );
+    assert_eq!(
+        prev,
+        GENESIS.to_vec(),
+        "the first real entry is genesis-rooted; a caller-planted predecessor must not stick"
+    );
+}
