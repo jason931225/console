@@ -412,6 +412,24 @@ async fn an_append_omitting_a_required_fact_is_refused(owner_pool: PgPool) {
         Some("23514"),
         "a blank required fact must be refused as a check violation, got: {blank}"
     );
+
+    // The two refusals above exercise ONE column. "Any required fact" is a
+    // statement about all twelve, and a NOT NULL dropped from `actor` or
+    // `erased_relation` would leave both assertions above green while the ledger
+    // accepted an entry that cannot say who erased what. The catalog answers for
+    // every column at once, which is also less code than twelve inserts.
+    let nullable: Option<String> = sqlx::query_scalar(
+        "SELECT string_agg(attname, ', ' ORDER BY attnum) FROM pg_catalog.pg_attribute \
+         WHERE attrelid = 'erasure_ledger'::regclass \
+           AND attnum > 0 AND NOT attisdropped AND NOT attnotnull",
+    )
+    .fetch_one(&owner_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        nullable, None,
+        "every column of the recorded fact set must be NOT NULL; these are not"
+    );
 }
 
 // ---------------------------------------------------------------------------
