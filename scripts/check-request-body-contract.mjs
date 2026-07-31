@@ -45,23 +45,27 @@ const STRUCT = /#\[serde\(([^\]]*)\)\]\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+([A-Z
 // snake_case and kebab-case are handled rather than silently read as "no rename".
 const RENAME_ALL = /rename_all\s*=\s*"([A-Za-z_-]+)"/;
 
-function renameField(name, style) {
-  const words = name.split("_").filter(Boolean);
+// Mirrors `RenameRule::apply_to_field` in serde_derive_internals-0.29.1 src/case.rs, which is the
+// function that decides what the server actually accepts. Two rules were guessed rather than read:
+// serde's `LowerCase` is `field.to_owned()` and its `UpperCase` is `field.to_ascii_uppercase()` —
+// both keep the underscores. A `words.join("")` form dropped them, which reads a spec publishing
+// `very_tasty` as a mismatch and a spec publishing `verytasty` — a guaranteed 422 under
+// deny_unknown_fields — as correct. `lowercase` and `snake_case` are identity and fall to default.
+export function renameField(name, style) {
+  const pascal = () => name.split("_").filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1)).join("");
   switch (style) {
     case "camelCase":
-      return words[0] + words.slice(1).map((word) => word[0].toUpperCase() + word.slice(1)).join("");
+      return pascal().replace(/^./, (first) => first.toLowerCase());
     case "PascalCase":
-      return words.map((word) => word[0].toUpperCase() + word.slice(1)).join("");
+      return pascal();
     case "kebab-case":
-      return words.join("-");
+      return name.replaceAll("_", "-");
+    case "SCREAMING-KEBAB-CASE":
+      return name.replaceAll("_", "-").toUpperCase();
+    case "UPPERCASE":
     case "SCREAMING_SNAKE_CASE":
       return name.toUpperCase();
-    case "SCREAMING-KEBAB-CASE":
-      return words.join("-").toUpperCase();
-    case "lowercase":
-      return words.join("").toLowerCase();
-    case "UPPERCASE":
-      return words.join("").toUpperCase();
     default:
       return name;
   }

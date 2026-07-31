@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { evaluateRequestBodyContract } from "./check-request-body-contract.mjs";
+import { evaluateRequestBodyContract, renameField } from "./check-request-body-contract.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const cli = fileURLToPath(new URL("./check-request-body-contract.mjs", import.meta.url));
@@ -272,4 +272,39 @@ describe("request body contract gate", () => {
     assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
     assert.match(`${result.stdout}${result.stderr}`, /resolved 0 /);
   });
+});
+
+// The wire name is the whole comparison: get it wrong and the gate reads a real mismatch as a
+// match. The expectations below are not derived — they are the fixture table from serde's own
+// `rename_fields` test in
+// ~/.cargo/registry/src/index.crates.io-*/serde_derive_internals-0.29.1/src/case.rs, whose
+// `apply_to_field` is the function actually deciding what the server accepts.
+describe("serde rename_all reproduction", () => {
+  const cases = [
+    // field           UPPERCASE      PascalCase    camelCase     kebab-case      SCREAMING-KEBAB-CASE
+    ["outcome", "OUTCOME", "Outcome", "outcome", "outcome", "OUTCOME"],
+    ["very_tasty", "VERY_TASTY", "VeryTasty", "veryTasty", "very-tasty", "VERY-TASTY"],
+    ["a", "A", "A", "a", "a", "A"],
+    ["z42", "Z42", "Z42", "z42", "z42", "Z42"],
+  ];
+
+  for (const [field, upper, pascal, camel, kebab, screamingKebab] of cases) {
+    it(`renames ${field} the way serde does`, () => {
+      // `None | LowerCase | SnakeCase => field.to_owned()` — identity, underscores intact. An
+      // earlier `words.join("").toLowerCase()` produced `verytasty`, which would have read a
+      // spec publishing `very_tasty` as a mismatch, and a spec publishing `verytasty` — a
+      // guaranteed 422 under deny_unknown_fields — as correct.
+      assert.equal(renameField(field, null), field);
+      assert.equal(renameField(field, "snake_case"), field);
+      assert.equal(renameField(field, "lowercase"), field);
+      // `UpperCase => field.to_ascii_uppercase()` keeps the underscores; it is not a separate
+      // rule from SCREAMING_SNAKE_CASE, which is the same expression in serde.
+      assert.equal(renameField(field, "UPPERCASE"), upper);
+      assert.equal(renameField(field, "SCREAMING_SNAKE_CASE"), upper);
+      assert.equal(renameField(field, "PascalCase"), pascal);
+      assert.equal(renameField(field, "camelCase"), camel);
+      assert.equal(renameField(field, "kebab-case"), kebab);
+      assert.equal(renameField(field, "SCREAMING-KEBAB-CASE"), screamingKebab);
+    });
+  }
 });
