@@ -513,8 +513,7 @@ jobs:
             //tools/buck:workflow-adapter-postgres-payroll-drain-period-lock-pg \
             //tools/buck:workorder-adapter-postgres-m2-flag-off-parity-pg \
             //tools/buck:workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg \
-            //tools/buck:workorder-adapter-postgres-use-cases-pg \
-            //tools/buck:workorder-rest-mobile-sync-pg
+            //tools/buck:workorder-adapter-postgres-use-cases-pg
 
   company-conformance:
     # The immutable target the company/HR fan-out aimed at, now GREEN at 12/12 and

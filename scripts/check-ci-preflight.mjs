@@ -349,8 +349,7 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:workflow-adapter-postgres-payroll-drain-period-lock-pg \\",
   "//tools/buck:workorder-adapter-postgres-m2-flag-off-parity-pg \\",
   "//tools/buck:workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg \\",
-  "//tools/buck:workorder-adapter-postgres-use-cases-pg \\",
-  "//tools/buck:workorder-rest-mobile-sync-pg",
+  "//tools/buck:workorder-adapter-postgres-use-cases-pg",
 ];
 const postgresWrapperContracts = [
   ["platform-db-feature-catalog-coverage", "//backend/crates/platform/db:console-platform-db-itest-feature_catalog_covers_every_feature"],
