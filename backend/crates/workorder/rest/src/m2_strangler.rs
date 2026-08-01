@@ -185,7 +185,7 @@ async fn record_completion_run(
         principal,
         "completion_review",
         org,
-        branch_id,
+        Some(branch_id),
         "work_order",
         &work_order_id.to_string(),
         NODE_TRANSITION_DOMAIN,

@@ -6,7 +6,7 @@ use axum::{Extension, Json, Router};
 use console_governance_adapter_postgres::{PgGovernanceError, four_eyes_consume_conn};
 use console_governance_domain::{GateChainConfig, GateEvidence, evaluate_gate_chain};
 use console_kernel_core::{
-    AuditAction, AuditEvent, BranchId, BranchScope, ErrorKind, KernelError, TraceContext, UserId,
+    AuditAction, AuditEvent, BranchId, ErrorKind, KernelError, TraceContext, UserId,
 };
 use console_platform_auth::{JwtVerifier, PasskeyAuthenticationCredential, PasskeyService};
 use console_platform_authz::{
@@ -837,7 +837,7 @@ async fn finalize_task(
         ));
     }
 
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let resource_type = context.object_type.as_deref().unwrap_or("workflow_run");
     let resource_id = context
         .object_id
@@ -870,7 +870,7 @@ async fn finalize_task(
     // (`enforce_finalize_policy`) already enforced above (this line is only
     // reached on its ALLOW); the shadow records how Cedar-alone compares and can
     // never affect the finalize.
-    let shadow_resource = AuthorizationResource::branch(
+    let shadow_resource = shadow_resource(
         principal.org_id,
         branch,
         context
@@ -951,7 +951,7 @@ async fn create_post_finalization_rejection(
         ));
     }
 
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let authz_request = build_guard_request(
         &principal,
         Feature::ApprovalFinalize.as_str(),
@@ -982,7 +982,7 @@ async fn create_post_finalization_rejection(
     // Enrollment wave 2: audit-only Cedar parity observation (legacy already
     // enforced above). Scope is branch + run-specific so the parity row mirrors
     // the workflow run the already-enforced legacy decision acted on.
-    let shadow_resource = AuthorizationResource::branch(principal.org_id, branch, "workflow_run")
+    let shadow_resource = shadow_resource(principal.org_id, branch, "workflow_run")
         .with_resource_id(run_id.to_string());
     crate::cedar_parity::observe_parity(
         &state.pool,
@@ -1293,7 +1293,7 @@ fn require_task_authorization_boundary(
 fn guard_task_policy(
     principal: &Principal,
     org: console_kernel_core::OrgId,
-    branch: BranchId,
+    branch: Option<BranchId>,
     required_policy: Option<&str>,
     resource_type: &str,
     resource_id: &str,
@@ -1350,7 +1350,7 @@ async fn observe_task_decide_parity(
     pool: &PgPool,
     principal: &Principal,
     org: console_kernel_core::OrgId,
-    branch: BranchId,
+    branch: Option<BranchId>,
     required_policy: Option<&str>,
     resource_type: &str,
     resource_id: &str,
@@ -1361,7 +1361,7 @@ async fn observe_task_decide_parity(
     else {
         return;
     };
-    let resource = AuthorizationResource::branch(org, branch, resource_type.to_owned())
+    let resource = shadow_resource(org, branch, resource_type.to_owned())
         .with_resource_id(resource_id.to_owned());
     crate::cedar_parity::observe_parity(
         pool,
@@ -1421,7 +1421,7 @@ fn classify_role_key(role_key: &str) -> Option<RoleKeyKind> {
 fn principal_holds_feature(
     principal: &Principal,
     org: console_kernel_core::OrgId,
-    branch: BranchId,
+    branch: Option<BranchId>,
     feature_key: &str,
 ) -> bool {
     let Ok(feature) = Feature::from_str(feature_key) else {
@@ -1452,7 +1452,7 @@ fn principal_holds_feature(
 pub(crate) fn held_authority_role_keys(
     principal: &Principal,
     org: console_kernel_core::OrgId,
-    branch: BranchId,
+    branch: Option<BranchId>,
 ) -> Vec<String> {
     WORKFLOW_AUTHORITY_ROLE_KEYS
         .iter()
@@ -1473,7 +1473,7 @@ pub(crate) fn held_authority_role_keys(
 fn holds_group_inbox_role(
     principal: &Principal,
     org: console_kernel_core::OrgId,
-    branch: BranchId,
+    branch: Option<BranchId>,
     role_key: &str,
 ) -> bool {
     match classify_role_key(role_key) {
@@ -1491,7 +1491,7 @@ fn holds_group_inbox_role(
 fn task_visible(
     principal: &Principal,
     org: console_kernel_core::OrgId,
-    branch: BranchId,
+    branch: Option<BranchId>,
     item: &WaitingTaskListItem,
 ) -> bool {
     // Ownership-held rows (e.g. the initiator's own finalize task) reach this
@@ -1763,7 +1763,7 @@ async fn start_workflow_run(
     // 기안/상신 stays all-employee per DESIGN §4.8; operational pipelines (e.g. the
     // completion→approval→payroll template) set `start_policy` so a start is a
     // policy-gated 403 + shadow for non-privileged personas.
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let entry_policy = match graph.node_spec(&entry).map(|spec| &spec.kind) {
         Some(NodeKind::HumanTask {
             required_policy, ..
@@ -1959,7 +1959,7 @@ async fn list_bulk_approval_inbox(
 ) -> Result<Json<BulkApprovalInboxResponse>, WorkflowStudioError> {
     let limit = query.limit.clamp(1, 200) as usize;
     let org = principal.org_id;
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let store = PgWorkflowRuntimeStore::new(state.pool.clone());
     let filter = WaitingTaskListFilter {
         role_key: None,
@@ -2059,7 +2059,7 @@ async fn list_workflow_tasks(
     }
     let statuses = parse_task_statuses(query.status.as_deref())?;
     let org = principal.org_id;
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
 
     // Group inbox (security M3): a `role_key=` query returns rows only when the
     // caller holds that role. Deny-by-omission — a caller who does not is handed
@@ -2109,7 +2109,7 @@ pub(crate) async fn my_action_inbox_tasks_page(
     limit: usize,
 ) -> Result<(Vec<WaitingTaskListItem>, bool), KernelError> {
     let org = principal.org_id;
-    let branch = guard_branch(principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let store = PgWorkflowRuntimeStore::new(pool.clone());
     let filter = WaitingTaskListFilter {
         role_key: None,
@@ -2171,7 +2171,7 @@ pub(crate) async fn my_action_inbox_task_count(
     as_of: OffsetDateTime,
 ) -> Result<(usize, bool), KernelError> {
     let org = principal.org_id;
-    let branch = guard_branch(principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let store = PgWorkflowRuntimeStore::new(pool.clone());
     let filter = WaitingTaskListFilter {
         role_key: None,
@@ -2381,7 +2381,7 @@ async fn get_workflow_run(
     let org = principal.org_id;
     let is_admin = authorize_workflow_manage(&principal).is_ok();
     let caller = *principal.user_id.as_uuid();
-    let held_role_keys = held_authority_role_keys(&principal, org, guard_branch(&principal));
+    let held_role_keys = held_authority_role_keys(&principal, org, WORKFLOW_SPINE_HAS_NO_BRANCH);
 
     let detail = with_org_conn::<_, Option<RunDetailResponse>, WorkflowStudioError>(
         &state.pool,
@@ -2534,7 +2534,7 @@ async fn claim_workflow_task(
     // boundary. Refuse the mutation rather than let any org member claim it.
     require_task_authorization_boundary(context.required_policy.as_deref())?;
 
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let resource_type = context.object_type.as_deref().unwrap_or("workflow_run");
     let resource_id = context
         .object_id
@@ -2631,7 +2631,7 @@ async fn decide_workflow_task(
     // org member push the run forward.
     require_task_authorization_boundary(context.required_policy.as_deref())?;
 
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let resource_type = context.object_type.as_deref().unwrap_or("workflow_run");
     let resource_id = context
         .object_id
@@ -2889,7 +2889,7 @@ async fn list_submittable_definitions(
 ) -> Result<Json<SubmittableDefinitionListResponse>, WorkflowStudioError> {
     authorize_workflow_member(&principal)?;
     let org = principal.org_id;
-    let branch = guard_branch(&principal);
+    let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
     let candidates = with_org_conn::<_, Vec<SubmittableCandidate>, WorkflowStudioError>(
         &state.pool,
         org,
@@ -2962,7 +2962,7 @@ async fn list_submittable_definitions(
 fn caller_can_start(
     principal: &Principal,
     org: console_kernel_core::OrgId,
-    branch: BranchId,
+    branch: Option<BranchId>,
     definition_id: Uuid,
     definition: &Value,
 ) -> bool {
@@ -7745,6 +7745,37 @@ fn empty_object() -> Value {
     json!({})
 }
 
+/// The workflow spine carries NO branch: `workflow_runs`, `workflow_waiting_tasks`,
+/// `workflow_definitions`, `object_types` and `series` all lack a `branch_id`
+/// column, and a definition-only run has no subject row to read one from. These
+/// guards are therefore capability decisions
+/// (`console_platform_authz::authorize_capability` via
+/// `AuthorizationResource::branchless`), not per-branch ones.
+///
+/// This constant replaced a `guard_branch(principal)` helper that fabricated a
+/// branch out of `principal.branch_scope` — `All => BranchId::new()`,
+/// `Branches(b) => b.iter().next()`. Both arms made `authorize`'s
+/// `branch_scope.allows(resource_branch)` check a tautology, silently deleting
+/// the branch dimension instead of enforcing it. Where a workflow guard DOES have
+/// a real subject branch (`workflow_object_context::resolve_subject_branch` reads
+/// `work_orders.branch_id` / `support_tickets.branch_id`) it passes `Some(..)` and
+/// the branch check is real.
+pub(crate) const WORKFLOW_SPINE_HAS_NO_BRANCH: Option<BranchId> = None;
+
+/// Mirror [`build_guard_request`]'s resource shape for the audit-only Cedar parity
+/// observations, so the parity row records the same branch-less/branch-bearing
+/// scope the enforced decision used.
+fn shadow_resource(
+    org: console_kernel_core::OrgId,
+    branch: Option<BranchId>,
+    resource_type: impl Into<String>,
+) -> AuthorizationResource {
+    match branch {
+        Some(branch) => AuthorizationResource::branch(org, branch, resource_type),
+        None => AuthorizationResource::branchless(org, resource_type),
+    }
+}
+
 fn record_workflow_studio_request(surface: &'static str, outcome: &'static str) {
     metrics::counter!(
         WORKFLOW_STUDIO_REQUESTS_TOTAL,
@@ -7752,17 +7783,6 @@ fn record_workflow_studio_request(surface: &'static str, outcome: &'static str) 
         "outcome" => outcome,
     )
     .increment(1);
-}
-
-pub(crate) fn guard_branch(principal: &Principal) -> BranchId {
-    match &principal.branch_scope {
-        BranchScope::All => BranchId::new(),
-        BranchScope::Branches(branches) => branches
-            .iter()
-            .next()
-            .copied()
-            .unwrap_or_else(BranchId::new),
-    }
 }
 
 fn shadow_audit_event(

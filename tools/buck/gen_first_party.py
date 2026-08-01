@@ -278,6 +278,12 @@ TEST_RESOURCE_REQUIREMENTS = {
     'console-gate-dev-auth-absence': {
         'unit': 'none',
     },
+    'console-gate-fabricated-branch': {
+        'unit': 'none',
+        'integration': {
+            'tests/gate_detects_violation.rs': 'none',
+        },
+    },
     'console-gate-iac-tier': {
         'unit': 'none',
     },

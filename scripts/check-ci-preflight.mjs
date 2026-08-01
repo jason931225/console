@@ -1228,6 +1228,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       ["RLS-arming gate", "cargo run -p console-gate-rls-arming"],
       ["Dev-auth-absence gate", "cargo run -p console-gate-dev-auth-absence"],
       ["IaC tier-discipline gate", "cargo run -p console-gate-iac-tier"],
+      ["Fabricated-branch gate", "cargo run -p console-gate-fabricated-branch"],
     ];
     const gateIndexes = requireOrderedStepContracts(
       steps,

@@ -198,6 +198,7 @@ names only, not incidental workflow prose or runner setup text.
 
 - `console-gate-audit-coverage`
 - `console-gate-dev-auth-absence`
+- `console-gate-fabricated-branch`
 - `console-gate-iac-tier`
 - `console-gate-layer-boundary`
 - `console-gate-migration-safety`

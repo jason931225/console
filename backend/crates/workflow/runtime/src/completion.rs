@@ -24,7 +24,10 @@ pub struct FinalizePolicyRequest<'a> {
     pub required_policy: Option<&'a str>,
     pub principal: &'a Principal,
     pub org: OrgId,
-    pub branch: BranchId,
+    /// The resource's OWN branch, or `None` when it has none (the workflow spine
+    /// carries no `branch_id`). Never a branch derived from the principal — see
+    /// [`build_guard_request`](crate::build_guard_request).
+    pub branch: Option<BranchId>,
     pub resource_type: &'a str,
     pub resource_id: String,
     pub initiated_by: UserId,
@@ -115,7 +118,7 @@ mod tests {
 
     fn delegate_request<'a>(
         principal: &'a Principal,
-        branch: BranchId,
+        branch: Option<BranchId>,
         reason: Option<&'a str>,
     ) -> FinalizePolicyRequest<'a> {
         FinalizePolicyRequest {
@@ -136,7 +139,7 @@ mod tests {
         let branch = BranchId::new();
         let principal = principal(Role::SuperAdmin, BranchScope::single(branch));
 
-        let err = enforce_finalize_policy(delegate_request(&principal, branch, Some("  ")))
+        let err = enforce_finalize_policy(delegate_request(&principal, Some(branch), Some("  ")))
             .expect_err("blank delegated-finalize reason must be rejected");
 
         assert_eq!(err.kind, ErrorKind::Validation);
@@ -150,7 +153,7 @@ mod tests {
 
         let err = enforce_finalize_policy(delegate_request(
             &principal,
-            branch,
+            Some(branch),
             Some("author is unavailable"),
         ))
         .expect_err("member must not be allowed to delegated-finalize");
@@ -165,7 +168,7 @@ mod tests {
 
         let outcome = enforce_finalize_policy(delegate_request(
             &principal,
-            branch,
+            Some(branch),
             Some("author is unavailable"),
         ))
         .expect("super admin can delegated-finalize with reason");
@@ -191,7 +194,7 @@ mod tests {
             required_policy: Some("approval_finalize"),
             principal: &principal,
             org: OrgId::knl(),
-            branch,
+            branch: Some(branch),
             resource_type: "approval_document",
             resource_id: Uuid::new_v4().to_string(),
             initiated_by: UserId::new(),
