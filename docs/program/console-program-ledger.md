@@ -2374,3 +2374,10 @@ receives work. Minimisation survives as retention, not as shape.
 
 No code changed and no personal data was touched. Every capability, evidence contract, jurisdiction
 binding, Korea control, review disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — rebind after #550 under the erasure-architecture candidate
+
+Mechanical rebind. No claim in the candidate changes.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
