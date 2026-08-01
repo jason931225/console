@@ -451,31 +451,274 @@ fn gate_ignores_migrations_vendored_under_buck_out() -> Result<(), Box<dyn std::
     Ok(())
 }
 
-/// DDL built inside a plpgsql body is not schema. Lexing into a dollar-quoted
-/// body would invent tables (and, in this repo, drop real ones — 0005 builds
-/// `DROP TABLE` strings for `location_pings` day partitions).
+/// A table created inside a dollar-quoted body must FAIL.
+///
+/// This test used to assert `result.passed()`, under the reasoning that DDL
+/// built inside plpgsql "is not schema". It is schema — `EXECUTE format('CREATE
+/// TABLE %I (secret TEXT)', 'ghost')` creates a real relation holding real
+/// columns, and the gate could not see one of them. Asserting that a hole is
+/// correct behaviour is the most expensive kind of test, because it makes the
+/// next reader believe the hole was considered and accepted.
+///
+/// The lexer still does not read plpgsql as SQL — doing so would invent tables
+/// and drop real ones. It keeps the body instead of discarding it, so the body
+/// can be refused rather than trusted.
 #[test]
-fn gate_does_not_read_ddl_out_of_a_dollar_quoted_body() -> Result<(), Box<dyn std::error::Error>> {
+fn gate_rejects_a_table_created_inside_a_dollar_quoted_body()
+-> Result<(), Box<dyn std::error::Error>> {
+    let bodies: &[(&str, &str)] = &[
+        (
+            "plpgsql-function",
+            "CREATE FUNCTION f() RETURNS VOID LANGUAGE plpgsql AS $$
+             BEGIN
+                 EXECUTE format('CREATE TABLE %I (secret TEXT)', 'ghost');
+             END;
+             $$;",
+        ),
+        (
+            "do-block",
+            "DO $$
+             BEGIN
+                 CREATE TABLE ghost (secret TEXT);
+             END;
+             $$;",
+        ),
+    ];
+
+    for (name, body) in bodies {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff (id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 {body}"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "'{name}' must FAIL: a table created in a dollar-quoted body holds columns the \
+             gate cannot enumerate. Got a pass."
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("dollar-quoted body")),
+            "'{name}' must be reported as UnsupportedDdl naming the body, got {:#?}",
+            result.violations
+        );
+    }
+    Ok(())
+}
+
+/// The repo's standard RLS-arming idiom must still pass, or every future
+/// migration that arms a table needs a waiver — and a gate that demands a
+/// waiver for the house idiom is a gate someone eventually deletes.
+///
+/// This is the other half of the test above: the body scan is not "dollar
+/// quote means reject", it is "reject unless the DDL inside is one of the
+/// column-neutral `ALTER TABLE` actions the parser already recognises".
+#[test]
+fn gate_accepts_a_body_that_only_arms_row_level_security() -> Result<(), Box<dyn std::error::Error>>
+{
     let dir = tree(
-        "plpgsql",
+        "rls-arming",
         "CREATE TABLE staff (id UUID PRIMARY KEY);
          COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
-         CREATE FUNCTION f() RETURNS VOID LANGUAGE plpgsql AS $$
-         BEGIN
-             EXECUTE format('CREATE TABLE %I (secret TEXT)', 'ghost');
-             EXECUTE format('DROP TABLE %I', 'staff');
-         END;
-         $$;",
+         DO $$ DECLARE t TEXT; tenant_tables TEXT[] := ARRAY['staff']; BEGIN
+             FOREACH t IN ARRAY tenant_tables LOOP
+                 EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+                 EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+             END LOOP;
+         END $$;",
     )?;
     let result = check_tree(&dir, &empty_baseline())?;
     assert!(
         result.passed(),
-        "expected plpgsql-built DDL to be invisible, got {:#?}",
+        "an RLS-arming body changes no column list and must pass, got {:#?}",
         result.violations
     );
-    assert_eq!(
-        result.total_tables, 1,
-        "the ghost table must not be created"
+    Ok(())
+}
+
+/// A body that adds a COLUMN, however, is not neutral — the same idiom shape,
+/// the opposite verdict. Without this the arming exemption above would be a
+/// blanket pass for anything spelled `ALTER TABLE` inside a body.
+#[test]
+fn gate_rejects_a_body_that_adds_a_column() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tree(
+        "body-add-column",
+        "CREATE TABLE staff (id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         DO $$ BEGIN
+             EXECUTE format('ALTER TABLE %I ADD COLUMN rrn TEXT', 'staff');
+         END $$;",
+    )?;
+    let result = check_tree(&dir, &empty_baseline())?;
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::UnsupportedDdl),
+        "a body that adds a column must FAIL, got {:#?}",
+        result.violations
+    );
+    Ok(())
+}
+
+/// THE INVERSION ITSELF.
+///
+/// Round 2 made unparseable mean FAIL by enumerating the constructs known to
+/// be dangerous, which is the same fail-open shape one step further along: the
+/// dispatch still required `head[1] == "table"`, so every spelling that puts a
+/// word in slot 1 walked straight past it. `apply_statement` now has no
+/// fallthrough arm — the recognised set is the whole allow-list — and these
+/// cases fail because nothing recognises them, not because anyone listed them.
+///
+/// Each case is one line of DDL that the previous dispatch accepted in silence.
+#[test]
+fn gate_rejects_every_table_spelling_the_dispatch_does_not_recognise()
+-> Result<(), Box<dyn std::error::Error>> {
+    let cases: &[(&str, &str)] = &[
+        ("unlogged", "CREATE UNLOGGED TABLE ghost (secret TEXT);"),
+        ("temp", "CREATE TEMP TABLE ghost (secret TEXT);"),
+        ("temporary", "CREATE TEMPORARY TABLE ghost (secret TEXT);"),
+        (
+            "global-temporary",
+            "CREATE GLOBAL TEMPORARY TABLE ghost (secret TEXT);",
+        ),
+        (
+            "create-schema-element-list",
+            "CREATE SCHEMA hr CREATE TABLE ghost (secret TEXT);",
+        ),
+        (
+            "materialized-view",
+            "CREATE MATERIALIZED VIEW ghost AS SELECT 1;",
+        ),
+        ("truncate", "TRUNCATE TABLE staff;"),
+    ];
+
+    for (name, sql) in cases {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff (id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 {sql}"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "'{name}' must FAIL the gate: the dispatch does not recognise it, and an \
+             unrecognised statement may create columns nobody can prove classified. Got a pass."
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl),
+            "'{name}' must be reported as UnsupportedDdl, got {:#?}",
+            result.violations
+        );
+    }
+    Ok(())
+}
+
+/// The allow-list must not have swallowed the corpus. If every statement were
+/// unsupported the gate would be trivially fail-closed and equally useless, so
+/// this pins the forms the repo actually writes as still recognised.
+#[test]
+fn gate_accepts_the_column_neutral_statements_the_repo_writes()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = tree(
+        "column-neutral",
+        "CREATE TABLE staff (id UUID PRIMARY KEY, org_id UUID NOT NULL);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         COMMENT ON COLUMN staff.org_id IS 'pd:none — tenant key, not a person';
+         CREATE SCHEMA hr AUTHORIZATION console_app;
+         CREATE EXTENSION IF NOT EXISTS pg_trgm;
+         CREATE UNIQUE INDEX staff_org_idx ON staff (org_id, id);
+         CREATE INDEX CONCURRENTLY staff_org ON staff (org_id);
+         CREATE POLICY org_isolation ON staff USING (true);
+         CREATE OR REPLACE FUNCTION hr.touch() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+         BEGIN RETURN NEW; END; $$;
+         CREATE TRIGGER staff_touch BEFORE UPDATE ON staff
+             FOR EACH ROW EXECUTE FUNCTION hr.touch();
+         CREATE VIEW staff_public AS SELECT id FROM staff;
+         ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
+         ALTER TABLE staff FORCE ROW LEVEL SECURITY;
+         ALTER TABLE staff ADD CONSTRAINT staff_org_check CHECK (org_id IS NOT NULL);
+         ALTER TABLE staff VALIDATE CONSTRAINT staff_org_check;
+         ALTER TABLE staff ALTER COLUMN org_id SET NOT NULL;
+         ALTER TABLE staff OWNER TO console_app;
+         ALTER TABLE staff DROP CONSTRAINT staff_org_check;
+         GRANT SELECT ON staff TO console_rt;
+         REVOKE ALL ON staff FROM PUBLIC;
+         INSERT INTO staff (id, org_id) VALUES (gen_random_uuid(), gen_random_uuid());
+         UPDATE staff SET org_id = org_id;
+         WITH ordered AS (SELECT id FROM staff) UPDATE staff SET org_id = org_id;
+         SELECT pg_advisory_xact_lock(hashtext('x'));",
+    )?;
+    let result = check_tree(&dir, &empty_baseline())?;
+    assert!(
+        result.passed(),
+        "the corpus's column-neutral forms must stay recognised, got {:#?}",
+        result.violations
+    );
+    assert_eq!(result.total_tables, 1, "only `staff` is a table");
+    Ok(())
+}
+
+/// The clock `BASELINE_FROZEN_AFTER_MIGRATION` reads is a filename prefix,
+/// written by the same author as the migration. It is honest only while every
+/// number at or below the freeze is taken and stays taken — then a new
+/// migration cannot claim one without colliding.
+#[test]
+fn gate_rejects_a_reused_or_vacant_pre_freeze_migration_number()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = tree(
+        "clock-reuse",
+        "CREATE TABLE staff (id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';",
+    )?;
+    // A second file claiming 0001: the prefix now says two different things.
+    fs::write(
+        dir.join("migrations").join("0001_sneaky.sql"),
+        "CREATE TABLE medical_notes (id UUID PRIMARY KEY);",
+    )?;
+    let reused = check_tree(&dir, &baseline(&["medical_notes"]))?;
+    assert!(
+        reused
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::MigrationNumberReused),
+        "a reused pre-freeze number must fail, got {:#?}",
+        reused.violations
+    );
+
+    // A vacancy is the same hole one step earlier: a free slot below the
+    // freeze is a slot a later migration can occupy and be read as old.
+    let gapped = tree(
+        "clock-vacancy",
+        "CREATE TABLE staff (id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';",
+    )?;
+    fs::write(
+        gapped.join("migrations").join("0009_later.sql"),
+        "CREATE TABLE notes (id UUID PRIMARY KEY);
+         COMMENT ON COLUMN notes.id IS 'pd:none — surrogate key';",
+    )?;
+    let result = check_tree(&gapped, &empty_baseline())?;
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::MigrationNumberVacant),
+        "a vacant pre-freeze number must fail, got {:#?}",
+        result.violations
     );
     Ok(())
 }

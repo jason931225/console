@@ -10,11 +10,15 @@
 //! burn-down. See `BASELINE_FROZEN_AFTER_MIGRATION` for how "never join it" is
 //! enforced with no access to the previous baseline.
 //!
-//! UNPARSEABLE MEANS FAIL. A table whose DDL the parser cannot read has no
-//! columns to check, and a table with no columns to check would pass — so an
-//! unsupported construct is a silent hole in exactly the guarantee this gate
-//! exists to give. Every such construct is reported as `UnsupportedDdl` and
-//! named; see `Schema::unsupported`.
+//! UNPARSEABLE MEANS FAIL, AND THAT IS THE DEFAULT, NOT A LIST. A table whose
+//! DDL the parser cannot read has no columns to check, and a table with no
+//! columns to check would pass — so an unsupported construct is a silent hole
+//! in exactly the guarantee this gate exists to give. The first attempt at
+//! closing it enumerated the constructs known to be dangerous, which is the
+//! same fail-open shape one step further along: the next unlisted spelling
+//! walks past. So `apply_statement` has NO fallthrough arm. Every statement the
+//! parser does not positively recognise is `UnsupportedDdl` and fails, named.
+//! The recognised set is the allow-list; see `apply_statement`.
 //!
 //! WHAT THIS DOES NOT DO, stated here because a gate whose scope is guessed at
 //! is worse than none. It asserts nothing about whether any statutory
@@ -71,6 +75,40 @@ pub const BASELINE_FROZEN_AFTER_MIGRATION: u32 = 209;
 
 /// Prefix that marks a column comment as a personal-data classification.
 pub const MARKER_PREFIX: &str = "pd:";
+
+/// One statement the parser cannot read, waived by name with the reason it is
+/// safe to leave unread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnsupportedWaiver {
+    /// Migration file name, without directory.
+    pub migration: &'static str,
+    /// Substring of the finding that identifies the construct being waived.
+    pub construct: &'static str,
+    /// Why this unreadable statement introduces no unclassified column.
+    pub reason: &'static str,
+}
+
+/// Every statement in the existing corpus that the inverted parser cannot read.
+///
+/// Inverting the dispatch turned 210 migrations into 27 findings; teaching the
+/// body scan the same column-neutral `ALTER TABLE` actions the parser already
+/// knows (`COLUMN_NEUTRAL_ALTER_ACTIONS`) took that to one. This is the one.
+///
+/// SHRINK-ONLY, and mechanically: a waiver whose migration is present but whose
+/// finding is gone is itself a violation (`WaiverMatchesNothing`), so an entry
+/// cannot outlive the statement it excuses. Growing the list is a Rust edit in
+/// the same commit as the migration, which is the review surface a data file
+/// does not give.
+pub const UNSUPPORTED_WAIVERS: &[UnsupportedWaiver] = &[UnsupportedWaiver {
+    migration: "0005_create_compliance_location_store.sql",
+    construct: "a dollar-quoted body builds `create table`",
+    reason: "location_pings_ensure_partition() runs EXECUTE format('CREATE TABLE IF NOT EXISTS \
+             %I PARTITION OF location_pings …') with a name computed per day, so no parse can \
+             name the relation. A partition declares no columns of its own; it takes \
+             location_pings', and location_pings is in the parsed schema and checked like any \
+             other table. NOT covered: the partition relations themselves carry no markers, \
+             because COMMENT ON COLUMN is per-relation.",
+}];
 
 // ---------------------------------------------------------------------------
 // Closed vocabulary, each token carrying the instrument it rests on.
@@ -222,6 +260,16 @@ pub enum ViolationKind {
     /// A DDL statement the parser cannot read. Fails the gate rather than
     /// yielding a table with nothing to classify.
     UnsupportedDdl,
+    /// A waiver in `UNSUPPORTED_WAIVERS` excuses a statement that no longer
+    /// exists. Waivers may only shrink.
+    WaiverMatchesNothing,
+    /// Two migrations claim the same number at or below the freeze — the clock
+    /// `BASELINE_FROZEN_AFTER_MIGRATION` reads is a filename, and this is the
+    /// filename lying.
+    MigrationNumberReused,
+    /// A number at or below the freeze has no migration — a vacancy a later
+    /// migration could move into and be read as pre-freeze.
+    MigrationNumberVacant,
 }
 
 impl ViolationKind {
@@ -238,6 +286,9 @@ impl ViolationKind {
             Self::BaselineEntryUnknownTable => "baseline-entry-unknown-table",
             Self::BaselineGrew => "baseline-grew",
             Self::UnsupportedDdl => "unsupported-ddl",
+            Self::WaiverMatchesNothing => "waiver-matches-nothing",
+            Self::MigrationNumberReused => "migration-number-reused",
+            Self::MigrationNumberVacant => "migration-number-vacant",
         }
     }
 }
@@ -281,6 +332,8 @@ pub struct GateResult {
     pub total_tables: usize,
     /// Tables still listed in the baseline.
     pub baselined_tables: usize,
+    /// Statements the parser could not read that a waiver excused.
+    pub waived_statements: usize,
 }
 
 impl GateResult {
@@ -311,6 +364,13 @@ enum Tok {
     Word(String),
     /// Single-quoted string body, case preserved.
     Str(String),
+    /// A `$tag$ … $tag$` body, verbatim and unparsed.
+    ///
+    /// It used to be discarded and replaced by an empty string, which made a
+    /// table created inside a `DO` block or a plpgsql function body invisible —
+    /// one of the two critical fail-open holes. The text is kept so
+    /// `body_builds_table_ddl` can refuse to call the body harmless.
+    Body(String),
     /// Any other single character.
     Punct(char),
 }
@@ -328,13 +388,14 @@ impl Tok {
     }
 }
 
-/// Lex SQL into words, string literals and punctuation.
+/// Lex SQL into words, string literals, dollar-quoted bodies and punctuation.
 ///
-/// Comments are dropped. Dollar-quoted bodies are dropped entirely and replaced
-/// by an empty string token: they hold plpgsql, and this repo's plpgsql builds
-/// DDL with `EXECUTE format('DROP TABLE …')` (0005 does exactly that for
-/// `location_pings` day partitions). Lexing into those bodies would invent
-/// tables and drop real ones.
+/// Comments are dropped. A dollar-quoted body is NOT lexed into — it holds
+/// plpgsql, and this repo's plpgsql builds DDL with
+/// `EXECUTE format('DROP TABLE …')` (0005 does exactly that for
+/// `location_pings` day partitions), so reading it as SQL would invent tables
+/// and drop real ones. It is kept whole as `Tok::Body` instead of discarded,
+/// because a body that is discarded is a body that cannot be refused.
 fn lex(sql: &str) -> Vec<Tok> {
     let bytes = sql.as_bytes();
     let mut tokens = Vec::new();
@@ -374,11 +435,12 @@ fn lex(sql: &str) -> Vec<Tok> {
         {
             let tag = &sql[i..tag_end];
             let body_start = tag_end;
-            match sql[body_start..].find(tag) {
-                Some(offset) => i = body_start + offset + tag.len(),
-                None => i = bytes.len(),
-            }
-            tokens.push(Tok::Str(String::new()));
+            let body_end = match sql[body_start..].find(tag) {
+                Some(offset) => body_start + offset,
+                None => bytes.len(),
+            };
+            i = body_end.saturating_add(tag.len()).min(bytes.len());
+            tokens.push(Tok::Body(sql[body_start..body_end].to_owned()));
             continue;
         }
         // 'string', with '' as the embedded quote.
@@ -525,6 +587,19 @@ const CONSTRAINT_HEADS: &[&str] = &[
     "exclude",
 ];
 
+/// `ALTER TABLE` actions that change access, storage, defaults or constraints
+/// but never the column list: `ALTER COLUMN … SET/DROP …`, `ENABLE`/`DISABLE`/
+/// `FORCE`/`NO FORCE ROW LEVEL SECURITY`, `VALIDATE CONSTRAINT`, `OWNER TO`.
+///
+/// Read from two places on purpose — `apply_alter_table` on parsed SQL, and
+/// `body_builds_table_ddl` on the raw text of a dollar-quoted body — so the two
+/// cannot drift into disagreeing about what a column-neutral action is. `add`,
+/// `rename` and a bare `drop` are absent: those are the three that move
+/// columns.
+const COLUMN_NEUTRAL_ALTER_ACTIONS: &[&str] = &[
+    "alter", "enable", "disable", "force", "no", "validate", "owner",
+];
+
 /// Parse `CREATE TABLE`, `ALTER TABLE … ADD/DROP COLUMN` and `DROP TABLE`
 /// across every migration file, in filename order, into a post-migration schema.
 #[must_use]
@@ -542,30 +617,218 @@ pub fn parse_schema(files: &[PathBuf]) -> Schema {
     schema
 }
 
+/// Dispatch one statement. **There is no fallthrough arm, and that is the fix.**
+///
+/// The previous shape recognised `CREATE TABLE` / `ALTER TABLE` / `DROP TABLE`
+/// plus a hand-list of dangerous constructs, and sent everything else to a
+/// silent `_ => {}`. That is fail-open by construction, and the list did not
+/// save it: the dispatch required `head[1] == "table"`, so `CREATE UNLOGGED
+/// TABLE`, `CREATE TEMP TABLE` and `CREATE GLOBAL TEMPORARY TABLE` put the
+/// modifier in slot 1 and walked past; `CREATE SCHEMA x CREATE TABLE …` walked
+/// past on `head[1] == "schema"`; and a table built inside a `DO` block walked
+/// past because the body had been discarded. The gate then reported green over
+/// relations it had never read.
+///
+/// Inverted, the recognised set below is the whole allow-list and everything
+/// else fails. It holds two kinds of form, and the difference is the point:
+///
+/// * forms that CHANGE a table's column set — parsed, and failing when the
+///   parse does not consume them (see `apply_create_table`);
+/// * forms that provably create no column. Each is an assertion about SQL, not
+///   a convenience: an index, a policy, a trigger, a view, an extension, a
+///   grant, a comment and a DML statement all leave every table's column list
+///   exactly as they found it.
+///
+/// The list is deliberately only what this repo's 210 migrations actually use.
+/// A construct nobody has written yet is a construct nobody has thought about,
+/// and the fail-closed reading of "not thought about" is "reject".
 fn apply_statement(statement: &[Tok], file: &Path, schema: &mut Schema) {
-    let head: Vec<&str> = statement.iter().take(4).filter_map(Tok::word).collect();
-    match head.first().copied() {
-        Some("create") if head.get(1).copied() == Some("table") => {
-            apply_create_table(statement, file, schema);
+    // Before the head is even read: a dollar-quoted body is opaque, and the
+    // head of the statement carrying it says nothing about what it does.
+    for token in statement {
+        if let Tok::Body(body) = token
+            && let Some(construct) = body_builds_table_ddl(body)
+        {
+            schema.unsupported(
+                file,
+                format!(
+                    "a dollar-quoted body builds `{construct}` — DDL inside plpgsql is not read by \
+                     this parser, so the columns it creates cannot be proved classified"
+                ),
+            );
         }
-        Some("drop") if head.get(1).copied() == Some("table") => {
+    }
+
+    let head: Vec<&str> = statement.iter().filter_map(Tok::word).take(4).collect();
+    match head.as_slice() {
+        // ---- forms that change the column set: parsed ----
+        ["create", "table", ..] => apply_create_table(statement, file, schema),
+        ["alter", "table", ..] => apply_alter_table(statement, file, schema),
+        ["drop", "table", ..] => {
             for table in drop_table_targets(statement) {
                 schema.tables.remove(&table);
                 schema.origins.retain(|(t, _), _| t != &table);
             }
         }
-        Some("alter") if head.get(1).copied() == Some("table") => {
-            apply_alter_table(statement, file, schema);
+
+        // ---- forms that create no column ----
+        // `COMMENT ON …` is read separately by `parse_markers`; the rest touch
+        // access, execution or rows, never a column list.
+        ["comment", "on", ..]
+        | ["create", "index", ..]
+        | ["create", "unique", "index", ..]
+        | ["create", "trigger", ..]
+        | ["create", "constraint", "trigger", ..]
+        | ["create", "policy", ..]
+        | ["create", "extension", ..]
+        | ["create", "function", ..]
+        | ["create", "or", "replace", "function"]
+        | ["create", "view", ..]
+        | ["alter", "function", ..]
+        | ["alter", "default", "privileges", ..]
+        | ["drop", "function", ..]
+        | ["drop", "trigger", ..]
+        | ["grant", ..]
+        | ["revoke", ..]
+        | ["do", ..] => {}
+
+        // `CREATE SCHEMA` is column-neutral only in its bare form. The standard
+        // also admits a schema element list — `CREATE SCHEMA x CREATE TABLE
+        // y (…)` — which creates tables the old dispatch never saw, because it
+        // tested `head[1] == "table"` and this statement heads with `schema`.
+        ["create", "schema", ..] => {
+            if statement.iter().skip(1).any(|t| t.word() == Some("create")) {
+                schema.unsupported(
+                    file,
+                    "CREATE SCHEMA … CREATE TABLE … creates tables inside a schema element list",
+                );
+            }
         }
-        // `SELECT … INTO new_table FROM …` creates a table with a column set
-        // the parser never sees. Top-level only: `INSERT INTO` heads with
-        // `insert`, and plpgsql's `SELECT … INTO var` lives in a dollar-quoted
-        // body the lexer has already dropped.
-        Some("select") if statement.iter().any(|t| t.word() == Some("into")) => {
-            schema.unsupported(file, "SELECT … INTO creates a table from a query");
+
+        // DML. The only DML that creates a relation is `SELECT … INTO target`;
+        // `INSERT INTO` is the other spelling of the same word and creates
+        // nothing. plpgsql's `SELECT … INTO variable` is not reachable here —
+        // it lives in a body, which is never lexed as SQL.
+        ["select", ..] | ["with", ..] | ["insert", ..] | ["update", ..] => {
+            if let Some(target) = select_into_target(statement) {
+                schema.unsupported(
+                    file,
+                    format!("SELECT … INTO {target} creates a table from a query"),
+                );
+            }
         }
-        _ => {}
+
+        [] => {}
+        _ => schema.unsupported(
+            file,
+            format!(
+                "unrecognised statement `{}` — the parser cannot tell whether it changes a \
+                 table's column set",
+                head.join(" ")
+            ),
+        ),
     }
+}
+
+/// The target of a relation-creating `INTO`, or `None`.
+///
+/// `INSERT INTO t` is excluded by its preceding word, which is the only reason
+/// `into` alone cannot be the test.
+fn select_into_target(statement: &[Tok]) -> Option<String> {
+    let mut previous_word: Option<&str> = None;
+    for (index, token) in statement.iter().enumerate() {
+        if let Some(word) = token.word() {
+            if word == "into" && previous_word != Some("insert") {
+                return read_qualified_name(statement, index + 1).map(|(name, _)| name);
+            }
+            previous_word = Some(word);
+        }
+    }
+    None
+}
+
+/// Does an opaque dollar-quoted body build table DDL?
+///
+/// A body is plpgsql, this gate has no plpgsql parser, and under the inverted
+/// default a statement that is not consumed fails. What the gate can still do
+/// is refuse to call a body harmless. The scan runs over the body's whole text,
+/// code and string literals alike, because this repo builds DDL by string —
+/// `EXECUTE format('CREATE TABLE %I …')` — so the DDL is inside a literal and a
+/// scan that skipped literals would see nothing.
+///
+/// A leading `DROP … TABLE` is deliberately not flagged. A body that drops a
+/// table leaves the parser believing in a table that is gone, so the gate
+/// demands one classification too many: the fail-closed direction, not a hole.
+///
+/// `ALTER … TABLE` is flagged unless the action that follows is one
+/// `COLUMN_NEUTRAL_ALTER_ACTIONS` names — the same vocabulary
+/// `apply_alter_table` applies to parsed SQL. Without that, the repo's standard
+/// RLS-arming idiom (`EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL
+/// SECURITY', t)`, in 25 migrations) would need a waiver every time it is
+/// written, and a gate that demands a waiver for the house idiom is a gate
+/// someone eventually deletes.
+///
+/// ponytail: word-window scan, not a plpgsql parse. Known ceiling — a body that
+/// assembles the keyword from fragments (`'CREA' || 'TE TABLE'`), or one whose
+/// action verb sits more than three words past `TABLE`, is not read correctly;
+/// the second case errs closed. The upgrade path is a real plpgsql parser,
+/// which nothing here justifies.
+fn body_builds_table_ddl(body: &str) -> Option<String> {
+    let words: Vec<&str> = body
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|word| !word.is_empty())
+        .collect();
+    for (index, word) in words.iter().enumerate() {
+        let creates = word.eq_ignore_ascii_case("create");
+        if !creates && !word.eq_ignore_ascii_case("alter") {
+            continue;
+        }
+        // Wide enough for `CREATE GLOBAL TEMPORARY TABLE`, the longest
+        // modifier run Postgres accepts before the keyword.
+        let window_end = index.saturating_add(4).min(words.len());
+        let Some(offset) = words[index + 1..window_end]
+            .iter()
+            .position(|word| word.eq_ignore_ascii_case("table"))
+        else {
+            continue;
+        };
+        let phrase = words[index..=index + 1 + offset].join(" ").to_lowercase();
+        // Any `CREATE … TABLE` makes a relation whose name this parser never
+        // learns — 0005 computes a partition name per day.
+        if creates || !alter_action_is_column_neutral(&words[index + 2 + offset..]) {
+            return Some(phrase);
+        }
+    }
+    None
+}
+
+/// `words` begins just past `ALTER … TABLE`. The table name is one to three
+/// words (`%I`, `foo`, `public.foo` after splitting), so the action verb is
+/// searched for rather than assumed to sit first.
+fn alter_action_is_column_neutral(words: &[&str]) -> bool {
+    for (index, word) in words.iter().take(3).enumerate() {
+        if COLUMN_NEUTRAL_ALTER_ACTIONS
+            .iter()
+            .any(|action| word.eq_ignore_ascii_case(action))
+        {
+            return true;
+        }
+        // `ADD`/`DROP CONSTRAINT` is neutral, `ADD`/`DROP COLUMN` is not, and a
+        // bare `ADD colname TYPE` is the implicit column form: the same
+        // distinction `apply_alter_table` draws on parsed SQL, drawn here on
+        // text.
+        if word.eq_ignore_ascii_case("add") || word.eq_ignore_ascii_case("drop") {
+            return words.get(index + 1).is_some_and(|next| {
+                CONSTRAINT_HEADS
+                    .iter()
+                    .any(|head| next.eq_ignore_ascii_case(head))
+            });
+        }
+        if word.eq_ignore_ascii_case("rename") {
+            return false;
+        }
+    }
+    false
 }
 
 /// Consume `[IF NOT EXISTS]` / `[IF EXISTS]` and return the index of the name.
@@ -684,6 +947,7 @@ fn apply_create_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
 fn apply_alter_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
     let index = skip_if_clause(statement, 2);
     let Some((table, after_name)) = read_qualified_name(statement, index) else {
+        schema.unsupported(file, "ALTER TABLE with no readable table name");
         return;
     };
     if !schema.tables.contains_key(&table) {
@@ -726,7 +990,20 @@ fn apply_alter_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
                 let mut cursor = 1usize;
                 if action.get(cursor).and_then(Tok::word) == Some("column") {
                     cursor += 1;
+                } else if action
+                    .get(cursor)
+                    .and_then(Tok::word)
+                    .is_some_and(|w| CONSTRAINT_HEADS.contains(&w))
+                {
+                    continue;
                 } else {
+                    schema.unsupported(
+                        file,
+                        format!(
+                            "ALTER TABLE {table} DROP {} is not a form this parser reads",
+                            words.get(1).copied().unwrap_or("…")
+                        ),
+                    );
                     continue;
                 }
                 cursor = skip_if_clause(action, cursor);
@@ -737,6 +1014,12 @@ fn apply_alter_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
                     schema.origins.remove(&(table.clone(), column.to_owned()));
                 }
             }
+            // Actions that change access, storage, defaults or constraints, but
+            // never the column list: `ALTER COLUMN … SET/DROP …`, `ENABLE`/
+            // `DISABLE`/`FORCE`/`NO FORCE ROW LEVEL SECURITY`, `VALIDATE
+            // CONSTRAINT`, `OWNER TO`. Same allow-list discipline as
+            // `apply_statement`: named, or rejected.
+            Some(action) if COLUMN_NEUTRAL_ALTER_ACTIONS.contains(&action) => {}
             // `RENAME COLUMN a TO b` moves a column out from under its
             // classification: the marker still names `a`, and `b` arrives
             // unclassified. No migration uses it today; the day one does, the
@@ -747,7 +1030,16 @@ fn apply_alter_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
                     format!("ALTER TABLE {table} RENAME … moves a column away from its marker"),
                 );
             }
-            _ => {}
+            // No fallthrough. `ATTACH PARTITION` and `INHERIT parent` both
+            // widen a table's effective column set, and both used to land here
+            // silently.
+            _ => schema.unsupported(
+                file,
+                format!(
+                    "ALTER TABLE {table} {} is not an action this parser reads",
+                    words.first().copied().unwrap_or("…")
+                ),
+            ),
         }
     }
 }
@@ -974,6 +1266,70 @@ fn migration_number(path: &Path) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// Prove the migration-number clock cannot be lied to.
+///
+/// `BASELINE_FROZEN_AFTER_MIGRATION` decides whether a column predates the
+/// backlog, and it decides it by reading a FILENAME PREFIX — written by the
+/// same author as the migration it labels. Nothing above stops a new migration
+/// from being called `0042_…` and being read as pre-freeze, which puts the
+/// whole baseline ratchet back on the honour system.
+///
+/// What makes the prefix honest is that every number at or below the freeze is
+/// already taken and stays taken. Then a new migration cannot claim one: it
+/// collides. So this checks exactly that, and nothing more —
+///
+/// * no two migrations share a number at or below the freeze, and
+/// * no number below the highest one present is vacant, since a vacancy is a
+///   slot a later migration could move into and be read as pre-freeze.
+///
+/// Bounded to `<= BASELINE_FROZEN_AFTER_MIGRATION` on purpose: numbers above
+/// the freeze are already outside the baseline's shelter, so a collision there
+/// changes no verdict here. `console-gate-migration-safety` checks both
+/// properties across the whole range; this gate re-checks the part its own
+/// correctness rests on, because a silent dependency on a sibling gate is a
+/// dependency that breaks silently.
+fn check_freeze_clock(files: &[PathBuf], result: &mut GateResult) {
+    let mut by_number: BTreeMap<u32, Vec<&PathBuf>> = BTreeMap::new();
+    for file in files {
+        if let Some(number) =
+            migration_number(file).filter(|n| *n <= BASELINE_FROZEN_AFTER_MIGRATION)
+        {
+            by_number.entry(number).or_default().push(file);
+        }
+    }
+    for (number, sharing) in &by_number {
+        if sharing.len() > 1 {
+            result.push(
+                ViolationKind::MigrationNumberReused,
+                sharing.first().map(|f| (*f).clone()),
+                format!(
+                    "migration number {number:04} is claimed by {} files — the clock \
+                     {BASELINE_FROZEN_AFTER_MIGRATION:04} is read from this prefix, so a reused \
+                     number lets a new migration present itself as pre-freeze and be sheltered \
+                     by the baseline",
+                    sharing.len()
+                ),
+            );
+        }
+    }
+    let Some(highest) = by_number.keys().next_back().copied() else {
+        return;
+    };
+    for number in 1..highest {
+        if !by_number.contains_key(&number) {
+            result.push(
+                ViolationKind::MigrationNumberVacant,
+                None,
+                format!(
+                    "migration number {number:04} is vacant below {highest:04} — a vacancy at or \
+                     below the freeze is a slot a new migration can occupy and be read as \
+                     pre-freeze"
+                ),
+            );
+        }
+    }
+}
+
 /// Parse a baseline file into its table set, ignoring blanks and `#` comments.
 #[must_use]
 pub fn parse_baseline(text: &str) -> BTreeSet<String> {
@@ -1047,7 +1403,20 @@ pub fn check_files(files: &[PathBuf], baseline: &BTreeSet<String>) -> GateResult
 
     // 0. Anything the parser could not read. First, because every later check
     //    reasons over a column set that this says is incomplete.
+    let mut waiver_matched = vec![false; UNSUPPORTED_WAIVERS.len()];
     for (file, detail) in &schema.unsupported {
+        let name = file
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if let Some(index) = UNSUPPORTED_WAIVERS
+            .iter()
+            .position(|waiver| waiver.migration == name && detail.contains(waiver.construct))
+        {
+            waiver_matched[index] = true;
+            result.waived_statements += 1;
+            continue;
+        }
         result.push(
             ViolationKind::UnsupportedDdl,
             Some(file.clone()),
@@ -1058,6 +1427,27 @@ pub fn check_files(files: &[PathBuf], baseline: &BTreeSet<String>) -> GateResult
             ),
         );
     }
+    // A waiver may only leave this list. It is checked against the tree it
+    // names, so a synthetic tree that does not contain the migration says
+    // nothing about the waiver either way.
+    for (waiver, matched) in UNSUPPORTED_WAIVERS.iter().zip(&waiver_matched) {
+        let present = files
+            .iter()
+            .any(|file| file.file_name().and_then(|n| n.to_str()) == Some(waiver.migration));
+        if present && !matched {
+            result.push(
+                ViolationKind::WaiverMatchesNothing,
+                None,
+                format!(
+                    "the waiver for {} ('{}') no longer matches anything the parser rejects — \
+                     remove it from UNSUPPORTED_WAIVERS so the list keeps shrinking",
+                    waiver.migration, waiver.construct
+                ),
+            );
+        }
+    }
+
+    check_freeze_clock(files, &mut result);
 
     // 1. Marker well-formedness, existence and uniqueness.
     let mut classified: BTreeMap<(String, String), &Marker> = BTreeMap::new();

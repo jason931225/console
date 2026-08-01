@@ -50,11 +50,13 @@ fn run_gate(start_dir: &Path) {
 
     eprintln!(
         "console-gate-personal-data-classification: {} table(s), {} column(s); \
-         {} column(s) classified; {} table(s) still baselined",
+         {} column(s) classified; {} table(s) still baselined; \
+         {} statement(s) unreadable and waived",
         result.total_tables,
         result.total_columns,
         result.classified_columns,
-        result.baselined_tables
+        result.baselined_tables,
+        result.waived_statements
     );
 
     if result.passed() {

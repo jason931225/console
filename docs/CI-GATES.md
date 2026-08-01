@@ -408,16 +408,30 @@ hand-maintained.
 
 Two properties carry the weight:
 
-- **Unparseable means FAIL.** `CREATE TABLE … AS SELECT`, `SELECT … INTO`,
-  `(LIKE parent INCLUDING ALL)`, `PARTITION OF`, `INHERITS (…)`,
-  `RENAME`, and a plain syntax error each raise `unsupported-ddl` naming the
-  construct. A table the parser cannot read has no columns to check, and a table
-  with no columns to check would otherwise pass.
+- **Unparseable means FAIL, by default rather than by list.** `apply_statement`
+  has no fallthrough arm: the forms it recognises are the whole allow-list, and
+  anything else raises `unsupported-ddl` naming the head it could not read. An
+  earlier version enumerated the dangerous constructs instead, which is the same
+  fail-open shape one step along — it tested `head[1] == "table"`, so
+  `CREATE UNLOGGED/TEMP/GLOBAL TEMPORARY TABLE` and
+  `CREATE SCHEMA x CREATE TABLE …` all walked past. A dollar-quoted body is
+  refused the same way unless the DDL inside it is one of the column-neutral
+  `ALTER TABLE` actions the parser already recognises, so a table built in a
+  `DO` block or a plpgsql body now fails instead of being invisible.
+  `UNSUPPORTED_WAIVERS` records what the corpus still cannot parse — one entry,
+  0005's per-day `location_pings` partitions — with a reason each, and a waiver
+  that matches nothing is itself a violation.
 - **The baseline is shrink-only, enforced.** CI checks out a single commit with
   no history, so the gate cannot diff against the previous baseline. Migration
   numbers supply the clock instead: a column introduced after
   `BASELINE_FROZEN_AFTER_MIGRATION` is not sheltered by a baseline entry,
-  whether it arrived on a new table or on one already listed.
+  whether it arrived on a new table or on one already listed. That clock is a
+  filename prefix, so the gate also checks that no number at or below the freeze
+  is reused or vacant — otherwise a new migration could name itself `0042_…` and
+  be read as pre-freeze. What is *not* achieved: nothing here proves the
+  baseline file is a subset of yesterday's, because yesterday's is not in the
+  checkout. It proves that every way of adding an entry today is already a
+  violation.
 
 Coverage is partial by design and the number is countable, not claimed: the gate
 prints classified columns and baselined tables on every run. Listing a table in

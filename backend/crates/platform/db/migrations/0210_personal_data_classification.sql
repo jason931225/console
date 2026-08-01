@@ -857,12 +857,19 @@ COMMENT ON COLUMN audit_events.user_agent IS 'pd:personal — 이용자 단말 �
 -- reports a property of the SCHEMA, which is identical for every tenant, and it
 -- exposes no tenant row data.
 
+-- `pg_catalog` FIRST, and that order is the security property, not style.
+-- These are SECURITY DEFINER, so they execute with the definer's rights. With
+-- `public` ahead of `pg_catalog`, the unqualified `string_to_array`,
+-- `regexp_match` and `unnest` below resolve against `public` first — and
+-- anyone who can CREATE in `public` can plant a function of the same name and
+-- signature and have it run as the definer. `pg_temp` stays last for the same
+-- reason at one further remove.
 CREATE OR REPLACE FUNCTION personal_data_columns()
 RETURNS TABLE (rel_name TEXT, col_name TEXT, tokens TEXT[])
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public, pg_catalog, pg_temp
+SET search_path = pg_catalog, public, pg_temp
 AS $$
     SELECT
         c.relname::TEXT,
@@ -893,12 +900,15 @@ RETURNS INTEGER
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public, pg_catalog, pg_temp
+SET search_path = pg_catalog, public, pg_temp
 AS $$
     SELECT CASE
         WHEN EXISTS (
             SELECT 1
-            FROM personal_data_columns() AS pdc,
+            -- Schema-qualified: `personal_data_columns` lives in `public`, so
+            -- ordering `pg_catalog` first does not protect this call the way
+            -- it protects the built-ins. Naming the schema does.
+            FROM public.personal_data_columns() AS pdc,
                  LATERAL unnest(pdc.tokens) AS token
             WHERE token = 'unique-id' OR token LIKE 'unique-id/%'
                OR token = 'sensitive' OR token LIKE 'sensitive/%'
