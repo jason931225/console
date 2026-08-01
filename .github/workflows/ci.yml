@@ -499,6 +499,7 @@ jobs:
             //tools/buck:platform-db-lifecycle-maker-checker-pg \
             //tools/buck:platform-db-m2-flag-on-runtime-drain-pg \
             //tools/buck:platform-db-period-locks-and-lifecycle-pg \
+            //tools/buck:platform-db-personal-data-classification-pg \
             //tools/buck:platform-group-lib-pg \
             //tools/buck:platform-jobs-apalis-adapter-pg \
             //tools/buck:platform-jobs-apalis-schema-contract-pg \
@@ -768,7 +769,10 @@ jobs:
       - name: Fabricated-branch gate
         run: cargo run -p console-gate-fabricated-branch
 
-      # The nine `cargo run -p console-gate-*` steps above only prove the gates
+      - name: Personal-data-classification gate
+        run: cargo run -p console-gate-personal-data-classification
+
+      # The ten `cargo run -p console-gate-*` steps above only prove the gates
       # exit 0 against THIS tree. A gate whose scan root no longer resolves --
       # e.g. after the 2026-07-28 deletion moved or emptied a directory it walks
       # -- also exits 0, so "green" cannot be distinguished from "scanned
@@ -791,6 +795,7 @@ jobs:
             //backend/ci/gates/fabricated-branch:console-gate-fabricated-branch-unit \
             //backend/ci/gates/layer-boundary:console-gate-layer-boundary-itest-gate_detects_violation \
             //backend/ci/gates/migration-safety:console-gate-migration-safety-itest-gate_detects_violation \
+            //backend/ci/gates/personal-data-classification:console-gate-personal-data-classification-itest-gate_detects_violation \
             //backend/ci/gates/pii-no-logs:console-gate-pii-no-logs-itest-gate_detects_violation \
             //backend/ci/gates/vendor-lockin:console-gate-vendor-lockin-itest-gate_detects_violation
 

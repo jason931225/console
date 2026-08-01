@@ -298,6 +298,11 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/gate_detects_violation.rs': 'none',
         },
     },
+    'console-gate-personal-data-classification': {
+        'integration': {
+            'tests/gate_detects_violation.rs': 'none',
+        },
+    },
     'console-gate-pii-no-logs': {
         'integration': {
             'tests/gate_detects_violation.rs': 'none',
@@ -706,6 +711,7 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/lifecycle_maker_checker.rs': 'postgres',
             'tests/m2_flag_on_runtime_drain.rs': 'postgres',
             'tests/period_locks_and_lifecycle.rs': 'postgres',
+            'tests/personal_data_classification.rs': 'postgres',
             'tests/rls_isolation.rs': 'postgres',
             'tests/rls_rollout_isolation.rs': 'postgres',
         },

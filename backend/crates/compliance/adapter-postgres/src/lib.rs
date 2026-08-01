@@ -76,6 +76,27 @@ pub struct PgComplianceStore {
     pool: PgPool,
 }
 
+/// The 접속기록 retention floor derived from the personal-data classification,
+/// with the counts that produced it.
+///
+/// `floor_days` is 730 when any classified column carries a `unique-id` or a
+/// `sensitive` token, else 365 — 「개인정보의 안전성 확보조치 기준」
+/// (개인정보보호위원회 고시 제2026-9호) 제8조제1항. The two counts are carried so
+/// a reader can see WHICH limb fired: 제8조제1항제2호 reads
+/// 고유식별정보 **또는** 민감정보, and a floor that fires only on 고유식별정보
+/// under-retains for a 민감정보 system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AccessLogRetentionFloor {
+    /// Minimum 접속기록 retention in days implied by the classification.
+    pub floor_days: i32,
+    /// Columns carrying any classification marker.
+    pub classified_columns: i64,
+    /// Columns classified 고유식별정보.
+    pub unique_id_columns: i64,
+    /// Columns classified 민감정보.
+    pub sensitive_columns: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetentionPurge {
     pub dropped_ping_partitions: i32,
@@ -91,6 +112,59 @@ impl PgComplianceStore {
     #[must_use]
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    /// Read the 접속기록 retention floor DERIVED from the field-level
+    /// personal-data classification recorded in the database catalog.
+    ///
+    /// Nothing here is hand-maintained: the floor is computed by
+    /// `access_log_retention_floor_days()` (migration 0210) over the `pd:`
+    /// markers on `pg_attribute`, so it moves when the classification moves and
+    /// cannot drift from it.
+    ///
+    /// This reports what the classification implies about
+    /// 「개인정보의 안전성 확보조치 기준」 제8조제1항. It does not assert that the
+    /// obligation is met — nothing in this codebase measures how long access
+    /// logs are actually kept — and it moves no compliance control off HOLD.
+    ///
+    /// While the classification is partial the value is a LOWER BOUND: it can
+    /// under-report and never over-report, because an unclassified column
+    /// contributes nothing and 730 is the ceiling.
+    pub async fn access_log_retention_floor(
+        &self,
+    ) -> Result<AccessLogRetentionFloor, PgComplianceError> {
+        let org = current_org().map_err(KernelError::from)?;
+        with_org_conn::<_, _, PgComplianceError>(&self.pool, org, move |tx| {
+            Box::pin(async move {
+                let row = sqlx::query(
+                    r"
+                    SELECT
+                        access_log_retention_floor_days() AS floor_days,
+                        (SELECT COUNT(*)::BIGINT FROM personal_data_columns())
+                            AS classified_columns,
+                        (SELECT COUNT(*)::BIGINT
+                           FROM personal_data_columns() AS pdc,
+                                LATERAL unnest(pdc.tokens) AS token
+                          WHERE token = 'unique-id' OR token LIKE 'unique-id/%')
+                            AS unique_id_columns,
+                        (SELECT COUNT(*)::BIGINT
+                           FROM personal_data_columns() AS pdc,
+                                LATERAL unnest(pdc.tokens) AS token
+                          WHERE token = 'sensitive' OR token LIKE 'sensitive/%')
+                            AS sensitive_columns
+                    ",
+                )
+                .fetch_one(tx.as_mut())
+                .await?;
+                Ok(AccessLogRetentionFloor {
+                    floor_days: row.try_get("floor_days")?,
+                    classified_columns: row.try_get("classified_columns")?,
+                    unique_id_columns: row.try_get("unique_id_columns")?,
+                    sensitive_columns: row.try_get("sensitive_columns")?,
+                })
+            })
+        })
+        .await
     }
 
     pub async fn transition_consent(

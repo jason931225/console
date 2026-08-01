@@ -1724,6 +1724,10 @@ name = "console-gate-migration-safety"
 version = "0.1.0"
 
 [[package]]
+name = "console-gate-personal-data-classification"
+version = "0.1.0"
+
+[[package]]
 name = "console-gate-pii-no-logs"
 version = "0.1.0"
 

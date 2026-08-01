@@ -1401,6 +1401,14 @@ sh_test(
 )
 
 sh_test(
+    name = "platform-db-personal-data-classification-pg",
+    test = "run_test_with_postgres_env.sh",
+    args = ["$(location //backend/crates/platform/db:console-platform-db-itest-personal_data_classification)"],
+    deps = ["//backend/crates/platform/db:console-platform-db-itest-personal_data_classification"],
+    labels = ["test.integration", "resource.postgres", "needs-postgres"],
+)
+
+sh_test(
     name = "platform-group-lib-pg",
     test = "run_test_with_postgres_env.sh",
     args = ["$(location //backend/crates/platform/group:console-platform-group-unit)"],

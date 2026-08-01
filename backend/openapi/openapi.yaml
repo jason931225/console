@@ -3329,6 +3329,41 @@ paths:
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalServerError' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/compliance/personal-data/access-log-retention-floor:
+    get:
+      tags:
+        - compliance
+      operationId: getAccessLogRetentionFloor
+      summary: Read the access-log retention floor derived from the field-level personal-data classification
+      description: >-
+        Reports the 접속기록 retention floor implied by the personal-data
+        classification recorded on the database columns themselves, together
+        with the instrument it rests on. 730 days when any classified column
+        carries a 고유식별정보 or 민감정보 token, otherwise 365 —
+        「개인정보의 안전성 확보조치 기준」 (개인정보보호위원회 고시 제2026-9호,
+        발령ㆍ시행 2026-07-01) 제8조제1항.
+
+
+        This is a DERIVED value, not a measurement: nothing observes how long
+        access logs are actually retained. The response asserts no compliance
+        with any statutory obligation and moves no compliance control off HOLD.
+        While the classification is partial the value is a lower bound — it can
+        under-report and never over-report.
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Derived retention floor with its citation and the counts that produced it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessLogRetentionFloor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/location-consent/status:
     get:
       tags:
@@ -24919,6 +24954,76 @@ components:
       - GRANTED
       - SUSPENDED
       - WITHDRAWN
+    AccessLogRetentionFloor:
+      type: object
+      description: >-
+        The 접속기록 retention floor DERIVED from the field-level personal-data
+        classification held on the database columns, with the instrument it
+        rests on and the counts that produced it. Records what the
+        classification implies; asserts no compliance.
+      required:
+      - floor_days
+      - classified_columns
+      - unique_id_columns
+      - sensitive_columns
+      - basis
+      - instrument
+      - article
+      - effective_date
+      - administrative_rule_serial
+      - derivation_is_lower_bound
+      - compliance_assertion
+      properties:
+        floor_days:
+          type: integer
+          format: int32
+          description: >-
+            Minimum 접속기록 retention in days implied by the classification.
+            730 when any classified column carries a 고유식별정보 or 민감정보
+            token, otherwise 365.
+          enum: [365, 730]
+        classified_columns:
+          type: integer
+          format: int64
+          description: Columns carrying any personal-data classification marker.
+        unique_id_columns:
+          type: integer
+          format: int64
+          description: Columns classified 고유식별정보 (개인정보 보호법 제24조제1항).
+        sensitive_columns:
+          type: integer
+          format: int64
+          description: >-
+            Columns classified 민감정보 (개인정보 보호법 제23조제1항). Carried
+            separately from unique_id_columns because 고시 제8조제1항제2호 reads
+            고유식별정보 OR 민감정보, and a floor firing only on the former
+            under-retains.
+        basis:
+          type: string
+          description: The operative rule, quoted.
+        instrument:
+          type: string
+          description: Instrument name and version.
+        article:
+          type: string
+          description: Article the floor rests on.
+        effective_date:
+          type: string
+          format: date
+          description: 시행일자 of the cited instrument.
+        administrative_rule_serial:
+          type: string
+          description: 행정규칙일련번호 on the official legislation portal.
+        derivation_is_lower_bound:
+          type: boolean
+          description: >-
+            True while the classification is partial: the value can under-report
+            and never over-report.
+        compliance_assertion:
+          type: string
+          description: >-
+            Always states that no compliance is asserted. Present so a caller
+            cannot read the number alone as a verdict.
     LocationConsentStatus:
       type: object
       required:
