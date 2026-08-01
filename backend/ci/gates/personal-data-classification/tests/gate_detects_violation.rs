@@ -273,6 +273,148 @@ fn gate_ignores_a_dropped_column() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// THE FAIL-OPEN CLASS, which is the one that matters.
+///
+/// Every construct below used to make the parser return early WITHOUT
+/// registering the table. A table that is never registered has no columns to
+/// check, and a table with no columns to check passes — so the gate reported
+/// green over relations it had not read. `CREATE TABLE … AS SELECT` and
+/// `SELECT … INTO` were invisible; `(LIKE parent INCLUDING ALL)` was skipped as
+/// if `LIKE` were a table constraint, discarding every inherited column.
+///
+/// For a gate whose entire purpose is "no personal-data column goes
+/// unclassified", unparseable must mean FAIL. Each of these now names the
+/// construct that defeated the parser.
+#[test]
+fn gate_rejects_ddl_it_cannot_parse_instead_of_passing_it() -> Result<(), Box<dyn std::error::Error>>
+{
+    // (case name, SQL, substring the finding must name)
+    let cases: &[(&str, &str, &str)] = &[
+        (
+            "create-table-as-select",
+            "CREATE TABLE staff_copy AS SELECT * FROM staff;",
+            "AS SELECT",
+        ),
+        (
+            "select-into",
+            "SELECT * INTO staff_copy FROM staff;",
+            "SELECT … INTO",
+        ),
+        (
+            "create-table-like",
+            "CREATE TABLE staff_copy (LIKE staff INCLUDING ALL);",
+            "(LIKE … )",
+        ),
+        (
+            "partition-of",
+            "CREATE TABLE staff_2026 PARTITION OF staff FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+            "PARTITION OF",
+        ),
+        (
+            "inherits",
+            "CREATE TABLE contractor (day_rate NUMERIC) INHERITS (staff);",
+            "INHERITS",
+        ),
+        (
+            "syntax-error",
+            "CREATE TABLE staff_copy (id UUID PRIMARY KEY, name TEXT;",
+            "balanced",
+        ),
+    ];
+
+    for (name, sql, expected) in cases {
+        let dir = tree(name, sql)?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "'{name}' must FAIL the gate: a construct the parser cannot read is a table \
+             whose columns cannot be proved classified. Got a pass."
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl && v.detail.contains(expected)),
+            "'{name}' must be reported as UnsupportedDdl naming '{expected}', got {:#?}",
+            result.violations
+        );
+    }
+    Ok(())
+}
+
+/// The baseline claims to be shrink-only. Without this it was not: the gate has
+/// no memory of the previous baseline — CI checks out a single commit with no
+/// history — so appending one line admitted a whole new personal-data table
+/// with no signal at all.
+///
+/// Migration numbers supply the missing clock. A column introduced after the
+/// freeze is outside what the backlog declared, whether it arrived on a new
+/// table or on one already listed.
+#[test]
+fn gate_rejects_a_table_appended_to_the_baseline_after_the_freeze()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = tree(
+        "baseline-append",
+        "CREATE TABLE staff (id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';",
+    )?;
+    fs::write(
+        dir.join("migrations").join("9999_new_table.sql"),
+        "CREATE TABLE medical_notes (id UUID PRIMARY KEY, diagnosis TEXT NOT NULL);",
+    )?;
+
+    // Without the entry the new table simply fails as unclassified.
+    let unlisted = check_tree(&dir, &empty_baseline())?;
+    assert!(!unlisted.passed());
+
+    // Appending it to the baseline must NOT buy silence.
+    let listed = check_tree(&dir, &baseline(&["medical_notes"]))?;
+    assert!(
+        listed
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::BaselineGrew
+                && v.detail.contains("medical_notes.diagnosis")),
+        "appending a post-freeze table to the baseline must fail, got {:#?}",
+        listed.violations
+    );
+    Ok(())
+}
+
+/// The same clock closes the hole the table-level baseline opened by
+/// construction: a NEW column on an ALREADY-listed table used to need no
+/// classification at all, because the shelter was granted per table.
+#[test]
+fn gate_rejects_a_new_column_on_an_already_baselined_table()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = tree(
+        "baseline-column-growth",
+        "CREATE TABLE staff (id UUID PRIMARY KEY, legacy TEXT);",
+    )?;
+    fs::write(
+        dir.join("migrations").join("9999_add_rrn.sql"),
+        "ALTER TABLE staff ADD COLUMN rrn TEXT;",
+    )?;
+    let result = check_tree(&dir, &baseline(&["staff"]))?;
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::BaselineGrew && v.detail.contains("staff.rrn")),
+        "a post-freeze column on a baselined table must fail, got {:#?}",
+        result.violations
+    );
+    assert!(
+        !result
+            .violations
+            .iter()
+            .any(|v| v.detail.contains("staff.legacy")),
+        "a pre-freeze column on a baselined table is still debt, not a failure: {:#?}",
+        result.violations
+    );
+    Ok(())
+}
+
 /// Build residue is not our schema, and a gate whose verdict depends on whether
 /// anyone has run Buck locally is not reproducible.
 ///

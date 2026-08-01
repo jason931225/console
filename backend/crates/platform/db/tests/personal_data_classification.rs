@@ -280,11 +280,67 @@ async fn no_column_is_classified_credit_while_the_scope_question_is_open(pool: P
     );
 }
 
-/// The runtime role the application actually connects as must be able to read
-/// the derivation, or the route added in `console-compliance-rest` fails at
-/// runtime while every owner-privileged test passes.
+/// A ROLE WITHOUT THE GRANT IS REFUSED — and only then does the positive half
+/// mean anything.
+///
+/// An earlier version of this file asserted only that `console_rt` may execute
+/// the two functions, and the accompanying report called that "proven by test,
+/// not assumed". It was not. Both functions are SECURITY DEFINER, and
+/// PostgreSQL grants EXECUTE on a new function to PUBLIC by default; the
+/// migration carried no `REVOKE ALL … FROM PUBLIC`, so every role in the
+/// cluster already held EXECUTE and the assertion would have passed with the
+/// `GRANT` lines deleted. The migration now revokes first, and this drives a
+/// role holding no grant at all into `42501 insufficient_privilege` before
+/// asserting the runtime role succeeds.
 #[sqlx::test(migrations = "./migrations")]
-async fn console_rt_may_execute_the_derivation(pool: PgPool) {
+async fn only_a_granted_role_may_execute_the_derivation(pool: PgPool) {
+    // Unique per test database, so parallel runs on one cluster cannot race
+    // over a shared role name. The identifier is a fixed prefix plus a UUID's
+    // lowercase hex, so it cannot carry SQL metacharacters.
+    let ungranted = format!("pd_ungranted_{}", uuid::Uuid::new_v4().simple());
+    sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+        "CREATE ROLE \"{ungranted}\" NOLOGIN"
+    )))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // (1) The negative. A role nobody granted anything to must be refused.
+    //     Both probes yield BIGINT so a success would decode cleanly and the
+    //     assertion below would be about privileges, not about types.
+    for probe in [
+        "SELECT access_log_retention_floor_days()::BIGINT",
+        "SELECT COUNT(*) FROM personal_data_columns()",
+    ] {
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+            "SET LOCAL ROLE \"{ungranted}\""
+        )))
+        .execute(tx.as_mut())
+        .await
+        .unwrap();
+        let refused = sqlx::query_scalar::<_, i64>(probe)
+            .fetch_one(tx.as_mut())
+            .await
+            .expect_err(
+                "a role with no EXECUTE grant must be REFUSED — if this succeeds the \
+                 REVOKE ALL … FROM PUBLIC is missing and the positive assertion below \
+                 proves nothing",
+            );
+        assert_eq!(
+            refused
+                .as_database_error()
+                .and_then(|e| e.code())
+                .as_deref(),
+            Some("42501"),
+            "expected insufficient_privilege for `{probe}`, got {refused:?}"
+        );
+        tx.rollback().await.unwrap();
+    }
+
+    // (2) The positive. The runtime role the application actually connects as
+    //     must reach the derivation, or the route in `console-compliance-rest`
+    //     fails at runtime while every owner-privileged test passes.
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("SET LOCAL ROLE console_rt")
         .execute(tx.as_mut())
@@ -304,4 +360,9 @@ async fn console_rt_may_execute_the_derivation(pool: PgPool) {
     assert!(classified > 0);
 
     tx.rollback().await.unwrap();
+
+    sqlx::raw_sql(sqlx::AssertSqlSafe(format!("DROP ROLE \"{ungranted}\"")))
+        .execute(&pool)
+        .await
+        .unwrap();
 }

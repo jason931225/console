@@ -28,14 +28,22 @@ fn main() {
     }
 }
 
-fn run_gate(workspace_dir: &Path) {
+fn run_gate(start_dir: &Path) {
+    // Print the RESOLVED root, not the cwd. CI runs this with cwd `backend/`,
+    // and a message naming a directory the gate did not actually scan is how a
+    // scan-root bug hides.
+    let root =
+        console_gate_personal_data_classification::workspace_root(start_dir).unwrap_or_else(|e| {
+            eprintln!("ERROR: {e}");
+            std::process::exit(1);
+        });
     eprintln!(
         "console-gate-personal-data-classification: checking workspace at {}",
-        workspace_dir.display()
+        root.display()
     );
 
-    let result = console_gate_personal_data_classification::check_workspace(workspace_dir)
-        .unwrap_or_else(|e| {
+    let result =
+        console_gate_personal_data_classification::check_workspace(&root).unwrap_or_else(|e| {
             eprintln!("ERROR: {e}");
             std::process::exit(1);
         });
@@ -64,8 +72,13 @@ fn run_gate(workspace_dir: &Path) {
     std::process::exit(1);
 }
 
-fn inventory(workspace_dir: &Path) {
-    let files = console_gate_personal_data_classification::collect_migration_files(workspace_dir)
+fn inventory(start_dir: &Path) {
+    let root =
+        console_gate_personal_data_classification::workspace_root(start_dir).unwrap_or_else(|e| {
+            eprintln!("ERROR: {e}");
+            std::process::exit(1);
+        });
+    let files = console_gate_personal_data_classification::collect_migration_files(&root)
         .unwrap_or_else(|e| {
             eprintln!("ERROR: {e}");
             std::process::exit(1);

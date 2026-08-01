@@ -7,7 +7,14 @@
 //! shrink-only backlog of tables nobody has classified yet; a NEW table is
 //! never in it, so a new table must be fully classified at creation. That one
 //! property is the completeness enforcement — everything else is debt
-//! burn-down.
+//! burn-down. See `BASELINE_FROZEN_AFTER_MIGRATION` for how "never join it" is
+//! enforced with no access to the previous baseline.
+//!
+//! UNPARSEABLE MEANS FAIL. A table whose DDL the parser cannot read has no
+//! columns to check, and a table with no columns to check would pass — so an
+//! unsupported construct is a silent hole in exactly the guarantee this gate
+//! exists to give. Every such construct is reported as `UnsupportedDdl` and
+//! named; see `Schema::unsupported`.
 //!
 //! WHAT THIS DOES NOT DO, stated here because a gate whose scope is guessed at
 //! is worse than none. It asserts nothing about whether any statutory
@@ -43,6 +50,24 @@ use std::path::{Path, PathBuf};
 /// Baseline path relative to the workspace root.
 pub const BASELINE_RELATIVE_PATH: &str =
     "backend/ci/gates/personal-data-classification/unclassified-tables.txt";
+
+/// Highest migration number that existed when the baseline was frozen.
+///
+/// This is what makes the baseline SHRINK-ONLY rather than merely say it is.
+/// The gate has no memory of the previous baseline — CI checks out one commit
+/// with no history (`actions/checkout` without `fetch-depth: 0`), so there is
+/// no earlier version to diff against. Migration numbers supply the missing
+/// clock: a column introduced at or before this number already existed when
+/// the backlog was declared and may be sheltered by it; a column introduced
+/// after it may not.
+///
+/// That closes appending. Every table outside the baseline today is fully
+/// classified, so naming one here already fails `BaselineEntryFullyClassified`,
+/// and a name that matches nothing fails `BaselineEntryUnknownTable`. The only
+/// remaining way to grow the backlog was a NEW table — or a new column on an
+/// already-listed table, which the table-level baseline used to shelter for
+/// free. Both now fail.
+pub const BASELINE_FROZEN_AFTER_MIGRATION: u32 = 209;
 
 /// Prefix that marks a column comment as a personal-data classification.
 pub const MARKER_PREFIX: &str = "pd:";
@@ -191,6 +216,12 @@ pub enum ViolationKind {
     BaselineEntryFullyClassified,
     /// A baseline entry names a table that no longer exists.
     BaselineEntryUnknownTable,
+    /// The baseline is sheltering a column introduced after it was frozen —
+    /// a new table, or a new column on an already-listed table.
+    BaselineGrew,
+    /// A DDL statement the parser cannot read. Fails the gate rather than
+    /// yielding a table with nothing to classify.
+    UnsupportedDdl,
 }
 
 impl ViolationKind {
@@ -205,6 +236,8 @@ impl ViolationKind {
             Self::DuplicateMarker => "duplicate-marker",
             Self::BaselineEntryFullyClassified => "baseline-entry-fully-classified",
             Self::BaselineEntryUnknownTable => "baseline-entry-unknown-table",
+            Self::BaselineGrew => "baseline-grew",
+            Self::UnsupportedDdl => "unsupported-ddl",
         }
     }
 }
@@ -456,6 +489,13 @@ pub struct Schema {
     pub tables: BTreeMap<String, BTreeSet<String>>,
     /// (table, column) -> migration file that introduced it.
     pub origins: BTreeMap<(String, String), PathBuf>,
+    /// Statements the parser could not read, as (file, named construct).
+    ///
+    /// THE GATE FAILS OPEN WITHOUT THIS. A table the parser cannot understand
+    /// used to become a table with nothing to classify, and a table with
+    /// nothing to classify passes. For a gate whose whole purpose is "no
+    /// personal-data column goes unclassified", unparseable must mean FAIL.
+    pub unsupported: Vec<(PathBuf, String)>,
 }
 
 impl Schema {
@@ -464,9 +504,18 @@ impl Schema {
     pub fn column_count(&self) -> usize {
         self.tables.values().map(BTreeSet::len).sum()
     }
+
+    fn unsupported(&mut self, file: &Path, detail: impl Into<String>) {
+        self.unsupported.push((file.to_path_buf(), detail.into()));
+    }
 }
 
 /// Words that begin a table-level constraint rather than a column definition.
+///
+/// `like` is deliberately NOT here. `CREATE TABLE x (LIKE parent INCLUDING
+/// ALL)` copies every column of `parent`, and treating the clause as a
+/// constraint discarded all of them — the table then held zero columns and
+/// satisfied the gate trivially. It is now an unsupported construct.
 const CONSTRAINT_HEADS: &[&str] = &[
     "constraint",
     "primary",
@@ -474,8 +523,6 @@ const CONSTRAINT_HEADS: &[&str] = &[
     "foreign",
     "check",
     "exclude",
-    "like",
-    "partition",
 ];
 
 /// Parse `CREATE TABLE`, `ALTER TABLE … ADD/DROP COLUMN` and `DROP TABLE`
@@ -510,6 +557,13 @@ fn apply_statement(statement: &[Tok], file: &Path, schema: &mut Schema) {
         Some("alter") if head.get(1).copied() == Some("table") => {
             apply_alter_table(statement, file, schema);
         }
+        // `SELECT … INTO new_table FROM …` creates a table with a column set
+        // the parser never sees. Top-level only: `INSERT INTO` heads with
+        // `insert`, and plpgsql's `SELECT … INTO var` lives in a dollar-quoted
+        // body the lexer has already dropped.
+        Some("select") if statement.iter().any(|t| t.word() == Some("into")) => {
+            schema.unsupported(file, "SELECT … INTO creates a table from a query");
+        }
         _ => {}
     }
 }
@@ -541,30 +595,69 @@ fn read_qualified_name(statement: &[Tok], index: usize) -> Option<(String, usize
     Some((name, cursor))
 }
 
+/// Parse one `CREATE TABLE`, or name the construct that defeated the parser.
+///
+/// Every early return here used to be silent, and a silent return meant the
+/// table was never registered at all — so it could not be checked, and the
+/// gate passed. Each is now an `UnsupportedDdl` finding naming the construct.
 fn apply_create_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
     let index = skip_if_clause(statement, 2);
     let Some((table, after_name)) = read_qualified_name(statement, index) else {
+        schema.unsupported(file, "CREATE TABLE with no readable table name");
         return;
     };
-    // `CREATE TABLE x PARTITION OF y …` inherits its parent's columns and is
-    // not an independently classifiable relation. This repo creates partitions
-    // only inside plpgsql (0005), which the lexer already drops, but the guard
-    // keeps a hand-written partition from inventing an empty table.
-    if statement
-        .get(after_name)
-        .and_then(Tok::word)
-        .is_some_and(|w| w == "partition")
+    match statement.get(after_name).and_then(Tok::word) {
+        // `CREATE TABLE x PARTITION OF y` takes its parent's whole column set.
+        // This repo builds partitions only inside plpgsql (0005), which the
+        // lexer drops, so a hand-written one is a construct nobody has taught
+        // the gate to resolve — not a table with no columns.
+        Some("partition") => {
+            schema.unsupported(
+                file,
+                format!("CREATE TABLE {table} PARTITION OF … inherits its parent's columns"),
+            );
+            return;
+        }
+        // `CREATE TABLE x AS SELECT …` — the column set comes from the query.
+        Some("as") => {
+            schema.unsupported(
+                file,
+                format!("CREATE TABLE {table} AS SELECT … takes its columns from a query"),
+            );
+            return;
+        }
+        _ => {}
+    }
+    let Some((open, close)) = parenthesised_span(statement, after_name) else {
+        schema.unsupported(
+            file,
+            format!("CREATE TABLE {table} has no balanced ( … ) column list"),
+        );
+        return;
+    };
+    // `INHERITS (parent)` follows the column list and adds the parent's
+    // columns to this table.
+    if statement[close + 1..]
+        .iter()
+        .any(|t| t.word() == Some("inherits"))
     {
+        schema.unsupported(
+            file,
+            format!("CREATE TABLE {table} … INHERITS (…) adds its parent's columns"),
+        );
         return;
     }
-    let Some(body) = parenthesised_body(statement, after_name) else {
-        return;
-    };
     let entry = schema.tables.entry(table.clone()).or_default();
-    for item in split_top_level_commas(body) {
+    let mut copied_from_elsewhere = false;
+    for item in split_top_level_commas(&statement[open + 1..close]) {
         let Some(first) = item.first().and_then(Tok::word) else {
             continue;
         };
+        // `LIKE parent INCLUDING ALL` copies parent's columns into this table.
+        if first == "like" {
+            copied_from_elsewhere = true;
+            continue;
+        }
         if CONSTRAINT_HEADS.contains(&first) {
             continue;
         }
@@ -572,6 +665,19 @@ fn apply_create_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
         schema
             .origins
             .insert((table.clone(), first.to_owned()), file.to_path_buf());
+    }
+    if copied_from_elsewhere {
+        schema.unsupported(
+            file,
+            format!("CREATE TABLE {table} (LIKE … ) copies another table's columns"),
+        );
+    } else if schema.tables.get(&table).is_some_and(BTreeSet::is_empty) {
+        // Catch-all for a form nobody enumerated: a real table always declares
+        // at least one column, so zero columns means the parser missed them.
+        schema.unsupported(
+            file,
+            format!("CREATE TABLE {table} yielded no columns — the column list did not parse"),
+        );
     }
 }
 
@@ -581,6 +687,10 @@ fn apply_alter_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
         return;
     };
     if !schema.tables.contains_key(&table) {
+        schema.unsupported(
+            file,
+            format!("ALTER TABLE {table} names a table no parsed migration creates"),
+        );
         return;
     }
     // Each comma-separated action is parsed independently. 0066 uses the
@@ -627,6 +737,16 @@ fn apply_alter_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
                     schema.origins.remove(&(table.clone(), column.to_owned()));
                 }
             }
+            // `RENAME COLUMN a TO b` moves a column out from under its
+            // classification: the marker still names `a`, and `b` arrives
+            // unclassified. No migration uses it today; the day one does, the
+            // gate says so instead of quietly reporting the old column set.
+            Some("rename") => {
+                schema.unsupported(
+                    file,
+                    format!("ALTER TABLE {table} RENAME … moves a column away from its marker"),
+                );
+            }
             _ => {}
         }
     }
@@ -647,17 +767,18 @@ fn drop_table_targets(statement: &[Tok]) -> Vec<String> {
     targets
 }
 
-/// Return the token slice inside the first balanced `( … )` at or after `from`.
-fn parenthesised_body(statement: &[Tok], from: usize) -> Option<&[Tok]> {
+/// Return `(open, close)` indices of the first balanced `( … )` at or after
+/// `from`. `None` when there is no `(`, or when it is never closed.
+fn parenthesised_span(statement: &[Tok], from: usize) -> Option<(usize, usize)> {
     let open = (from..statement.len()).find(|i| statement[*i].is_punct('('))?;
     let mut depth = 0usize;
-    for index in open..statement.len() {
-        if statement[index].is_punct('(') {
+    for (index, token) in statement.iter().enumerate().skip(open) {
+        if token.is_punct('(') {
             depth += 1;
-        } else if statement[index].is_punct(')') {
+        } else if token.is_punct(')') {
             depth -= 1;
             if depth == 0 {
-                return Some(&statement[open + 1..index]);
+                return Some((open, index));
             }
         }
     }
@@ -842,6 +963,17 @@ fn validate_token(token: &str) -> Result<&'static ClassCitation, (ViolationKind,
 // Gate
 // ---------------------------------------------------------------------------
 
+/// Leading numeric prefix of a migration filename, e.g. `0209_foo.sql` -> 209.
+///
+/// `None` for a filename with no numeric prefix, which the caller treats as
+/// "after the freeze": an unnumbered migration is one this gate cannot place
+/// on the clock, and the fail-closed reading is the one that rejects.
+fn migration_number(path: &Path) -> Option<u32> {
+    let name = path.file_name()?.to_str()?;
+    let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
 /// Parse a baseline file into its table set, ignoring blanks and `#` comments.
 #[must_use]
 pub fn parse_baseline(text: &str) -> BTreeSet<String> {
@@ -856,12 +988,39 @@ pub fn parse_baseline(text: &str) -> BTreeSet<String> {
 ///
 /// # Errors
 /// Returns an error when the migration tree or the baseline file cannot be read.
-pub fn check_workspace(workspace_dir: &Path) -> Result<GateResult, String> {
-    let baseline_path = workspace_dir.join(BASELINE_RELATIVE_PATH);
+pub fn check_workspace(start_dir: &Path) -> Result<GateResult, String> {
+    let root = workspace_root(start_dir)?;
+    let baseline_path = root.join(BASELINE_RELATIVE_PATH);
     let baseline = fs::read_to_string(&baseline_path)
         .map_err(|e| format!("cannot read baseline {}: {e}", baseline_path.display()))?;
-    let files = collect_migration_files(workspace_dir)?;
+    let files = collect_migration_files(&root)?;
     Ok(check_files(&files, &parse_baseline(&baseline)))
+}
+
+/// Find the workspace root by walking up from `start` until the baseline is
+/// found.
+///
+/// The CI job this gate runs in sets `defaults.run.working-directory: backend`,
+/// so `current_dir()` is NOT the repo root and resolving the baseline against
+/// it produced `backend/backend/ci/…`: the gate exited 1 on every run. Every
+/// sibling gate resolves only paths that happen to sit under `backend/`, so
+/// none of them noticed. Anchoring on the baseline file makes the gate answer
+/// the same from any directory inside the checkout.
+///
+/// # Errors
+/// Returns an error when no ancestor of `start` holds the baseline file.
+pub fn workspace_root(start: &Path) -> Result<PathBuf, String> {
+    start
+        .ancestors()
+        .find(|dir| dir.join(BASELINE_RELATIVE_PATH).is_file())
+        .map(Path::to_path_buf)
+        .ok_or_else(|| {
+            format!(
+                "no ancestor of {} holds {BASELINE_RELATIVE_PATH} — run this from inside the \
+                 repository checkout",
+                start.display()
+            )
+        })
 }
 
 /// Run the gate against an explicit migration tree and baseline set.
@@ -885,6 +1044,20 @@ pub fn check_files(files: &[PathBuf], baseline: &BTreeSet<String>) -> GateResult
         baselined_tables: baseline.len(),
         ..GateResult::default()
     };
+
+    // 0. Anything the parser could not read. First, because every later check
+    //    reasons over a column set that this says is incomplete.
+    for (file, detail) in &schema.unsupported {
+        result.push(
+            ViolationKind::UnsupportedDdl,
+            Some(file.clone()),
+            format!(
+                "{detail} — the gate cannot enumerate this table's columns, so it cannot prove \
+                 they are classified. Teach the parser this form, or write the table out in \
+                 explicit column definitions"
+            ),
+        );
+    }
 
     // 1. Marker well-formedness, existence and uniqueness.
     let mut classified: BTreeMap<(String, String), &Marker> = BTreeMap::new();
@@ -972,7 +1145,8 @@ pub fn check_files(files: &[PathBuf], baseline: &BTreeSet<String>) -> GateResult
         }
     }
 
-    // 3. The baseline is a ratchet: it may only shrink, and it may not rot.
+    // 3. The baseline is a ratchet: it may only shrink, it may not rot, and it
+    //    may not shelter anything that did not exist when it was frozen.
     for table in baseline {
         let Some(columns) = schema.tables.get(table) else {
             result.push(
@@ -985,11 +1159,30 @@ pub fn check_files(files: &[PathBuf], baseline: &BTreeSet<String>) -> GateResult
             );
             continue;
         };
-        let unclassified = columns
+        let unclassified: Vec<&String> = columns
             .iter()
             .filter(|column| !classified.contains_key(&(table.clone(), (*column).clone())))
-            .count();
-        if unclassified == 0 {
+            .collect();
+        // Anything introduced after the freeze is outside what the backlog
+        // declared. This is what makes "a table may only leave this list"
+        // enforced rather than asserted.
+        for column in &unclassified {
+            let origin = schema.origins.get(&(table.clone(), (*column).clone()));
+            let number = origin.and_then(|path| migration_number(path));
+            if number.is_none_or(|n| n > BASELINE_FROZEN_AFTER_MIGRATION) {
+                result.push(
+                    ViolationKind::BaselineGrew,
+                    origin.cloned(),
+                    format!(
+                        "{table}.{column} was introduced after the baseline froze at migration \
+                         {BASELINE_FROZEN_AFTER_MIGRATION:04}, so '{table}' being listed in \
+                         {BASELINE_RELATIVE_PATH} does not cover it — classify it, or the \
+                         backlog is growing"
+                    ),
+                );
+            }
+        }
+        if unclassified.is_empty() {
             result.push(
                 ViolationKind::BaselineEntryFullyClassified,
                 None,

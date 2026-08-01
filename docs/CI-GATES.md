@@ -202,6 +202,7 @@ names only, not incidental workflow prose or runner setup text.
 - `console-gate-iac-tier`
 - `console-gate-layer-boundary`
 - `console-gate-migration-safety`
+- `console-gate-personal-data-classification`
 - `console-gate-pii-no-logs`
 - `console-gate-rls-arming`
 - `console-gate-tenant-isolation`
@@ -393,6 +394,36 @@ not erode the audit trail. It rejects:
 
 The append-only protection on `audit_events` (REVOKE UPDATE/DELETE + trigger) is
 thus immune to being silently undone by a later migration.
+
+### `console-gate-personal-data-classification` — every column is classified or declared
+
+Source: `backend/ci/gates/personal-data-classification/`. Parses every migration
+into a post-migration column set and requires each column, in a table not listed
+in `unclassified-tables.txt`, to carry a
+`COMMENT ON COLUMN … IS 'pd:<tokens> …'` marker drawn from a closed vocabulary
+(`none`, `personal`, `sensitive/*`, `unique-id/*`, `credit`, `pseudonymous`,
+`undeclared`). Migration 0210 reads the same markers back out of `pg_attribute`
+so the 접속기록 retention floor is derived from the schema rather than
+hand-maintained.
+
+Two properties carry the weight:
+
+- **Unparseable means FAIL.** `CREATE TABLE … AS SELECT`, `SELECT … INTO`,
+  `(LIKE parent INCLUDING ALL)`, `PARTITION OF`, `INHERITS (…)`,
+  `RENAME`, and a plain syntax error each raise `unsupported-ddl` naming the
+  construct. A table the parser cannot read has no columns to check, and a table
+  with no columns to check would otherwise pass.
+- **The baseline is shrink-only, enforced.** CI checks out a single commit with
+  no history, so the gate cannot diff against the previous baseline. Migration
+  numbers supply the clock instead: a column introduced after
+  `BASELINE_FROZEN_AFTER_MIGRATION` is not sheltered by a baseline entry,
+  whether it arrived on a new table or on one already listed.
+
+Coverage is partial by design and the number is countable, not claimed: the gate
+prints classified columns and baselined tables on every run. Listing a table in
+the baseline is an admission that nobody has classified it — **not** a statement
+that it holds no personal data. The gate asserts nothing about whether any
+statutory obligation is met and moves no compliance control off HOLD.
 
 ### `console-gate-pii-no-logs` — PIPA log hygiene
 

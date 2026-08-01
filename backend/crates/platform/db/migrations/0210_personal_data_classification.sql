@@ -915,5 +915,22 @@ COMMENT ON FUNCTION access_log_retention_floor_days() IS
     '동안 이 값은 하한이며 과대 산출되지 않는다. 이 함수는 의무 이행 여부를 '
     '주장하지 않는다.';
 
+-- --------------------------------------------------------------------------
+-- Grants. THE REVOKE IS THE LOAD-BEARING HALF.
+--
+-- Both functions are SECURITY DEFINER, and PostgreSQL grants EXECUTE on a new
+-- function to PUBLIC by default. Without the REVOKE below, every role in the
+-- cluster could already run them and the GRANT would be decoration -- a test
+-- asserting that `console_rt` may execute would pass no matter what the grants
+-- said, and prove nothing. `console_rt` must reach these because the route in
+-- `console-compliance-rest` runs as that role; nobody else needs them.
+--
+-- Proved by `personal_data_classification.rs`, which drives a freshly created
+-- role holding no grant at all into `42501 insufficient_privilege` and only
+-- then asserts `console_rt` succeeds. A test that cannot fail is not evidence.
+-- --------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION personal_data_columns() FROM PUBLIC;
+REVOKE ALL ON FUNCTION access_log_retention_floor_days() FROM PUBLIC;
+
 GRANT EXECUTE ON FUNCTION personal_data_columns() TO console_rt;
 GRANT EXECUTE ON FUNCTION access_log_retention_floor_days() TO console_rt;
