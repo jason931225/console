@@ -2320,3 +2320,26 @@ a table moves it later, which is wrong for anything the sweep already handled co
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review
 disposition, and exposure state remains `HOLD`.
+
+## 2026-07-31 — Pass 177, Fail 0
+
+Rebind after the PostgreSQL suite reached zero failures.
+
+Deleting the maintenance-history subtree before the catalog sweep closed all three constraints at
+once. Excluding tables from the sweep had fixed one per 71-minute cycle and then regressed a
+passing test; the subtree pre-delete is the fix the original diagnosis recommended.
+
+**177 previously-dark PostgreSQL targets now execute and pass**, from a starting point of 287 test
+files that executed nowhere. One production defect was found and fixed by that execution.
+
+Ten tests remain deferred and named in `executed-tests-baseline.json`: seven on fixture rot or a
+defect the silence hid, three that fail to BUILD because they include a shared file from
+`backend/test_support/` by relative path that the generated `mapped_srcs` does not carry.
+
+The tenth was a bug in the unwiring itself: the removal script matched entries by their trailing
+line-continuation, and the last target in a list has none, so it reported "removed 9" against 10
+requested and the arithmetic was not checked. Same under-reporting shape as a CI waiter that reads
+a cancelled job as zero failures.
+
+Every capability, evidence contract, jurisdiction binding, Korea control, review
+disposition, and exposure state remains `HOLD`.
