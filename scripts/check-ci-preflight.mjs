@@ -355,7 +355,8 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:workflow-adapter-postgres-payroll-drain-period-lock-pg \\",
   "//tools/buck:workorder-adapter-postgres-m2-flag-off-parity-pg \\",
   "//tools/buck:workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg \\",
-  "//tools/buck:workorder-adapter-postgres-use-cases-pg",
+  "//tools/buck:workorder-adapter-postgres-use-cases-pg \\",
+  "//tools/buck:workorder-rest-mobile-device-registration-pg",
 ];
 const postgresWrapperContracts = [
   ["platform-db-feature-catalog-coverage", "//backend/crates/platform/db:console-platform-db-itest-feature_catalog_covers_every_feature"],
@@ -519,6 +520,7 @@ const postgresWrapperContracts = [
   ["workorder-adapter-postgres-m2-flag-off-parity-pg", "//backend/crates/workorder/adapter-postgres:console-workorder-adapter-postgres-itest-m2_flag_off_parity"],
   ["workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg", "//backend/crates/workorder/adapter-postgres:console-workorder-adapter-postgres-itest-rls_read_surfaces_as_runtime_role"],
   ["workorder-adapter-postgres-use-cases-pg", "//backend/crates/workorder/adapter-postgres:console-workorder-adapter-postgres-itest-use_cases"],
+  ["workorder-rest-mobile-device-registration-pg", "//backend/crates/workorder/rest:console-workorder-rest-itest-mobile_device_registration"],
 
   // Tenant-isolation and PII tranche, 2026-07-31.
   ["platform-db-rls-isolation", "//backend/crates/platform/db:console-platform-db-itest-rls_isolation"],

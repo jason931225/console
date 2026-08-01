@@ -1,4 +1,4 @@
-//! fabricated-branch gate.
+//! fabricated-branch gate — **DEFENCE IN DEPTH, NOT A CONTROL.**
 //!
 //! `console_platform_authz::authorize(principal, action, resource_branch)` checks
 //! `principal.branch_scope.allows(resource_branch)` before it reads a matrix cell.
@@ -23,7 +23,43 @@
 //! one of them documented it as correct and cited another as precedent. A doc
 //! comment is what already failed; hence a gate.
 //!
-//! ## The fix is never "add a marker"
+//! # READ THIS BEFORE TRUSTING A GREEN
+//!
+//! This gate greps. It reads match-arm bodies as text. A pass means only:
+//!
+//! > none of the literal shapes below appear in an unmarked `BranchScope::` match
+//! > arm in a file that also mentions `authorize`.
+//!
+//! It does NOT mean "no authorization branch in this tree is derived from the
+//! principal". Three blind spots are known, and every one of them is a property
+//! of scanning text rather than a bug to be fixed:
+//!
+//! 1. **A fabrication moved one function away scans clean.** The gate reasons
+//!    about match-arm bodies, never about what a caller does with the returned
+//!    `Option`.
+//! 2. **The `Branches` rule matches literal substrings only**, so
+//!    `branches.first().copied()`, `.iter().copied().next()`, `.nth(0)` and a
+//!    plain `for` loop are invisible.
+//! 3. **Detection keys on the literal prefix `BranchScope::`**, so any import
+//!    alias defeats it entirely.
+//!
+//! Do not open a fourth round of pattern-matching against these. Each added
+//! pattern is one more shape enumerated and the next shape walks past it; a second
+//! lane reached the identical class on the same day with a different scanner. The
+//! gate's honest job is to make the three copy-paste shapes that actually occurred
+//! impossible to reintroduce silently, and to force every remaining exception to
+//! be a sentence a human wrote.
+//!
+//! ## The fix that WOULD be a control (queued, deliberately not here)
+//!
+//! A `ResourceBranch` newtype constructible only from a row read, so
+//! `authorize(principal, action, ResourceBranch)` cannot receive a
+//! principal-derived value at all — the compiler refuses, and none of the three
+//! blind spots above can exist because none of them is about text. That is a
+//! cross-lane signature change to `authorize` and all of its callers, and it is
+//! queued separately. Its absence here is a known limitation, not an oversight.
+//!
+//! ## The fix at a call site is never "add a marker"
 //!
 //! * The resource HAS a branch → read it off the row and pass THAT to `authorize`.
 //! * The resource has NO branch (no `branch_id` column; a list gate whose
@@ -37,13 +73,17 @@
 //! authorization decision — choosing a default branch for row *creation*, a
 //! `len() == 1` store filter, stamping an actor branch on an audit row.
 //!
-//! Those shapes are recognized, not merely tolerated: a `Branches` arm whose
-//! sibling is `BranchScope::All => None` yields `Option<BranchId>` and so cannot
-//! hand `authorize` a branch for an `All` principal, which is the only thing the
-//! fabrication existed to do. An arm that calls `authorize` itself is never
-//! excused that way. Anything else needs an inline `// fabricated-branch: ok
-//! <reason>` marker on the arm or the line above it, so each remaining exception
-//! is a reviewed sentence rather than an accident.
+//! Every one of those needs an inline `// fabricated-branch: ok <reason>` marker
+//! on the arm or the line directly above it. A marker is the ONE thing a text
+//! scanner can enforce honestly: it cannot tell a legitimate pick from a
+//! fabrication, but it can insist that a human wrote down which one this is.
+//!
+//! An earlier revision inferred the exception instead — a `Branches` arm whose
+//! sibling was `BranchScope::All => None` was read as "yields `Option`, therefore
+//! safe" and excused without a marker. That inference is blind spot 1 in
+//! executable form: an `Option`-yielding match is only safe if no CALLER unwraps
+//! it into `authorize`, and this gate never looks at callers. The requirement is
+//! restored.
 //!
 //! ## Scope
 //!
@@ -73,9 +113,11 @@ const HANDED_OFF: &[(&str, &str)] = &[
         "registry lane: the fabricating helpers at :1929 and :1985 — \
          registry_equipment/customers/sites all carry a NOT NULL branch_id, so \
          thread the real scope, do not make it branch-less. \
-         `principal_create_branch` (:713) is NOT covered by this entry and no \
-         longer needs to be: it is an Option-yielding default-branch pick for row \
-         creation, which the sibling-`None` rule reads as clean on its own.",
+         `principal_create_branch` (:713) is a default-branch pick for row \
+         CREATION and never reaches authorize; it wants a \
+         `// fabricated-branch: ok` marker, not a fix. It is unflagged today only \
+         because this entry skips the whole file, which is exactly why the entry \
+         must be deleted rather than left to rot.",
     ),
     (
         "app/src/hr.rs",
@@ -197,7 +239,7 @@ fn check_source_file(file: &Path, source: &str, result: &mut GateResult) {
         if let Some(binding) = branches_arm_binding(line) {
             let picks_own_member = body.contains(&format!("{binding}.iter().next()"))
                 || body.contains(&format!("{binding}.iter().any("));
-            if picks_own_member && !yields_option(&lines, idx, &body) {
+            if picks_own_member {
                 result.violations.push(Violation {
                     kind: ViolationKind::TautologicalBranchesArm,
                     file: file.to_path_buf(),
@@ -212,41 +254,6 @@ fn check_source_file(file: &Path, source: &str, result: &mut GateResult) {
             }
         }
     }
-}
-
-/// How far from a `Branches` arm its sibling `All` arm can sit. Both arms of these
-/// two-arm matches are adjacent, give or take a marker comment.
-const SIBLING_ARM_WINDOW: usize = 4;
-
-/// Whether this `Branches` arm belongs to a match that yields `Option<BranchId>`,
-/// identified by a sibling `BranchScope::All => None` arm.
-///
-/// That match cannot be the fabrication this gate exists to stop. The fabrication's
-/// whole job was to hand [`authorize`] a `BranchId` for an `All` principal, and an
-/// `All` arm of `None` refuses to produce one — an `All` caller is then either
-/// skipped or denied, never admitted on a minted id. What remains is precisely the
-/// legitimate shape the module docs list: the ACTOR's branch stamped on an audit
-/// row (`console_app::audit_event_branch`), or a default branch chosen for row
-/// CREATION (`registry/rest::principal_create_branch`). Those sites previously had
-/// to carry a marker or, worse, a file-wide `HANDED_OFF` exemption that also hid
-/// the file's real fabrications.
-///
-/// An arm that calls `authorize` itself is never excused — that is the `.any()`
-/// tautology, and it is a decision, not a value.
-fn yields_option(lines: &[&str], idx: usize, body: &str) -> bool {
-    if body.contains("authorize(") {
-        return false;
-    }
-    let lo = idx.saturating_sub(SIBLING_ARM_WINDOW);
-    let hi = (idx + SIBLING_ARM_WINDOW).min(lines.len().saturating_sub(1));
-    (lo..=hi).any(|sibling| {
-        !is_comment(lines[sibling])
-            && lines[sibling].contains("BranchScope::All =>")
-            && matches!(
-                arm_body(lines, sibling).as_str(),
-                "BranchScope::All=>None" | "BranchScope::All=>None,"
-            )
-    })
 }
 
 fn is_comment(line: &str) -> bool {
@@ -512,18 +519,42 @@ fn call() { authorize(p, a, b) }
         assert_eq!(result.violations[0].kind, ViolationKind::FabricatedAllArm);
     }
 
-    /// `All => None` makes the match yield `Option<BranchId>`, which cannot hand
-    /// `authorize` a branch for an `All` principal — the actor-branch and
-    /// default-branch-for-creation shapes the module docs bless. Previously this
-    /// needed a marker, or a file-wide exemption that also hid real fabrications
-    /// (`registry/rest/src/lib.rs:713`).
+    /// THE RESTORED MARKER REQUIREMENT. An earlier revision excused this shape
+    /// automatically: sibling `All => None` ⇒ the match yields `Option<BranchId>`
+    /// ⇒ assumed safe. That inference is blind spot 1 — the gate never looks at
+    /// what the CALLER does with the `Option`, and `pick(p).unwrap()` fed to
+    /// `authorize` one function away is the same fabrication. An unmarked pick is
+    /// flagged again, `All => None` or not.
     #[test]
-    fn accepts_an_option_yielding_pick_beside_an_all_none_arm() {
+    fn an_option_yielding_pick_still_needs_a_marker() {
         let result = scan(
             r#"
 fn principal_create_branch(principal: &Principal) -> Option<BranchId> {
     match &principal.branch_scope {
         BranchScope::All => None,
+        BranchScope::Branches(branches) => branches.iter().next().copied(),
+    }
+}
+fn create(p: &Principal) { authorize(p, a, principal_create_branch(p).unwrap()) }
+"#,
+        );
+        assert_eq!(result.violations.len(), 1, "{:#?}", result.violations);
+        assert_eq!(
+            result.violations[0].kind,
+            ViolationKind::TautologicalBranchesArm
+        );
+    }
+
+    /// The same shape with the human-written sentence attached is clean. This is
+    /// `registry/rest::principal_create_branch`'s intended end state.
+    #[test]
+    fn a_marked_option_yielding_pick_is_clean() {
+        let result = scan(
+            r#"
+fn principal_create_branch(principal: &Principal) -> Option<BranchId> {
+    match &principal.branch_scope {
+        BranchScope::All => None,
+        // fabricated-branch: ok default branch for row CREATION; never reaches authorize
         BranchScope::Branches(branches) => branches.iter().next().copied(),
     }
 }
@@ -533,10 +564,10 @@ fn create(p: &Principal) { authorize(p, a, row.branch_id) }
         assert!(result.passed(), "{:#?}", result.violations);
     }
 
-    /// The `Option` exemption is about a VALUE, not a decision: an arm that calls
-    /// `authorize` itself is still the tautology, `All => None` or not.
+    /// An arm that calls `authorize` itself is the tautology outright, and a
+    /// sibling `All => None` never had anything to say about it.
     #[test]
-    fn option_exemption_does_not_excuse_an_arm_that_authorizes() {
+    fn an_arm_that_authorizes_is_flagged_beside_an_all_none_sibling() {
         let result = scan(
             r#"
 fn require(principal: &Principal, action: Action) -> Option<()> {
@@ -557,10 +588,10 @@ fn require(principal: &Principal, action: Action) -> Option<()> {
         );
     }
 
-    /// ...and it is keyed on `None` specifically. An `All` arm that DENIES still
-    /// leaves the `Branches` arm free to feed `authorize` a member of its own set.
+    /// An `All` arm that DENIES leaves the `Branches` arm free to feed
+    /// `authorize` a member of its own set.
     #[test]
-    fn option_exemption_does_not_extend_to_a_denying_all_arm() {
+    fn a_denying_all_arm_does_not_excuse_the_branches_arm() {
         let result = scan(
             r#"
 fn representative(principal: &Principal) -> Result<BranchId, E> {

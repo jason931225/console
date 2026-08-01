@@ -539,7 +539,8 @@ jobs:
             //tools/buck:workflow-adapter-postgres-payroll-drain-period-lock-pg \
             //tools/buck:workorder-adapter-postgres-m2-flag-off-parity-pg \
             //tools/buck:workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg \
-            //tools/buck:workorder-adapter-postgres-use-cases-pg
+            //tools/buck:workorder-adapter-postgres-use-cases-pg \
+            //tools/buck:workorder-rest-mobile-device-registration-pg
 
   company-conformance:
     # The immutable target the company/HR fan-out aimed at, now GREEN at 12/12 and
@@ -758,6 +759,12 @@ jobs:
       # the branch dimension disappears silently. That pattern reached 18
       # production helpers, one of which documented it as correct; a doc comment
       # is what already failed. This gate also fails if it walked zero .rs files.
+      #
+      # DEFENCE IN DEPTH, NOT A CONTROL. It greps: a fabrication one function
+      # away, a non-literal pick (`.first()`, `.nth(0)`, a `for` loop) and any
+      # `BranchScope::` import alias all scan clean. The three blind spots are
+      # named in the module doc and in docs/CI-GATES.md; the control that closes
+      # them is a `ResourceBranch` newtype, queued separately.
       - name: Fabricated-branch gate
         run: cargo run -p console-gate-fabricated-branch
 

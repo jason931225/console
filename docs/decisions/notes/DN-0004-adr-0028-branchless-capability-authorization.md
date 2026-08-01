@@ -101,6 +101,54 @@ single moved row is pinned by name in
 `capability_replaces_an_order_dependent_grant_verdict_with_a_deny`, which also
 executes the pre-migration verdict and shows it flipping on branch-id sort order.
 
+## Handoff to the workflow lane
+
+`backend/crates/workflow/**` is owned by a lane that is mid-flight, so this change
+does not touch it. `git diff origin/main -- backend/crates/workflow` is empty by
+construction. Two public signatures there still take a non-optional `BranchId`,
+and both are on the branch-less spine:
+
+| Item | Today | Wanted |
+|---|---|---|
+| `authz_guard::build_guard_request` | `branch_id: BranchId` | `branch_id: Option<BranchId>` |
+| `completion::FinalizePolicyRequest::branch` | `BranchId` | `Option<BranchId>` |
+
+`Some(b)` keeps today's behaviour exactly (`AuthorizationResource::branch`);
+`None` builds `AuthorizationResource::branchless` and routes to
+`authorize_capability`.
+
+**Why.** `workflow_runs`, `workflow_waiting_tasks` and `workflow_definitions` have
+no `branch_id` column, so no caller can supply an honest branch. The only branch
+available to `app/src/workflow_studio.rs` was the CALLER's — `guard_branch()`,
+`All => BranchId::new()` / `Branches(b) => b.iter().next()` — which made
+`authorize`'s `branch_scope.allows(resource_branch)` check vacuous at every
+workflow-studio guard: task list visibility, group-inbox role membership, claim,
+decide, start, post-finalization rejection, delegated finalize. That helper is
+deleted in this change.
+
+**What stands in for it meanwhile.** Two private functions in
+`backend/app/src/workflow_studio.rs`:
+
+* `spine_guard_request` — `build_guard_request` with `Option<BranchId>`; `Some`
+  delegates to the upstream helper unchanged.
+* `enforce_spine_finalize_policy` — `enforce_finalize_policy` with the branch-less
+  guard resource. Rule-for-rule identical, including resolving the policy with
+  `Feature::from_str` on the raw `required_policy` rather than through
+  `guard_policy`.
+
+**What breaks if this is not done.** Nothing compiles differently and no route
+changes behaviour — the cost is duplication, not breakage. `enforce_spine_finalize_policy`
+is a second copy of the author/delegate finalize rules living in a different crate
+from the original. A change to delegated-finalize policy made in
+`console-workflow-runtime` will NOT reach `POST /workflow-studio/tasks/{id}/finalize`,
+and nothing fails to warn about it. That is the whole reason it is temporary.
+
+**Landing it.** Widen both signatures, then delete both stand-ins and call the
+upstream helpers directly; `workflow_studio.rs` already passes
+`WORKFLOW_SPINE_HAS_NO_BRANCH` (`Option<BranchId> = None`) at every spine site, so
+the call sites need no edit beyond the name. `m2_strangler.rs` passes a real
+`work_orders.branch_id` and becomes `Some(branch_id)`.
+
 ## What this note does not say
 
 It does not say the migrated tables lack branch identity. `branches` obviously

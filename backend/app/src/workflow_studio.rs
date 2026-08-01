@@ -10,18 +10,18 @@ use console_kernel_core::{
 };
 use console_platform_auth::{JwtVerifier, PasskeyAuthenticationCredential, PasskeyService};
 use console_platform_authz::{
-    Action, AuthorizationAuditEvent, AuthorizationResource, Feature, PermissionLevel, Principal,
-    authorize_org_wide, permission_for,
+    Action, AuthorizationAuditEvent, AuthorizationRequest, AuthorizationResource, Feature,
+    PermissionLevel, Principal, RlsScopeProof, authorize_org_wide, permission_for,
 };
 use console_platform_db::{DbError, with_audit, with_org_conn};
 use console_workflow_domain::{
-    FinalizeWaitingTaskCommand, PostFinalizationRejectionCommand, RunStatus, TriggerType,
-    WaitingTaskStatus, WorkflowRuntimePort,
+    FinalizeWaitingTaskCommand, FinalizeWaitingTaskContext, PostFinalizationRejectionCommand,
+    RunStatus, TriggerType, WaitingTaskStatus, WorkflowRuntimePort,
 };
 use console_workflow_runtime::{
-    AuditContext, ExecGraph, FinalizeMode, FinalizePolicyRequest, NodeKind, StartRunRequest,
-    WAITING_COMPLETION_DOMAIN, build_guard_request, drive_from, enforce_finalize_policy, guard,
-    start_run, workflow_coexistence_entry,
+    AuditContext, ExecGraph, FinalizeMode, FinalizePolicyOutcome, NodeKind, StartRunRequest,
+    WAITING_COMPLETION_DOMAIN, build_guard_request, drive_from, guard, start_run,
+    workflow_coexistence_entry,
 };
 use console_workflow_runtime_adapter_postgres::{
     AdminRunListFilter, ClaimWaitingTaskCommand, DecideWaitingTaskCommand, PgWorkflowRuntimeStore,
@@ -844,17 +844,14 @@ async fn finalize_task(
         .map(|id| id.to_string())
         .unwrap_or_else(|| context.run_id.to_string());
     let shadow_resource_id = resource_id.clone();
-    let policy = enforce_finalize_policy(FinalizePolicyRequest {
-        mode: request.mode.policy_mode(),
-        reason: request.reason.as_deref(),
-        required_policy: context.required_policy.as_deref(),
-        principal: &principal,
-        org: principal.org_id,
-        branch,
+    let policy = enforce_spine_finalize_policy(
+        &principal,
+        &context,
+        request.mode.policy_mode(),
+        request.reason.as_deref(),
         resource_type,
-        resource_id,
-        initiated_by: context.initiated_by,
-    })?;
+        &resource_id,
+    )?;
 
     let mut audits = Vec::new();
     if let Some(guard_audit) = policy.guard_audit {
@@ -952,7 +949,7 @@ async fn create_post_finalization_rejection(
     }
 
     let branch = WORKFLOW_SPINE_HAS_NO_BRANCH;
-    let authz_request = build_guard_request(
+    let authz_request = spine_guard_request(
         &principal,
         Feature::ApprovalFinalize.as_str(),
         principal.org_id,
@@ -1309,7 +1306,7 @@ fn guard_task_policy(
     let feature = Feature::from_str(&feature_key).map_err(|_| {
         WorkflowStudioError::from(KernelError::forbidden("workflow task policy is unknown"))
     })?;
-    let request = build_guard_request(
+    let request = spine_guard_request(
         principal,
         &feature_key,
         org,
@@ -1427,7 +1424,7 @@ fn principal_holds_feature(
     let Ok(feature) = Feature::from_str(feature_key) else {
         return false;
     };
-    let Ok(request) = build_guard_request(
+    let Ok(request) = spine_guard_request(
         principal,
         feature_key,
         org,
@@ -1521,7 +1518,7 @@ fn task_visible(
         .object_id
         .map(|id| id.to_string())
         .unwrap_or_else(|| item.run_id.to_string());
-    let Ok(request) = build_guard_request(
+    let Ok(request) = spine_guard_request(
         principal,
         &feature_key,
         org,
@@ -2992,7 +2989,7 @@ fn caller_can_start(
     let Ok(feature) = Feature::from_str(&feature_key) else {
         return false;
     };
-    let Ok(request) = build_guard_request(
+    let Ok(request) = spine_guard_request(
         principal,
         &feature_key,
         org,
@@ -7762,7 +7759,127 @@ fn empty_object() -> Value {
 /// the branch check is real.
 pub(crate) const WORKFLOW_SPINE_HAS_NO_BRANCH: Option<BranchId> = None;
 
-/// Mirror [`build_guard_request`]'s resource shape for the audit-only Cedar parity
+/// [`build_guard_request`] widened to the branch-less spine.
+///
+/// `Some(branch)` is the upstream helper verbatim. `None` builds the identical
+/// request against [`AuthorizationResource::branchless`] instead — same feature,
+/// same policy domain, same RLS scope proof — which routes the decision through
+/// `authorize_capability`.
+///
+/// ## Why this lives here and not in `console-workflow-runtime`
+///
+/// `build_guard_request` takes `branch_id: BranchId`, and widening it to
+/// `Option<BranchId>` is a public-signature change in a crate another lane owns
+/// and is mid-flight in. This wrapper is the handoff's stand-in: DELETE it and
+/// call `build_guard_request` directly once that lane lands the `Option`. See
+/// `docs/decisions/notes/DN-0004-adr-0028-branchless-capability-authorization.md`
+/// § "Handoff to the workflow lane".
+fn spine_guard_request(
+    principal: &Principal,
+    required_policy: &str,
+    org: console_kernel_core::OrgId,
+    branch: Option<BranchId>,
+    resource_type: &str,
+    object_id: &str,
+    domain: &str,
+) -> Result<AuthorizationRequest, KernelError> {
+    let Some(branch) = branch else {
+        let feature = Feature::from_str(required_policy)?;
+        let resource = AuthorizationResource::branchless(org, resource_type.to_owned())
+            .with_resource_id(object_id.to_owned());
+        return Ok(
+            AuthorizationRequest::new(principal.clone(), Action::new(feature), resource)
+                .with_policy_domain(domain.to_owned())
+                .with_rls_scope_proof(RlsScopeProof::runtime_role_guc(org)),
+        );
+    };
+    build_guard_request(
+        principal,
+        required_policy,
+        org,
+        branch,
+        resource_type,
+        object_id,
+        domain,
+    )
+}
+
+/// `console_workflow_runtime::enforce_finalize_policy` for the branch-less spine.
+///
+/// Identical rules — author finalize is owner-only, delegated finalize needs a
+/// non-blank reason and a configured policy, and the policy is resolved with
+/// `Feature::from_str` on the RAW `required_policy` (NOT through
+/// [`guard_policy`], which would map `approval_review` onto `completion_review`
+/// and admit a delegate the upstream rule denies). The single difference is the
+/// guard resource: branch-less, because `workflow_waiting_tasks` has no
+/// `branch_id` column.
+///
+/// Same handoff as [`spine_guard_request`]: `FinalizePolicyRequest::branch` is
+/// `BranchId` in a crate another lane owns. DELETE this and call
+/// `enforce_finalize_policy` again once that field is `Option<BranchId>`.
+fn enforce_spine_finalize_policy(
+    principal: &Principal,
+    context: &FinalizeWaitingTaskContext,
+    mode: FinalizeMode,
+    reason: Option<&str>,
+    resource_type: &str,
+    resource_id: &str,
+) -> Result<FinalizePolicyOutcome, WorkflowStudioError> {
+    match mode {
+        FinalizeMode::Author => {
+            if principal.user_id != context.initiated_by {
+                return Err(WorkflowStudioError::from(KernelError::forbidden(
+                    "author finalize requires the initiating author",
+                )));
+            }
+            Ok(FinalizePolicyOutcome {
+                delegated_reason: None,
+                guard_audit: None,
+            })
+        }
+        FinalizeMode::Delegate => {
+            let reason = reason
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    KernelError::validation("delegated finalize requires a non-empty reason")
+                })?;
+            let required_policy = context.required_policy.as_deref().ok_or_else(|| {
+                KernelError::forbidden("delegated finalize requires a configured policy")
+            })?;
+            let feature = Feature::from_str(required_policy)
+                .map_err(|_| KernelError::forbidden("delegated finalize policy is unknown"))?;
+            let request = spine_guard_request(
+                principal,
+                required_policy,
+                principal.org_id,
+                WORKFLOW_SPINE_HAS_NO_BRANCH,
+                resource_type,
+                resource_id,
+                WAITING_COMPLETION_DOMAIN,
+            )
+            .map_err(|_| KernelError::forbidden("delegated finalize policy denied"))?;
+            let entry = workflow_coexistence_entry(
+                "workflow.waiting_task.finalize.delegate",
+                WAITING_COMPLETION_DOMAIN,
+                feature,
+                resource_type,
+            );
+            let outcome = guard(&request, &entry);
+            if !outcome.is_allowed() {
+                return Err(WorkflowStudioError::from(KernelError::forbidden(
+                    "delegated finalize policy denied",
+                )));
+            }
+            Ok(FinalizePolicyOutcome {
+                delegated_reason: Some(reason.to_owned()),
+                guard_audit: Some(outcome.audit),
+            })
+        }
+    }
+}
+
+/// Mirror [`spine_guard_request`]'s resource shape for the audit-only Cedar parity
 /// observations, so the parity row records the same branch-less/branch-bearing
 /// scope the enforced decision used.
 fn shadow_resource(

@@ -55,13 +55,6 @@ pub fn workflow_coexistence_entry(
 /// * `required_policy` — the waiting task's `required_policy` (or the node's
 ///   required feature). An unknown policy fails closed here (→ `Err`), which the
 ///   caller treats as a deny, matching the boundary's "unknown → deny" contract.
-/// * `branch_id` — `Some(branch)` ONLY when the branch was read off the resource
-///   row. `None` when the resource genuinely carries no branch (the workflow
-///   spine: `workflow_runs`, `workflow_waiting_tasks`, `workflow_definitions`
-///   and `object_types` all lack a `branch_id` column), which builds an
-///   [`AuthorizationResource::branchless`] and routes to `authorize_capability`.
-///   Never pass a branch derived from `principal.branch_scope` — that makes the
-///   boundary's branch check a tautology.
 /// * `resource` — `branch(org, branch_id, resource_type).with_resource_id(object_id)`
 ///   from `workflow_runs.object_type/object_id`.
 /// * the RLS scope proof witnesses that the DB reads used to build this request
@@ -71,17 +64,14 @@ pub fn build_guard_request(
     principal: &Principal,
     required_policy: &str,
     org: OrgId,
-    branch_id: Option<BranchId>,
+    branch_id: BranchId,
     resource_type: &str,
     object_id: &str,
     domain: &str,
 ) -> Result<AuthorizationRequest, KernelError> {
     let feature = Feature::from_str(required_policy)?;
-    let resource = match branch_id {
-        Some(branch_id) => AuthorizationResource::branch(org, branch_id, resource_type.to_owned()),
-        None => AuthorizationResource::branchless(org, resource_type.to_owned()),
-    }
-    .with_resource_id(object_id.to_owned());
+    let resource = AuthorizationResource::branch(org, branch_id, resource_type.to_owned())
+        .with_resource_id(object_id.to_owned());
     Ok(
         AuthorizationRequest::new(principal.clone(), Action::new(feature), resource)
             .with_policy_domain(domain.to_owned())
@@ -151,7 +141,7 @@ mod tests {
             &admin_principal(branch),
             "completion_review",
             OrgId::knl(),
-            Some(branch),
+            branch,
             "work_order",
             "work_order:node-run-1",
             NODE_TRANSITION_DOMAIN,
@@ -174,7 +164,7 @@ mod tests {
             &admin_principal(branch),
             "payroll.legal_gate", // not a Feature key
             OrgId::knl(),
-            Some(branch),
+            branch,
             "work_order",
             "work_order:node-run-1",
             NODE_TRANSITION_DOMAIN,

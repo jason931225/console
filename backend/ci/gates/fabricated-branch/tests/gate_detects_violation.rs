@@ -162,16 +162,17 @@ fn authorize_audit_read(principal: &Principal) -> Result<(), ApiError> {
     Ok(())
 }
 
-/// The exemption that replaced `registry/rest`'s file-wide handoff: a sibling
-/// `All => None` arm makes the match yield `Option<BranchId>`, which cannot hand
-/// `authorize` a branch for an `All` principal. Must stay clean, or the gate
-/// blocks the shape it recommends for audit rows and creation defaults.
+/// THE MARKER IS THE EXEMPTION, and nothing else is.
+///
+/// An earlier revision inferred it: sibling `All => None` ⇒ yields `Option` ⇒
+/// excused without a marker. That is the gate's first blind spot in executable
+/// form — it never looks at what a CALLER does with the `Option`, and the
+/// `.unwrap()` below is one function away. The same shape is flagged unmarked and
+/// clean marked, which is the only distinction a text scanner can honestly draw.
 #[test]
-fn gate_passes_an_option_yielding_actor_branch() -> Result<(), Box<dyn std::error::Error>> {
+fn gate_requires_a_marker_on_an_option_yielding_pick() -> Result<(), Box<dyn std::error::Error>> {
     let ws = temp_workspace("option-actor-branch")?;
-    write_file(
-        &ws.join("src/lib.rs"),
-        r#"
+    let unmarked = r#"
 fn principal_create_branch(principal: &Principal) -> Option<BranchId> {
     match &principal.branch_scope {
         BranchScope::All => None,
@@ -180,9 +181,28 @@ fn principal_create_branch(principal: &Principal) -> Option<BranchId> {
 }
 
 async fn create_site(state: &S, principal: &Principal, row: Row) -> Result<(), RestError> {
-    authorize(principal, Action::new(Feature::X), row.branch_id).map_err(RestError::from_kernel)
+    let branch = principal_create_branch(principal).unwrap();
+    authorize(principal, Action::new(Feature::X), branch).map_err(RestError::from_kernel)
 }
-"#,
+"#;
+    write_file(&ws.join("src/lib.rs"), unmarked)?;
+
+    let result = check_source_tree(&ws)?;
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::TautologicalBranchesArm),
+        "an unmarked pick must be flagged, got {:#?}",
+        result.violations
+    );
+
+    write_file(
+        &ws.join("src/lib.rs"),
+        &unmarked.replace(
+            "        BranchScope::Branches(branches) => branches.iter().next().copied(),",
+            "        // fabricated-branch: ok default branch for row CREATION; never reaches authorize\n        BranchScope::Branches(branches) => branches.iter().next().copied(),",
+        ),
     )?;
 
     let result = check_source_tree(&ws)?;

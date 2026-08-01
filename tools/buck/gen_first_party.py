@@ -905,6 +905,7 @@ TEST_RESOURCE_REQUIREMENTS = {
     'console-workorder-rest': {
         'unit': 'none',
         'integration': {
+            'tests/mobile_device_registration.rs': 'postgres',
             'tests/mobile_evidence.rs': 'postgres',
             'tests/mobile_sync.rs': 'postgres',
         },

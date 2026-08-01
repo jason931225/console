@@ -26,8 +26,12 @@ fn run_gate(workspace_dir: &Path) {
         });
 
     if result.passed() {
+        // A PASSED line that overstates itself is how a grep gets mistaken for a
+        // control. State the scope on the same line as the green.
         eprintln!(
-            "console-gate-fabricated-branch: PASSED ({} Rust files scanned)",
+            "console-gate-fabricated-branch: PASSED ({} Rust files scanned) - text scan, \
+             defence in depth: three known blind spots are listed in the module doc \
+             (backend/ci/gates/fabricated-branch/src/lib.rs) and docs/CI-GATES.md",
             result.files_scanned
         );
         std::process::exit(0);

@@ -432,6 +432,34 @@ query execution on a bare pool where no per-transaction `app.current_org` GUC is
 armed. Legitimately global reads must carry an inline `// rls-arming: ok
 <reason>` marker so each exception is reviewed and path-local.
 
+### `console-gate-fabricated-branch` — defence in depth, NOT a control
+
+Source: `backend/ci/gates/fabricated-branch/`. `authorize(principal, action,
+resource_branch)` checks `principal.branch_scope.allows(resource_branch)`. Fed a
+branch derived from the principal (`All => BranchId::new()`,
+`Branches(b) => b.iter().next()/.any()`), that check is a tautology on both arms
+and the branch dimension silently disappears. The gate scans `BranchScope::`
+match arms for those shapes; a legitimate representative-branch pick (audit-row
+actor branch, default branch for row creation) needs an inline
+`// fabricated-branch: ok <reason>` marker, like `rls-arming` above.
+
+**Read the module doc before trusting a GREEN.** This gate greps, and three blind
+spots are known and unpatchable by more patterns:
+
+1. a fabrication moved one function away scans clean — it reasons about match-arm
+   bodies, never about what a caller does with the returned `Option`;
+2. the `Branches` rule matches literal substrings only, so
+   `branches.first().copied()`, `.iter().copied().next()`, `.nth(0)` and a plain
+   `for` loop are invisible;
+3. detection keys on the literal prefix `BranchScope::`, so any import alias
+   defeats it entirely.
+
+The control that would close all three is a `ResourceBranch` newtype
+constructible only from a row read, so `authorize` cannot receive a
+principal-derived value at all. That is a cross-lane signature change and is
+queued separately; its absence is known, not overlooked
+([DN-0004](decisions/notes/DN-0004-adr-0028-branchless-capability-authorization.md)).
+
 ### `console-gate-dev-auth-absence` — dev auth stays out of release defaults
 
 Source: `backend/ci/gates/dev-auth-absence/`. Uses `cargo metadata` to prove the
