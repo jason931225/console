@@ -547,7 +547,7 @@ async fn only_a_granted_role_may_execute_the_derivation(pool: PgPool) {
 //   `location_pings_create_day_partition()` / `location_pings_ensure_partition()`,
 //   which run `EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF
 //   location_pings …')` once per day. All ten columns of `location_pings` carry
-//   `pd:personal — 개인위치정보` (0210:306-315), and every ping row is stored in
+//   `pd:personal — 개인위치정보` (0211:306-315), and every ping row is stored in
 //   a day partition that carries no COMMENT of its own and appears in neither
 //   reader: the migration text names it nowhere, and a catalog built from
 //   `./migrations` holds only what the migrations made.
@@ -4566,7 +4566,7 @@ fn completeness_violations(columns: &[CatalogColumn], baseline: &[(&str, &[&str]
 /// vocabulary here rather than in a second, differently scoped query.
 ///
 /// THE DIVERGENCE FROM `personal_data_columns()` HAS TWO AXES, NOT ONE, AND THE
-/// SECOND ONE UNDER-RETAINS. `personal_data_columns()` (0210:887) is also scoped
+/// SECOND ONE UNDER-RETAINS. `personal_data_columns()` (0211:887) is also scoped
 /// `relkind IN ('r', 'p')`; this sweep takes `('r', 'p', 'm', 'f')`. So a
 /// `pd:sensitive/health` marker on a materialized view or a foreign table is a
 /// VALID classification that this assertion and the vocabulary check both

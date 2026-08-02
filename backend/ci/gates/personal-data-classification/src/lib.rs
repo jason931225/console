@@ -121,7 +121,7 @@
 //!   database, on a developer's machine, before the push.
 //! * **`relkind` and `nspname` divergence from `personal_data_columns()`.** The
 //!   sweep takes `relkind IN ('r','p','m','f')` across every application schema;
-//!   `personal_data_columns()` (0210:887) takes `('r','p')` scoped
+//!   `personal_data_columns()` (0211:887) takes `('r','p')` scoped
 //!   `nspname = 'public'`. So a valid `pd:sensitive/health` marker on a
 //!   materialized view, a foreign table, or any non-`public` schema is accepted
 //!   by the sweep and never seen by `access_log_retention_floor_days()`, which
@@ -136,7 +136,7 @@
 //!   `EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF location_pings
 //!   …')` (0005:103), and `location_pings_ensure_partition()` (0005:114), which
 //!   calls it once per day. All ten columns of `location_pings` are
-//!   `pd:personal — 개인위치정보` (0210:306-315), but every ping row lands in a
+//!   `pd:personal — 개인위치정보` (0211:306-315), but every ping row lands in a
 //!   partition that exists in neither reader: not in the migration text, whose
 //!   partition name is computed at runtime, and not in a catalog built from
 //!   `./migrations`, which holds only the partitions the migration itself made.

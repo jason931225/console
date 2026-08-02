@@ -421,7 +421,7 @@ not listed in `unclassified-tables.txt`, to carry a
 every column of every application table out of
 `pg_attribute`/`pg_class`/`pg_namespace` after the migrations have run and
 requires the same, against its own Rust-side baseline — the per-table SET of
-unclassified column names, generated from the live catalog. Migration 0210 reads
+unclassified column names, generated from the live catalog. Migration 0211 reads
 the same markers back out of `pg_attribute` so the 접속기록 retention floor is
 derived from the schema rather than hand-maintained.
 
@@ -483,7 +483,7 @@ excludes, named rather than implied:
   child inherited the parent's markers.
 - **The `relkind`/`nspname` divergence against `personal_data_columns()`.** The
   sweep reads `relkind IN ('r','p','m','f')` across every application schema;
-  `personal_data_columns()` (migration 0210) reads `('r','p')` scoped
+  `personal_data_columns()` (migration 0211) reads `('r','p')` scoped
   `nspname = 'public'`. A valid `pd:sensitive/health` marker outside that
   intersection is accepted by the sweep and never reaches
   `access_log_retention_floor_days()`, which then derives 제8조제1항 본문's 365

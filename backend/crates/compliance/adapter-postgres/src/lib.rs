@@ -118,7 +118,7 @@ impl PgComplianceStore {
     /// personal-data classification recorded in the database catalog.
     ///
     /// Nothing here is hand-maintained: the floor is computed by
-    /// `access_log_retention_floor_days()` (migration 0210) over the `pd:`
+    /// `access_log_retention_floor_days()` (migration 0211) over the `pd:`
     /// markers on `pg_attribute`, so it moves when the classification moves and
     /// cannot drift from it.
     ///

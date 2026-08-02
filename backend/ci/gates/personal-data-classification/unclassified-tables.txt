@@ -25,7 +25,7 @@
 #     catalog built from ./migrations. This already ships: 0005's
 #     location_pings_ensure_partition() creates a day partition per day, and the
 #     ten classified columns of the parent prove nothing about the child.
-#   * the relkind/nspname divergence against personal_data_columns() (0210), which
+#   * the relkind/nspname divergence against personal_data_columns() (0211), which
 #     reads ('r','p') in schema public where the sweep reads ('r','p','m','f')
 #     across every schema -- so a valid marker outside that intersection is
 #     accepted by the sweep and never reaches the retention derivation.
