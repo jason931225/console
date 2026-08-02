@@ -395,18 +395,173 @@ not erode the audit trail. It rejects:
 The append-only protection on `audit_events` (REVOKE UPDATE/DELETE + trigger) is
 thus immune to being silently undone by a later migration.
 
-### `console-gate-personal-data-classification` — every column is classified or declared
+### personal-data classification — two checks, neither subsuming the other
 
-Source: `backend/ci/gates/personal-data-classification/`. Parses every migration
-into a post-migration column set and requires each column, in a table not listed
-in `unclassified-tables.txt`, to carry a
+Field-level classification is guarded by a **pair** of checks that read
+different things, and both must run. They are not equal partners: the catalog
+assertion carries the column-membership class, and the text gate is defence in
+depth for what only a text reader can do. Earlier versions of this section have
+been falsified by the next probe three rounds running, so what follows is
+written as measurements with their exit codes rather than as guarantees.
+
+| | reads | CI step |
+| --- | --- | --- |
+| `console-gate-personal-data-classification` | migration **text** | `Personal-data-classification gate` (`cargo run -p console-gate-personal-data-classification`) |
+| `every_application_column_is_classified_or_its_table_is_declared` | the **catalog** of a migrated database | `Serialized disposable PostgreSQL integration targets` → `//tools/buck:platform-db-personal-data-classification-pg` |
+
+**The gate**, `backend/ci/gates/personal-data-classification/`, parses every
+migration into a post-migration column set and requires each column, in a table
+not listed in `unclassified-tables.txt`, to carry a
 `COMMENT ON COLUMN … IS 'pd:<tokens> …'` marker drawn from a closed vocabulary
 (`none`, `personal`, `sensitive/*`, `unique-id/*`, `credit`, `pseudonymous`,
-`undeclared`). Migration 0210 reads the same markers back out of `pg_attribute`
-so the 접속기록 retention floor is derived from the schema rather than
-hand-maintained.
+`undeclared`).
 
-Two properties carry the weight:
+**The catalog assertion**,
+`backend/crates/platform/db/tests/personal_data_classification.rs`, enumerates
+every column of every application table out of
+`pg_attribute`/`pg_class`/`pg_namespace` after the migrations have run and
+requires the same, against its own Rust-side baseline — the per-table SET of
+unclassified column names, generated from the live catalog. Migration 0210 reads
+the same markers back out of `pg_attribute` so the 접속기록 retention floor is
+derived from the schema rather than hand-maintained.
+
+**What each one cannot see, and which of them the class now depends on.** The
+gate re-implements PostgreSQL's parser, so it reads some constructs wrong and
+passes on them: schema qualification is dropped (`shadow.employees` registers as
+`employees`), quoted identifiers are case-folded (`"Employees"."RAW_ROW"` reads
+as `employees.raw_row`), a plpgsql body that assembles a keyword out of fragments
+— `DO $$ BEGIN EXECUTE 'ALTER TA' || 'BLE leave_requests ADD COLUMN
+medical_certificate_no TEXT'; END $$;` — is read as building nothing because the
+body scan looks for `table` within four words of `alter` and finds neither
+spelled whole, and a multi-action `ALTER TABLE` is judged from its FIRST action,
+so this repository's own house idiom with one comma appended —
+`EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY, ADD COLUMN
+medical_certificate_no TEXT', 'leave_requests')`, the shape used in 25 migrations
+— is read as column-neutral with nothing concatenated and every keyword spelled
+whole. All were planted and the gate exited 0 on each.
+
+**The parser is no longer what this class depends on, and is not being hardened
+further.** Six rounds of hardening it each closed one spelling and each was
+followed by another, and every one of those criticals needed TWO things: a
+spelling the parser misreads, AND a net unclassified count that did not move,
+because the catalog side's baseline pinned a per-table COUNT and a count is
+payable — classify one existing column in the same migration that adds an
+unclassified one and the number is unchanged. The last of them measured gate
+EXIT=0, catalog EXIT=0, `3268 / 668 / 2600` against a clean `3267 / 667 / 2600`,
+all 243 pins unmoved, the column confirmed live in `pg_attribute`. Those trios
+are from that measurement and are not today's: a clean tree now reads
+`3288 / 667 / 2621`, because `information_schema` entered the sweep afterwards.
+
+That baseline is now the per-table **SET of unclassified column NAMES** — 247
+tables, 2,621 names, generated from the live catalog by the `#[ignore]`d
+`print_unclassified_baseline` in the same file and never typed by hand. A set has
+nothing to pay with. Adding an unclassified column makes the set gain a name;
+classifying one in the same change makes membership move. Both fail, in both
+directions, with a message naming which columns landed unclassified and which
+baseline names must be removed in the same change — a stale entry is a slot the
+next column takes silently. Replanted against it and measured: the multi-action
+house idiom, the `CREATE FUNCTION … AS 'BEGIN ALTER TABLE …'` body, and the
+concatenation-split `'ALTER TA' || 'BLE …'` form each give **gate EXIT=0,
+catalog EXIT=101**, each naming `medical_certificate_no` and `reason`. The last
+of those is the residual the parser could never reach, and it is the proof the
+new pin does not care how the DDL was spelled. A column added AND classified in
+the same migration passes both, exit 0 each — without that the control would be
+routed around within a week.
+
+**So, precisely:** for any relation the catalog sweep reads, a parser blind spot
+no longer composes into a silent live unclassified column. That is a claim about
+the composite, not about the parser, and it stops where the sweep stops. What it
+excludes, named rather than implied:
+
+- **Relations created at RUNTIME.** In no migration text and in no catalog built
+  from `./migrations`. This already ships:
+  `0005_create_compliance_location_store.sql:90-121` creates a `location_pings`
+  day partition per day with
+  `EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF location_pings …')`.
+  All ten `location_pings` columns are classified `pd:personal — 개인위치정보`, but
+  every ping row lands in a partition neither reader sees, and nothing proves the
+  child inherited the parent's markers.
+- **The `relkind`/`nspname` divergence against `personal_data_columns()`.** The
+  sweep reads `relkind IN ('r','p','m','f')` across every application schema;
+  `personal_data_columns()` (migration 0210) reads `('r','p')` scoped
+  `nspname = 'public'`. A valid `pd:sensitive/health` marker outside that
+  intersection is accepted by the sweep and never reaches
+  `access_log_retention_floor_days()`, which then derives 제8조제1항 본문's 365
+  days where 고시 제2026-9호 제8조제1항제2호 requires 730. Latent today — no
+  migration creates a materialized view or a foreign table, measured by planting
+  one and watching the table count move 282 → 283 — and it under-retains, which
+  is the dangerous direction.
+
+That list had a third entry that was in the query and in no text.
+`application_columns` also filtered `n.nspname <> 'information_schema'`, a
+predicate its own doc comment never explained, and as the initdb superuser — who
+is exactly who migrates in the pgtest and CI containers, though not the
+`console_app` role production uses — `CREATE TABLE information_schema.pd_leak
+(rrn TEXT, employee_name TEXT)` landed two live columns and left the catalog
+counts byte-identical to a clean tree. The predicate is gone rather than written
+down. What PostgreSQL 18.4 ships there under `relkind IN ('r','p','m','f')` is
+four real tables — `sql_features`, `sql_implementation_info`, `sql_parts`,
+`sql_sizing`, 21 columns, none commented, everything else in that schema being
+`relkind = 'v'` — and they are declared in the baseline like any other
+unclassified table. Replanted after the fix: **catalog EXIT=101**, naming
+`information_schema.pd_leak` and both columns.
+
+A fourth entry was in the query for the same reason and was closed the same way.
+`application_columns` also filtered `n.nspname NOT LIKE 'pg\_%'`, justified in its
+own doc by the claim that the prefix is reserved so nothing can hide behind it.
+That claim is false: `allow_system_table_mods` is a `superuser`-context GUC, and
+with it set, `CREATE SCHEMA pg_evil` succeeds where it otherwise raises
+`42939 unacceptable schema name`. A migration planting
+`pg_evil.pd_leak (rrn, employee_name)` with a stored 주민등록번호 gave gate EXIT=0
+and catalog EXIT=0 with output byte-identical to a clean tree. The prefix pattern
+is replaced by `n.nspname <> 'pg_catalog' AND c.relpersistence <> 't'` — the 64
+system catalogs by name, session-temporary relations by PostgreSQL's own tag
+rather than by the shape of a schema name — which adds zero baseline entries and
+is *stricter* than the enumeration it replaces: a planted `pg_toast.pd_leak` is
+also caught, because a clean `pg_toast` holds only `relkind` `t` and `i` and so
+was excluded by the `relkind` predicate already. `pg_temp_N` needs no predicate;
+`CREATE TABLE pg_temp_99.pd_leak` raises `42P16 cannot create relations in
+temporary schemas of other sessions` even with the GUC on.
+
+**The boundary, named once.** Both of those escapes needed **superuser**, and at
+superuser the migrating session can `INSERT INTO pg_description` and forge a `pd:`
+marker instead of hiding a table — measured, it succeeds. So this control assumes
+a migration that does not exercise superuser catalog-write privilege. Production
+migrates as `console_app` (`deploy/apps/console/base/migrate-job.yaml`), created
+`NOSUPERUSER`, which reaches none of it: `42501 permission denied to set parameter
+"allow_system_table_mods"`, `42939` on `CREATE SCHEMA pg_evil` with no way to lift
+it, `42501 permission denied for schema pg_catalog`, `42501 permission denied for
+table pg_description`. The pgtest and CI containers migrate as the initdb
+superuser, which is why the probes land there. That boundary is not a reason to
+leave a predicate unjustified — the `pg_` filter was closed anyway, because
+closing it was free. The full statement lives in the module doc of
+`backend/crates/platform/db/tests/personal_data_classification.rs`.
+
+**The gate stays, as defence in depth.** It is the only reader that sees a column
+at WRITE time, before any database exists, in milliseconds on a developer's
+machine, and the catalog is consulted only for relations it knows. A newly found
+parser escape is written into the residual register in its crate doc and left
+there.
+
+Two forms have left the blind-spot list, and the distance between them is the
+lesson.
+`DO 'BEGIN CREATE TABLE …; END'` was closed by refusing a `DO` that carries a
+single-quoted literal — a refusal written at the STATEMENT HEAD. The identical
+block one head over,
+`CREATE FUNCTION f() RETURNS void AS 'BEGIN ALTER TABLE … ADD COLUMN …; END'
+LANGUAGE plpgsql`, then passed the gate AND the catalog assertion, exit 0 each,
+over a column live in `pg_attribute` on PostgreSQL 18.4;
+`CREATE OR REPLACE FUNCTION` likewise. The fix was right in kind and one level
+too high. The body scan now reads `Tok::Str` alongside `Tok::Body`, below the
+head, so a body carrying table DDL is `unsupported-ddl` under either quoting and
+under any head. The `DO` refusal is kept on top of it, because
+`DO 'BEGIN PERFORM 1; END'` carries no DDL for a scan to find; it is not extended
+to `CREATE FUNCTION`, whose literals include parameter defaults
+(`0064_platform_group_accounts.sql` writes `DEFAULT ARRAY['MEMBER']` and
+`DEFAULT 'GROUP_ADMIN'`). Cost of the widened scan on the corpus, measured: 3,488
+top-level single-quoted literals across 210 migrations, zero flagged.
+
+Three properties carry the weight:
 
 - **Unparseable means FAIL, by default rather than by list.** `apply_statement`
   has no fallthrough arm: the forms it recognises are the whole allow-list, and
@@ -414,16 +569,17 @@ Two properties carry the weight:
   earlier version enumerated the dangerous constructs instead, which is the same
   fail-open shape one step along — it tested `head[1] == "table"`, so
   `CREATE UNLOGGED/TEMP/GLOBAL TEMPORARY TABLE` and
-  `CREATE SCHEMA x CREATE TABLE …` all walked past. A dollar-quoted body is
-  refused the same way unless the DDL inside it is one of the column-neutral
-  `ALTER TABLE` actions the parser already recognises, so a table built in a
-  `DO` block or a plpgsql body now fails instead of being invisible.
+  `CREATE SCHEMA x CREATE TABLE …` all walked past. A quoted body — dollar- or
+  single-quoted, the scan does not distinguish — is refused the same way unless
+  the DDL inside it is one of the column-neutral `ALTER TABLE` actions the parser
+  already recognises, so a table built in a `DO` block or a plpgsql function body
+  now fails instead of being invisible.
   `UNSUPPORTED_WAIVERS` records what the corpus still cannot parse — one entry,
   0005's per-day `location_pings` partitions — with a reason each, and a waiver
   that matches nothing is itself a violation.
-- **The baseline is shrink-only, enforced.** CI checks out a single commit with
-  no history, so the gate cannot diff against the previous baseline. Migration
-  numbers supply the clock instead: a column introduced after
+- **The gate's baseline is shrink-only, enforced.** CI checks out a single
+  commit with no history, so the gate cannot diff against the previous baseline.
+  Migration numbers supply the clock instead: a column introduced after
   `BASELINE_FROZEN_AFTER_MIGRATION` is not sheltered by a baseline entry,
   whether it arrived on a new table or on one already listed. That clock is a
   filename prefix, so the gate also checks that no number at or below the freeze
@@ -432,12 +588,25 @@ Two properties carry the weight:
   baseline file is a subset of yesterday's, because yesterday's is not in the
   checkout. It proves that every way of adding an entry today is already a
   violation.
+- **The catalog assertion's baseline is a set of column names, and two-sided.**
+  It declares 247 of 286 tables, so a table-granular baseline would have
+  sheltered 86% of the schema whole. Each entry therefore names that table's
+  unclassified columns — 2,621 names today, of 3,288 columns. A name in the
+  catalog that the entry does not list fails, saying it *landed unclassified*; a
+  listed name that is no longer unclassified fails too, requiring the baseline be
+  updated in the same change, because a stale entry is a slot the next column
+  takes silently. Set membership rather than a count is what makes the two
+  failures independent: classifying one column does not pay for adding another.
+  Separately, the closed vocabulary is applied where `classified` is decided and
+  across every application schema, so `COMMENT ON COLUMN x IS 'pd:lol'` is a
+  violation, and being in the baseline does not shelter it — an entry admits a
+  MISSING marker, never a wrong one.
 
-Coverage is partial by design and the number is countable, not claimed: the gate
-prints classified columns and baselined tables on every run. Listing a table in
-the baseline is an admission that nobody has classified it — **not** a statement
-that it holds no personal data. The gate asserts nothing about whether any
-statutory obligation is met and moves no compliance control off HOLD.
+Coverage is partial by design and the numbers are countable, not claimed: both
+checks print their totals on every run. Listing a table in either baseline is an
+admission that nobody has classified it — **not** a statement that it holds no
+personal data. Neither check asserts anything about whether any statutory
+obligation is met, and neither moves a compliance control off HOLD.
 
 ### `console-gate-pii-no-logs` — PIPA log hygiene
 

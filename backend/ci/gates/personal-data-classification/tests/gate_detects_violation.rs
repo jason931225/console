@@ -513,6 +513,166 @@ fn gate_rejects_a_table_created_inside_a_dollar_quoted_body()
     Ok(())
 }
 
+/// A `DO` whose body is a SINGLE-QUOTED string must FAIL, whatever is in it.
+///
+/// This is the hole the test above did not cover, and it was measured against a
+/// migrated database rather than imagined. `DO 'BEGIN ALTER TABLE
+/// leave_requests ADD COLUMN medical_certificate_no TEXT; END'` is a `Tok::Str`,
+/// not a `Tok::Body`, so the body scan never touched it and the gate passed. Add
+/// a `COMMENT ON COLUMN` on some other unclassified column of the same table in
+/// the same migration and the catalog assertion's per-table COUNT did not move
+/// either — both halves of the control green over a live 진단서 번호 column.
+/// That second half is gone: the catalog baseline is a SET of column names now,
+/// so the compensating comment no longer pays for the added column. This test
+/// stays because the gate is defence in depth, not because the class depends on
+/// it.
+///
+/// The refusal is on the QUOTING, not on what the body says: the third case
+/// here creates nothing at all and is still rejected. Scanning the literal would
+/// have closed the one spelling that was measured and left `E'…'`, `U&'…'` and
+/// the next one for someone else to find.
+#[test]
+fn gate_rejects_a_do_with_a_single_quoted_body() -> Result<(), Box<dyn std::error::Error>> {
+    let statements: &[(&str, &str)] = &[
+        (
+            "adds-a-column",
+            "DO 'BEGIN ALTER TABLE staff ADD COLUMN medical_certificate_no TEXT; END';",
+        ),
+        (
+            "creates-a-table",
+            "DO 'BEGIN CREATE TABLE ghost (secret TEXT); END';",
+        ),
+        // Column-neutral, and still refused: the gate is judging the quoting.
+        ("harmless", "DO 'BEGIN PERFORM 1; END';"),
+        // The escape-string spelling of the same literal, which a scan written
+        // for plain `'…'` would walk straight past.
+        (
+            "escape-string",
+            "DO E'BEGIN ALTER TABLE staff ADD COLUMN medical_certificate_no TEXT; END';",
+        ),
+    ];
+
+    for (name, statement) in statements {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff (id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 {statement}"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "'{name}' must FAIL: a single-quoted DO body is never scanned, so the gate cannot \
+             prove what it did. Got a pass."
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("single-quoted body")),
+            "'{name}' must be reported as UnsupportedDdl naming the quoting, got {:#?}",
+            result.violations
+        );
+    }
+    Ok(())
+}
+
+/// THE SAME BLOCK, ONE HEAD OVER. A single-quoted body carrying table DDL must
+/// fail under whatever statement carries it.
+///
+/// The first fix for the single-quoted body was written at the `DO` head, and
+/// this is what walked past it — measured on a migrated PostgreSQL 18.4, gate
+/// EXIT=0 and catalog assertion EXIT=0, over a `medical_certificate_no` column
+/// live in `pg_attribute`. The scan reads `Tok::Str` alongside `Tok::Body`
+/// instead, which is one level below the head, so there is no head left to
+/// move to. This test is the thing that fails if the check is ever hoisted back
+/// up to a head.
+#[test]
+fn gate_rejects_a_function_whose_single_quoted_body_builds_table_ddl()
+-> Result<(), Box<dyn std::error::Error>> {
+    let statements: &[(&str, &str)] = &[
+        (
+            "create-function",
+            "CREATE FUNCTION hole() RETURNS void AS
+                 'BEGIN ALTER TABLE staff ADD COLUMN medical_certificate_no TEXT; END'
+                 LANGUAGE plpgsql;",
+        ),
+        (
+            "create-or-replace-function",
+            "CREATE OR REPLACE FUNCTION hole() RETURNS void AS
+                 'BEGIN ALTER TABLE staff ADD COLUMN medical_certificate_no TEXT; END'
+                 LANGUAGE plpgsql;",
+        ),
+        (
+            "create-function-creating-a-table",
+            "CREATE FUNCTION hole() RETURNS void AS
+                 'BEGIN CREATE TABLE ghost (secret TEXT); END'
+                 LANGUAGE plpgsql;",
+        ),
+    ];
+
+    for (name, statement) in statements {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff (id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 {statement}"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "'{name}' must FAIL: the body builds DDL this parser does not read, and the head \
+             carrying it changes nothing about that. Got a pass."
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("single-quoted body builds")),
+            "'{name}' must be reported as UnsupportedDdl naming the body, got {:#?}",
+            result.violations
+        );
+    }
+    Ok(())
+}
+
+/// And the cost of that scan on the corpus is zero, which is why it is a scan
+/// and not a refusal-by-quoting like `DO`'s.
+///
+/// `0064_platform_group_accounts.sql` writes `DEFAULT ARRAY['MEMBER']` and
+/// `DEFAULT 'GROUP_ADMIN'` in a `CREATE OR REPLACE FUNCTION` parameter list:
+/// top-level `Tok::Str` tokens that are not bodies at all. Refusing that head on
+/// its quoting would fail the gate on a statement that creates no column.
+/// Measured across the 210 migrations: 3,488 top-level single-quoted literals,
+/// zero flagged.
+#[test]
+fn gate_accepts_string_literals_that_are_not_bodies() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tree(
+        "literals-that-are-not-bodies",
+        "CREATE TABLE staff (id UUID PRIMARY KEY, role TEXT NOT NULL DEFAULT 'MEMBER');
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         COMMENT ON COLUMN staff.role IS 'pd:none — 권한 등급, not a person';
+         CREATE OR REPLACE FUNCTION platform_create_group_account(
+             p_tenant_roles TEXT[] DEFAULT ARRAY['MEMBER']::TEXT[],
+             p_group_role TEXT DEFAULT 'GROUP_ADMIN'
+         ) RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;
+         INSERT INTO staff (id, role) VALUES (gen_random_uuid(), 'MEMBER');",
+    )?;
+    let result = check_tree(&dir, &empty_baseline())?;
+    assert!(
+        result.passed(),
+        "a literal that is a default, not a body, must not trip the scan, got {:#?}",
+        result.violations
+    );
+    Ok(())
+}
+
 /// The repo's standard RLS-arming idiom must still pass, or every future
 /// migration that arms a table needs a waiver — and a gate that demands a
 /// waiver for the house idiom is a gate someone eventually deletes.

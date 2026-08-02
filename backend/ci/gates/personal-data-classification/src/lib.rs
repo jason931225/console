@@ -1,14 +1,188 @@
-//! CI gate: personal-data classification completeness.
+//! TWO CHECKS GUARD PERSONAL-DATA CLASSIFICATION. THIS IS ONE OF THEM.
 //!
-//! WHAT THIS ENFORCES. Every column created by a migration, in a table that is
-//! NOT listed in the baseline, must carry a
-//! `COMMENT ON COLUMN <table>.<column> IS 'pd:<tokens> …'` marker whose tokens
-//! all come from a closed vocabulary. The baseline is the declared,
-//! shrink-only backlog of tables nobody has classified yet; a NEW table is
-//! never in it, so a new table must be fully classified at creation. That one
-//! property is the completeness enforcement — everything else is debt
-//! burn-down. See `BASELINE_FROZEN_AFTER_MIGRATION` for how "never join it" is
-//! enforced with no access to the previous baseline.
+//! The other is `every_application_column_is_classified_or_its_table_is_declared`
+//! in `backend/crates/platform/db/tests/personal_data_classification.rs`.
+//! THIS GATE IS DEFENCE IN DEPTH, AND IS NOT BEING HARDENED FURTHER. Six rounds
+//! of hardening its parser each closed one spelling and each was followed by
+//! another, so the owner's decision was to change what the OTHER check needs
+//! instead. Its baseline used to pin a per-table unclassified COUNT, and a count
+//! is payable: every one of those criticals needed two things at once — a
+//! spelling this parser misreads, AND a compensating classification in the same
+//! migration that left the count where it was. That baseline is now the SET of
+//! unclassified column NAMES, which has nothing to trade with.
+//!
+//! What follows from that, stated as narrowly as the measurement supports: for
+//! ANY RELATION THE CATALOG SWEEP READS, a blind spot in this parser no longer
+//! composes into a silent live unclassified column. It is not a claim about this
+//! parser, which is still blind in the ways listed below and will acquire more.
+//! It is a claim about the composite, and it stops at the edge of what that
+//! sweep reads — see WHERE THE CATALOG ASSERTION IS BLIND.
+//!
+//! SO WHY KEEP THIS GATE. Two reasons, both load-bearing:
+//!
+//! * **It is the only thing that sees a column at WRITE time.** Before any
+//!   database exists, before anything is applied, on a developer's machine in
+//!   milliseconds. The catalog assertion needs CI to stand a database up.
+//! * **The catalog is consulted only for relations it knows**, and it knows only
+//!   what `./migrations` built. This reads the text, including text that builds
+//!   relations the catalog sweep will never enumerate.
+//!
+//! WHAT THE CATALOG ASSERTION READS. Every column of every application table out
+//! of `pg_attribute`/`pg_class`/`pg_namespace` after the migrations have actually
+//! run. `UNLOGGED`, quoted mixed case, schema qualification, a single-quoted `DO`
+//! body, `LIKE INCLUDING ALL`, `PARTITION OF`, `INHERITS`, a multi-action
+//! `ALTER TABLE` and a keyword assembled out of concatenated fragments all land
+//! in `pg_attribute` identically, because the catalog holds what the DDL PRODUCED
+//! and not how it was spelled. What that reaches is bounded by which relations
+//! are in it, not by syntax.
+//!
+//! WHERE THIS GATE IS BLIND — constructs it reads WRONG, so it prints PASSED on
+//! a column that is really unclassified. This list is a RESIDUAL REGISTER now,
+//! not a work queue: a new entry gets written down and left alone. The first two
+//! and the last two were planted as migrations and confirmed by execution; the
+//! middle two are read from this file's own code, not planted:
+//!
+//! * **Schema qualification is discarded.** `read_qualified_name` keeps only
+//!   the last component, so `shadow.employees` registers as `employees` and
+//!   inherits the real table's markers. The corpus already creates non-public
+//!   schemas (`leave_api`, `ontology_api`, `ont_policy_api`).
+//! * **Quoted identifiers are case-folded.** `lex` lowercases everything, so
+//!   `"Employees"."RAW_ROW"` is read as the already-classified
+//!   `employees.raw_row`. PostgreSQL treats those as different relations.
+//! * **A column named `check`, `unique` or `primary`** — legal, quoted — is
+//!   read as the start of a table constraint and vanishes from the column set.
+//! * **`check_freeze_clock` scans vacancies over `1..highest`**, so slot `0000`
+//!   is never examined. A migration numbered `0000` would sit below every
+//!   existing one and be read as pre-freeze.
+//! * **A body that splits a keyword across a concatenation.**
+//!   `DO $$ BEGIN EXECUTE 'ALTER TA' || 'BLE leave_requests ADD COLUMN
+//!   medical_certificate_no TEXT'; END $$;`. `body_builds_table_ddl` reads words,
+//!   finds `alter`, finds no `table` in the four-word window after it, and
+//!   returns `None`. The `Tok::Str` scan does not reach it either: the keyword is
+//!   split across two literals and neither holds it whole.
+//!   `'CREA' || 'TE TABLE'` is the same hole. Planted with a compensating
+//!   `COMMENT ON COLUMN` under the count baseline and measured: gate EXIT=0 AND
+//!   catalog EXIT=0, one extra LIVE column, every per-table pin unmoved. Replanted
+//!   against the SET baseline: gate EXIT=0, **catalog EXIT=101**, naming
+//!   `medical_certificate_no` as landed and `reason` as no longer unclassified.
+//!   This parser still cannot reach it; it no longer needs to.
+//! * **A multi-action `ALTER TABLE` is judged from its FIRST action.**
+//!   `alter_action_is_column_neutral` (see `apply_statement`) reads one action
+//!   and rules on the whole statement, so this repository's house idiom —
+//!   `EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY, ADD COLUMN
+//!   medical_certificate_no TEXT', 'leave_requests')`, the shape used in 25
+//!   migrations, with one comma appended — is read as column-neutral. Nothing is
+//!   concatenated and every keyword is spelled whole. Under the count baseline it
+//!   measured gate EXIT=0, catalog EXIT=0, `3268 / 668 / 2600` against a clean
+//!   `3267 / 667 / 2600`, with all 243 pins unmoved and the column confirmed live
+//!   in `pg_attribute`. It was the sixth consecutive round's critical and the
+//!   reason the count became a set. Replanted against the SET baseline: gate
+//!   EXIT=0, **catalog EXIT=101**, both halves named.
+//!
+//! WHAT THE QUOTED-BODY SCAN COVERS. `DO 'BEGIN CREATE TABLE … ; END'` used to
+//! be on the list above: the scan ran on `Tok::Body` alone, so a single-quoted
+//! body was never looked inside, and measured against a migrated database that
+//! one form defeated BOTH halves of the control at once, leaving a live
+//! `medical_certificate_no` column classified by nothing. Two mechanisms close
+//! it, and they cover different amounts:
+//!
+//! * The scan at the top of `apply_statement` reads `Tok::Str` as well as
+//!   `Tok::Body`. A body whose text builds table DDL is `unsupported-ddl` under
+//!   either quoting, under whatever head carries it. It is written below the
+//!   head for a measured reason: the first attempt was written AT the `DO` head,
+//!   and `CREATE FUNCTION f() RETURNS void AS 'BEGIN ALTER TABLE … END'
+//!   LANGUAGE plpgsql` — the identical block, one head over — passed the gate
+//!   and the catalog assertion both, EXIT=0 each, over a live column.
+//! * The `["do", ..]` arm additionally refuses ANY `Tok::Str`, DDL or not, so
+//!   `DO 'BEGIN PERFORM 1; END'` fails too although it carries nothing for the
+//!   scan to find.
+//!
+//! That refusal-by-quoting is NOT extended to `CREATE FUNCTION`: a function
+//! statement's literals are not all bodies. `0064_platform_group_accounts.sql`
+//! writes `DEFAULT ARRAY['MEMBER']` and `DEFAULT 'GROUP_ADMIN'` in a parameter
+//! list, and refusing on quoting there would fail the gate on a statement that
+//! creates no column. So `do` is judged on its quoting, every other head on what
+//! its literals say — and a body that never spells a keyword whole, the fifth
+//! bullet above, is read by neither. See `apply_statement`.
+//!
+//! Distinct from those, and NOT a blind spot: a spelling `apply_statement` does
+//! not recognise at all — `CREATE UNLOGGED TABLE`, `CREATE TEMP TABLE`,
+//! `CREATE SCHEMA x CREATE TABLE …` — raises `unsupported-ddl` and FAILS. The
+//! gate cannot read those, and says so loudly instead of passing. See
+//! UNPARSEABLE MEANS FAIL below.
+//!
+//! WHERE THE CATALOG ASSERTION IS BLIND, so that neither side is read as total:
+//!
+//! * **Only the relations it can enumerate.** This is the whole of what is left
+//!   on that side for the column-membership class, and it is a question about
+//!   WHICH RELATIONS, not about syntax. Two named divergences, both below.
+//! * **Anything not yet applied.** It needs a migrated database, so it says
+//!   nothing until CI has stood one up. This gate runs in milliseconds with no
+//!   database, on a developer's machine, before the push.
+//! * **`relkind` and `nspname` divergence from `personal_data_columns()`.** The
+//!   sweep takes `relkind IN ('r','p','m','f')` across every application schema;
+//!   `personal_data_columns()` (0210:887) takes `('r','p')` scoped
+//!   `nspname = 'public'`. So a valid `pd:sensitive/health` marker on a
+//!   materialized view, a foreign table, or any non-`public` schema is accepted
+//!   by the sweep and never seen by `access_log_retention_floor_days()`, which
+//!   then derives 제8조제1항 본문's 365 days where 고시 제2026-9호 제8조제1항제2호
+//!   requires 730. Latent today — no migration creates a materialized view or a
+//!   foreign table, measured by planting one and watching the table count move
+//!   282 → 283 — and it under-retains, which is the dangerous direction.
+//! * **A relation created at RUNTIME rather than by a migration.** Neither
+//!   check sees one: it is in no migration text and in no migrated catalog.
+//!   THIS ALREADY SHIPS. `0005_create_compliance_location_store.sql:90-121`
+//!   defines `location_pings_create_day_partition()`, which runs
+//!   `EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF location_pings
+//!   …')` (0005:103), and `location_pings_ensure_partition()` (0005:114), which
+//!   calls it once per day. All ten columns of `location_pings` are
+//!   `pd:personal — 개인위치정보` (0210:306-315), but every ping row lands in a
+//!   partition that exists in neither reader: not in the migration text, whose
+//!   partition name is computed at runtime, and not in a catalog built from
+//!   `./migrations`, which holds only the partitions the migration itself made.
+//!   The parent's classification is the only thing standing there, and no check
+//!   here proves the child inherited it.
+//!
+//! * **Below superuser catalog-write, nothing there defends.** Not a blind spot
+//!   in the sweep but the floor under it: a migrating session with superuser can
+//!   `INSERT INTO pg_description` and forge a `pd:` marker, so an assertion that
+//!   READS the catalog has nothing left to read correctly. Production migrates
+//!   as `console_app` (`NOSUPERUSER`), which is refused at every step of that
+//!   with `42501`/`42939`; the pgtest and CI containers migrate as the initdb
+//!   superuser, which is why the probes land there. Stated in full in the module
+//!   doc of `personal_data_classification.rs`; not repeated here.
+//!
+//! That list was short two entries until 2026-08, and neither was a divergence.
+//! One was a bare predicate: `application_columns` filtered
+//! `n.nspname <> 'information_schema'`, explained nowhere. As the initdb
+//! superuser — who migrates in the pgtest and CI containers, though not the
+//! `console_app` role production uses — a planted
+//! `information_schema.pd_leak (rrn, employee_name)` left two live columns and
+//! catalog counts byte-identical to a clean tree. The predicate is deleted, not
+//! documented: PostgreSQL 18.4 ships four real tables there under
+//! `relkind IN ('r','p','m','f')` (`sql_features`, `sql_implementation_info`,
+//! `sql_parts`, `sql_sizing`; 21 columns, none commented; the rest of the schema
+//! is `relkind = 'v'`), and those are declared in the catalog side's baseline
+//! like any other unclassified table. Replanted after the fix, that plant gives
+//! **catalog EXIT=101** naming the table and both columns.
+//!
+//! The other was `n.nspname NOT LIKE 'pg\_%'`, justified by the claim that the
+//! prefix is reserved so nothing can hide behind it. `allow_system_table_mods`
+//! is a `superuser`-context GUC and setting it lifts that reservation, so a
+//! planted `pg_evil.pd_leak (rrn, employee_name)` holding a 주민등록번호 gave
+//! gate EXIT=0 and catalog EXIT=0 with output byte-identical to a clean tree.
+//! Deleted rather than documented, for zero baseline entries: the sweep now
+//! reads `n.nspname <> 'pg_catalog' AND c.relpersistence <> 't'`, which is
+//! stricter than the name enumeration it replaces. Replanted after the fix:
+//! **catalog EXIT=101**.
+//!
+//! WHAT THIS GATE ENFORCES, WITHIN THOSE LIMITS. Every column the parser
+//! believes a migration created, in a table NOT listed in the baseline, must
+//! carry a `COMMENT ON COLUMN <table>.<column> IS 'pd:<tokens> …'` marker whose
+//! tokens all come from a closed vocabulary. The baseline is the declared,
+//! shrink-only backlog of tables nobody has classified yet. See
+//! `BASELINE_FROZEN_AFTER_MIGRATION` for how "never join it" is enforced with
+//! no access to the previous baseline.
 //!
 //! UNPARSEABLE MEANS FAIL, AND THAT IS THE DEFAULT, NOT A LIST. A table whose
 //! DDL the parser cannot read has no columns to check, and a table with no
@@ -40,11 +214,10 @@
 //!   condition as defence in depth.
 //! * column exists, classification absent — that is this gate.
 //!
-//! The known weakness, named rather than hidden: `ALTER TABLE ... DROP COLUMN`
-//! silently discards the column's comment, so a drop-and-recreate loses the
-//! classification. That case lands as a column present in the parsed schema
-//! with no marker, which is exactly what this gate rejects. The gate is not
-//! decoration around the Postgres error; it is the other half of the mechanism.
+//! `ALTER TABLE ... DROP COLUMN` silently discards the column's comment, so a
+//! drop-and-recreate loses the classification. That case lands as a column
+//! present with no marker, which both this gate and the catalog assertion
+//! reject.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -643,16 +816,28 @@ pub fn parse_schema(files: &[PathBuf]) -> Schema {
 /// A construct nobody has written yet is a construct nobody has thought about,
 /// and the fail-closed reading of "not thought about" is "reject".
 fn apply_statement(statement: &[Tok], file: &Path, schema: &mut Schema) {
-    // Before the head is even read: a dollar-quoted body is opaque, and the
-    // head of the statement carrying it says nothing about what it does.
+    // Before the head is even read: a quoted body is opaque, and the head of
+    // the statement carrying it says nothing about what it does.
+    //
+    // `Tok::Str` is scanned alongside `Tok::Body` because PostgreSQL accepts
+    // BOTH quotings for the same body, and an earlier round closed only the
+    // head it had measured: `DO '…'` was refused while
+    // `CREATE FUNCTION … AS 'BEGIN ALTER TABLE … END' LANGUAGE plpgsql` — the
+    // identical block, one head over — still passed. Scanning here, below the
+    // head, is what makes the two quotings equal; a refusal written per head
+    // has to be written again for every head that can carry a body.
     for token in statement {
-        if let Tok::Body(body) = token
+        if let Tok::Body(body) | Tok::Str(body) = token
             && let Some(construct) = body_builds_table_ddl(body)
         {
+            let quoting = match token {
+                Tok::Body(_) => "dollar-quoted",
+                _ => "single-quoted",
+            };
             schema.unsupported(
                 file,
                 format!(
-                    "a dollar-quoted body builds `{construct}` — DDL inside plpgsql is not read by \
+                    "a {quoting} body builds `{construct}` — DDL inside plpgsql is not read by \
                      this parser, so the columns it creates cannot be proved classified"
                 ),
             );
@@ -689,8 +874,47 @@ fn apply_statement(statement: &[Tok], file: &Path, schema: &mut Schema) {
         | ["drop", "function", ..]
         | ["drop", "trigger", ..]
         | ["grant", ..]
-        | ["revoke", ..]
-        | ["do", ..] => {}
+        | ["revoke", ..] => {}
+
+        // `DO` runs an anonymous block, and the block is where DDL hides. A
+        // `$$ … $$` body arrives as `Tok::Body`; the SAME block written
+        // `DO 'BEGIN … END'` arrives as `Tok::Str`. The scan at the top of this
+        // function now reads both, which is where the quoting stopped mattering
+        // — and where it had to be fixed, because writing the fix here left
+        // `CREATE FUNCTION … AS 'BEGIN ALTER TABLE … END'` passing one head
+        // over, measured EXIT=0 on both halves of the control.
+        //
+        // This arm adds what the scan cannot: it refuses a `DO` carrying ANY
+        // `Tok::Str` whatever the literal says, so `DO 'BEGIN PERFORM 1; END'`
+        // — no DDL in it for the scan to find — fails too, as does any spelling
+        // of the literal the scan reads but does not understand. It stays
+        // scoped to `do` because a `DO` literal IS the program, whereas
+        // `CREATE FUNCTION`'s literals include parameter defaults (0064 writes
+        // `DEFAULT ARRAY['MEMBER']`, `DEFAULT 'GROUP_ADMIN'`), so the same rule
+        // one head over would fail the gate on a statement that creates no
+        // column. No migration here writes the form — all 52 `DO` statements
+        // are `$$`/`$block$` — so it costs nothing today.
+        //
+        // NOT covered by this arm: a DOLLAR-quoted `DO` body, which carries no
+        // `Tok::Str` and is judged only by the scan. A body that assembles its
+        // keywords from fragments (`EXECUTE 'ALTER TA' || 'BLE …'`) passes the
+        // scan and passes here. See the crate doc's blind-spot list.
+        //
+        // ponytail: the test is "a `DO` statement carrying ANY `Tok::Str`", so
+        // the legacy `DO $$ … $$ LANGUAGE 'plpgsql'` would be refused too even
+        // though its literal is a language name. Known ceiling, unused here,
+        // and it errs closed. Upgrade path is to look only at the token that
+        // follows `do`/`language`, which is more parser than this is worth.
+        ["do", ..] => {
+            if statement.iter().any(|t| matches!(t, Tok::Str(_))) {
+                schema.unsupported(
+                    file,
+                    "DO with a single-quoted body — a `DO` literal is the whole program and this \
+                     parser reads no plpgsql, so the block is refused on its quoting rather than \
+                     on what it says. Write it as `DO $$ … $$`",
+                );
+            }
+        }
 
         // `CREATE SCHEMA` is column-neutral only in its bare form. The standard
         // also admits a schema element list — `CREATE SCHEMA x CREATE TABLE
@@ -747,7 +971,11 @@ fn select_into_target(statement: &[Tok]) -> Option<String> {
     None
 }
 
-/// Does an opaque dollar-quoted body build table DDL?
+/// Does an opaque quoted body build table DDL?
+///
+/// Called on every `Tok::Body` AND every `Tok::Str` in a statement, because
+/// PostgreSQL accepts both quotings for the same plpgsql body and a check that
+/// reads only one of them is a check written against a spelling.
 ///
 /// A body is plpgsql, this gate has no plpgsql parser, and under the inverted
 /// default a statement that is not consumed fails. What the gate can still do
@@ -769,9 +997,13 @@ fn select_into_target(statement: &[Tok]) -> Option<String> {
 /// someone eventually deletes.
 ///
 /// ponytail: word-window scan, not a plpgsql parse. Known ceiling — a body that
-/// assembles the keyword from fragments (`'CREA' || 'TE TABLE'`), or one whose
-/// action verb sits more than three words past `TABLE`, is not read correctly;
-/// the second case errs closed. The upgrade path is a real plpgsql parser,
+/// assembles the keyword from fragments (`'CREA' || 'TE TABLE'`,
+/// `'ALTER TA' || 'BLE …'`), or one whose action verb sits more than three words
+/// past `TABLE`, is not read correctly; the second case errs closed. The first
+/// is a measured blind spot of the whole gate, not a private note: it is the
+/// fifth bullet in the crate doc's list, and it is repeated in
+/// `docs/CI-GATES.md` and `unclassified-tables.txt` so the residual stated there
+/// is the residual this code has. The upgrade path is a real plpgsql parser,
 /// which nothing here justifies.
 fn body_builds_table_ddl(body: &str) -> Option<String> {
     let words: Vec<&str> = body
@@ -805,6 +1037,17 @@ fn body_builds_table_ddl(body: &str) -> Option<String> {
 /// `words` begins just past `ALTER … TABLE`. The table name is one to three
 /// words (`%I`, `foo`, `public.foo` after splitting), so the action verb is
 /// searched for rather than assumed to sit first.
+///
+/// ponytail: FIRST ACTION ONLY, and that is a registered residual, not a TODO.
+/// `ALTER TABLE t ENABLE ROW LEVEL SECURITY, ADD COLUMN c TEXT` returns `true`
+/// off `ENABLE` and the `ADD COLUMN` is never read — the house idiom in 25
+/// migrations with one comma appended, measured passing this gate over a live
+/// column. It is the sixth bullet in the crate doc's blind-spot register. It is
+/// deliberately NOT fixed here: six rounds of closing one spelling each produced
+/// a seventh, and the catalog assertion's baseline is a SET of column names now,
+/// so this misreading no longer composes into a silent live column for any
+/// relation that sweep reads. Upgrade path, if one is ever justified: a real
+/// plpgsql/DDL parse, not another word window.
 fn alter_action_is_column_neutral(words: &[&str]) -> bool {
     for (index, word) in words.iter().take(3).enumerate() {
         if COLUMN_NEUTRAL_ALTER_ACTIONS
@@ -1020,14 +1263,27 @@ fn apply_alter_table(statement: &[Tok], file: &Path, schema: &mut Schema) {
             // CONSTRAINT`, `OWNER TO`. Same allow-list discipline as
             // `apply_statement`: named, or rejected.
             Some(action) if COLUMN_NEUTRAL_ALTER_ACTIONS.contains(&action) => {}
-            // `RENAME COLUMN a TO b` moves a column out from under its
-            // classification: the marker still names `a`, and `b` arrives
-            // unclassified. No migration uses it today; the day one does, the
-            // gate says so instead of quietly reporting the old column set.
+            // `RENAME COLUMN a TO b` is rejected because THIS PARSER would lose
+            // the column, not because PostgreSQL does. An earlier version of
+            // this comment said the marker keeps naming `a`; that is false, and
+            // execution says so: `pg_description` is keyed on
+            // `(objoid, objsubid)` where `objsubid` is `attnum`, and a rename
+            // touches neither, so the comment follows the column to `b`
+            // untouched. The catalog side is therefore fine. What breaks is
+            // here: this gate models a table as a set of NAMES, so after a
+            // rename it would hold `a` — a column that no longer exists — and
+            // not `b`, whose marker it would then read as pointing at nothing.
+            // Rejecting is the fail-closed reading of a text model that cannot
+            // follow the identity Postgres actually tracks. No migration uses
+            // the form today; the day one does, the gate says so instead of
+            // quietly reporting the old column set.
             Some("rename") => {
                 schema.unsupported(
                     file,
-                    format!("ALTER TABLE {table} RENAME … moves a column away from its marker"),
+                    format!(
+                        "ALTER TABLE {table} RENAME … — this parser tracks columns by name, so it \
+                         would keep the old one and never see the new"
+                    ),
                 );
             }
             // No fallthrough. `ATTACH PARTITION` and `INHERIT parent` both
