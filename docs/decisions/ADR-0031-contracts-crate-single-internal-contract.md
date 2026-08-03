@@ -42,8 +42,7 @@ and the handler returns the embedded bytes unchanged (`backend/app/src/lib.rs:34
 
 **The client-generation and dual-build artifacts are gone.** `clients/`, `ios/`, and `android/` do
 not exist at HEAD. `gen:api`, `check:ts`, `check:kotlin`, and `check:swift` are absent from
-`package.json`; the only remaining OpenAPI-adjacent script is `check:platform-contract-drift`
-(`package.json:10`), which is the route-inventory half of what `check:openapi-app` used to run.
+`package.json`; the only remaining OpenAPI script is `check:openapi-app` (`package.json:10`).
 `git grep -iln 'swift\|kotlin' -- .github/ package.json` returns nothing at all, so neither the
 T1.9 drift gate nor the T1.8 dual-build gate has a surviving artifact.
 
@@ -53,11 +52,10 @@ T1.9 drift gate nor the T1.8 dual-build gate has a surviving artifact.
 `openapi_yaml_covers_configured_route_inventory` (`:351`, which compares OpenAPI **path keys** only).
 The rest is hand-written spot-checks on named shapes (`:367`, `:410`, `:426`, `:453`) plus platform
 operation keys (`:548`, `:571`). **No test compares a documented request or response schema to the
-Rust type the handler actually serializes.** `scripts/check-openapi-app.mjs` used to prove only that
-the served document was byte-identical to the committed one — identity between two copies of the
-same hand-written text, not fidelity to code — and was deleted for that reason; its surviving half,
-`scripts/check-platform-contract-drift.mjs`, checks route inventory, not schemas. The 36k lines of
-schemas are therefore unverified prose about the API.
+Rust type the handler actually serializes.** `scripts/check-openapi-app.mjs` proves only that the
+served document is byte-identical to the committed one (`:23`, `:67`–`:73`) — identity between two
+copies of the same hand-written text, not fidelity to code. The 36k lines of schemas are therefore
+unverified prose about the API.
 
 `docs/decisions/README.md:6` governs this situation: implementation divergence from an ADR is a
 governance gap, not silent supersession, and is reconciled through a new decision. This record is
@@ -178,7 +176,7 @@ status change:
    edit mandatory in the same commit as this record declaring `amends: [ADR-0009]`, which
    `:421`–`:425` permits only once this record's status is `accepted`.
 2. **`ADR-0009`'s README index row changed.** It previously read
-   `| `ADR-0009` | accepted | Dual-native Swift/Kotlin employee apps from one OpenAPI contract; `coss-rn` is outside this scope |`.
+   `| [ADR-0009](…) | accepted | Dual-native Swift/Kotlin employee apps from one OpenAPI contract; `coss-rn` is outside this scope |`.
    Its status cell became `accepted, amended` and its scope cell names this amendment, in the
    style already used for ADR-0005 and ADR-0015.
 3. **This record's own index row moved from `proposed` to `accepted`**, and the *Effective

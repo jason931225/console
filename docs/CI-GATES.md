@@ -15,6 +15,16 @@ production. Do not treat a lightweight local loop as full CI confidence: a
 change is not "done" until the relevant local gates, review evidence, and CI
 jobs for the touched surfaces are green.
 
+### Branch-protection context migration prerequisite
+
+The workflow now publishes the truthful contexts `API contract — text-only
+contract checks`, `Domain crates — unit tests`, and `dev-up.mjs smoke — compose
+deps + migrate + /readyz`. Before a pull request using these names can merge,
+the repository owner must atomically replace the stale required context `API
+contract — app-served OpenAPI`, add the exact Domain and dev-up contexts, and
+read the protection rule back. Until that external migration is verified, these
+jobs are CI evidence but this document does not claim they are merge-gating.
+
 ## Review evidence gate
 
 ## Console authority bootstrap
@@ -131,6 +141,20 @@ their prerequisites are available:
 The initial **CI preflight** job runs the foundation-gate, CI-preflight,
 executed-test reachability, credential-argument, and deterministic-lockfile
 contracts before the expensive backend and database jobs begin.
+
+As measured on 2026-08-03, `check:executed-tests` inventories 333 defined test
+binaries: workflow commands directly select 320, leaving an exact dark set of
+13. Those reachable binaries contain 319 source files and 2,097 lexically
+declared test attributes. The attribute count is a source ratchet, not a runtime
+case count: it does not evaluate `cfg`, feature selection, macro expansion, or
+`ignore`. The SeaweedFS tests are recorded in the dark set as out of pivot; they
+are not claimed as executed coverage. Any new or lost declared attribute must
+update the exact baseline intentionally in the same change.
+
+`check:test-credentials` has a deliberately narrow static scope: it rejects
+literal passwords on workflow commands that spell a test runner, and its
+runtime half exercises the opt-in `pgtest.sh` argv guard. It does not prove that
+arbitrary scripts or tests cannot construct credentials internally.
 
 `SQLX_OFFLINE=true` uses the committed `.sqlx/` query cache; regenerate it with
 `cargo sqlx prepare --workspace -- --all-targets` (note `--all-targets`, so test

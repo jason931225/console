@@ -175,9 +175,9 @@ Minimum evidence by class:
 | docs/process only | markdown/readability or custom required-term check, link consistency when touched, governance consistency review; product CI is N/A only with rationale. |
 | backend/internal | `cargo fmt --all -- --check`, `SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings`, relevant `cargo test`, and applicable `console-gate-*` gates from `docs/CI-GATES.md`. |
 | DB migration/RLS/authz | migration-safety, tenant-isolation/RLS arming, SQLx/offline query cache checks, rollback/forward-only note, and authz/tenant regression tests. |
-| OpenAPI/generated clients | source OpenAPI/generator change, regenerated drift checks, `npm run check:ts`, `npm run check:kotlin`, `npm run check:swift`, `npm run check:platform-contract-drift`, contract tests as applicable. |
-| web/RN UI | lint/type/test/build plus browser or React Native web user-story evidence for the changed flow; API-only tests are not enough. |
-| Android/iOS | platform unit/build/behavior evidence, string/i18n parity, device/simulator evidence when user-visible behavior changes. |
+| Backend OpenAPI contract | `backend/app/tests/openapi_drift.rs`, `npm run check:platform-contract-drift`, and focused handler/contract tests as applicable. This repository has no generated-client trees or client-drift commands. |
+| UI consumer | UI evidence is N/A in this backend-only repository and belongs in the repository that owns the changed UI; record its exact SHA and evidence link when a coordinated change exists. |
+| Mobile consumer | Mobile build/device evidence is N/A here and belongs in the owning mobile repository; do not cite the deleted Android/iOS trees or their retired CI as current proof. |
 | CI/release/deploy | workflow syntax/action pinning review, secret/ref safety, release dry-run where available, image/security/signing gates, rollback/smoke proof. |
 | multi-surface | all applicable rows above plus serialized integrator review and conflict check for shared roots. |
 

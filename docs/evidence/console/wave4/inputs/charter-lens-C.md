@@ -171,11 +171,9 @@ backend contract"*) and unblocks **C-39** (*"keyboard nav over server-paginated 
   negative asserting zero rows (superuser `#[sqlx::test]` BYPASSRLS masks this — project memory).
 - Buck2 targets for the new crate build+test green (`buck2 test //backend/crates/listing/...`);
   cargo run via a spawned subagent as a pre-push check.
-- `npm run check:platform-contract-drift` green **after** the integrator applies the openapi
-  manifest (lane records the manifest it expects). *Written as
-  `check:openapi-app && check:api-drift:portable && check:api-drift:swift`; all three scripts have
-  since been deleted along with the generated-client trees, and `check:platform-contract-drift` is
-  the surviving route-inventory half.*
+- `npm run check:openapi-app && npm run check:api-drift:portable && npm run check:api-drift:swift`
+  green **after** the integrator applies the openapi manifest (lane records the manifest + the
+  regenerated-client diff it expects).
 - Audit: list reads on the pilot are audited per the sensitive-view rule where applicable; no
   new mutation, so no new audit surface otherwise.
 - Evidence in `docs/evidence/console/CAP-CONSOLE-PAGE/`: the 34-endpoint coverage table with
