@@ -82,6 +82,13 @@ newer CI run does not retroactively make this consolidation incomplete.
   after hosted verification exposed defects. It is superseded by the later exact
   C/T pair recorded in the final authority ledger and must never be merged on the
   strength of its partial checks.
+- Signed repair checkpoint `baadf03cf4692754fd0b964834e324d14e48f20e`
+  was also pushed while the PR remained draft. It adds the reviewed Buck test-face
+  reconciliation and a provenance-safe deploy-test harness. A clean fast verifier
+  passed every non-authority stage at that checkpoint; its two exact-M admissions
+  correctly rejected the head because a content checkpoint is not the required
+  ledger-only direct-child authority tip. It is recoverable evidence, not merge
+  authority; only the replacement C/T pair may proceed.
 - Two signed archive tags make provenance commits outside the post-pivot main
   ancestry reproducible from a fresh clone:
   `archive/pre-pivot-implementation-freeze-2026-07-24` resolves to
@@ -124,7 +131,7 @@ similarity; no source branch is a continuation dependency.
 | Personal-data classification | Schema-derived closed-vocabulary column classification, exact-name baseline, database assertion, CI reachability, and payroll classifications. The final correction preserves the official instrument's one-/two-year unit, keeps schema introspection owner-only, and removes the out-of-pivot compliance product route. | `fccdf5288f916c5180045ef19d4daaa395998fbf` through `851b999f49222a4d04282088f508f552469d756d`; final signed C named by its direct-child authority ledger |
 | Gate integrity | Request-body and undeclared-import false-green repairs, plus CI preflight enforcement of `openapi_drift` | `1ec3e69d7ec3b8348561d2d699326f0949258521` |
 | Documentation gates | Stale citations were reconciled and local-link checking learned to ignore inline-code examples while still checking adjacent real links | `d90f127654e0b4b0fe423304bbf5086e3cc24228` |
-| CI/tooling ratchets | Exact executed-test named sets, Cargo/feature reachability, credential argv hardening, local-CI parity, and removal of dead post-pivot tooling. The complete ten-job surface now locks 95 run steps, 29 action steps, job/workflow envelopes, and unfiltered required-context triggers. | reduced from `09f147a7`, `26491630`, and `eb60e2e4`; final execution lock `3d5f0b0649b21c8e647b2fa31ec40bd2aeeb8fec` |
+| CI/tooling ratchets | Exact executed-test named sets, Cargo/feature reachability, credential argv hardening, local-CI parity, and removal of dead post-pivot tooling. The complete ten-job surface now locks 95 run steps, 29 action steps, job/workflow envelopes, and unfiltered required-context triggers. The final repair admits registry/reporting inline tests to the generated Buck face, updates both app inline-test cardinality locks, and runs fresh command doubles through load-bearing Bash wrappers so macOS provenance checks cannot turn an expected deploy failure into a harness timeout. | reduced from `09f147a7`, `26491630`, and `eb60e2e4`; final execution lock `3d5f0b0649b21c8e647b2fa31ec40bd2aeeb8fec`; repair checkpoints `aba19c8db6fa66ee4a6e642f72471e00dc65483f` and `baadf03cf4692754fd0b964834e324d14e48f20e` |
 | Security proofs | Five required security contexts have exact parsed job/proof contracts; Trivy installs checksum-pinned before checkout, Cargo audit/deny use isolated direct binaries, and exception-policy regressions execute. Hosted execution caught the direct `cargo-audit` invocation missing its required `audit` subcommand; the final correction fixes and mutation-locks that exact command. | `d6cfedfd1c8230ca6e5ea43053d1ccc7dbcc2026`; final signed C named by its direct-child authority ledger |
 | Program boundary | The generic instance-backed `company_conformance` fixture remains useful engine regression evidence but is explicitly not the Company/HR projected product target. Replacement conformance and projected Company/Person/Employment/PayRun work remain HOLD until owning-port and single-writer contracts exist. | final signed C named by its direct-child authority ledger |
 | External PR authority | Unsigned fork and Dependabot heads fail the same protected-main C/T authentication instead of reporting a successful skip. | `e448f48ea840af2258d5bb374a9185e93b9d838e` |
@@ -158,7 +165,7 @@ retained byte-for-byte, together with one tracked execution status record:
 | `.omx/context/reasoning-lens-contract-20260803T101035Z.md` | `dea80c0a1fa5cc47c7ba12e4ee1c62480cd675e7b26bf33434ddf1fc94be61e4` |
 | `.omx/plans/reasoning-lens-contract.md` | `76dc05561d7d6c07ee26afb68ea60841321eab7516f6d0546ba96d41825aad5c` |
 | `.omx/plans/reasoning-lens-contract-handoff.json` | `db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2` |
-| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `39476f6bda2a3fc282b99cf5b98ad63d986165222bb9082f1c910d900a7ce3fb` at the PR #562 candidate stage |
+| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `0604281adacaca79263e891945e40866f4d053300203b8d131a91292801ea630` at the replacement-candidate sealing stage |
 
 The original JSON correctly says execution had not started at the instant the
 architect/critic plan was frozen. Do not edit that historical claim. The sibling
