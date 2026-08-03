@@ -139,6 +139,110 @@ pub struct AttachObjectPolicyCommand {
     pub declared: Vec<DeclaredAttr>,
 }
 
+/// One org-authored FIELD policy, on its way to becoming an enforced catalog row
+/// plus the attachment that binds it to one property of one object-type version.
+///
+/// `blocks.action` IS the activity (`read_field` or `edit`) — migration 0211
+/// stores it on the attachment and the read path filters on it, so the two can
+/// never disagree. SAP's authorization field is the "smallest unit … either data
+/// such as a key field of a database table or activities such as reading or
+/// changing"; without the second half a field policy is a read mask every write
+/// path walks through.
+///
+/// It carries NO `declared`, and that is a deliberate narrowing rather than an
+/// omission: [`crate::PROPERTY_POLICY_CONDITION_RULE`] restricts a field policy
+/// to `roles contains …`, so the decision is provably independent of any
+/// individual row. A condition over the row's own attributes would need a per-row
+/// evaluation this path does not perform, and admitting one would silently decide
+/// every row by the first row's values.
+/// Like [`AttachObjectPolicyCommand`] it carries no `stable_key`, `title`,
+/// `natural_language_rule` or generated Cedar text: 0211 derives all four.
+pub struct AttachPropertyPolicyCommand {
+    pub actor: UserId,
+    /// The `ont_property_defs` row id the attachment is filed under, matching the
+    /// `ont_property_policies.property_def_id` the read path queries.
+    pub property_def_id: Uuid,
+    pub blocks: NoCodeBlocks,
+}
+
+/// The activities a field policy may be attached for — the Cedar action names
+/// the authoring schema already declares, and the CHECK migration 0211 puts on
+/// `ont_property_policies.activity`. Not a second vocabulary: the attachment's
+/// activity IS the action the policy is evaluated under, so the two cannot drift.
+pub const PROPERTY_POLICY_ACTIVITIES: &[&str] = &[authoring::PROPERTY_POLICY_ACTION, "edit"];
+
+/// The ONE subject set attribute a field policy may test. Not `clearance_keys`,
+/// and the reason is not taste — see [`PROPERTY_POLICY_CONDITION_RULE`].
+const PROPERTY_POLICY_CONDITION_ATTR: &str = "roles";
+
+/// Why a field policy may carry only `roles contains …` conditions, quoted
+/// verbatim by the attach route when it refuses one.
+///
+/// TWO independent restrictions, both of which have to hold for the decision this
+/// path takes to be sound.
+///
+/// 1. `contains`, never `eq`/`ne` over a row attribute. A field decision is taken
+///    ONCE per (principal, object type, property) and applied to every row of
+///    that type in the response. A condition over the row's own attributes —
+///    `owner == principal.user_id`, say — would therefore be evaluated against no
+///    row at all and then applied to all of them. The dynamic, per-instance form
+///    is SAP's `field ( features : instance )` and is a separate slice; this is
+///    the static `field ( readonly )` / `field ( suppress )` shape.
+///
+/// 2. `roles`, never `clearance_keys`. The authoring schema declares both, but
+///    NOTHING in this system resolves a clearance set for a request principal:
+///    `Principal` has no such field, `ontology_subject` (the object-policy twin)
+///    omits it, and the field request built by the ontology read gate therefore
+///    sends an empty set. A policy conditioned on `clearance_keys` would attach
+///    201 CREATED and then deny forever — the worst of the three outcomes,
+///    because the failure is invisible at write time and looks like enforcement
+///    at read time. It is refused at attach AND re-checked on every read, so a
+///    row minted through the definer cannot reintroduce it. When a clearance
+///    source is wired into the request principal, relax this constant and its two
+///    call sites together — not one of them.
+pub const PROPERTY_POLICY_CONDITION_RULE: &str = "a field policy may only carry `roles contains <literal>` conditions: the decision \
+     is taken once per principal and property and applied to every row, so a condition over \
+     a row attribute would be evaluated against no row and then applied to all of them, and \
+     `clearance_keys` is not resolved for a request principal anywhere in this system, so a \
+     policy conditioned on it would attach and then deny forever";
+
+/// The one condition shape a field policy may carry, in ONE place because it is
+/// asserted twice: at attach, and again on every read of an enforced row (a row
+/// minted through the definer, or one authored before this rule, must not be
+/// evaluated as if it were sound). See [`PROPERTY_POLICY_CONDITION_RULE`].
+fn is_satisfiable_field_condition(condition: &authoring::Condition) -> bool {
+    condition.op == authoring::ConditionOp::Contains
+        && condition.attr == PROPERTY_POLICY_CONDITION_ATTR
+        // A `SubjectAttr` right-hand side would render `principal.roles.contains(
+        // principal.<attr>)`, which is not the static role test this shape is
+        // narrowed to.
+        && matches!(condition.value, authoring::ConditionValue::Literal(_))
+}
+
+/// Everything about a field policy that can be judged from the blocks alone —
+/// the activity whitelist and the condition shape. Pure, so the attach ROUTE can
+/// spend it before it spends a four-eyes approval, and
+/// [`PgCedarPolicyStore::attach_property_policy`] can re-assert it at the crate
+/// boundary for every other caller. ONE definition called twice, not two copies:
+/// a copy in the route is how the two diverge.
+///
+/// # Errors
+/// [`KernelError::validation`] naming the rule that was broken.
+pub fn validate_property_policy_blocks(blocks: &NoCodeBlocks) -> Result<(), KernelError> {
+    if !PROPERTY_POLICY_ACTIVITIES.contains(&blocks.action.as_str()) {
+        return Err(KernelError::validation(format!(
+            "unknown field-policy activity {:?}: expected one of {PROPERTY_POLICY_ACTIVITIES:?}",
+            blocks.action
+        )));
+    }
+    if !blocks.conditions.iter().all(is_satisfiable_field_condition) {
+        return Err(KernelError::validation(
+            PROPERTY_POLICY_CONDITION_RULE.to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 fn digest(text: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(text.as_bytes());
@@ -294,6 +398,72 @@ impl PgCedarPolicyStore {
                 // 0205 no longer accepts it: see the note on
                 // [`Self::load_enforced_policies`]. Enforcement re-derives
                 // everything from this row.
+                .bind(&validation.normalized_row)
+                .bind(authoring::AUTHORING_SCHEMA_VERSION)
+                .bind(trace.trace_id())
+                .bind(trace.span_id())
+                .fetch_one(tx.as_mut())
+                .await?;
+                Ok(policy_id)
+            })
+        })
+        .await
+    }
+
+    /// Attach one org-authored FIELD policy to one property, as one enforced
+    /// catalog row plus its attachment, audited in the same transaction.
+    ///
+    /// The same shape as [`Self::attach_object_policy`] and for the same reasons:
+    /// the runtime role has no INSERT on the catalog (0150) and — since 0211 —
+    /// none on `ont_property_policies` either (0154 granted it and nothing ever
+    /// took it back; 0205 performed exactly this revoke for the object twin and
+    /// skipped this one). Everything is written by
+    /// `ont_policy_api.attach_property_policy`, a SECURITY DEFINER owned by the
+    /// NOBYPASSRLS `console_ontology_writer`, reachable only through
+    /// [`Self::command_pool`]. An unwired store fails closed rather than falling
+    /// back to `pool`.
+    ///
+    /// Validation is the authoring validator's verdict, never re-encoded here.
+    /// `declared` is empty by construction — see [`AttachPropertyPolicyCommand`].
+    pub async fn attach_property_policy(
+        &self,
+        command: AttachPropertyPolicyCommand,
+    ) -> Result<Uuid, PgCedarError> {
+        let org = current_org().map_err(KernelError::from)?;
+        // Re-asserted HERE, at the crate boundary, even though the attach route
+        // already ran it before spending its four-eyes approval: the read path's
+        // row-independence is what makes one decision valid for a whole result
+        // set, and an invariant enforced only by the caller that happens to exist
+        // today is an invariant the next caller breaks.
+        validate_property_policy_blocks(&command.blocks).map_err(PgCedarError::Domain)?;
+        let validation = authoring::validate_blocks(org, &command.blocks);
+        if !validation.valid {
+            return Err(PgCedarError::Domain(KernelError::validation(
+                validation.errors.join("; "),
+            )));
+        }
+        let trace = TraceContext::generate();
+        let actor = *command.actor.as_uuid();
+        let org_uuid = *org.as_uuid();
+        // Activity and effect both derive from ONE value each: 0211 compares the
+        // stored row's `action`/`effect` to them, and the loader below rejects
+        // any later disagreement between blocks, catalog and attachment.
+        let activity = command.blocks.action.clone();
+        let effect = command.blocks.effect.as_str();
+
+        with_org_conn::<_, Uuid, PgCedarError>(self.command_pool()?, org, move |tx| {
+            Box::pin(async move {
+                let policy_id: Uuid = sqlx::query_scalar(
+                    "SELECT ont_policy_api.attach_property_policy($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+                )
+                .bind(org_uuid)
+                .bind(actor)
+                .bind(command.property_def_id)
+                .bind(&activity)
+                .bind(effect)
+                // The CANONICAL normalized row, never `to_value(&blocks)`: the
+                // read path re-derives it and rejects any non-canonical row, so
+                // raw JSON would pass this write and 500 every later read.
                 .bind(&validation.normalized_row)
                 .bind(authoring::AUTHORING_SCHEMA_VERSION)
                 .bind(trace.trace_id())
@@ -647,15 +817,137 @@ impl PgCedarPolicyStore {
         .await
     }
 
-    /// Live property-policy decision for `property_def_id`.
+    /// The enforced no-code blocks attached to one property for one activity, in
+    /// the form the field decision evaluates.
+    ///
+    /// A direct mirror of [`Self::load_enforced_object_policy_blocks`], and it
+    /// exists for the same non-negotiable reason: the stored
+    /// `generated_policy_text` is the one column the definer can neither derive
+    /// nor re-validate, so 0211 stores NULL and every enforced row is
+    /// re-derived here from `normalized_row`. Four arms run on EVERY read — the
+    /// stored row deserializes, the validator's verdict, the canonicality
+    /// comparison, and effect agreement between blocks and catalog. Delete any
+    /// one and a forged row is served.
+    ///
+    /// `declared` is deliberately empty: a field policy may only carry
+    /// `contains` conditions over subject set attributes (enforced at the attach
+    /// route), which makes the decision provably row-independent — the property
+    /// this path needs, since the decision is taken once per (principal, type,
+    /// property) and applied to every row of that type in the response.
+    async fn load_enforced_property_policy_blocks(
+        &self,
+        property_def_id: Uuid,
+        activity: &str,
+    ) -> Result<Vec<NoCodeBlocks>, PgCedarError> {
+        let org = current_org().map_err(KernelError::from)?;
+        let activity = activity.to_owned();
+        with_org_conn::<_, _, PgCedarError>(&self.pool, org, move |tx| {
+            Box::pin(async move {
+                let rows = sqlx::query(
+                    r#"
+                    SELECT c.id,
+                           c.effect,
+                           c.validation_status,
+                           c.normalized_row
+                    FROM ont_property_policies a
+                    JOIN cedar_policy_catalog_entries c
+                      ON c.id = a.cedar_policy_id AND c.org_id = a.org_id
+                    WHERE a.property_def_id = $1
+                      AND a.activity = $2
+                      AND c.status = 'enforced'
+                    "#,
+                )
+                .bind(property_def_id)
+                .bind(&activity)
+                .fetch_all(tx.as_mut())
+                .await?;
+                rows.iter()
+                    .map(|row| {
+                        let policy_id: Uuid = row.try_get("id")?;
+                        let catalog_effect: String = row.try_get("effect")?;
+                        let validation_status: String = row.try_get("validation_status")?;
+                        let value: serde_json::Value = row.try_get("normalized_row")?;
+                        let blocks: NoCodeBlocks = serde_json::from_value(value.clone()).map_err(|error| {
+                            PgCedarError::Domain(KernelError::validation(format!(
+                                "invalid enforced property policy row {policy_id}: {error}"
+                            )))
+                        })?;
+                        let validation = authoring::validate_blocks(org, &blocks);
+                        if validation_status != "valid" || !validation.valid {
+                            return Err(PgCedarError::Domain(KernelError::validation(format!(
+                                "enforced property policy row {policy_id} is not valid"
+                            ))));
+                        }
+                        if validation.normalized_row != value {
+                            return Err(PgCedarError::Domain(KernelError::validation(format!(
+                                "enforced property policy row {policy_id} is not canonical"
+                            ))));
+                        }
+                        if blocks.effect.as_str() != catalog_effect {
+                            return Err(PgCedarError::Domain(KernelError::validation(format!(
+                                "enforced property policy row {policy_id} effect does not match its catalog entry"
+                            ))));
+                        }
+                        // The attachment's own activity already scoped the query;
+                        // a stored row whose action disagrees with it could never
+                        // decide the request it was selected for.
+                        if blocks.action != activity {
+                            return Err(PgCedarError::Domain(KernelError::validation(format!(
+                                "enforced property policy row {policy_id} action does not match its attachment activity"
+                            ))));
+                        }
+                        // Row-independence AND satisfiability, re-checked on every
+                        // read and NOT only at attach. `validate_blocks` above
+                        // admits `owner == principal.user_id` (`owner` is a
+                        // whitelisted generic resource attribute) and admits
+                        // `clearance_keys contains "x"` (the authoring schema
+                        // declares the set) — so the validator can carry neither
+                        // arm. Without this a row minted through the definer, or
+                        // one predating the rule, is evaluated against a resource
+                        // carrying no `owner` and a subject carrying no clearance
+                        // set, and its answer applied to every row in the
+                        // response.
+                        if !blocks.conditions.iter().all(is_satisfiable_field_condition) {
+                            return Err(PgCedarError::Domain(KernelError::validation(format!(
+                                "enforced property policy row {policy_id}: {PROPERTY_POLICY_CONDITION_RULE}"
+                            ))));
+                        }
+                        Ok(blocks)
+                    })
+                    .collect()
+            })
+        })
+        .await
+    }
+
+    /// Live field decision for `property_def_id` under `request.action`, which IS
+    /// the attachment activity (`read_field` / `edit`).
+    ///
+    /// Serves both the ontology read/write gates and `POST /policy/authorize`
+    /// with a `property_def_id`. It reads the RE-DERIVED set, never the stored
+    /// `generated_policy_text`: 0211 stores NULL for that column exactly as 0205
+    /// does for object policies, so continuing to read it here would have made
+    /// this endpoint permanently vacuous — and would have put a column the
+    /// definer cannot re-validate into an enforcement position the moment the
+    /// read path started acting on the answer.
     pub async fn authorize_property_field(
         &self,
         property_def_id: Uuid,
         request: &SimRequest,
     ) -> Result<SimulationOutcome, PgCedarError> {
-        let policies = self
-            .load_attached_policies(PROPERTY_POLICY_SELECT, property_def_id)
+        let blocks = self
+            .load_enforced_property_policy_blocks(property_def_id, &request.action)
             .await?;
+        let policies: Vec<AuthoredPolicy> = blocks
+            .iter()
+            .enumerate()
+            .map(|(index, block)| {
+                AuthoredPolicy::new(
+                    format!("propertypolicy{index}"),
+                    authoring::generate_cedar_text(block),
+                )
+            })
+            .collect();
         Ok(authoring::simulate(&policies, request))
     }
 
@@ -873,13 +1165,13 @@ const OBJECT_POLICY_SELECT: &str = r#"
     WHERE a.object_type_id = $1 AND c.generated_policy_text IS NOT NULL
 "#;
 
-const PROPERTY_POLICY_SELECT: &str = r#"
-    SELECT c.id AS id, c.generated_policy_text AS generated_policy_text
-    FROM ont_property_policies a
-    JOIN cedar_policy_catalog_entries c
-      ON c.id = a.cedar_policy_id AND c.org_id = a.org_id
-    WHERE a.property_def_id = $1 AND c.generated_policy_text IS NOT NULL
-"#;
+// A `PROPERTY_POLICY_SELECT` used to live here, reading
+// `c.generated_policy_text` — the exact forgeable column the object path already
+// excludes and documents on `load_enforced_policies`. It is DELETED rather than
+// left beside its replacement: 0211 stores NULL for that column, so the query
+// could only ever have returned rows attached some other way, and a second
+// property-policy loader is precisely the kind of thing a later change
+// repoints an enforcement path at by accident.
 
 const DRAFT_SELECT_BY_ID: &str = r#"
     SELECT id, draft_key, title, normalized_row, generated_policy_text,

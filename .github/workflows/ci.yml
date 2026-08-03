@@ -369,6 +369,7 @@ jobs:
             //tools/buck:ontology-object-type-cas-postgres \
             //tools/buck:ontology-publish-auto-create-action-postgres \
             //tools/buck:ontology-object-policy-attach-postgres \
+            //tools/buck:ontology-property-policy-enforcement-postgres \
             //tools/buck:ontology-action-execute-postgres \
             //tools/buck:ontology-gaps-postgres \
             //tools/buck:ontology-projected-dispatch-postgres \

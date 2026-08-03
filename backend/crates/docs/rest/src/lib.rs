@@ -514,6 +514,7 @@ impl DocsRestState {
                 four_eyes_request_ref,
                 EVIDENCE_HOLD_RELEASE_FOUR_EYES_KIND,
                 Some(*command.hold_id.as_uuid()),
+                None,
                 command.actor,
             )
             .await

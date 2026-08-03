@@ -13,10 +13,15 @@
 //!   * cross-purpose approved ref — an unrelated approved ref never satisfies;
 //!   * replay — the same ref used twice denies the second time;
 //!   * concurrent double-consume — two racing consumers, exactly one wins;
-//!   * peek — the preview check never consumes.
+//!   * peek — the preview check never consumes;
+//!   * grant binding — an approval signed for one BODY cannot be spent on another
+//!     body against the same (kind, target), and a decision with no pending request
+//!     behind it satisfies no grant-bound gate at all.
 
 use console_governance_adapter_postgres::PgGovernanceStore;
-use console_governance_application::{ApprovalDecision, DecideApprovalCommand};
+use console_governance_application::{
+    ApprovalDecision, CreateApprovalCommand, DecideApprovalCommand,
+};
 use console_kernel_core::{OrgId, TraceContext, UserId};
 use console_platform_request_context::scope_org;
 use sqlx::PgPool;
@@ -115,7 +120,7 @@ async fn matching_approval_passes_and_is_consumed_once(owner_pool: PgPool) {
 
     let passed = scope_org(OrgId::from_uuid(ORG), async {
         store
-            .four_eyes_consume(request_ref, KIND, Some(target), actor)
+            .four_eyes_consume(request_ref, KIND, Some(target), None, actor)
             .await
     })
     .await
@@ -142,7 +147,7 @@ async fn wrong_kind_ref_denied(owner_pool: PgPool) {
 
     let denied = scope_org(OrgId::from_uuid(ORG), async {
         store
-            .four_eyes_consume(request_ref, KIND, Some(target), actor)
+            .four_eyes_consume(request_ref, KIND, Some(target), None, actor)
             .await
     })
     .await
@@ -169,7 +174,7 @@ async fn wrong_target_ref_denied(owner_pool: PgPool) {
     // Same kind + ref, but the gate acts on a DIFFERENT object.
     let denied = scope_org(OrgId::from_uuid(ORG), async {
         store
-            .four_eyes_consume(request_ref, KIND, Some(Uuid::new_v4()), actor)
+            .four_eyes_consume(request_ref, KIND, Some(Uuid::new_v4()), None, actor)
             .await
     })
     .await
@@ -199,7 +204,7 @@ async fn unrelated_approved_ref_never_satisfies(owner_pool: PgPool) {
 
     let denied = scope_org(OrgId::from_uuid(ORG), async {
         store
-            .four_eyes_consume(unrelated_ref, KIND, Some(Uuid::new_v4()), actor)
+            .four_eyes_consume(unrelated_ref, KIND, Some(Uuid::new_v4()), None, actor)
             .await
     })
     .await
@@ -224,14 +229,14 @@ async fn replay_of_same_ref_is_denied(owner_pool: PgPool) {
 
     let first = scope_org(OrgId::from_uuid(ORG), async {
         store
-            .four_eyes_consume(request_ref, KIND, Some(target), actor)
+            .four_eyes_consume(request_ref, KIND, Some(target), None, actor)
             .await
     })
     .await
     .unwrap();
     let second = scope_org(OrgId::from_uuid(ORG), async {
         store
-            .four_eyes_consume(request_ref, KIND, Some(target), actor)
+            .four_eyes_consume(request_ref, KIND, Some(target), None, actor)
             .await
     })
     .await
@@ -259,8 +264,8 @@ async fn concurrent_double_consume_admits_exactly_one(owner_pool: PgPool) {
 
     let (a, b) = scope_org(OrgId::from_uuid(ORG), async {
         tokio::join!(
-            store.four_eyes_consume(request_ref, KIND, Some(target), actor),
-            store.four_eyes_consume(request_ref, KIND, Some(target), actor),
+            store.four_eyes_consume(request_ref, KIND, Some(target), None, actor),
+            store.four_eyes_consume(request_ref, KIND, Some(target), None, actor),
         )
     })
     .await;
@@ -308,7 +313,7 @@ async fn peek_does_not_consume(owner_pool: PgPool) {
 
     scope_org(OrgId::from_uuid(ORG), async {
         store
-            .four_eyes_consume(request_ref, KIND, Some(target), actor)
+            .four_eyes_consume(request_ref, KIND, Some(target), None, actor)
             .await
     })
     .await
@@ -325,4 +330,168 @@ async fn peek_does_not_consume(owner_pool: PgPool) {
         Some(false),
         "a consumed approval no longer peeks as available"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Grant binding — the approval must match WHAT IS BEING DONE, not only what to.
+// ---------------------------------------------------------------------------
+
+/// Open a pending request carrying `grant` under `payload_summary.grant`, then
+/// record a distinct approver's `approved` decision for it. Returns the
+/// `request_ref` — the same two steps a real requester/approver pair performs.
+async fn request_and_approve_grant(
+    store: &PgGovernanceStore,
+    requester: UserId,
+    approver: UserId,
+    target: Uuid,
+    grant: serde_json::Value,
+) -> Uuid {
+    let request_ref = Uuid::new_v4();
+    scope_org(OrgId::from_uuid(ORG), async {
+        store
+            .create_approval(CreateApprovalCommand {
+                requester,
+                request_ref,
+                kind: KIND.to_owned(),
+                target_ref: Some(target),
+                payload_summary: serde_json::json!({ "grant": grant }),
+                trace: TraceContext::generate(),
+                occurred_at: time::OffsetDateTime::now_utc(),
+            })
+            .await
+    })
+    .await
+    .unwrap();
+    scope_org(OrgId::from_uuid(ORG), async {
+        store
+            .decide_approval(DecideApprovalCommand {
+                approver,
+                request_ref,
+                kind: KIND.to_owned(),
+                requested_by: requester,
+                target_ref: Some(target),
+                decision: ApprovalDecision::Approved,
+                trace: TraceContext::generate(),
+                occurred_at: time::OffsetDateTime::now_utc(),
+            })
+            .await
+    })
+    .await
+    .unwrap();
+    request_ref
+}
+
+/// THE HOLE THE (kind, target) BINDING LEAVES OPEN. Approver signs a NARROW body
+/// — one condition — and the same approval is spent on a BROADER body against the
+/// identical (kind, target). Without the grant conjunct the second signature
+/// approves the object, not the change made to it.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn an_approval_signed_for_one_body_cannot_be_spent_on_another(owner_pool: PgPool) {
+    seed_org(&owner_pool).await;
+    let requester = seed_user(&owner_pool, "requester").await;
+    let approver = seed_user(&owner_pool, "approver").await;
+    let actor = seed_user(&owner_pool, "actor").await;
+    let store = PgGovernanceStore::new(runtime_role_pool(&owner_pool).await);
+    let target = Uuid::new_v4();
+
+    let narrow = serde_json::json!({
+        "activity": "read_field",
+        "effect": "permit",
+        "conditions": [{ "attr": "roles", "op": "contains", "value": "HR" }],
+    });
+    let broad = serde_json::json!({
+        "activity": "read_field",
+        "effect": "permit",
+        "conditions": [],
+    });
+    let request_ref =
+        request_and_approve_grant(&store, requester, approver, target, narrow.clone()).await;
+
+    // Same ref, same kind, same target — only the body differs.
+    let widened = scope_org(OrgId::from_uuid(ORG), async {
+        store
+            .four_eyes_consume(request_ref, KIND, Some(target), Some(broad), actor)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        widened,
+        Some(false),
+        "an approval signed for a narrow grant must not be spendable on a broader one"
+    );
+    assert_eq!(
+        consumption_count(&owner_pool, request_ref).await,
+        0,
+        "a refused grant-bound consume must not burn the approval"
+    );
+
+    // POSITIVE CONTROL: the body the approver actually signed still passes, so the
+    // refusal above is the binding and not a broken gate. Key order differs from
+    // the request on purpose — jsonb is the normalization, so it must not matter.
+    let reordered = serde_json::json!({
+        "conditions": [{ "value": "HR", "op": "contains", "attr": "roles" }],
+        "effect": "permit",
+        "activity": "read_field",
+    });
+    let matched = scope_org(OrgId::from_uuid(ORG), async {
+        store
+            .four_eyes_consume(request_ref, KIND, Some(target), Some(reordered), actor)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        matched,
+        Some(true),
+        "the body the approver signed must still pass, key order notwithstanding"
+    );
+    assert_eq!(
+        consumption_count(&owner_pool, request_ref).await,
+        1,
+        "and it is consumed exactly once"
+    );
+}
+
+/// `decide_approval` only takes `requested_by` from a pending request WHEN ONE
+/// EXISTS. So an approver can record an approved decision naming a requester who
+/// never asked — and against a (kind, target)-only gate that decision is valid. A
+/// grant-bound gate has no request row to match and refuses.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn a_decision_with_no_pending_request_satisfies_no_grant_bound_gate(owner_pool: PgPool) {
+    seed_org(&owner_pool).await;
+    let requester = seed_user(&owner_pool, "requester").await;
+    let approver = seed_user(&owner_pool, "approver").await;
+    let actor = seed_user(&owner_pool, "actor").await;
+    let store = PgGovernanceStore::new(runtime_role_pool(&owner_pool).await);
+    let target = Uuid::new_v4();
+    let grant =
+        serde_json::json!({ "activity": "read_field", "effect": "permit", "conditions": [] });
+
+    // No create_approval — the decision is recorded straight from the approver.
+    let request_ref = approve(&store, requester, approver, KIND, target).await;
+
+    let bound = scope_org(OrgId::from_uuid(ORG), async {
+        store
+            .four_eyes_consume(request_ref, KIND, Some(target), Some(grant), actor)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        bound,
+        Some(false),
+        "a decision with no request behind it declares no grant, so it satisfies none"
+    );
+
+    // The same decision still satisfies an UNBOUND gate — proof the refusal above
+    // is the grant conjunct alone and not something else about the row.
+    let unbound = scope_org(OrgId::from_uuid(ORG), async {
+        store
+            .four_eyes_consume(request_ref, KIND, Some(target), None, actor)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(unbound, Some(true), "an unbound gate is unchanged");
 }

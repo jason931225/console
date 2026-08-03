@@ -1346,6 +1346,13 @@ async fn the_attach_definer_is_owned_by_a_non_bypassrls_role_under_a_pinned_sear
         vec![
             "attach_object_policy|true|console_ontology_writer|true|true".to_owned(),
             "attach_object_policy_rows|true|console_ontology_writer|true|true".to_owned(),
+            // Migration 0211's field-policy pair, held to the identical bar. They
+            // are ADDED to this total vector rather than the vector being relaxed
+            // to a subset match: the property this assertion has is that it names
+            // every routine in the schema, and a `contains` form would let the
+            // next one land unowned and unpinned.
+            "attach_property_policy|true|console_ontology_writer|true|true".to_owned(),
+            "attach_property_policy_rows|true|console_ontology_writer|true|true".to_owned(),
         ],
         "every routine in ont_policy_api must be SECURITY DEFINER, owned by the \
          NOBYPASSRLS writer role, with search_path AND row_security pinned. A \
@@ -1987,6 +1994,13 @@ async fn the_attach_schema_grants_exactly_the_audited_command_credential(owner_p
             "attach_object_policy|console_ontology_cmd|EXECUTE".to_owned(),
             "attach_object_policy|console_ontology_writer|EXECUTE".to_owned(),
             "attach_object_policy_rows|console_ontology_writer|EXECUTE".to_owned(),
+            // Migration 0211, and it is the exact repair the message below
+            // prescribes: the audited entrypoint is granted to the command
+            // credential, the row-writer is owner-only so the audit row cannot be
+            // skipped, and `console_rt` still appears nowhere in this vector.
+            "attach_property_policy|console_ontology_cmd|EXECUTE".to_owned(),
+            "attach_property_policy|console_ontology_writer|EXECUTE".to_owned(),
+            "attach_property_policy_rows|console_ontology_writer|EXECUTE".to_owned(),
         ],
         "the whole ont_policy_api ACL, so a fourth grantee, a surviving overload, \
          or a routine left at default privileges cannot hide behind a per-role \
@@ -3329,6 +3343,14 @@ const INSTANCE_ROUTE_CLASSIFICATION: &[(&str, InstanceVisibility)] = &[
     ),
     (
         "/api/v1/ontology/object-types/{key}/policies",
+        InstanceVisibility::NotInstanceBearing,
+    ),
+    (
+        // The FIELD-policy attach route. Schema surface, exactly like its
+        // object-policy sibling above: it names an object-type key and a property
+        // key, never an instance id, and it serves no attribute bag. What it
+        // WRITES is enforced on the instance routes, which are all `Gated`.
+        "/api/v1/ontology/object-types/{key}/properties/{property_key}/policies",
         InstanceVisibility::NotInstanceBearing,
     ),
     (
