@@ -42,6 +42,18 @@ function withInjectedTextBefore(path, marker, text, callback) {
   }
 }
 
+function withReplacedContractText(path, needle, replacement, callback) {
+  const absolutePath = resolve(root, path);
+  const original = readFileSync(absolutePath, "utf8");
+  assert.ok(original.includes(needle), `${path} is missing test needle ${needle}`);
+  writeFileSync(absolutePath, original.replace(needle, replacement));
+  try {
+    callback();
+  } finally {
+    writeFileSync(absolutePath, original);
+  }
+}
+
 test("foundation gate rejects retired authority reentry in every live authority contract", () => {
   const hostileLiterals = [
     "hermes kanban",
@@ -97,6 +109,19 @@ test("foundation gate rejects a nonexistent package command in the live CI runbo
       const result = runChecker();
       assert.notEqual(result.status, 0);
       assert.match(result.stderr, /live CI gate documentation package scripts.*check:nonexistent-live-gate/i);
+    },
+  );
+});
+
+test("foundation gate executes the structural security-workflow hardening gate", () => {
+  withReplacedContractText(
+    ".github/workflows/security.yml",
+    '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071',
+    '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071 || true',
+    () => {
+      const result = runChecker();
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /security\.jobs\.rust-advisories/i);
     },
   );
 });

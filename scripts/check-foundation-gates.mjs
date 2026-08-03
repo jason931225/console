@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createTextGate } from "./lib/text-gate.mjs";
+import { evaluateSecurityWorkflowHardening } from "./check-workflow-hardening.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const textGate = createTextGate({
@@ -237,11 +238,14 @@ for (const ciNeedle of [
 }
 for (const securityNeedle of [
   "trivy fs --scanners vuln,secret",
+  "node --test scripts/generate-trivy-dev-codegen-exceptions.test.mjs",
   "node scripts/generate-trivy-dev-codegen-exceptions.mjs --check",
   "--ignorefile security/trivy-dev-codegen-exceptions.yaml",
   "trivy config --severity HIGH,CRITICAL --exit-code 1",
-  "cargo audit",
-  "cargo deny --manifest-path backend/Cargo.toml check",
+  "cargo-security-tools/bin/cargo-audit",
+  "cargo-security-tools/bin/cargo-deny",
+  "node --test scripts/check-workflow-hardening.test.mjs",
+  "node --test scripts/check-node-audit-exceptions.test.mjs",
   "npm audit --omit=dev --audit-level=high --json",
   "check-node-audit-exceptions.mjs --mode production",
   "npm audit --audit-level=high --json",
@@ -249,6 +253,11 @@ for (const securityNeedle of [
 ]) {
   requireIncludes(".github/workflows/security.yml", securityNeedle, `security workflow: ${securityNeedle}`);
 }
+const securityWorkflowHardening = evaluateSecurityWorkflowHardening(
+  read(".github/workflows/security.yml"),
+);
+passes.push(...securityWorkflowHardening.passes);
+failures.push(...securityWorkflowHardening.failures);
 requireFile("security/node-audit-exceptions.json", "Node audit exception registry");
 requireFile("security/trivy-dev-codegen-exceptions.yaml", "Trivy dev/codegen exception registry");
 requireFile("scripts/check-node-audit-exceptions.mjs", "Node audit exception gate");
