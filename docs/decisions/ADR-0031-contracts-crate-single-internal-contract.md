@@ -176,7 +176,7 @@ status change:
    edit mandatory in the same commit as this record declaring `amends: [ADR-0009]`, which
    `:421`–`:425` permits only once this record's status is `accepted`.
 2. **`ADR-0009`'s README index row changed.** It previously read
-   `| [ADR-0009](…) | accepted | Dual-native Swift/Kotlin employee apps from one OpenAPI contract; `coss-rn` is outside this scope |`.
+   `| `ADR-0009` | accepted | Dual-native Swift/Kotlin employee apps from one OpenAPI contract; `coss-rn` is outside this scope |`.
    Its status cell became `accepted, amended` and its scope cell names this amendment, in the
    style already used for ADR-0005 and ADR-0015.
 3. **This record's own index row moved from `proposed` to `accepted`**, and the *Effective

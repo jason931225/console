@@ -294,14 +294,16 @@ fn check_drop_column(
         if token != "alter" || tokens.get(index + 1).is_none_or(|next| next != "table") {
             continue;
         }
-        let Some(table) = table_name_after_alter_table(tokens, index + 2) else {
+        let Some(drop_column_index) = tokens
+            .windows(2)
+            .position(|window| window[0] == "drop" && window[1] == "column")
+        else {
             continue;
         };
-        if audited_tables.contains(table)
-            && tokens
-                .windows(2)
-                .any(|window| window[0].as_str() == "drop" && window[1].as_str() == "column")
-        {
+        let Some(table) = table_name_before_action(tokens, index + 2, drop_column_index) else {
+            continue;
+        };
+        if audited_tables.contains(table) {
             result.violations.push(Violation {
                 kind: ViolationKind::DropAuditedColumn,
                 file: file.to_path_buf(),
@@ -311,14 +313,20 @@ fn check_drop_column(
     }
 }
 
-fn table_name_after_alter_table(tokens: &[String], start: usize) -> Option<&str> {
+fn table_name_before_action(tokens: &[String], start: usize, action: usize) -> Option<&str> {
     let mut index = start;
     if tokens.get(index).is_some_and(|token| token == "if")
         && tokens.get(index + 1).is_some_and(|token| token == "exists")
     {
         index += 2;
     }
-    tokens.get(index).map(String::as_str)
+    if tokens.get(index).is_some_and(|token| token == "only") {
+        index += 1;
+    }
+
+    // Tokenization intentionally discards qualification punctuation. The table
+    // is therefore the final identifier before the known top-level action.
+    (index < action).then(|| tokens[action - 1].as_str())
 }
 
 fn check_audit_events_grants(file: &Path, tokens: &[String], result: &mut GateResult) {

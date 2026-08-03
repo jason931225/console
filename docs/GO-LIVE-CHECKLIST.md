@@ -1,3 +1,5 @@
+> **POST-PIVOT STATUS:** This inventory/checklist documents currently present and historical machinery; it does not authorize broad product scope, release, or production readiness. Current scope and authority come from [`docs/PIVOT-2026-07-28.md`](PIVOT-2026-07-28.md).
+
 # Go-Live Checklist (T6.5)
 
 Final go/no-go gate for the 물류장비 정비/렌탈 업무 시스템 pilot launch (HQ team,
@@ -59,8 +61,8 @@ Deployment-context shorthand used below:
   IP), the web tier ships CSP + HSTS, and `list_tickets` is paginated. All
   re-verified (workspace tests + 4 gates + client-drift gate).
 - [x] **Adversarial review → harden → fix complete.** The security and
-  correctness/concurrency reviews are filed in
-  [`.omc/review/`](../.omc/review/); all 7 confirmed findings are fixed and
+  correctness/concurrency reviews were filed in the historical runtime path
+  `.omc/review/`; all 7 confirmed findings are fixed and
   independently re-verified (passkey-ceremony atomicity, audit-gate path
   binding, /sync payload-binding, /sync crash recovery, WORM post-completion
   guard + DB trigger, P1 alert exactly-once lease, negative-residual flooring),

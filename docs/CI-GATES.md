@@ -1,3 +1,5 @@
+> **POST-PIVOT STATUS:** This inventory/checklist documents currently present and historical machinery; it does not authorize broad product scope, release, or production readiness. Current scope and authority come from [`docs/PIVOT-2026-07-28.md`](PIVOT-2026-07-28.md).
+
 # CI Gates
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` is the source of truth
@@ -209,6 +211,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:ci-preflight`
 - `check:console-truth-ledger`
 - `check:doc-citations`
+- `check:doc-links`
 - `check:executed-tests`
 - `check:foundation-gates`
 - `check:g004-identity-foundation`
@@ -374,8 +377,9 @@ destructible and must never enter `audit_events`
 single real writer (`crates/compliance/adapter-postgres/src/lib.rs ::
 record_location_ping`) — the same exemption reason on any other file/function is
 rejected. (Path binding was hardened in `fix/harden-1`; previously the exemption
-matched on reason only, which could silently apply to the wrong handler — see
-[review/security-compliance.md](../.omc/review/security-compliance.md).)
+matched on reason only, which could silently apply to the wrong handler. The
+historical review path was `.omc/review/security-compliance.md`; runtime state is
+not repository authority.)
 
 ### `console-gate-migration-safety` — append-only audit trail
 

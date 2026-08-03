@@ -22,6 +22,12 @@ on:
       - "docs/i18n.md"
       - "docs/parity-checklist.md"
       - "docs/release/**"
+      - "README.md"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "SPEC.md"
+      - "DESIGN.md"
+      - "HANDOFF.md"
       - "ops/**"
       - "scripts/**"
       - "tools/buck/**"
@@ -48,6 +54,12 @@ on:
       - "docs/i18n.md"
       - "docs/parity-checklist.md"
       - "docs/release/**"
+      - "README.md"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "SPEC.md"
+      - "DESIGN.md"
+      - "HANDOFF.md"
       - "ops/**"
       - "scripts/**"
       - "tools/buck/**"
@@ -1058,6 +1070,12 @@ jobs:
       - name: ADR governance gate
         if: ${{ !cancelled() }}
         run: npm run check:adrs
+      - name: Documentation link tests
+        if: ${{ !cancelled() }}
+        run: node --test scripts/check-doc-links.test.mjs
+      - name: Documentation local-link gate
+        if: ${{ !cancelled() }}
+        run: npm run check:doc-links
       - name: Doc citations — every code citation must resolve
         if: ${{ !cancelled() }}
         run: npm run check:doc-citations
