@@ -28,6 +28,21 @@ test("ignores fenced code", async () => {
   await run(process.execPath, [script, root]);
 });
 
+test("ignores link-shaped examples inside inline code", async () => {
+  const root = await mkdtemp(join(tmpdir(), "doc-links-"));
+  await writeFile(
+    join(root, "README.md"),
+    "Manifest text: `[AGENTS.md](AGENTS.md#task-selected-reasoning-lenses)`.\n",
+  );
+  await run(process.execPath, [script, root]);
+});
+
+test("still checks links beside inline code", async () => {
+  const root = await mkdtemp(join(tmpdir(), "doc-links-"));
+  await writeFile(join(root, "README.md"), "`[example](ignored.md)` [missing](real-missing.md)\n");
+  await assert.rejects(run(process.execPath, [script, root]), /missing target: real-missing\.md/);
+});
+
 test("rejects missing extensionless and reference-style targets", async () => {
   const root = await mkdtemp(join(tmpdir(), "doc-links-"));
   await writeFile(join(root, "README.md"), "[direct](missing)\n[ref]: absent-dir\n");

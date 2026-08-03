@@ -22,6 +22,30 @@ function localTarget(raw) {
   return decodeURIComponent(pathPart);
 }
 
+function withoutInlineCode(line) {
+  let visible = "";
+  let cursor = 0;
+  while (cursor < line.length) {
+    if (line[cursor] !== "`") {
+      visible += line[cursor];
+      cursor += 1;
+      continue;
+    }
+
+    let endOfOpeningRun = cursor + 1;
+    while (line[endOfOpeningRun] === "`") endOfOpeningRun += 1;
+    const delimiter = line.slice(cursor, endOfOpeningRun);
+    const closingRun = line.indexOf(delimiter, endOfOpeningRun);
+    if (closingRun === -1) {
+      visible += delimiter;
+      cursor = endOfOpeningRun;
+      continue;
+    }
+    cursor = closingRun + delimiter.length;
+  }
+  return visible;
+}
+
 walk(root);
 const failures = [];
 for (const file of markdown) {
@@ -31,9 +55,10 @@ for (const file of markdown) {
     const line = lines[lineNo];
     if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
     if (fenced) continue;
+    const visibleLine = withoutInlineCode(line);
     // Markdown inline links/images; reference-style definitions are handled too.
-    const links = [...line.matchAll(/!?\[[^\]]*\]\(\s*([^\s)]+|<[^>]+>)(?:\s+[^)]*)?\s*\)/g)];
-    const reference = line.match(/^\s*\[[^\]]+\]:\s*(\S+)/);
+    const links = [...visibleLine.matchAll(/!?\[[^\]]*\]\(\s*([^\s)]+|<[^>]+>)(?:\s+[^)]*)?\s*\)/g)];
+    const reference = visibleLine.match(/^\s*\[[^\]]+\]:\s*(\S+)/);
     if (reference) links.push({ 1: reference[1] });
     for (const match of links) {
       const target = localTarget(match[1]);
