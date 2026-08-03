@@ -3,9 +3,9 @@ import test from 'node:test';
 import { AUTHORITY_PATHS, POLICY_PATH, TRUSTED_ALLOWED_SIGNER, TRUSTED_FINGERPRINT, TRUSTED_PRINCIPAL, candidateCheckPlan, fetchExactAuthorityTip, squashBindingReceipt, validatePinnedPolicy, verifyBootstrapGraph, verifyPinnedSshCommit, verifySquashBinding } from './verify-console-pr-authority-bootstrap.mjs';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { load } from 'js-yaml';
 
 const C = 'c'.repeat(40), T = 't'.repeat(40).replace(/t/g, 'a'), M = 'b'.repeat(40), S = 'e'.repeat(40), BASE = 'd'.repeat(40);
 // Pinned as a literal on purpose: this is the one prefix where an ADDED file is admissible, so
@@ -177,21 +177,25 @@ test('candidate compatibility fixture receives only C/T/M environment facts and 
 });
 test('workflow separates open PR authentication from closed merged squash binding', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/console-authority-bootstrap.yml', import.meta.url), 'utf8');
-  const parsed = load(workflow);
-  const authenticate = parsed.jobs['authenticate-console-authority'];
-  const squashBinding = parsed.jobs['bind-merged-console-authority-squash'];
-  assert.deepEqual(parsed.on.pull_request_target, {
-    types: ['opened', 'synchronize', 'reopened', 'closed'],
-    branches: ['main'],
-  });
-  assert.equal(parsed.on.pull_request, undefined);
-  assert.deepEqual(parsed.permissions, { contents: 'read' });
+  // This suite is deliberately executed by the protected-target bootstrap before
+  // npm install. Keep it dependency-free: exact bytes plus focused structural
+  // assertions are the hermetic contract. The normal CI preflight independently
+  // parses this workflow with js-yaml after the lockfile install boundary.
   assert.equal(
-    authenticate.if,
-    "github.event.action != 'closed' && github.event.pull_request.base.ref == 'main'",
+    createHash('sha256').update(workflow).digest('hex'),
+    '91724bb72a5653a9ac6c5b36487497dbba45d94eade39860cd5a5bca21faeca3',
   );
-  assert.doesNotMatch(authenticate.if, /head\.repo|github\.repository/);
-  assert.match(squashBinding.if, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
+  assert.match(workflow, /^on:\n  pull_request_target:\n    types: \[opened, synchronize, reopened, closed\]\n    branches:\n      - main$/m);
+  assert.doesNotMatch(workflow, /^  pull_request:$/m);
+  assert.match(workflow, /^permissions:\n  contents: read$/m);
+  const authenticateStart = workflow.indexOf('  authenticate-console-authority:');
+  const squashStart = workflow.indexOf('  bind-merged-console-authority-squash:');
+  assert.ok(authenticateStart >= 0 && squashStart > authenticateStart);
+  const authenticate = workflow.slice(authenticateStart, squashStart);
+  const squashBinding = workflow.slice(squashStart);
+  assert.match(authenticate, /if: >-\n      github\.event\.action != 'closed' &&\n      github\.event\.pull_request\.base\.ref == 'main'/);
+  assert.doesNotMatch(authenticate, /head\.repo|github\.repository/);
+  assert.match(squashBinding, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   assert.match(workflow, /github\.event\.action == 'closed'/);
   assert.match(workflow, /pull_request\.merged == true/);
   assert.match(workflow, /squash-binding/);
@@ -200,15 +204,11 @@ test('workflow separates open PR authentication from closed merged squash bindin
   assert.match(workflow, /test "\$\(git -c core\.hooksPath=\/dev\/null rev-parse HEAD\)" = "\$SQUASH_SHA"\n\s+git -c core\.hooksPath=\/dev\/null checkout --detach "\$SQUASH_SHA\^"\n\s+node scripts\/console\/verify-console-pr-authority-bootstrap\.mjs squash-binding/);
   assert.match(workflow, /PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}/);
   assert.match(workflow, /--pr-number "\$PR_NUMBER"/);
-  assert.deepEqual(authenticate.steps[0], {
-    name: 'Checkout protected target code only',
-    uses: 'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
-    with: { ref: 'main', 'persist-credentials': false, 'fetch-depth': 0 },
-  });
-  assert.equal(authenticate.steps.length, 2);
-  assert.deepEqual(Object.keys(authenticate.steps[1]).sort(), ['env', 'name', 'run']);
-  assert.match(authenticate.steps[1].run, /^node scripts\/console\/verify-console-pr-authority-bootstrap\.mjs/);
-  assert.doesNotMatch(authenticate.steps[1].run, /checkout|npm|candidateCheckPlan|runAuthenticatedCandidateChecks/);
+  assert.match(authenticate, /- name: Checkout protected target code only\n        uses: actions\/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7\n        with:\n          ref: main\n          persist-credentials: false\n          fetch-depth: 0/);
+  assert.equal([...authenticate.matchAll(/^      - name:/gm)].length, 2);
+  const verificationStep = authenticate.slice(authenticate.indexOf('      - name: Verify C/T authority train before candidate execution'));
+  assert.match(verificationStep, /run: \|\n          node scripts\/console\/verify-console-pr-authority-bootstrap\.mjs \\/);
+  assert.doesNotMatch(verificationStep, /checkout|npm|candidateCheckPlan|runAuthenticatedCandidateChecks/);
   const verifier = readFileSync(new URL('./verify-console-pr-authority-bootstrap.mjs', import.meta.url), 'utf8');
   const openMain = verifier.slice(verifier.indexOf('function main()'), verifier.indexOf('function squashBindingMain()'));
   const openOrder = ['fetchExactPullObjects', 'verifyBootstrapGraph', 'runAuthenticatedCandidateChecks'].map((needle) => openMain.indexOf(needle));
