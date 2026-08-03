@@ -943,4 +943,35 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       "repo-gates must preserve the locked fail-fast step order",
     );
   });
+
+  // The suite H-1 is about. `openapi_drift` is the only thing inventorying every mounted route
+  // against openapi.yaml, and it was unprotected: deleting this `run:` line left check:ci-preflight,
+  // check:foundation-gates and check:doc-citations all exiting 0. check:request-body-contract closed
+  // H-1's request-body half but reads no route inventory, so nothing else covers what this covers.
+  it("locks the console-app OpenAPI drift suite step in backend", () => {
+    const run = "        run: env -u DATABASE_URL tools/buck2 test"
+      + " //backend/app:console-app-itest-openapi_drift\n";
+    const step = "      - name: Buck2 console-app OpenAPI drift suite\n"
+      + "        working-directory: .\n"
+      + run;
+    assert.ok(workflow.includes(step), "backend does not run the openapi_drift suite");
+
+    // The exact deletion this lock exists to refuse: the step keeps its slot, runs nothing.
+    expectFailure(
+      workflow.replace(run, ""),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    // Quieter, and the reason `run` is pinned rather than just the name: the step still reads as
+    // the drift suite in the job list while executing a target that inventories no routes.
+    expectFailure(
+      workflow.replace(run, "        run: env -u DATABASE_URL tools/buck2 test"
+        + " //backend/app:console-app-unit\n"),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    // `if: ${{ !cancelled() }}` here would let a red drift suite pass the job as a soft warning.
+    expectFailure(
+      workflow.replace(run, `        if: \${{ !cancelled() }}\n${run}`),
+      "backend must preserve the locked fail-fast step multiset and failure semantics",
+    );
+  });
 });

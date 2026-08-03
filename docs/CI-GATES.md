@@ -77,16 +77,12 @@ SQLX_OFFLINE=true cargo test -p console-platform-auth-rest --features dev-auth
 SQLX_OFFLINE=true cargo test -p console-app --features dev-auth --test dev_auth_persona_guard_feature
 SQLX_OFFLINE=true cargo test -p console-platform-provisioning --test dev_principal_upsert_race
 
-# API/client contract gates (from repo root after npm ci)
-npm run check:api-drift:portable          # regenerate ts+kotlin, expect no diff
-npm run check:ts
-npm run check:kotlin
-npm run check:api-drift:swift             # macOS/Swift toolchain gate
-npm run check:swift                       # macOS/Swift toolchain gate
+# API contract gates (from repo root after npm ci)
 npm run check:openapi-app                 # committed openapi.yaml covers mounted routes
-CONTRACT_DATABASE_URL=postgres://<user>@localhost/console_contract npm run test:contract
 
-# Web console + product-maturity gates (from repo root after npm ci)
+# Product-maturity and repo gates (from repo root after npm ci)
+# 962fb98b7 (#503) deleted the frontend and the ts/kotlin/swift client codegen. Every script
+# this block used to invoke around them went with it; each line below was executed and exits 0.
 npm run test:adrs
 npm run check:adrs
 for s in \
@@ -95,12 +91,7 @@ for s in \
   check:request-body-contract \
   check:doc-citations \
   check:package-lock \
-  check:root-workspaces \
-  check:enterprise-ux-parity \
-  check:browser-persona-matrix \
   check:ci-preflight \
-  check:ios-ui-test-fail-closed \
-  check:android-e2e-fail-closed \
   check:g004-identity-foundation \
   check:g005-workflow-lifecycle \
   check:workflow-runtime-spine \
@@ -113,16 +104,9 @@ for s in \
   check:g008-payroll-readiness \
   check:people-hr-maturity \
   check:payroll-release-gate \
-  check:undeclared-imports \
-  check:financial-maturity \
-  check:cx-reporting-maturity \
-  check:operations-intelligence-maturity; do
+  check:undeclared-imports; do
   npm run "$s"
 done
-npm run web:lint
-npm run web:test
-npm run test:production-dev-auth-guards --workspace @console/web
-npm run check:production-dev-auth-absence --workspace @console/web
 
 # Deployment and mobile parity gates
 npm run check:k8s                         # render manifests; CI warns if no live cluster
@@ -223,12 +207,12 @@ names only, not incidental workflow prose or runner setup text.
 - `check:g008-payroll-readiness`
 - `check:k8s`
 - `check:openapi-app`
-- `check:request-body-contract`
 - `check:package-lock`
 - `check:payroll-release-gate`
 - `check:people-hr-maturity`
 - `check:pr473-migration-operational`
 - `check:production-hardening`
+- `check:request-body-contract`
 - `check:undeclared-imports`
 - `check:workflow-runtime-m2-cedar-guards`
 - `check:workflow-runtime-m2-drainer`

@@ -1281,6 +1281,18 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
           if: failFastIf,
         },
         {
+          // The suite H-1 is *about*. `openapi_drift` is the only thing that inventories every
+          // mounted route against openapi.yaml, and it was unprotected: deleting this `run:` line
+          // left check:ci-preflight, check:foundation-gates and check:doc-citations all exiting 0.
+          // check:request-body-contract closed H-1's request-body half but reads no route
+          // inventory, so nothing else in CI covers what this step covers — a gate one line from
+          // silent removal is the meta-finding this file exists to refuse.
+          name: "Buck2 console-app OpenAPI drift suite",
+          run: "env -u DATABASE_URL tools/buck2 test //backend/app:console-app-itest-openapi_drift",
+          workingDirectory: ".",
+          if: failFastIf,
+        },
+        {
           name: "Buck2 console-app inline PostgreSQL suites",
           run: [
             "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
