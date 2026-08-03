@@ -16,9 +16,12 @@ as an honest diagnostic record and is not the merge authority.
 The corrected C removes the runtime package import from the pre-install suite. It
 binds the authority workflow's exact SHA-256 bytes and retains focused assertions
 for its trigger, permissions, job separation, protected-target checkout, proof
-ordering, and external-head fail-closed behavior. Normal CI still parses the same
-workflow with `js-yaml` after its lockfile-governed install boundary. The corrected
-bootstrap suite passed 17/17 locally without relying on that package.
+ordering, and external-head fail-closed behavior. Normal CI reruns that exact-byte
+and focused structural suite after
+its lockfile-governed install boundary; CI preflight locks the suite's unconditional
+reachability and execution semantics. No separate generic YAML-parser coverage is
+claimed for this target-only workflow. The corrected bootstrap suite passed 17/17
+locally without relying on that package.
 
 All scope, preservation/discard decisions, external-opinion limitations, branch
 deletion evidence, secret-custody requirements, review requirements, protection
@@ -48,11 +51,11 @@ merge, release closeout, and final branch/PR readback remain pending at this rec
   ],
   "task_fit": {
     "Red Team": "Executed the protected trust-root path in a dependency-empty candidate worktree and refused to waive the reproduced failure.",
-    "Systems Thinking": "Distinguished the pre-authentication runtime boundary from normal post-install CI parsing instead of assuming one environment covered both.",
+    "Systems Thinking": "Distinguished the pre-authentication runtime boundary from the normal post-install suite rerun instead of assuming one environment or an unrelated YAML parser covered both.",
     "Operability / Day-2": "Made the trust-root regression suite runnable on the actual hosted job contract without hidden workstation state.",
     "Blast-radius / cell-based": "Changed one test file, preserved the workflow bytes and protection model, and resealed authority instead of broadening bootstrap privileges.",
     "Telemetry-first": "Recorded the failed C/T identities, exact missing dependency, corrected C, workflow digest contract, and 17/17 regression result.",
-    "Zero-trust / defense-in-depth": "Kept candidate code behind protected-target signature authentication while retaining independent post-install parsed workflow checks."
+    "Zero-trust / defense-in-depth": "Kept candidate code behind protected-target signature authentication while retaining an unconditional post-install suite rerun and CI reachability locks."
   },
   "mandatory_lens_exceptions": {},
   "findings": [
