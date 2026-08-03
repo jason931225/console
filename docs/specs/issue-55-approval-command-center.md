@@ -34,7 +34,7 @@ The backend enforces approval-list visibility before returning data. Source-spec
 - Targeted unit/component tests: `npm --prefix web test -- ApprovalsPage.test.tsx ApprovalQueue.test.tsx WorkHubPage.test.tsx`.
 - Broader web route regression: `npm --prefix web test -- App.test.tsx`.
 - Lint: `npm --prefix web run lint`.
-- OpenAPI app check: `npm run check:openapi-app`.
+- Platform contract drift check: `npm run check:platform-contract-drift`.
 - E2E smoke: `PATH="$PWD/.venv-e2e/bin:$PATH" bash e2e/run.sh e2e/specs/admin-07-approvals.spec.ts e2e/specs/admin-08-daily-plan.spec.ts e2e/specs/admin-19-stub-wiring.spec.ts e2e/specs/admin-21-work-hub.spec.ts`.
 
 ## Project Structure

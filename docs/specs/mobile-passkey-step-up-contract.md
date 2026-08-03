@@ -266,7 +266,7 @@ Generated-client path:
 
 - Change OpenAPI/schema/server first.
 - Regenerate: `npm run gen:api:portable` and `npm run gen:api:swift`.
-- Compile/check: `npm run check:ts`, `npm run check:kotlin`, `npm run check:swift`, and `npm run check:openapi-app`.
+- Compile/check: `npm run check:ts`, `npm run check:kotlin`, `npm run check:swift`, and `npm run check:platform-contract-drift`.
 - Do not hand-edit generated clients.
 
 ## Regression coverage required downstream

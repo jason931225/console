@@ -77,8 +77,14 @@ SQLX_OFFLINE=true cargo test -p console-platform-auth-rest --features dev-auth
 SQLX_OFFLINE=true cargo test -p console-app --features dev-auth --test dev_auth_persona_guard_feature
 SQLX_OFFLINE=true cargo test -p console-platform-provisioning --test dev_principal_upsert_race
 
-# API contract gates (from repo root after npm ci)
-npm run check:openapi-app                 # committed openapi.yaml covers mounted routes
+# API/client contract gates (from repo root after npm ci)
+npm run check:api-drift:portable          # regenerate ts+kotlin, expect no diff
+npm run check:ts
+npm run check:kotlin
+npm run check:api-drift:swift             # macOS/Swift toolchain gate
+npm run check:swift                       # macOS/Swift toolchain gate
+npm run check:platform-contract-drift     # platform route inventory vs committed openapi.yaml
+CONTRACT_DATABASE_URL=postgres://<user>@localhost/console_contract npm run test:contract
 
 # Product-maturity and repo gates (from repo root after npm ci)
 # 962fb98b7 (#503) deleted the frontend and the ts/kotlin/swift client codegen. Every script
@@ -206,7 +212,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:g007-collaboration-mobile-lifecycle`
 - `check:g008-payroll-readiness`
 - `check:k8s`
-- `check:openapi-app`
+- `check:platform-contract-drift`
 - `check:test-credentials`
 - `check:package-lock`
 - `check:payroll-release-gate`
@@ -261,9 +267,9 @@ names only, not incidental workflow prose or runner setup text.
   `npm run check:production-dev-auth-absence --workspace @console/web`.
   The last command builds the production bundle before asserting that dev-auth
   entrypoints are absent. Root shortcuts are `web:lint` and `web:test`.
-- **API contract — app OpenAPI and generated TS round-trip**:
-  `npm run check:openapi-app` and `npm run test:contract` with
-  `CONTRACT_DATABASE_URL`.
+- **API contract — platform route inventory (text-only)**:
+  `npm run check:platform-contract-drift` plus the employee-import and
+  ontology-write-precondition contract suites. The job builds nothing.
 - **Kubernetes manifests — render / hardening / NetworkPolicy preflight**:
   `npm run check:k8s` (render plus `scripts/check-networkpolicy-enforcement.sh`)
   and `npm run check:production-hardening`.
@@ -738,12 +744,9 @@ generator config/template/script), and the fixture/test that proves the exceptio
 is narrow. Exception tests must still run under `check:kotlin` or the relevant
 contract/drift gate so future routes do not inherit compatibility mode silently.
 
-### `check:openapi-app` — spec covers mounted routes
+### `check:platform-contract-drift` — spec covers mounted routes
 
-`node scripts/check-openapi-app.mjs` first runs
-`scripts/check-platform-contract-drift.mjs`, then asserts the app-served OpenAPI
-document is byte-for-byte equal to the committed `backend/openapi/openapi.yaml`.
-The platform drift gate parses `console-platform-rest` router definitions in
+`node scripts/check-platform-contract-drift.mjs` parses `console-platform-rest` router definitions in
 `src/lib.rs` and `src/view_as.rs` and fails when any `/api/platform/*`
 path+HTTP-method is missing from OpenAPI, or when OpenAPI documents a platform
 operation that the backend router does not define. The backend
@@ -754,9 +757,8 @@ unowned/undocumented HTTP surface (MFL-0002), including method-level platform
 drift on already-documented paths.
 
 Verification notes for platform route or DTO changes must name both halves of the
-contract check: the route inventory comparison (`node scripts/check-platform-contract-drift.mjs`
-or `npm run check:openapi-app`) and frontend type generation/validation (`npm run gen:api:ts`
-plus `npm run check:ts`).
+contract check: the route inventory comparison (`npm run check:platform-contract-drift`)
+and the backend `openapi_drift.rs` suite.
 
 ### `test:contract` — generated client ↔ app round-trip
 
@@ -1135,7 +1137,7 @@ dependencies are available:
 - The seven `console-gate-*` binaries exit non-zero on the first violation with a
   `file:detail` message; run an individual gate locally to see what it caught.
 - When a change touches OpenAPI routes/schemas, the generated-client drift,
-  client compile, `check:openapi-app`, and `test:contract` gates must all be
+  client compile, `check:platform-contract-drift`, and `test:contract` gates must all be
   re-run; a backend-only internal change that does not move API/client surfaces
   still needs the backend fmt/clippy/test/gate binaries and any touched-surface
   CI-contextual gates.

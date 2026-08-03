@@ -67,8 +67,10 @@ function declaredIn(manifestPath) {
   ]);
 }
 
-// Nearest manifest wins: tools/npm/minimatch-callable-compat declares `minimatch-modern`
-// locally, and resolving that file against the root manifest would report a false finding.
+// Nearest manifest wins: a nested package.json may declare a dependency the root does not, and
+// resolving files under it against the root manifest would report a false finding. Only the root
+// manifest exists at HEAD, so this walk currently always lands there; it stays so that adding a
+// nested manifest does not silently start producing false findings.
 function nearestDeclarations(root, file, cache) {
   let directory = dirname(resolve(root, file));
   const stop = resolve(root);

@@ -36,15 +36,6 @@ function requireIncludesAtLeast(path, needle, minimumCount, label) {
   throw new Error(`${label}: ${path} must include ${JSON.stringify(needle)} at least ${minimumCount} times (found ${count})`);
 }
 
-function requireAny(path, needles, label) {
-  const text = read(path);
-  if (needles.some((needle) => text.includes(needle))) {
-    passes.push(label);
-    return;
-  }
-  throw new Error(`${label}: ${path} must include one of ${needles.map((needle) => JSON.stringify(needle)).join(", ")}`);
-}
-
 function uniqueSorted(values) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
@@ -224,7 +215,7 @@ for (const ciNeedle of [
   "cargo run -p console-gate-audit-coverage",
   "cargo run -p console-gate-pii-no-logs",
   "cargo run -p console-gate-rls-arming",
-  "npm run check:openapi-app",
+  "npm run check:platform-contract-drift",
 ]) {
   requireIncludes(".github/workflows/ci.yml", ciNeedle, `CI gate: ${ciNeedle}`);
 }

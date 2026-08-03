@@ -235,7 +235,7 @@ console-only Action; every object shows source + freshness + its AuditEvent stre
 - Backend: `cd backend && SQLX_OFFLINE=true cargo fmt --all --check` · `cargo clippy --all-targets -- -D
   warnings` · `DATABASE_URL=postgres://<user>@localhost/console_ci cargo test -p <crate>` (username
   REQUIRED) · gates `cargo run -p console-gate-{rls-arming,tenant-isolation,layer-boundary,audit-coverage,
-  migration-safety}` · `npm run check:openapi-app` · `npm run gen:api:swift`.
+  migration-safety}` · `npm run check:platform-contract-drift` · `npm run gen:api:swift`.
 
 ## Project Structure
 
@@ -281,7 +281,7 @@ links via `ObjectLink` (never render a raw UUID — `safeLabel`); copy in `ko.ts
 - **Web**: vitest unit/integration per page + the shared kit; **visual-verdict ≥90** on every path
   before a UI phase is "done" (the chained `visual-verdict` skill).
 - **Gates** green (rls-arming + the new org-binding lint #43, tenant-isolation, layer-boundary,
-  audit-coverage, migration-safety) + fmt/clippy + check:openapi-app before any commit.
+  audit-coverage, migration-safety) + fmt/clippy + check:platform-contract-drift before any commit.
 
 ## Boundaries
 

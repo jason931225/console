@@ -1023,9 +1023,9 @@ jobs:
       # include_str!-ed into the binary. This suite is the only thing that
       # inventories every mounted route against it. It existed but was never
       # invoked by CI, so drift between the router and the spec could land
-      # unnoticed; `check:openapi-app` does not cover this (it only regexes
-      # /api/platform/ paths, then byte-compares the served bytes to the file —
-      # tautological, since the handler returns the const verbatim).
+      # unnoticed; `check:platform-contract-drift` does not cover this (it only
+      # regexes /api/platform/ paths). The byte-compare of the served document
+      # against the file was deleted: include_str! made it tautological.
       - name: Buck2 console-app OpenAPI drift suite
         working-directory: .
         run: env -u DATABASE_URL tools/buck2 test //backend/app:console-app-itest-openapi_drift
@@ -1198,44 +1198,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: preflight
     timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:18.4
-        env:
-          POSTGRES_DB: console_contract
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U postgres -d console_contract"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      CONTRACT_DATABASE_URL: postgres://postgres:postgres@localhost:5432/console_contract
-      # This job builds console-app before comparing the app-served OpenAPI and
-      # running the generated-client round-trip. Match the backend job's lean
-      # Cargo artifacts so the standard runner does not exhaust disk on cache
-      # misses.
-      CARGO_INCREMENTAL: "0"
-      CARGO_PROFILE_DEV_DEBUG: "0"
 
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Install pinned DotSlash runtime
-        run: tools/buck/install_dotslash.sh
-
-      - name: Free runner disk for API contract
-        uses: ./.github/actions/free-runner-disk
-
-      - name: Install Rust toolchain (pinned via rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          toolchain: "1.97.1"
-
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -1246,19 +1212,9 @@ jobs:
       - name: Install client tooling
         run: npm ci
 
-      - name: OpenAPI app-served drift gate
+      - name: Platform contract drift gate
         if: ${{ !cancelled() }}
-        run: npm run check:openapi-app
-
-      - name: Capture Buck2-built app for contract test
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # check:openapi-app is the sole Buck2 producer for this handoff.
-          console_app_bin="${GITHUB_WORKSPACE}/.tmp/buck2/api-contract/console-app"
-          test -x "${console_app_bin}"
-          printf 'CONSOLE_APP_BIN=%s\n' "${console_app_bin}" >> "${GITHUB_ENV}"
+        run: npm run check:platform-contract-drift
 
       - name: Employee import replay contract
         if: ${{ !cancelled() }}

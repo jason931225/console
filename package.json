@@ -7,7 +7,7 @@
   },
   "packageManager": "npm@11.13.0",
   "scripts": {
-    "check:openapi-app": "node scripts/check-openapi-app.mjs",
+    "check:platform-contract-drift": "node scripts/check-platform-contract-drift.mjs",
     "check:k8s:render": "tmpdir=\"${RUNNER_TEMP:-/tmp}/console-rendered-k8s\" && scripts/render-k8s-manifests.sh \"$tmpdir\"",
     "check:k8s:networkpolicy": "scripts/check-networkpolicy-enforcement.sh",
     "smoke:k8s:networkpolicy-deny": "scripts/smoke-networkpolicy-deny.sh",
@@ -43,7 +43,6 @@
     "check:erp": "node scripts/check-erp-domain.mjs",
     "check:comms-webmail": "node scripts/check-comms-webmail.mjs",
     "check:registry-equipment-rest": "node scripts/check-registry-equipment-rest.mjs",
-    "check:collaboration-app": "node scripts/check-collaboration-app.mjs",
     "check:production-hardening": "node scripts/check-production-hardening.mjs",
     "check:production-authority-blocked": "node scripts/check-production-authority-blocked.mjs",
     "check:people-hr-maturity": "node scripts/check-people-hr-maturity.mjs",

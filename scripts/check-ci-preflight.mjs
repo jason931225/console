@@ -1008,36 +1008,17 @@ function requireOrderedStepContracts(steps, contracts, job, failures) {
   return indexes;
 }
 
-const apiContractCaptureName = "Capture Buck2-built app for contract test";
-const apiContractCaptureCommands = [
-  "set -euo pipefail",
-  'console_app_bin="${GITHUB_WORKSPACE}/.tmp/buck2/api-contract/console-app"',
-  'test -x "${console_app_bin}"',
-  "printf 'CONSOLE_APP_BIN=%s\\n' \"${console_app_bin}\" >> \"${GITHUB_ENV}\"",
-];
-// The Swatinem/rust-cache step was REMOVED from this list on 2026-07-31. api-contract
-// builds //backend/app:console-app with Buck2 — see scripts/check-openapi-app.mjs, which
-// spawns a Buck2-built binary from .tmp/buck2/api-contract/console-app — and Buck2 never
-// writes backend/target. The job therefore restored and saved a cache it could not use,
-// paying transfer cost on every run and occupying an LRU slot against a 10GB repository
-// budget shared with the two jobs that DO run cargo.
+// The Swatinem/rust-cache step was REMOVED from this list on 2026-07-31 because Buck2
+// never writes backend/target, so the job restored and saved a cache it could not use.
+// The Buck2 app build itself was removed later: the only thing it fed was an app-boot
+// comparison of the served /openapi/openapi.yaml against the file on disk, which is
+// tautological because backend/app/src/lib.rs:214 include_str!s that exact file. What
+// remains in this job is text-only, so it needs neither Rust nor a built binary.
 const apiContractAllowedSteps = [
   "name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7",
-  "name: Install pinned DotSlash runtime\n        run: tools/buck/install_dotslash.sh",
-  "name: Free runner disk for API contract\n        uses: ./.github/actions/free-runner-disk",
-  "name: Install Rust toolchain (pinned via rust-toolchain.toml)\n        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable\n        with:\n          toolchain: \"1.97.1\"",
   "name: Set up Node.js\n        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0\n        with:\n          node-version: \"24\"\n          cache: npm",
   "name: Install client tooling\n        run: npm ci",
-  "name: OpenAPI app-served drift gate\n        if: ${{ !cancelled() }}\n        run: npm run check:openapi-app",
-  `name: ${apiContractCaptureName}
-        if: \${{ !cancelled() }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # check:openapi-app is the sole Buck2 producer for this handoff.
-          console_app_bin="\${GITHUB_WORKSPACE}/.tmp/buck2/api-contract/console-app"
-          test -x "\${console_app_bin}"
-          printf 'CONSOLE_APP_BIN=%s\\n' "\${console_app_bin}" >> "\${GITHUB_ENV}"`,
+  "name: Platform contract drift gate\n        if: ${{ !cancelled() }}\n        run: npm run check:platform-contract-drift",
   "name: Employee import replay contract\n        if: ${{ !cancelled() }}\n        run: npm run test:employee-import-contract",
   "name: Ontology write precondition contract\n        if: ${{ !cancelled() }}\n        run: npm run test:ontology-write-precondition",
 ];
@@ -1045,12 +1026,6 @@ const apiContractAllowedSteps = [
 function hasOnlyAllowedApiContractSteps(steps) {
   return steps.length === apiContractAllowedSteps.length
     && steps.every((step, index) => step.trimEnd() === apiContractAllowedSteps[index]);
-}
-
-function isDesignatedApiContractCapture(step) {
-  if (!step.startsWith(`name: ${apiContractCaptureName}\n`)) return false;
-  return multilineRunCommands(step).filter((line) => !line.startsWith("#")).join("\n")
-    === apiContractCaptureCommands.join("\n");
 }
 
 function requireReindeerToolchainBefore(steps, command, failures) {
@@ -1391,45 +1366,22 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
     if (!hasOnlyAllowedApiContractSteps(apiContractSteps)) {
       failures.push("api-contract must contain only the approved ordered steps");
     }
-    requireDotSlashBefore(
-      apiContractSteps,
-      "npm run check:openapi-app",
-      "api-contract",
-      failures,
-    );
-    const openApiGateIndexes = apiContractSteps
-      .map((step, index) => (runScalar(step) === "npm run check:openapi-app" ? index : -1))
-      .filter((index) => index >= 0);
-    if (openApiGateIndexes.length !== 1) {
-      failures.push("api-contract must run exactly one npm run check:openapi-app producer");
+    if (/^    (?:services|env):/m.test(apiContract)) {
+      failures.push("api-contract is text-only and must not provision services or job-level environment");
     }
-    const jobOrStepAppBinaryOverride = /^ {6,}CONSOLE_APP_BIN\s*:/m.test(apiContract);
-    const captureStepIndexes = apiContractSteps
-      .map((step, index) => (step.startsWith(`name: ${apiContractCaptureName}\n`) ? index : -1))
-      .filter((index) => index >= 0);
-    const captureStepIndex = captureStepIndexes[0] ?? -1;
-    const captureIsDesignated = captureStepIndexes.length === 1 && isDesignatedApiContractCapture(apiContractSteps[captureStepIndex]);
-    const nonCaptureSteps = apiContractSteps.filter((_, index) => index !== captureStepIndex);
-    const shellAppBinaryOverride = nonCaptureSteps.some((step) => step.includes("CONSOLE_APP_BIN"));
-    const cargoTargetAppBinaryOverride = apiContract.split(/\r?\n/).some((line) =>
-      !line.trimStart().startsWith("#") && line.includes("CONSOLE_APP_BIN:") && (line.includes("backend/target") || line.includes("CARGO_TARGET_DIR")),
-    );
-    if (jobOrStepAppBinaryOverride || shellAppBinaryOverride) {
-      failures.push("api-contract must not override the captured CONSOLE_APP_BIN");
+    const driftGateCount = apiContractSteps
+      .filter((step) => runScalar(step) === "npm run check:platform-contract-drift").length;
+    if (driftGateCount !== 1) {
+      failures.push("api-contract must run exactly one npm run check:platform-contract-drift");
     }
-    if (cargoTargetAppBinaryOverride) {
-      failures.push("api-contract must not use a Cargo target path for CONSOLE_APP_BIN");
+    // api-contract is now text-only: every step reads backend/openapi/openapi.yaml and
+    // asserts against it. Nothing builds or boots the app, so nothing may hand a binary
+    // path (or anything else) to a later step through the environment file.
+    if (apiContract.includes("GITHUB_ENV")) {
+      failures.push("api-contract must not hand state to later steps through GITHUB_ENV");
     }
-    if (!captureIsDesignated) {
-      failures.push("api-contract capture must use the designated verified command grammar");
-    }
-    if (nonCaptureSteps.some((step) => step.includes("GITHUB_ENV"))) {
-      failures.push("api-contract may reference GITHUB_ENV only in the designated capture step");
-    }
-
-    const openApiGateIndex = openApiGateIndexes[0] ?? -1;
-    if (openApiGateIndex < 0 || captureStepIndex < openApiGateIndex) {
-      failures.push("api-contract must capture the Buck2-built console-app path after its sole producer");
+    if (apiContract.includes("CONSOLE_APP_BIN")) {
+      failures.push("api-contract must not reference CONSOLE_APP_BIN; the job builds no app");
     }
   }
 

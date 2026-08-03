@@ -31,9 +31,11 @@ Deployment-context shorthand used below:
 - [x] **All CI gates green on `main`.** fmt, `clippy --all-targets -D warnings`,
   `cargo test --workspace` (170 suites / 302 tests / 0 failed), the four
   `console-gate-*` binaries (layer-boundary, audit-coverage, migration-safety,
-  pii-no-logs), tri-client drift (ts/kotlin/swift), openapi-app, contract
-  round-trip, i18n + parity, iOS build + behavior tests. See
-  [CI-GATES.md](CI-GATES.md).
+  pii-no-logs), `openapi_drift`, `check:platform-contract-drift`, contract
+  round-trip, i18n + parity. See [CI-GATES.md](CI-GATES.md). Retired since this
+  item was first written and no longer runnable, so do not look for them:
+  tri-client drift (ts/kotlin/swift), `check:openapi-app`, iOS build + behavior
+  tests.
 - [x] **Supply-chain CI shipped** — Eng. `image-release.yml` builds the
   `console-app` + `console-web` linux/arm64 images reproducibly for the current
   `oci-guest` A1 target (digest-pinned bases, `SOURCE_DATE_EPOCH`), with SBOM +

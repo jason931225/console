@@ -405,7 +405,7 @@ The persisted role catalog, feature FK, audit row, RLS policy, policy-version bu
 
 **Test strategy (per slice):** real `console_rt` RLS round-trip + cross-tenant invisibility for each new
 table; golden parity test that seeded system policy == `matrix_row()`; adversarial escalation/lockout
-tests; gates + fmt + clippy + `check:openapi-app` green; security-review as a separate pass.
+tests; gates + fmt + clippy + `check:platform-contract-drift` green; security-review as a separate pass.
 
 ## 11. Open decisions (recommended defaults in **bold** — confirm or override)
 

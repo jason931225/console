@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Local mirror of the CI `preflight` and `backend` jobs.
+// Local mirror of the CI jobs whose commands have safe local equivalents.
 //
 // Why this exists: those two jobs run ~35 commands in a specific order, several
 // of which need a PostgreSQL identity that migration 0196 restricts to
@@ -38,7 +38,7 @@ const JOBS = new Map([
   ["postgres-domain-reachability", "serialized Buck2 PostgreSQL targets; the `db` tier already exercises that harness"],
   ["generated-face-authority", "needs pinned Java + Reindeer toolchains to rebuild the full generated-face closure"],
   ["dev-up-smoke", "brings up the whole shared `console-dev` compose project; running it locally tears down other lanes' stacks"],
-  ["api-contract", "boots a Buck2-built app against a live listener with the CI keypair fixture"],
+  ["api-contract", true],
   ["company-conformance", true],
 ]);
 const MIRRORED_JOBS = [...JOBS].filter(([, v]) => v === true).map(([name]) => name);
@@ -177,6 +177,18 @@ const PLAN = new Map([
   // subset. Mirrored as-is so local matches CI exactly; renaming the step is
   // what would make the promise true.
   ["Doc citations — every code citation must resolve", { tier: "fast" }],
+
+  // ---- api-contract ------------------------------------------------------
+  // This job became text-only when the tautological app-served OpenAPI comparison
+  // and its Buck2 binary handoff were deleted, so every remaining command is safe
+  // to mirror locally.
+  ["Install client tooling", {
+    tier: "ci-only",
+    why: "`npm ci` deletes node_modules; `Canonical npm lockfile` covers lockfile drift",
+  }],
+  ["Platform contract drift gate", { tier: "fast" }],
+  ["Employee import replay contract", { tier: "fast" }],
+  ["Ontology write precondition contract", { tier: "fast" }],
 
   // ---- kubernetes-manifests ---------------------------------------------
   // Mirrored because `check:production-hardening` pins the exact text of the

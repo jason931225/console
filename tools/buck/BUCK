@@ -24,27 +24,6 @@ export_file(
     visibility = ["PUBLIC"],
 )
 
-export_file(
-    name = "generated-face-openapi-ts",
-    src = "generated-face-openapi-ts.sh",
-    mode = "reference",
-    visibility = ["PUBLIC"],
-)
-
-export_file(
-    name = "generated-face-openapi-kotlin",
-    src = "generated-face-openapi-kotlin.sh",
-    mode = "reference",
-    visibility = ["PUBLIC"],
-)
-
-export_file(
-    name = "generated-face-openapi-swift",
-    src = "generated-face-openapi-swift.sh",
-    mode = "reference",
-    visibility = ["PUBLIC"],
-)
-
 # Non-generated wrappers keep disposable PostgreSQL credential values out of
 # Buck's test-executor argv.  The harness passes only a mode-0600 file path;
 # this wrapper loads it inside the test process before executing the exact

@@ -99,12 +99,6 @@ describe("CI preflight contract", () => {
       ),
       "preflight must install pinned DotSlash before Buck2",
     );
-    const apiContract = workflow.indexOf("  api-contract:\n");
-    const apiWithoutDotSlash = workflow.slice(0, apiContract) + workflow.slice(apiContract).replace(
-      "      - name: Install pinned DotSlash runtime\n        run: tools/buck/install_dotslash.sh\n",
-      "",
-    );
-    expectFailure(apiWithoutDotSlash, "api-contract must install pinned DotSlash before Buck2");
   });
 
   it("resolves the backend DotSlash bootstrap from its effective working directory", () => {
@@ -154,144 +148,93 @@ describe("CI preflight contract", () => {
     );
   });
 
-  it("rejects API contract tests that point CONSOLE_APP_BIN at a Cargo target", () => {
+  it("rejects CONSOLE_APP_BIN anywhere in the text-only API contract job", () => {
     for (const path of [
       "${{ github.workspace }}/backend/target/debug/console-app",
       "${CARGO_TARGET_DIR}/debug/console-app",
+      "/tmp/other-console-app",
     ]) {
       expectFailure(
         workflow.replace(
-          "      CONTRACT_DATABASE_URL: postgres://postgres:postgres@localhost:5432/console_contract\n",
-          `      CONTRACT_DATABASE_URL: postgres://postgres:postgres@localhost:5432/console_contract\n      CONSOLE_APP_BIN: ${path}\n`,
+          "    timeout-minutes: 30\n\n    steps:\n",
+          `    timeout-minutes: 30\n    env:\n      CONSOLE_APP_BIN: ${path}\n\n    steps:\n`,
         ),
-        "api-contract must not use a Cargo target path for CONSOLE_APP_BIN",
+        "api-contract must not reference CONSOLE_APP_BIN; the job builds no app",
       );
     }
-  });
-
-  it("rejects duplicate API contract app producers and later binary overrides", () => {
-    expectFailure(
-      workflow.replace(
-        "      - name: Capture Buck2-built app for contract test\n",
-        "      - name: Duplicate OpenAPI app-served drift gate\n        run: npm run check:openapi-app\n\n      - name: Capture Buck2-built app for contract test\n",
-      ),
-      "api-contract must run exactly one npm run check:openapi-app producer",
-    );
-    expectFailure(
-      workflow.replace(
-        "      - name: Capture Buck2-built app for contract test\n",
-        "      - name: Duplicate direct Buck2 app build\n        run: tools/buck2 build //backend/app:console-app\n\n      - name: Capture Buck2-built app for contract test\n",
-      ),
-      "api-contract must contain only the approved ordered steps",
-    );
-    expectFailure(
-      workflow.replace(
-        "      - name: Employee import replay contract\n",
-        "      - name: Override contract app\n        run: echo \"CONSOLE_APP_BIN=${CARGO_TARGET_DIR}/debug/console-app\" >> \"$GITHUB_ENV\"\n\n      - name: Employee import replay contract\n",
-      ),
-      "api-contract may reference GITHUB_ENV only in the designated capture step",
-    );
-    expectFailure(
-      workflow.replace(
-        '          printf \'CONSOLE_APP_BIN=%s\\n\' "${console_app_bin}" >> "${GITHUB_ENV}"\n',
-        '          printf \'CONSOLE_APP_BIN=%s\\n\' "${console_app_bin}" >> "${GITHUB_ENV}"\n          export CONSOLE_APP_BIN=/tmp/other-console-app\n',
-      ),
-      "api-contract capture must use the designated verified command grammar",
-    );
     expectFailure(
       workflow.replace(
         "      - name: Employee import replay contract\n",
         "      - name: Employee import replay contract\n        env:\n          CONSOLE_APP_BIN: /tmp/other-console-app\n",
       ),
-      "api-contract must not override the captured CONSOLE_APP_BIN",
+      "api-contract must not reference CONSOLE_APP_BIN; the job builds no app",
     );
   });
 
-  it("accepts the designated verified Buck2 app handoff", () => {
-    assert.match(workflow, /# check:openapi-app is the sole Buck2 producer for this handoff\./);
-    assert.deepEqual(evaluateCiPreflight(workflow).failures, []);
-  });
-
-  it("rejects shell-spelling bypasses for API contract producers and environment writes", () => {
-    expectFailure(
-      workflow.replace(
-        "      - name: Capture Buck2-built app for contract test\n",
-        "      - name: Duplicate OpenAPI producer\n        run: |\n          # This still produces the Buck app.\n          CI=1 npm \\\n            run check:openapi-app; :\n\n      - name: Capture Buck2-built app for contract test\n",
-      ),
-      "api-contract must contain only the approved ordered steps",
-    );
-    expectFailure(
-      workflow.replace(
-        "      - name: Capture Buck2-built app for contract test\n",
-        "      - name: Duplicate direct Buck2 app build\n        run: |\n          command ./tools/buck2 --isolation-dir .tmp \\\n            build --out .tmp/duplicate //backend/app:console-app # direct producer\n\n      - name: Capture Buck2-built app for contract test\n",
-      ),
-      "api-contract must contain only the approved ordered steps",
-    );
-    expectFailure(
-      workflow.replace(
-        "      - name: Employee import replay contract\n",
-        "      - name: Late redirected override\n        run: |\n          echo \"CONSOLE_APP_BIN=/tmp/other-console-app\" >> \"$GITHUB_ENV\" # still a write\n          :\n\n      - name: Employee import replay contract\n",
-      ),
-      "api-contract may reference GITHUB_ENV only in the designated capture step",
-    );
-    expectFailure(
-      workflow.replace(
-        "      - name: Employee import replay contract\n",
-        "      - name: Late tee override\n        run: printf 'CONSOLE_APP_BIN=/tmp/other-console-app\\n' | tee -a \"$GITHUB_ENV\"\n\n      - name: Employee import replay contract\n",
-      ),
-      "api-contract may reference GITHUB_ENV only in the designated capture step",
-    );
-  });
-
-  it("fails closed on indirect producers and every non-capture GITHUB_ENV surface", () => {
-    for (const command of [
-      'bash -c "npm run check:openapi-app"',
-      'sh -c "npm run check:openapi-app"',
-      'zsh -c "npm run check:openapi-app"',
-      'eval "npm run check:openapi-app"',
-      '"$OPENAPI_PRODUCER"',
-      'command "$OPENAPI_PRODUCER"',
-      "node scripts/check-openapi-app.mjs",
+  it("rejects every GITHUB_ENV handoff surface in the API contract job", () => {
+    for (const step of [
+      "      - name: Redirected override\n        run: |\n          echo \"CONSOLE_APP_BIN=/tmp/other\" >> \"$GITHUB_ENV\" # still a write\n          :\n",
+      "      - name: Tee override\n        run: printf 'CONSOLE_APP_BIN=/tmp/other\\n' | tee -a \"$GITHUB_ENV\"\n",
+      "      - name: Programmatic override\n        run: node -e 'require(\"node:fs\").appendFileSync(process.env.GITHUB_ENV, \"X=1\\n\")'\n",
     ]) {
       expectFailure(
         workflow.replace(
-          "      - name: Capture Buck2-built app for contract test\n",
-          `      - name: Indirect OpenAPI producer\n        run: ${command}\n\n      - name: Capture Buck2-built app for contract test\n`,
+          "      - name: Employee import replay contract\n",
+          `${step}\n      - name: Employee import replay contract\n`,
+        ),
+        "api-contract must not hand state to later steps through GITHUB_ENV",
+      );
+    }
+  });
+
+  it("rejects any build or executable surface added to the text-only API contract job", () => {
+    for (const command of [
+      "tools/buck2 build //backend/app:console-app",
+      "$(printf ./tools/buck2) build //backend/app:console-app",
+      "command ./tools/buck2 --isolation-dir .tmp build --out .tmp/dup //backend/app:console-app",
+      "cargo build -p console-app",
+      "bash -c \"npm run check:platform-contract-drift\"",
+      "node scripts/check-platform-contract-drift.mjs",
+      "node --enable-source-maps scripts/check-platform-contract-drift.mjs",
+      // Spelled so no literal GITHUB_ENV appears; the ordered-steps allowlist is
+      // what fails it closed, which is why that rule exists alongside the string match.
+      'env_name=GITHUB_$(printf ENV); printf "X=1\\n" >> "${!env_name}"',
+    ]) {
+      expectFailure(
+        workflow.replace(
+          "      - name: Employee import replay contract\n",
+          `      - name: Unexpected executable surface\n        run: ${command}\n\n      - name: Employee import replay contract\n`,
         ),
         "api-contract must contain only the approved ordered steps",
       );
     }
+  });
 
+  it("rejects a duplicated platform contract drift gate", () => {
     expectFailure(
       workflow.replace(
         "      - name: Employee import replay contract\n",
-        "      - name: Programmatic environment override\n        run: node -e 'require(\"node:fs\").appendFileSync(process.env.GITHUB_ENV, \"CONSOLE_APP_BIN=/tmp/other\\n\")'\n\n      - name: Employee import replay contract\n",
+        "      - name: Duplicate drift gate\n        run: npm run check:platform-contract-drift\n\n      - name: Employee import replay contract\n",
       ),
-      "api-contract may reference GITHUB_ENV only in the designated capture step",
-    );
-    expectFailure(
-      workflow.replace(
-        '          printf \'CONSOLE_APP_BIN=%s\\n\' "${console_app_bin}" >> "${GITHUB_ENV}"',
-        '          printf \'CONSOLE_APP_BIN=%s\\n\' "${console_app_bin}" > "${GITHUB_ENV:?}"',
-      ),
-      "api-contract capture must use the designated verified command grammar",
+      "api-contract must run exactly one npm run check:platform-contract-drift",
     );
   });
 
-  it("allows only the ordered API contract execution surface", () => {
-    for (const command of [
-      "$(printf ./tools/buck2) build //backend/app:console-app",
-      "node ./scripts/check-openapi-app.mjs",
-      "node --enable-source-maps scripts/check-openapi-app.mjs",
-      "cargo build -p console-app",
-      'env_name=GITHUB_$(printf ENV); key=CONSOLE_APP_$(printf BIN); printf "$key=/tmp/other\\n" >> "${!env_name}"',
+  it("accepts the text-only API contract surface", () => {
+    assert.deepEqual(evaluateCiPreflight(workflow).failures, []);
+  });
+
+  it("rejects services and job-level environment on the text-only API contract", () => {
+    for (const block of [
+      "    services:\n      postgres:\n        image: postgres:18.4\n",
+      "    env:\n      CONTRACT_DATABASE_URL: postgres://postgres:postgres@localhost/db\n",
     ]) {
       expectFailure(
         workflow.replace(
-          "      - name: Capture Buck2-built app for contract test\n",
-          `      - name: Unexpected executable surface\n        run: ${command}\n\n      - name: Capture Buck2-built app for contract test\n`,
+          "    timeout-minutes: 30\n\n    steps:\n",
+          `    timeout-minutes: 30\n${block}\n    steps:\n`,
         ),
-        "api-contract must contain only the approved ordered steps",
+        "api-contract is text-only and must not provision services or job-level environment",
       );
     }
   });

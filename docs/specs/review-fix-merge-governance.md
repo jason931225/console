@@ -175,7 +175,7 @@ Minimum evidence by class:
 | docs/process only | markdown/readability or custom required-term check, link consistency when touched, governance consistency review; product CI is N/A only with rationale. |
 | backend/internal | `cargo fmt --all -- --check`, `SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings`, relevant `cargo test`, and applicable `console-gate-*` gates from `docs/CI-GATES.md`. |
 | DB migration/RLS/authz | migration-safety, tenant-isolation/RLS arming, SQLx/offline query cache checks, rollback/forward-only note, and authz/tenant regression tests. |
-| OpenAPI/generated clients | source OpenAPI/generator change, regenerated drift checks, `npm run check:ts`, `npm run check:kotlin`, `npm run check:swift`, openapi-app, contract tests as applicable. |
+| OpenAPI/generated clients | source OpenAPI/generator change, regenerated drift checks, `npm run check:ts`, `npm run check:kotlin`, `npm run check:swift`, `npm run check:platform-contract-drift`, contract tests as applicable. |
 | web/RN UI | lint/type/test/build plus browser or React Native web user-story evidence for the changed flow; API-only tests are not enough. |
 | Android/iOS | platform unit/build/behavior evidence, string/i18n parity, device/simulator evidence when user-visible behavior changes. |
 | CI/release/deploy | workflow syntax/action pinning review, secret/ref safety, release dry-run where available, image/security/signing gates, rollback/smoke proof. |
