@@ -17,5 +17,14 @@ Use three writer worktrees, one integration worktree, and one reserve/fix worktr
 ## Evidence and enforcement
 Preflight rejects dirty integration roots, stale bases, overlapping ownership, unowned migrations, generated-face writes, and weakened tests. Receipts retain command, revision, lockfile, runtime, counts, failures, and artifact hashes. Dry-run checks prove non-mutation. Jurisdiction records retain source locator, retrieval/effective dates, snapshot hash, applicability, reviewer, evidence links, due date, and claim type; CI never synthesizes a compliance conclusion.
 
-## Review lenses
-Review object-first, deep-not-wide, fail-closed authorization, mock-independent behavior, human dignity, and closed-loop rollback. Promote a lesson into `AGENTS.md` only after one severe incident or repeated recurrence; otherwise keep it in retrospectives and this playbook.
+## Task-selected reasoning lifecycle
+The canonical vocabulary and routing policy live in [`AGENTS.md`](../../AGENTS.md#task-selected-reasoning-lenses). Apply that policy to every substantive planning, investigation, implementation, review, and verification task, not only to code review.
+
+1. Before acting, classify the task and its risk, then select the smallest useful set of at least two lenses.
+2. For high-risk authz, migration, contracts, approval, HR/payroll, release, production, or compliance-sensitive work, include Red Team, Operability / Day-2, Blast-radius / cell-based, and Zero-trust / defense-in-depth, or record a lens-specific not-applicable rationale.
+3. Use the selected lenses to guide the work. Re-evaluate the set when evidence, scope, or risk changes.
+4. When the task produces a durable governed artifact, persist concise findings, decisions, tradeoffs, exceptions, and lens-set changes in its canonical `lens_contract: v1` evidence block. Record outcomes, not private chain-of-thought.
+
+The policy applies normatively to all substantive tasks. CI can prove only the structure of designated durable records and root manifests; it cannot prove universal task compliance, authentic reasoning quality, or access private reasoning. Historical unmarked ledgers and retrospectives are grandfathered, while new or materially revised governed records use the v1 evidence block.
+
+Continue to review object-first, deep-not-wide, fail-closed authorization, mock-independent behavior, human dignity, and closed-loop rollback. Promote a lesson into `AGENTS.md` only after one severe incident or repeated recurrence; otherwise keep it in retrospectives and this playbook.
