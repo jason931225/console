@@ -814,6 +814,7 @@ TEST_RESOURCE_REQUIREMENTS = {
         },
     },
     'console-registry-rest': {
+        'unit': 'none',
         'integration': {
             'tests/equipment_admin.rs': 'postgres',
         },
@@ -837,6 +838,9 @@ TEST_RESOURCE_REQUIREMENTS = {
         'unit': 'none',
     },
     'console-reporting-domain': {
+        'unit': 'none',
+    },
+    'console-reporting-rest': {
         'unit': 'none',
     },
     'console-sales-adapter-postgres': {
