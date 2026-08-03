@@ -61,14 +61,15 @@
 //   node scripts/check-executed-tests.mjs --json
 //   node scripts/check-executed-tests.mjs --map      # every rust_test → its cargo invocation
 //   node scripts/check-executed-tests.mjs --gap      # still reachable only through Buck2
-//   node scripts/check-executed-tests.mjs --update   # rewrite the per-binary case baseline
+//   node scripts/check-executed-tests.mjs --update   # rewrite the static source-attribute baseline
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync, existsSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { evaluateBaseline } from "./lib/executed-tests-baseline.mjs";
+import { countDeclaredTestAttributes, evaluateBaseline } from "./lib/executed-tests-baseline.mjs";
+import { directExecutable, executableWorkflowCommands } from "./lib/ci-workflow-executables.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CI = join(ROOT, ".github/workflows/ci.yml");
@@ -170,24 +171,30 @@ const rustTests = indexRustTests();
 const wrappers = indexWrappers();
 const cargo = cargoGraph();
 
-// Shell line-continuations are joined FIRST, then `#` comment lines dropped. Matching
-// `cargo test[^\n]*` against the raw text consumes the trailing backslash, so a continuation
-// group can never fire and every flag on a following line is silently invisible — the
-// resolver reports a smaller executed set, which reads as a finding rather than as a broken
-// tool. ci.yml carries comments containing the words "cargo test", so the strip is not
-// hypothetical.
-const ci = readFileSync(CI, "utf8")
-  .replace(/\\\s*\n\s*/g, " ")
-  .split("\n")
-  .filter((line) => !/^\s*#/.test(line))
-  .join("\n");
+// Resolve executable workflow step bodies before looking for targets. Text presence is not
+// reachability: `echo cargo test ...`, `exit 0`, `if: false`, and
+// `continue-on-error: true` have all been real false-green shapes in this repository.
+const ci = readFileSync(CI, "utf8");
+const workflowCommands = executableWorkflowCommands(ci).map((command) => ({
+  ...command,
+  executable: command.malformed || command.controlFlow
+    ? { tokens: [], malformed: true }
+    : directExecutable(command.tokens),
+}));
 
 const executed = new Map();   // key(file, features) → how it is reached
 const unresolved = [];
 
-// 1. //tools/buck:<wrapper>
-for (const m of ci.matchAll(/\/\/tools\/buck:([a-z0-9_-]+)/g)) {
-  const wrapper = m[1];
+// 1. //tools/buck:<wrapper>, but only as an argument to a command that can actually invoke
+// the wrapper or Buck2. An echo/comment/disabled step is not a path to a test binary.
+const buckInvocations = workflowCommands.filter(({ executable }) => {
+  const [program, verb] = executable.tokens;
+  return program === "tools/buck/test_needs_postgres.sh"
+    || program === "tools/buck2" && verb === "test";
+});
+for (const wrapperArg of buckInvocations.flatMap(({ executable }) => executable.tokens)
+  .filter((token) => /^\/\/tools\/buck:[a-z0-9_-]+$/.test(token))) {
+  const wrapper = wrapperArg.slice("//tools/buck:".length);
   const target = wrappers.get(wrapper);
   if (!target) { unresolved.push(`ci.yml names //tools/buck:${wrapper}, absent from tools/buck/BUCK`); continue; }
   const test = rustTests.get(target);
@@ -201,17 +208,20 @@ for (const m of ci.matchAll(/\/\/tools\/buck:([a-z0-9_-]+)/g)) {
 // file and reported nothing at all. All eight `//backend/...` references in ci.yml today are
 // rust_test targets; a future step naming a rust_binary here would have to be classified
 // rather than ignored, which is the intended cost.
-for (const m of ci.matchAll(/(\/\/backend\/[A-Za-z0-9_\/-]+:[A-Za-z0-9_-]+)/g)) {
-  const test = rustTests.get(m[1]);
-  if (!test) { unresolved.push(`ci.yml names ${m[1]}, which is not a rust_test in any BUCK file`); continue; }
-  executed.set(key(test.root, test.features), m[1]);
+for (const target of buckInvocations.flatMap(({ executable }) => executable.tokens)
+  .filter((token) => /^\/\/backend\/[A-Za-z0-9_\/-]+:[A-Za-z0-9_-]+$/.test(token))) {
+  const test = rustTests.get(target);
+  if (!test) { unresolved.push(`ci.yml names ${target}, which is not a rust_test in any BUCK file`); continue; }
+  executed.set(key(test.root, test.features), target);
 }
 
 // 3. cargo test -p <pkg> [--lib | --test <name>] [--features …], resolved through
 // `cargo metadata`. Runs last on purpose: where both build systems reach the same binary,
 // the cargo attribution wins, which is what makes `--gap` mean "still Buck2-only".
-for (const m of ci.matchAll(/cargo test[^\n]*/g)) {
-  const line = m[0];
+for (const { executable } of workflowCommands) {
+  const lineTokens = executable.tokens;
+  if (lineTokens[0] !== "cargo" || lineTokens[1] !== "test") continue;
+  const line = lineTokens.join(" ");
   // --doc runs doctests, which live in `src/**` and are not in the `defined` population.
   // Attributing a package's whole test set to a --doc line would report every one of its
   // files as executed.
@@ -220,14 +230,29 @@ for (const m of ci.matchAll(/cargo test[^\n]*/g)) {
     unresolved.push(`ci.yml runs "${line.trim()}"; this resolver models explicit --features only`);
     continue;
   }
-  const pkgs = [...line.matchAll(/(?:-p|--package)[= ]\s*([A-Za-z0-9_-]+)/g)].map((x) => x[1]);
+  const optionValues = (short, long) => {
+    const values = [];
+    for (let index = 2; index < lineTokens.length; index += 1) {
+      const token = lineTokens[index];
+      if (token === short || token === long) {
+        if (lineTokens[index + 1]) values.push(lineTokens[index + 1]);
+        index += 1;
+      } else if (token.startsWith(`${short}=`)) {
+        values.push(token.slice(short.length + 1));
+      } else if (token.startsWith(`${long}=`)) {
+        values.push(token.slice(long.length + 1));
+      }
+    }
+    return values;
+  };
+  const pkgs = optionValues("-p", "--package");
   if (pkgs.length === 0) {
     unresolved.push(`ci.yml runs "${line.trim()}" with no -p; this resolver cannot say what it executes`);
     continue;
   }
-  const tests = [...line.matchAll(/--test[= ]\s*([A-Za-z0-9_]+)/g)].map((x) => x[1]);
-  const lib = /\s--lib(\s|$)/.test(line);
-  const features = [...line.matchAll(/--features[= ]\s*([A-Za-z0-9_,-]+)/g)].flatMap((x) => x[1].split(","));
+  const tests = optionValues("--test", "--test");
+  const lib = lineTokens.includes("--lib");
+  const features = optionValues("--features", "--features").flatMap((value) => value.split(","));
   for (const pkg of pkgs) {
     const targets = cargo.byPackage.get(pkg);
     if (!targets) { unresolved.push(`ci.yml runs cargo test -p ${pkg}, which cargo metadata does not know`); continue; }
@@ -323,27 +348,28 @@ const executedBinaries = [...executed.keys()].sort();
 const dark = defined.filter((f) => !executed.has(f));
 const buckOnly = [...executed].filter(([, via]) => via.startsWith("//")).map(([k]) => k).sort();
 
-// Count static test attributes per executing binary. For a lib binary the compilation unit
-// is its whole src/ tree, not src/lib.rs alone: 50 sibling modules hold tests today. The
-// feature suffix remains part of the identity, so deleting one feature-bearing execution
-// path cannot hide behind the same crate_root's unfeatured binary.
-const TEST_ATTR = /^[ \t]*#\[(?:tokio::|sqlx::)?test(?:\([^\n)]*\))?\]/gm;
-
-function countCases(identity) {
-  const rel = identity.split(" --features ")[0];
+// Count declared test attributes once per reachable SOURCE. This is a cheap lexical
+// deletion ratchet, not runtime case evidence: it deliberately does not evaluate cfg,
+// feature selection, macro expansion, or `#[ignore]`. Feature-bearing BINARY reachability
+// is protected separately by the exact (file, feature set) dark-set ratchet above. A lib
+// source represents its whole src/ tree because sibling modules hold tests.
+function countAttributes(rel) {
   const abs = join(ROOT, rel);
   if (!existsSync(abs)) return 0;
   const files = rel.endsWith("/src/lib.rs")
     ? walk(dirname(abs), [], (entry) => entry.endsWith(".rs"))
     : [abs];
   return files.reduce(
-    (count, file) => count + (readFileSync(file, "utf8").match(TEST_ATTR) ?? []).length,
+    (count, file) => count + countDeclaredTestAttributes(readFileSync(file, "utf8")),
     0,
   );
 }
 
-const cases = Object.fromEntries(executedBinaries.map((binary) => [binary, countCases(binary)]));
-const totalCases = Object.values(cases).reduce((sum, count) => sum + count, 0);
+const reachableSources = [...new Set(executedBinaries.map((binary) => binary.split(" --features ")[0]))].sort();
+const testAttributes = Object.fromEntries(
+  reachableSources.map((source) => [source, countAttributes(source)]),
+);
+const totalTestAttributes = Object.values(testAttributes).reduce((sum, count) => sum + count, 0);
 
 for (const a of ANCHORS.filter((a) => !executed.has(a))) {
   unresolved.push(`ANCHOR ${a} no longer resolves — the resolver has silently degraded`);
@@ -355,7 +381,14 @@ for (const v of pinnedVariants.filter((v) => !defined.includes(v))) {
 }
 
 if (process.argv.includes("--json")) {
-  console.log(JSON.stringify({ defined: defined.length, executed: executedBinaries.length, dark, buckOnly, cases, unresolved }, null, 2));
+  console.log(JSON.stringify({
+    defined: defined.length,
+    executed: executedBinaries.length,
+    dark,
+    buckOnly,
+    testAttributes,
+    unresolved,
+  }, null, 2));
 } else if (process.argv.includes("--map")) {
   // Every rust_test and the cargo invocation that replaces it, features included: an
   // invocation printed without them is an invocation that runs zero tests.
@@ -368,7 +401,7 @@ if (process.argv.includes("--json")) {
 } else {
   console.log(`test binaries defined         : ${defined.length}`);
   console.log(`reachable from a CI step      : ${executedBinaries.length}`);
-  console.log(`test cases in those binaries  : ${totalCases}`);
+  console.log(`declared test attrs in reachable sources: ${totalTestAttributes}  (static; cfg/ignore-unaware)`);
   console.log(`executed nowhere              : ${dark.length}`);
   console.log(`reachable only through buck2  : ${buckOnly.length}  (--gap to list; the Buck2 exit has to wire these)`);
   for (const f of dark.slice(0, 25)) console.log(`  dark  ${f}`);
@@ -424,31 +457,42 @@ if (process.argv.includes("--update")) {
   // Deliberate, human-committed, and reviewable as a diff. Never run in CI: it would let a
   // degraded resolver relabel its own regression as the new normal. Resolution and the
   // named dark-set contract have already passed above before this write is reachable.
-  writeFileSync(baselinePath, `${JSON.stringify({ ...baseline, case_baseline: cases }, null, 2)}\n`);
-  console.error(`\ncase_baseline rewritten: ${executedBinaries.length} test binaries, ${totalCases} cases. Commit it with the change that moved the numbers.`);
+  const updatedBaseline = { ...baseline, test_attribute_baseline: testAttributes };
+  delete updatedBaseline.case_baseline;
+  writeFileSync(baselinePath, `${JSON.stringify(updatedBaseline, null, 2)}\n`);
+  console.error(`\ntest_attribute_baseline rewritten: ${reachableSources.length} reachable sources, ${totalTestAttributes} declared test attributes. This static metric does not evaluate cfg or ignore. Commit it with the change that moved the numbers.`);
   process.exit(0);
 }
 
-// THE CASE RATCHET. Per binary, because a total hides a loss behind an unrelated gain in
-// the same change. Deleting test attributes from a surviving crate_root leaves both the
-// defined and executed binary counts unchanged; this is the layer that sees that loss.
+// THE STATIC ATTRIBUTE RATCHET. Per source, because a total hides a loss behind an
+// unrelated gain. This sees lexical deletion from a still-reachable source. It does not
+// prove that a test is compiled, selected, unignored, or run; the binary ratchet above is
+// the executable-reachability evidence.
+const attributeBaseline = baseline.test_attribute_baseline;
+if (!attributeBaseline
+  || typeof attributeBaseline !== "object"
+  || Array.isArray(attributeBaseline)
+  || Object.values(attributeBaseline).some((count) => !Number.isInteger(count) || count < 0)) {
+  console.error(`\n${baselineRel} must contain a test_attribute_baseline object of non-negative integer static attribute counts.`);
+  process.exit(1);
+}
 const lost = [];
-for (const [binary, was] of Object.entries(baseline.case_baseline ?? {})) {
-  if (!(binary in cases)) {
-    lost.push(`${binary}: ${was} -> gone (file deleted, or it no longer reaches a CI step)`);
-  } else if (cases[binary] < was) {
-    lost.push(`${binary}: ${was} -> ${cases[binary]} (-${was - cases[binary]})`);
+for (const [source, was] of Object.entries(attributeBaseline)) {
+  if (!(source in testAttributes)) {
+    lost.push(`${source}: ${was} -> gone (source deleted, or no binary for it reaches a CI step)`);
+  } else if (testAttributes[source] < was) {
+    lost.push(`${source}: ${was} -> ${testAttributes[source]} (-${was - testAttributes[source]})`);
   }
 }
 if (lost.length > 0) {
-  console.error(`\n${lost.length} wired test binary(ies) lost executing test cases:`);
+  console.error(`\n${lost.length} reachable test source(s) lost declared test attributes:`);
   for (const loss of lost) console.error(`  ${loss}`);
   console.error(`\nIf each removal is intentional because its subject is gone too, say so in the commit message and run 'node scripts/check-executed-tests.mjs --update'.`);
   process.exit(1);
 }
-const gained = Object.entries(cases).filter(
-  ([binary, count]) => count > (baseline.case_baseline?.[binary] ?? 0),
+const gained = Object.entries(testAttributes).filter(
+  ([source, count]) => count > (attributeBaseline[source] ?? 0),
 );
 if (gained.length > 0) {
-  console.error(`\n${gained.length} test binary(ies) gained cases. Run --update to lock the gain in.`);
+  console.error(`\n${gained.length} reachable test source(s) gained declared test attributes. Run --update to lock the gain in.`);
 }

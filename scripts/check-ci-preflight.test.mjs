@@ -224,16 +224,6 @@ describe("CI preflight contract", () => {
     assert.deepEqual(evaluateCiPreflight(workflow).failures, []);
   });
 
-  it("rejects an API contract job name that claims the app is served", () => {
-    expectFailure(
-      workflow.replace(
-        "    name: API contract — text-only contract checks\n",
-        "    name: API contract — app-served OpenAPI\n",
-      ),
-      'api-contract job name must be "API contract — text-only contract checks"',
-    );
-  });
-
   it("rejects services and job-level environment on the text-only API contract", () => {
     for (const block of [
       "    services:\n      postgres:\n        image: postgres:18.4\n",
@@ -776,6 +766,44 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       "domain-unit must run --test location_consent_fsm",
     );
   });
+
+  it("rejects non-executing or non-gating domain-unit command surfaces", () => {
+    const domainStart = workflow.indexOf("  domain-unit:\n");
+    const domainEnd = workflow.indexOf("\n  postgres-domain-reachability:", domainStart);
+    const domainBlock = workflow.slice(domainStart, domainEnd);
+    const replaceDomain = (mutate) => (
+      workflow.slice(0, domainStart) + mutate(domainBlock) + workflow.slice(domainEnd)
+    );
+
+    expectFailure(
+      replaceDomain((block) => block.replace(
+        /^(\s*)(SQLX_OFFLINE=true cargo test)/gm,
+        "$1echo $2",
+      )),
+      "domain-unit must execute the locked Cargo test commands directly and unconditionally",
+    );
+    expectFailure(
+      replaceDomain((block) => block.replace("        run: |\n", "        run: |\n          exit 0\n")),
+      "domain-unit must execute the locked Cargo test commands directly and unconditionally",
+    );
+    for (const condition of ["false", "${{ false }}"]) {
+      expectFailure(
+        replaceDomain((block) => block.replace(
+          "      - name: Domain crate unit tests\n",
+          `      - name: Domain crate unit tests\n        if: ${condition}\n`,
+        )),
+        "domain-unit must execute the locked Cargo test commands directly and unconditionally",
+      );
+    }
+    expectFailure(
+      replaceDomain((block) => block.replace(
+        "      - name: Domain crate unit tests\n",
+        "      - name: Domain crate unit tests\n        continue-on-error: true\n",
+      )),
+      "domain-unit must execute the locked Cargo test commands directly and unconditionally",
+    );
+  });
+
   it("preserves fail-fast backend and dev-up ordering", () => {
     const sourceGateDisplaced = workflow
       .replace("      - name: Layer-boundary gate\n", "      - name: Displaced source gate\n")

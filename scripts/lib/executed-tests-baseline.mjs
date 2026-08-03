@@ -80,3 +80,12 @@ export function evaluateBaseline(dark, doc, label) {
 
   return { fatal: null, advisory: null };
 }
+
+// This is deliberately lexical. It counts declared test attributes without evaluating
+// cfg expressions or `#[ignore]`, so callers must never describe the result as executed
+// runtime cases. Keeping it here makes that limitation independently regression-testable.
+const TEST_ATTRIBUTE = /^[ \t]*#\[(?:tokio::|sqlx::)?test(?:\([^\n)]*\))?\]/gm;
+
+export function countDeclaredTestAttributes(source) {
+  return (source.match(TEST_ATTRIBUTE) ?? []).length;
+}

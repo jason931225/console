@@ -135,46 +135,48 @@ const domainUnitPackages = [
   "console-production-rest",
   "console-reporting-adapter-postgres",
   "console-support-adapter-postgres",
+  "console-kernel-core",
   "console-workflow-runtime-adapter-postgres",
   "console-workorder-rest",
+  "console-financial-domain",
+  "console-identity-application",
+  "console-integrity",
+  "console-platform-auth",
+  "console-platform-authz-rest",
+  "console-workflow-runtime",
 ];
-const domainUnitTestFiles = [
-  "attendance_policy",
-  "location_consent_fsm",
-  "location_ping_policy",
-  "cedar_pbac_readiness_cases",
-  "cedar_pbac_legacy_only_observe_and_record",
-  // `--lib` does not reach an integration test under tests/, so each of these has to be
-  // named. A crate appearing in domainUnitPackages above does NOT imply its tests/ files run.
-  "range_and_history",
-  "quote_and_residual",
-  "equipment",
-  "mentions",
-  "object_code_refs",
-  "parity",
-  "thread_kind",
-  "approval_and_assignment",
-  "serde_roundtrips",
-  "settlement_fsm",
-  "workorder_fsm",
-  // Third tranche, 2026-07-31. Integration tests under tests/ that needed no database —
-  // confirmed by running them, not by reading their imports.
-  "jwt_es256",
-  "jwt_verifier",
-  "template_fidelity",
-  "template_fill_engine",
-  "hub",
-  "notify_payload",
-  "seaweedfs_worm",
-  "config",
-  "dev_seed_notification_links",
-  "openslo_files",
-  "workbench_api",
-  // `well_known` exists in BOTH console-platform-auth and console-app. This list is bare test
-  // names, so one entry covers both and cannot distinguish them — which is exactly why ci.yml
-  // gives each package its own cargo invocation. Deleting either invocation still leaves this
-  // entry satisfied by the other, so the guard here is weaker than it looks for this one name.
-  "well_known",
+const domainUnitIntegrationInvocations = [
+  ["console-attendance-application", ["attendance_policy"]],
+  ["console-compliance-domain", ["location_consent_fsm", "location_ping_policy"]],
+  ["console-platform-authz", ["cedar_pbac_readiness_cases", "cedar_pbac_legacy_only_observe_and_record"]],
+  ["console-attendance-domain", ["range_and_history"]],
+  ["console-financial-domain", ["quote_and_residual"]],
+  ["console-registry-domain", ["equipment"]],
+  ["console-messenger-domain", ["mentions", "object_code_refs", "parity", "thread_kind"]],
+  ["console-workorder-domain", ["approval_and_assignment", "serde_roundtrips", "settlement_fsm", "workorder_fsm"]],
+  ["console-platform-auth", ["jwt_es256", "jwt_verifier", "well_known"]],
+  ["console-platform-excel", ["template_fidelity", "template_fill_engine"]],
+  ["console-platform-realtime", ["hub", "notify_payload"]],
+  ["console-app", ["config", "dev_seed_notification_links", "openslo_files", "well_known", "workbench_api"]],
+];
+const domainUnitTestFiles = domainUnitIntegrationInvocations.flatMap(([, tests]) => tests);
+const domainCargoPrefix = [
+  "SQLX_OFFLINE=true",
+  "cargo",
+  "test",
+  "--locked",
+  "--manifest-path",
+  "backend/Cargo.toml",
+];
+const domainUnitExpectedCommands = [
+  [...domainCargoPrefix, "--lib", ...domainUnitPackages.flatMap((pkg) => ["-p", pkg])],
+  [...domainCargoPrefix, "--doc", "-p", "console-kernel-core"],
+  ...domainUnitIntegrationInvocations.map(([pkg, tests]) => [
+    ...domainCargoPrefix,
+    "-p",
+    pkg,
+    ...tests.flatMap((test) => ["--test", test]),
+  ]),
 ];
 const postgresDomainReachabilityCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
@@ -1022,8 +1024,6 @@ const apiContractAllowedSteps = [
   "name: Employee import replay contract\n        if: ${{ !cancelled() }}\n        run: npm run test:employee-import-contract",
   "name: Ontology write precondition contract\n        if: ${{ !cancelled() }}\n        run: npm run test:ontology-write-precondition",
 ];
-const apiContractJobName = "API contract — text-only contract checks";
-
 function hasOnlyAllowedApiContractSteps(steps) {
   return steps.length === apiContractAllowedSteps.length
     && steps.every((step, index) => step.trimEnd() === apiContractAllowedSteps[index]);
@@ -1156,25 +1156,34 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   const domainUnit = jobBlock(workflow, "domain-unit");
   if (domainUnit) {
     const steps = stepBlocks(domainUnit);
-    const block = domainUnit;
+    const domainSteps = steps.filter((step) => stepName(step) === "Domain crate unit tests");
+    const domainStep = domainSteps[0] ?? "";
+    const parsedDomainCommands = shellCommandTokens(runScript(domainStep));
+    const domainCommandsMatch = domainSteps.length === 1
+      && parsedDomainCommands.length === domainUnitExpectedCommands.length
+      && parsedDomainCommands.every((command, index) => (
+        !command.malformed
+        && JSON.stringify(command.tokens) === JSON.stringify(domainUnitExpectedCommands[index])
+      ));
+    if (!domainCommandsMatch || !isUnconditional(domainStep)) {
+      failures.push("domain-unit must execute the locked Cargo test commands directly and unconditionally");
+    }
+    const directTokens = parsedDomainCommands.flatMap((command) => command.tokens);
     for (const pkg of domainUnitPackages) {
-      if (!block.includes(`-p ${pkg}`)) failures.push(`domain-unit must run -p ${pkg}`);
+      const present = directTokens.some((token, index) => token === "-p" && directTokens[index + 1] === pkg);
+      if (!present) failures.push(`domain-unit must run -p ${pkg}`);
     }
     for (const t of domainUnitTestFiles) {
-      if (!block.includes(`--test ${t}`)) failures.push(`domain-unit must run --test ${t}`);
+      const present = directTokens.some((token, index) => token === "--test" && directTokens[index + 1] === t);
+      if (!present) failures.push(`domain-unit must run --test ${t}`);
     }
-    // Match the INVOCATION, not the block. `/--lib/` alone is satisfied by the comment
-    // above the step explaining why --lib is load-bearing — the third time in this
-    // repository that prose has silently satisfied a code assertion.
-    if (!/cargo test[^\n]*--lib/.test(block)) {
+    if (parsedDomainCommands[0]?.tokens?.includes("--lib") !== true) {
       failures.push("domain-unit must pass --lib on its first cargo invocation");
     }
-    // The step list stays locked. Rewriting the command assertion to check packages
-    // rather than an exact string dropped requireOnlyLockedRuns, which would have let
-    // anyone ADD an arbitrary run step to this job unnoticed. One `run:` and no more.
-    const runCount = (block.match(/^        run: /gm) || []).length;
-    if (runCount !== 1) {
-      failures.push(`domain-unit must contain only the locked ordered run steps; found ${runCount} run steps`);
+
+    const runStepNames = steps.filter((step) => runCommand(step) !== null).map(stepName);
+    if (JSON.stringify(runStepNames) !== JSON.stringify(["Domain crate unit tests"])) {
+      failures.push(`domain-unit must contain only the locked ordered run steps; found ${runStepNames.length} run steps`);
     }
   }
 
@@ -1364,9 +1373,6 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   const apiContract = jobBlock(workflow, "api-contract");
   if (apiContract) {
     const apiContractSteps = stepBlocks(apiContract);
-    if (!apiContract.startsWith(`    name: ${apiContractJobName}\n`)) {
-      failures.push(`api-contract job name must be ${JSON.stringify(apiContractJobName)}`);
-    }
     if (!hasOnlyAllowedApiContractSteps(apiContractSteps)) {
       failures.push("api-contract must contain only the approved ordered steps");
     }

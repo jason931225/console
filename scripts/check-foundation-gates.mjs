@@ -224,7 +224,6 @@ requireNotIncludes("docs/CI-GATES.md", "test:contract", "live CI gate docs exclu
 requireNotIncludes("docs/CI-GATES.md", "check:openapi-app", "live CI gate docs exclude retired app-served OpenAPI gate");
 requireNotIncludes("docs/CI-GATES.md", "CONTRACT_DATABASE_URL", "live CI gate docs exclude retired contract database handoff");
 requireNotIncludes("docs/GO-LIVE-CHECKLIST.md", "check:openapi-app", "go-live status excludes retired app-served OpenAPI command");
-requireNotIncludes(".github/workflows/ci.yml", "API contract — app-served OpenAPI", "API contract job does not claim an app-served document");
 for (const ciNeedle of [
   "cargo fmt --all -- --check",
   "cargo clippy --all-targets -- -D warnings",

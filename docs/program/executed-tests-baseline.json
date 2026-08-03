@@ -1,8 +1,8 @@
 {
   "recorded_on": "2026-08-03",
-  "dark_baseline": 12,
+  "dark_baseline": 13,
   "how_this_file_is_read": "Every `deferred_*` array below is the pinned SET of test binaries that execute nowhere. check-executed-tests.mjs compares that set against what it measures and fails on EITHER difference: a binary that darkens and is not named here, and a binary named here that now executes or disappears. dark_baseline is derived from that named union and must agree with it; it is a cross-check, never the ratchet itself. A count alone passed silently on the most likely shape a wiring refactor takes — darken one binary, wire another, net zero — and this repository has already paid for that exact defect once, on the personal-data baseline, whose NET COUNT pin took six rounds to correct. `defined_feature_variants` is a different thing and is NOT part of the dark set; see its own note.",
-  "history": "Was 287 on 2026-07-30, then 10 on 2026-07-31 after 177 previously-dark PostgreSQL targets began to execute and pass. Every entry named below is wired-capable but fails on first execution, so every failure is fixture rot or a defect the silence hid — none is a regression.",
+  "history": "Was 287 on 2026-07-30, then 10 on 2026-07-31 after 177 previously-dark PostgreSQL targets began to execute and pass. The preexisting fixture/defect entries named below are wired-capable but fail on first execution, so those failures are fixture rot or defects the silence hid — none is a regression. Separately, deferred_out_of_pivot tracks an ignored service-backed binary excluded by the current product pivot.",
   "why_10_became_11": "NOT a regression and NOT a comparable number: the population changed. check-executed-tests.mjs counted FILES and now counts TEST BINARIES — (crate_root, feature set) — because a file alone cannot distinguish //backend/app:console-app-unit from //backend/app:console-app-itest-inline-postgres, which share backend/app/src/lib.rs and differ only in `features = [\"test-postgres\"]`. They are not variants of one thing: `cargo test -p console-app --lib` lists 152 tests and `--lib --features test-postgres` lists 17, because each compiles the other's `cfg(not(...))` half out. Under the old file key, deleting either wrapper from ci.yml moved no number at all. The finer key adds exactly two entries repo-wide (the two crate roots with a second, feature-carrying rust_test) and one of them was already dark, below.",
   "why_11_became_12": "The population changed again, in the FILE dimension this time. A crate's lib test binary was admitted only when `src/lib.rs` ITSELF contained `#[cfg(test)]`. Nine crates keep every one of theirs in `src/<module>.rs`, so their lib binaries were never in the measured population, could never be reported dark, and could be unwired with no observable effect — `backend/crates/kernel/core/src/lib.rs` has zero `#[cfg(test)]`, and deleting `-p console-kernel-core` from ci.yml (reverting #559, which landed for exactly this) moved no number at all. Admitting `#[cfg(test)]` anywhere under `src/` took defined 319 -> 328. Of the 9 newly visible binaries, 2 were already wired (kernel/core, payroll/adapter-postgres) and 6 were wired in the same change — 61 pure tests, listed in ci.yml's comment. The 7th, platform/db, is below.",
   "deferred_needs_postgres_lane": [
@@ -28,15 +28,19 @@
     "backend/crates/workorder/rest/tests/mobile_sync.rs"
   ],
   "why_shared_fixture_fails": "These include a file from backend/test_support/ through a relative path (../../../../test_support/...). The generated rust_test mapped_srcs does not carry it, so Buck reports \"couldn't read buck-out/.../__srcs/.../test_support/...\". A generator gap in tools/buck/gen_first_party.py, not a defect in the tests.",
+  "deferred_out_of_pivot": [
+    "backend/crates/platform/storage/tests/seaweedfs_worm.rs"
+  ],
+  "why_seaweedfs_worm_is_dark": "This ignored integration test requires a live SeaweedFS service. The former plain cargo invocation selected zero tests and therefore was not coverage. The current Console pivot explicitly excludes evidence/WORM and field-operations work, so adding a new service-backed CI lane here would expand scope. The binary remains named in the exact dark set so it cannot be mistaken for executed coverage or disappear silently.",
   "why_production_lifecycle_is_here": "Two defects in it were already fixed in this branch — a 52-character organizations slug against a 40-character ceiling, and a missing ont_object_type_key_revisions sidecar parent. It now fails 23514, a third and different CHECK violation.",
   "defined_feature_variants": [
     "backend/app/src/lib.rs --features test-postgres",
     "backend/crates/platform/auth-rest/src/lib.rs --features dev-auth"
   ],
   "why_feature_variants_are_pinned_here": "These are NOT dark and are NOT part of the set above — they execute today. They are pinned into the DEFINED population because both of the other sources for a binary's feature dimension are artifacts that a deletion PR deletes. `rust_test features` was the only source, so a commit removing //tools/buck:auth-rest-dev-auth-inline-postgres from ci.yml together with its sh_test and its rust_test — the ordinary shape of a wrapper-removal PR — dropped this binary from `defined` and from `executed` in the same instant. The dark set did not move, the gate exited 0, and an entire dev-auth PostgreSQL suite stopped running with no diagnostic. Pinned, the binary survives its own deletion, goes dark, and names itself. Two entries because repo-wide there are exactly two crate roots carrying a second, feature-bearing binary; a pinned entry that stops being `defined` is reported UNRESOLVED, so this list cannot rot into decoration.",
-  "case_baseline": {
+  "test_attribute_baseline_note": "This map is a cheap lexical deletion ratchet over reachable source files, not a runtime case count. It counts declared #[test], #[tokio::test], and #[sqlx::test] attributes without evaluating cfg expressions, feature selection, macro expansion, or #[ignore]. A source reached by multiple feature-bearing binaries appears once; exact (source, feature set) binary reachability is enforced separately by the named dark-set ratchet. For example, console-app's bare and test-postgres binaries list 152 and 17 tests respectively in the compiler harness, while this static source metric records 169 attributes once.",
+  "test_attribute_baseline": {
     "backend/app/src/lib.rs": 169,
-    "backend/app/src/lib.rs --features test-postgres": 169,
     "backend/app/tests/action_inbox_api.rs": 8,
     "backend/app/tests/audit_api.rs": 5,
     "backend/app/tests/auth_rest.rs": 17,
@@ -49,7 +53,7 @@
     "backend/app/tests/console_kill_switch.rs": 1,
     "backend/app/tests/console_route_telemetry.rs": 1,
     "backend/app/tests/dev_auth_persona_guard.rs": 2,
-    "backend/app/tests/dev_auth_persona_guard_feature.rs --features dev-auth": 1,
+    "backend/app/tests/dev_auth_persona_guard_feature.rs": 1,
     "backend/app/tests/dev_seed_notification_links.rs": 1,
     "backend/app/tests/dispatch_pipeline_api.rs": 1,
     "backend/app/tests/equipment_3r_api.rs": 5,
@@ -249,10 +253,10 @@
     "backend/crates/payroll/rest/tests/run_lifecycle_api.rs": 2,
     "backend/crates/platform/audit-chain/src/lib.rs": 5,
     "backend/crates/platform/audit-chain/tests/audit_chain_rls.rs": 19,
-    "backend/crates/platform/auth-rest/src/lib.rs --features dev-auth": 7,
+    "backend/crates/platform/auth-rest/src/lib.rs": 7,
     "backend/crates/platform/auth-rest/tests/dev_auth_absence.rs": 1,
-    "backend/crates/platform/auth-rest/tests/dev_auth_session.rs --features dev-auth": 7,
-    "backend/crates/platform/auth-rest/tests/group_admin_tenant_context.rs --features dev-auth": 1,
+    "backend/crates/platform/auth-rest/tests/dev_auth_session.rs": 7,
+    "backend/crates/platform/auth-rest/tests/group_admin_tenant_context.rs": 1,
     "backend/crates/platform/auth/src/lib.rs": 2,
     "backend/crates/platform/auth/tests/jwt_es256.rs": 14,
     "backend/crates/platform/auth/tests/jwt_verifier.rs": 1,
@@ -304,7 +308,6 @@
     "backend/crates/platform/request-context/src/lib.rs": 15,
     "backend/crates/platform/storage/src/lib.rs": 22,
     "backend/crates/platform/storage/tests/evidence_processing_rls_surfaces_as_runtime_role.rs": 1,
-    "backend/crates/platform/storage/tests/seaweedfs_worm.rs": 1,
     "backend/crates/policy/adapter-postgres/tests/draft_storage.rs": 1,
     "backend/crates/policy/application/src/lib.rs": 1,
     "backend/crates/policy/domain/src/lib.rs": 2,

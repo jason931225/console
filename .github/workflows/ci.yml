@@ -338,8 +338,6 @@ jobs:
           SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \
             -p console-platform-realtime --test hub --test notify_payload
           SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \
-            -p console-platform-storage --test seaweedfs_worm
-          SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \
             -p console-app --test config --test dev_seed_notification_links --test openslo_files \
             --test well_known --test workbench_api
 

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { evaluateBaseline } from "./executed-tests-baseline.mjs";
+import { countDeclaredTestAttributes, evaluateBaseline } from "./executed-tests-baseline.mjs";
+import { directExecutable, executableWorkflowCommands } from "./ci-workflow-executables.mjs";
 
 const LABEL = "executed-tests-baseline.json";
 
@@ -103,5 +104,72 @@ describe("evaluateBaseline", () => {
       const { fatal } = evaluateBaseline(["dark/tests/unnamed.rs"], doc, LABEL);
       assert.match(fatal, /no non-negative integer dark_baseline/);
     });
+  });
+});
+
+describe("countDeclaredTestAttributes", () => {
+  it("is explicitly cfg- and ignore-unaware static source evidence", () => {
+    const source = `
+#[cfg(any())]
+#[test]
+fn compiled_out() {}
+
+#[ignore = "requires a service"]
+#[tokio::test]
+async fn ignored_by_default() {}
+`;
+    assert.equal(countDeclaredTestAttributes(source), 2);
+  });
+});
+
+describe("workflow executable command extraction", () => {
+  const workflow = (body, stepFields = "") => `jobs:\n  domain-unit:\n    steps:\n      - name: Test\n${stepFields}        run: |\n${body.split("\n").map((line) => `          ${line}`).join("\n")}\n`;
+  const commands = (source) => executableWorkflowCommands(source).map((entry) => ({
+    ...entry,
+    direct: directExecutable(entry.tokens).tokens,
+  }));
+
+  it("admits a direct assignment-prefixed cargo test", () => {
+    const [command] = commands(workflow("SQLX_OFFLINE=true cargo test -p console-kernel-core --lib"));
+    assert.deepEqual(command.direct.slice(0, 4), ["cargo", "test", "-p", "console-kernel-core"]);
+    assert.equal(command.controlFlow, false);
+  });
+
+  it("does not truncate a run block at an empty line", () => {
+    const extracted = commands(workflow("echo setup\n\ncargo test -p console-kernel-core --lib"));
+    assert.deepEqual(extracted.map(({ direct }) => direct), [
+      ["echo", "setup"],
+      ["cargo", "test", "-p", "console-kernel-core", "--lib"],
+    ]);
+  });
+
+  it("does not mistake echo text for an executable cargo test", () => {
+    const [command] = commands(workflow("echo SQLX_OFFLINE=true cargo test -p console-kernel-core --lib"));
+    assert.equal(command.direct[0], "echo");
+  });
+
+  it("drops literal-false and continue-on-error steps", () => {
+    assert.deepEqual(commands(workflow("cargo test -p console-kernel-core", "        if: false\n")), []);
+    assert.deepEqual(commands(workflow("cargo test -p console-kernel-core", "        if: ${{ false }}\n")), []);
+    assert.deepEqual(commands(workflow("cargo test -p console-kernel-core", "        continue-on-error: true\n")), []);
+  });
+
+  it("stops at an unconditional exit before command-shaped text", () => {
+    const extracted = commands(workflow("exit 0\ncargo test -p console-kernel-core --lib"));
+    assert.equal(extracted.length, 1);
+    assert.equal(extracted[0].direct[0], "exit");
+  });
+
+  it("marks shell masks and disabled errexit as non-gating control flow", () => {
+    for (const body of [
+      "cargo test -p console-kernel-core --lib || true",
+      "false && cargo test -p console-kernel-core --lib",
+      "cargo test -p console-kernel-core --lib &",
+      "set +e\ncargo test -p console-kernel-core --lib",
+    ]) {
+      const cargo = commands(workflow(body)).find((entry) => entry.direct[0] === "cargo");
+      assert.ok(cargo, body);
+      assert.equal(cargo.controlFlow, true, body);
+    }
   });
 });
