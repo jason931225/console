@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { countDeclaredTestAttributes, evaluateBaseline } from "./executed-tests-baseline.mjs";
+import {
+  countDeclaredTestAttributes,
+  evaluateBaseline,
+  evaluateTestAttributeBaseline,
+} from "./executed-tests-baseline.mjs";
 import { directExecutable, executableWorkflowCommands } from "./ci-workflow-executables.mjs";
 
 const LABEL = "executed-tests-baseline.json";
@@ -119,6 +123,33 @@ fn compiled_out() {}
 async fn ignored_by_default() {}
 `;
     assert.equal(countDeclaredTestAttributes(source), 2);
+  });
+});
+
+describe("evaluateTestAttributeBaseline", () => {
+  it("passes only an exact static-attribute baseline", () => {
+    assert.deepEqual(
+      evaluateTestAttributeBaseline({ "a.rs": 2 }, { "a.rs": 2 }, "baseline.json"),
+      { fatal: null },
+    );
+  });
+
+  it("fails closed on a gain until --update locks it", () => {
+    assert.match(
+      evaluateTestAttributeBaseline({ "a.rs": 3 }, { "a.rs": 2 }, "baseline.json").fatal,
+      /gained declared test attributes.*--update/,
+    );
+  });
+
+  it("fails closed on a newly reachable source until --update locks it", () => {
+    assert.match(
+      evaluateTestAttributeBaseline(
+        { "a.rs": 2, "new.rs": 1 },
+        { "a.rs": 2 },
+        "baseline.json",
+      ).fatal,
+      /gained declared test attributes.*--update/,
+    );
   });
 });
 

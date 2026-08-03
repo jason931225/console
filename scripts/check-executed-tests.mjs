@@ -68,7 +68,11 @@ import { readFileSync, readdirSync, statSync, existsSync, writeFileSync } from "
 import { join, dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { countDeclaredTestAttributes, evaluateBaseline } from "./lib/executed-tests-baseline.mjs";
+import {
+  countDeclaredTestAttributes,
+  evaluateBaseline,
+  evaluateTestAttributeBaseline,
+} from "./lib/executed-tests-baseline.mjs";
 import { directExecutable, executableWorkflowCommands } from "./lib/ci-workflow-executables.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -468,31 +472,12 @@ if (process.argv.includes("--update")) {
 // unrelated gain. This sees lexical deletion from a still-reachable source. It does not
 // prove that a test is compiled, selected, unignored, or run; the binary ratchet above is
 // the executable-reachability evidence.
-const attributeBaseline = baseline.test_attribute_baseline;
-if (!attributeBaseline
-  || typeof attributeBaseline !== "object"
-  || Array.isArray(attributeBaseline)
-  || Object.values(attributeBaseline).some((count) => !Number.isInteger(count) || count < 0)) {
-  console.error(`\n${baselineRel} must contain a test_attribute_baseline object of non-negative integer static attribute counts.`);
-  process.exit(1);
-}
-const lost = [];
-for (const [source, was] of Object.entries(attributeBaseline)) {
-  if (!(source in testAttributes)) {
-    lost.push(`${source}: ${was} -> gone (source deleted, or no binary for it reaches a CI step)`);
-  } else if (testAttributes[source] < was) {
-    lost.push(`${source}: ${was} -> ${testAttributes[source]} (-${was - testAttributes[source]})`);
-  }
-}
-if (lost.length > 0) {
-  console.error(`\n${lost.length} reachable test source(s) lost declared test attributes:`);
-  for (const loss of lost) console.error(`  ${loss}`);
-  console.error(`\nIf each removal is intentional because its subject is gone too, say so in the commit message and run 'node scripts/check-executed-tests.mjs --update'.`);
-  process.exit(1);
-}
-const gained = Object.entries(testAttributes).filter(
-  ([source, count]) => count > (attributeBaseline[source] ?? 0),
+const attributeResult = evaluateTestAttributeBaseline(
+  testAttributes,
+  baseline.test_attribute_baseline,
+  baselineRel,
 );
-if (gained.length > 0) {
-  console.error(`\n${gained.length} reachable test source(s) gained declared test attributes. Run --update to lock the gain in.`);
+if (attributeResult.fatal) {
+  console.error(`\n${attributeResult.fatal}`);
+  process.exit(1);
 }

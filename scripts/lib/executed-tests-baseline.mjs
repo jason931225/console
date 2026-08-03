@@ -89,3 +89,43 @@ const TEST_ATTRIBUTE = /^[ \t]*#\[(?:tokio::|sqlx::)?test(?:\([^\n)]*\))?\]/gm;
 export function countDeclaredTestAttributes(source) {
   return (source.match(TEST_ATTRIBUTE) ?? []).length;
 }
+
+export function evaluateTestAttributeBaseline(current, baseline, label) {
+  if (!baseline
+    || typeof baseline !== "object"
+    || Array.isArray(baseline)
+    || Object.values(baseline).some((count) => !Number.isInteger(count) || count < 0)) {
+    return {
+      fatal: `${label} must contain a test_attribute_baseline object of non-negative integer static attribute counts.`,
+    };
+  }
+
+  const lost = [];
+  for (const [source, was] of Object.entries(baseline)) {
+    if (!(source in current)) {
+      lost.push(`${source}: ${was} -> gone (source deleted, or no binary for it reaches a CI step)`);
+    } else if (current[source] < was) {
+      lost.push(`${source}: ${was} -> ${current[source]} (-${was - current[source]})`);
+    }
+  }
+  if (lost.length > 0) {
+    return {
+      fatal: [
+        `${lost.length} reachable test source(s) lost declared test attributes:`,
+        ...lost.map((loss) => `  ${loss}`),
+        "",
+        "If each removal is intentional because its subject is gone too, say so in the commit message and run 'node scripts/check-executed-tests.mjs --update'.",
+      ].join("\n"),
+    };
+  }
+
+  const gained = Object.entries(current).filter(
+    ([source, count]) => count > (baseline[source] ?? 0),
+  );
+  if (gained.length > 0) {
+    return {
+      fatal: `${gained.length} reachable test source(s) gained declared test attributes. Run --update to lock the gain in before merge.`,
+    };
+  }
+  return { fatal: null };
+}
