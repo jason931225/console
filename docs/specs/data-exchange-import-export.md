@@ -2,7 +2,11 @@
 
 **Status:** Draft for implementation planning
 **Triggered by:** 2026-06-26 Excel/HR import request
-**Workbook evidence:** `/Users/jasonlee/Downloads/Untitled spreadsheet.xlsx`, profiled in `.omx/context/workbook-profile-untitled-spreadsheet.{md,json}`
+**Workbook evidence:** Restricted external input. The source workbook and its two
+derived profiles are not stored in Git; their exact custody identities are in the
+[disk-wipe handoff](../handoffs/2026-08-03-disk-wipe-consolidation.md#restricted-workbook-custody).
+Implementation must re-establish and review those inputs from approved encrypted
+custody rather than assuming a workstation path exists.
 **Parent specs:** `docs/specs/knl-business-os.md`, `docs/specs/org-hierarchy.md`, `docs/specs/rbac-configurable.md`
 
 ## 1. Objective

@@ -148,6 +148,15 @@ newer CI run does not retroactively make this consolidation incomplete.
   binaries into the PostgreSQL lane. All four Buck targets build locally and
   their 15 PostgreSQL tests pass; hosted proof still belongs to the replacement
   exact tip, not to this local measurement.
+- Signed tip `db7eda3ec2783ca93039b9d03cc2aaade613a927` then passed local
+  verification, protected-main simulation, authenticated authority checks,
+  independent exact-object review, and the hosted authority bootstrap. It was
+  nevertheless revoked before review or merge when a deeper ignored-file audit
+  found twelve OMX files still named by tracked records and disproved the
+  handoff's broad self-contained-planning claim. Ten stale pre-pivot reference
+  edges are now explicitly retired by hash; two workbook-derived profiles remain
+  in restricted external custody with their source. No result on that tip carries
+  merge authority into the custody-corrected pair.
 - Two signed archive tags make provenance commits outside the post-pivot main
   ancestry reproducible from a fresh clone:
   `archive/pre-pivot-implementation-freeze-2026-07-24` resolves to
@@ -218,21 +227,24 @@ Discarded means “do not reconstruct it from reflogs or backups after the wipe.
 
 Most ignored `.omx` state was runtime churn: approximately 3.6 GB and 138,000
 files of sessions, temporary worktrees, caches, logs, and superseded goals. `.omc`
-contained no durable unique plan. Exactly three immutable planning inputs were
+contained no durable unique plan. Exactly three active-pivot planning inputs were
 retained byte-for-byte, together with one tracked execution status record:
 
 The selection was time- and state-audited rather than guessed: the ignored tree
 held 294 plan files and 5,395 context files, while all 292 excluded plans and
 5,394 excluded contexts predated the July 28 pivot; `.omc` project memory had
 empty user directives/notes and its latest checkpoint had no tasks, modes, or
-jobs.
+jobs. Pre-pivot age alone was not treated as proof that every byte was runtime
+churn. A later reference-edge audit found ten reconstructible historical OMX
+artifacts and two restricted workbook profiles still named by tracked files.
+Their explicit dispositions follow; none is an unstated fresh-clone dependency.
 
 | Artifact | SHA-256 |
 | --- | --- |
 | `.omx/context/reasoning-lens-contract-20260803T101035Z.md` | `dea80c0a1fa5cc47c7ba12e4ee1c62480cd675e7b26bf33434ddf1fc94be61e4` |
 | `.omx/plans/reasoning-lens-contract.md` | `76dc05561d7d6c07ee26afb68ea60841321eab7516f6d0546ba96d41825aad5c` |
 | `.omx/plans/reasoning-lens-contract-handoff.json` | `db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2` |
-| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `bc567c4b67adc27b000c52332dbfc92765a37223c1468ee879cddb577d053fcc` at the replacement-candidate resealing stage |
+| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `c43624729910a392bbec720eb1a7e07bbf63e7f2ef11b19c025b4d3d29c8b471` at the custody-correction resealing stage |
 
 The original JSON correctly says execution had not started at the instant the
 architect/critic plan was frozen. Do not edit that historical claim. The sibling
@@ -242,6 +254,43 @@ until the consolidation closeout is committed; the first three hashes above do
 not. A fresh session should continue from current program state and the latest
 tracked receipt; it should not rerun the old Ultragoal as if implementation were
 pending.
+
+### Retired ignored OMX evidence
+
+The following ten local artifacts supported broad pre-pivot frontend/platform
+work. They are stale or reconstructible, outside the July 28 active boundary,
+and not suitable as current product evidence. Their tracked reference edges were
+replaced with this receipt. The bytes are explicitly retired and may be discarded;
+their hashes are retained so a later copy cannot silently regain authority.
+
+| Retired local artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `.omx/context/backlog-ledger/issues-6-19-55-56-20260629T0906Z.json` | 135,932 | `7e9103febcad3b81a1bfae10d0cc3600ea27d1c10f8d62516c6b4b01d3c74f52` |
+| `.omx/context/backlog-ledger/prs-61-86-gh-20260629T090935Z.json` | 16,821 | `20ae2420d8939c343bde953be691eb7a9fd2eed48561c7580582a929bd1ccabe` |
+| `.omx/context/platform-maturity-g001/issues-detail-20260630T0012Z.json` | 170,861 | `2a0cd280b4315182c0c1c1e3291f112ffa81dd675e5fe15485225aebc705646b` |
+| `.omx/context/platform-maturity-g001/issues-summary-20260630T0012Z.json` | 4,035 | `2b002abec663f001d8da6d4400b7b5719de22cc590c1ef7da61d0f61fb0886a9` |
+| `.omx/context/platform-maturity-g001/live-baseline-20260630T0017Z.txt` | 5,685 | `fe80a0f6b71f4c0ddffea95462bdc0d6ea57710dfdd7ae315599dca80890a56c` |
+| `.omx/context/platform-maturity-g001/red-route-audit-gate-20260630T0014Z.txt` | 37,576 | `6dc040afa7b23079e04b5d228e46e961db6fc75194ab6eafe6ff70a27462b7ac` |
+| `.omx/context/platform-maturity-g001/green-route-audit-gate-20260630T0016Z.txt` | 42,628 | `fde937f84659a955a05d50ec0363d4389814075c32762fcbafc30f629f801d47` |
+| `.omx/context/public-cx/g009-completion-evidence-20260629.md` | 2,947 | `2bc739746cc397e7dbc749e34c3aaeb67d3532e293b6602594e0b43d1c0baa83` |
+| `.omx/plans/platform-maturity-e2e-completion-prd-20260629T215449Z.md` | 54,777 | `986f9c57933f06d08560812b5d31b64883d33391cbde6c401b131a4a4a5cac46` |
+| `.omx/plans/platform-maturity-e2e-completion-test-spec-20260629T215449Z.md` | 11,607 | `a5e3ec0ca48bc149c1ce74449b2fc14c9cbf538258f0782e141a0690eada1226` |
+
+### Restricted workbook custody
+
+Two ignored profiles are derived from the real eight-sheet HR/payroll workbook
+named below. Pattern scanning found masked sensitive previews and no
+high-confidence private key, token, RRN, phone, or email value, but that is not a
+proof that non-sensitive cells are publishable or fully de-identified. Do not
+commit these profiles. Preserve all three inputs together in approved encrypted
+off-device custody and verify a read-back hash, or explicitly approve discarding
+the source and both profiles.
+
+| Restricted local input | Bytes | SHA-256 / observation |
+| --- | ---: | --- |
+| `.omx/context/workbook-profile-untitled-spreadsheet.md` | 53,955 | `a11423948582bc5050ad9358b1d7f7d82784c4ad2fb05c6f86683ef6f318eabb` |
+| `.omx/context/workbook-profile-untitled-spreadsheet.json` | 220,509 | `3fa610fd382c0428f92cc7fe0c556a481854ed6684de4a2814162c3c4652a281` |
+| `~/Downloads/Untitled spreadsheet.xlsx` | 910,174 | Bytes were not readable to the audit process; no hash was claimed. |
 
 ## Ignored files and secrets
 
@@ -292,7 +341,7 @@ decision before wipe—encrypted external preservation or deliberate discard:
 | --- | --- |
 | iCloud `TalkFile_장비Master List.xlsx` | 90,753 bytes; SHA-256 `caf83ec76dbdf35e85096a46ffb33372d22adeacc37c49c102a213a10875eba2` |
 | `~/Desktop/COSS Group/` | Directory exists; contents were not readable to the audit process |
-| `~/Downloads/Untitled spreadsheet.xlsx` | 910,174-byte file; bytes were not readable to the audit process |
+| `~/Downloads/Untitled spreadsheet.xlsx` | 910,174-byte file; bytes were not readable to the audit process; preserve or discard it together with the two profiles in [restricted workbook custody](#restricted-workbook-custody) |
 | iCloud `TalkFile_조직도_그룹웨어_회사_20260626105223.csv` | 7,424 bytes; SHA-256 `d5f4dcf2b856e12015b2af62a59725c1f0a030e5ec4bcba5cfa785e136ad6687` |
 
 An iCloud path alone is not proof that upload/synchronization completed, and
@@ -300,22 +349,62 @@ Desktop/Downloads paths are local unless separately backed up. Record the
 owner's decision and, for preserved inputs, verify an off-device read-back by
 hash before erase.
 
+### Whole-disk blockers outside Console
+
+The wipe boundary is larger than this repository. A bounded read-only audit
+found no usable custody destination: Time Machine had no configured destination
+or latest backup, `~/Library/CloudStorage` was empty, and `/Volumes` exposed only
+system or read-only application mounts. Console merge authority does not
+authorize modifying the repositories below, but their local-only state makes a
+whole-disk erase unsafe:
+
+- `/Users/jasonlee/Developer/oyatie` is at
+  `c52bdb09ea337de103b05317de0c120f2b7a3e45` on
+  `preserve/hermes-w1-dirty-20260630` with its upstream at 0/0, but has 13 staged
+  files, 1,386 unstaged files, 374 untracked files, two stashes, 151 commits not
+  reachable from fetched remote-tracking refs, and 175 registered/existing
+  worktrees. A Git bundle alone would omit the dirty and untracked bytes.
+- `/Users/jasonlee/Developer/TencentDB-Agent-Memory` is at
+  `f3df79326dfd763f45199c441e2129d780467949` on `feat/server_team` with its
+  upstream at 0/0, but 28 material subscription-gateway files under `deploy/`
+  and `reports/` are untracked and not remote.
+- `/Users/jasonlee/Developer/asterinas` has 17 commits not reachable from
+  remote-tracking refs. Worktree `agent-a0954f296eb65a23d` has six unpublished
+  commits at `ac0324984484b377dc0621213058e4ae2558c56d`, five modified source files,
+  and six untracked DTB/DTS test fixtures. Four authored root `.omc/artifacts`
+  also remain local: `arm64-container-verification-recipe.md`
+  (`6e2cf029bd251903eefec0ecf88ac98087dfdba29b5497b007a976e017cfd80e`),
+  `aarch64-local-host-capability.md`
+  (`778af950b36b3bcd7c80111fc3840ec1ffccdb2b1bccd5e9b6db3431e17fef5a`),
+  `pr-3270-security-review.md`
+  (`b3c1f5e2f4ff21e934223794bd96800bb1dfa9c9c25913df3ed00f8c4646837b`),
+  and `aarch64-maturity-parity-matrix.md`
+  (`6be28a697631dc9ee5409d81f330c5713a4379bf70fe918a146e0ced667c2903`).
+
+Preserve each repository's refs plus dirty/untracked bytes to encrypted writable
+off-device storage and independently read them back, or make an explicit
+repository-specific discard decision. Do not infer that an upstream at 0/0
+contains the working tree.
+
 The ignored `ops/.dev-secrets/jwt-private.pem` and `jwt-public.pem` are local
 development keys generated by the dev bootstrap and should be regenerated, not
 backed up. Also discard `node_modules`, Rust/Buck build outputs, `.tmp`,
 `.local-dev`, Python caches, Tofu provider locks/state generated in scratch
-areas, and the remaining OMX/OMC runtime directories. The durable root
+areas, and the remaining OMX/OMC runtime directories except for the two
+restricted workbook profiles above until their custody decision is complete.
+The durable root
 `.gitignore` now ignores newly generated `.omx/` runtime content; the four
 already tracked planning/status files remain tracked. Also discard
 `.superpowers` progress and temporary review packets under `/tmp`: they contain
 interim Coss approvals superseded by the final `BLOCKED` record and are a
 specific resurrection hazard.
 
-The repository is self-contained after the merge for product source, reviewed
-history, and planning context. It is intentionally not sufficient for
-workstation identity, secret recovery, or an OCI/Talos rebuild: those require the
-external custody items above. No unmerged local product code or planning context
-is a prerequisite for the next session.
+The repository is self-contained after the merge for active-pivot product
+source, reviewed history, and active planning authority. It is intentionally not
+sufficient for workstation identity, secret recovery, the restricted workbook
+evidence, or an OCI/Talos rebuild: those require the external custody items
+above. The ten retired historical artifacts cannot regain authority merely
+because a later machine happens to recover their bytes.
 
 ## Safety holds that survive the wipe
 

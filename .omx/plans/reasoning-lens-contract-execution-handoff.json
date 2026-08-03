@@ -16,7 +16,7 @@
       "sha256": "db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2"
     }
   },
-  "execution_state": "replacement_candidate_resealing_after_review",
+  "execution_state": "custody_correction_candidate_resealing",
   "implemented_commits": [
     "ed8424f5153b760162545e0ea669a4be5950280a",
     "963302685bae2c28d7c6107dc2bb0b4f902392cd",
@@ -29,6 +29,10 @@
     {
       "sha": "3885ed49b4bf2906f75c1907cfcd7f03f9aac0c3",
       "disposition": "revoked; never merge or treat as implementation authority"
+    },
+    {
+      "sha": "db7eda3ec2783ca93039b9d03cc2aaade613a927",
+      "disposition": "revoked after ignored-file reference audit contradicted its self-contained custody claim; hosted results on this tip are source evidence only"
     }
   ],
   "implementation": {
@@ -52,7 +56,9 @@
     "shared_test_fixture_mapping_and_ci_reachability": "implemented; mobile and dispatch shared fixtures are exported/mapped and three previously dark PostgreSQL binaries are in the serialized lane",
     "personal_data_reader_scope_alignment": "implemented; retention and completeness readers share the non-pg_catalog, non-temporary r/p/m/f catalog universe with schema-qualified identities",
     "rule_c_json_classification_reconciliation": "implemented; exactly five audited free-form JSONB omissions now include undeclared and are catalog-test locked",
-    "touched_api_contract_reconciliation": "implemented; site creation documents branch scope and exit-case creation returns the documented HTTP 201"
+    "touched_api_contract_reconciliation": "implemented; site creation documents branch scope and exit-case creation returns the documented HTTP 201",
+    "ignored_omx_reference_reconciliation": "implemented; ten stale pre-pivot evidence dependencies are explicitly retired by hash and two restricted workbook profiles are placed with their source in the external encrypted-custody boundary",
+    "whole_disk_custody_boundary": "documented; Console authority does not make dirty or unpublished Oyatie, TencentDB-Agent-Memory, or Asterinas state safe to erase"
   },
   "verification": {
     "validator_unit_tests": "40/40 passed",
@@ -69,8 +75,8 @@
     "retention_scope_repair": "27 personal-data classification assertions passed against disposable PostgreSQL, including isolated non-public table, materialized-view, foreign-table, Rule-C, two-year floor, and owner-only SQLSTATE 42501 probes",
     "pre_authority_local_verifier": "after the two reproduced repairs, every non-authority fast-verifier stage passed at signed checkpoint baadf03cf4692754fd0b964834e324d14e48f20e; only the two exact-M admission steps correctly rejected that content checkpoint because it was not yet a ledger-only direct-child authority tip",
     "superseded_exact_t_verifier": "protected-main simulation and its 72 authenticated checks passed at T 3885ed49b4bf2906f75c1907cfcd7f03f9aac0c3, and npm run verify completed successfully; exact-object review then revoked that T because two documents marked current still dispatched the generic company_conformance/JobPosition pilot that the roadmap and catalog place on HOLD, while accepted ADR-0030 still described required CI path filters that no longer exist",
-    "final_pr_ci": "pending",
-    "exact_sha_review": "NEEDS_FIXES at superseded T 3885ed49b4bf2906f75c1907cfcd7f03f9aac0c3; independent review additionally found the retention-reader under-scope, exactly five Rule-C JSON omissions, and two touched API-contract mismatches; all reproduced findings are repaired locally and replacement exact-SHA review is pending"
+    "final_pr_ci": "pending on the custody-corrected authority tip; run 30840399153 belongs to superseded T db7eda3ec2783ca93039b9d03cc2aaade613a927 and cannot authorize the replacement pair",
+    "exact_sha_review": "source and exact-object review passed at superseded T db7eda3ec2783ca93039b9d03cc2aaade613a927, but the subsequent ignored-file audit disproved its self-contained custody claim; replacement exact-SHA review is pending"
   },
-  "continuation": "Create a new signed candidate and ledger-only direct-child authority tip only after the current repair review is clean; pass exact-T protected-main simulation and the complete local verifier, finish exact-SHA review and hosted CI for PR #562, obtain a non-author formal GitHub approval, merge, finish any generated release PR under the same review/CI rule, and record the closeout on main. Then start future work from origin/main and docs/handoffs/2026-08-03-disk-wipe-consolidation.md; do not rerun the historical plan as unstarted, do not treat revoked T 3885ed49b4bf2906f75c1907cfcd7f03f9aac0c3 as authority, and do not erase the workstation until the handoff's off-device custody decisions are read-back verified."
+  "continuation": "Seal a new signed candidate and ledger-only direct-child authority tip only after the ignored OMX reference edges and whole-disk custody boundary are reviewed. Then pass exact-T protected-main simulation and the complete local verifier, finish exact-SHA review and hosted CI for PR #562, obtain a non-author formal GitHub approval, merge, finish any generated release PR under the same review/CI rule, and record the closeout on main. Start future product work only from origin/main and docs/handoffs/2026-08-03-disk-wipe-consolidation.md; do not rerun the historical plan as unstarted, do not treat revoked tips 3885ed49b4bf2906f75c1907cfcd7f03f9aac0c3 or db7eda3ec2783ca93039b9d03cc2aaade613a927 as authority, and do not erase the workstation until every Console and outside-repository off-device custody decision in the handoff is read-back verified."
 }
