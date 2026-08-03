@@ -1,3 +1,13 @@
+---
+id: ADR-0039
+status: proposed
+doc_status: review
+date: 2026-08-02
+owner: jasonlee
+decision: one-graph-tests-run-by-existing
+related: [ADR-0037, ADR-0038]
+---
+
 # ADR-0039 — One graph: a test runs because it exists
 
 **Status:** Proposed · **Date:** 2026-08-02 · **Supersedes:** nothing · **Relates to:** ADR-0037, ADR-0038
