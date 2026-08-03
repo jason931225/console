@@ -864,6 +864,41 @@ COMMENT ON COLUMN audit_events.user_agent IS 'pd:personal — 이용자 단말 �
 -- anyone who can CREATE in `public` can plant a function of the same name and
 -- signature and have it run as the definer. `pg_temp` stays last for the same
 -- reason at one further remove.
+-- payroll_statutory_rates
+-- Global statutory figures and source citations are shared reference data, not
+-- rows about a natural person.
+COMMENT ON COLUMN payroll_statutory_rates.code IS 'pd:none — global statutory-rate key; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.effective_from IS 'pd:none — statutory effective date; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.effective_to_exclusive IS 'pd:none — statutory effective-date bound; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.rate_num IS 'pd:none — statutory rate numerator; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.rate_den IS 'pd:none — statutory rate denominator; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.floor_won IS 'pd:none — statutory amount floor; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.cap_won IS 'pd:none — statutory amount cap; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.basis IS 'pd:none — statutory calculation-basis enum; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.bearer IS 'pd:none — statutory cost-bearer enum; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.instrument_ko IS 'pd:none — public statutory instrument citation; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.article_ko IS 'pd:none — public statutory article citation; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.promulgation_ko IS 'pd:none — public promulgation identifier; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.enforced_on IS 'pd:none — statutory enforcement date; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.source_url IS 'pd:none — public law source URL; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.retrieved_on IS 'pd:none — public-source retrieval date; no natural-person row';
+COMMENT ON COLUMN payroll_statutory_rates.provenance_ko IS 'pd:none — public-source provenance note; no natural-person row';
+
+-- employee_contract_wages
+-- Each row is an effective-dated wage record for one employee. Identifiers,
+-- dates, wage terms, and creator metadata are personal through that linkage;
+-- source_note is additionally unbounded operator-authored text.
+COMMENT ON COLUMN employee_contract_wages.id IS 'pd:personal — employee wage-record identifier; linkable to a natural person';
+COMMENT ON COLUMN employee_contract_wages.org_id IS 'pd:personal — tenant component of an employee wage record';
+COMMENT ON COLUMN employee_contract_wages.employee_id IS 'pd:personal — direct employee linkage';
+COMMENT ON COLUMN employee_contract_wages.effective_from IS 'pd:personal — effective date of an individual wage term';
+COMMENT ON COLUMN employee_contract_wages.wage_kind IS 'pd:personal — individual contract wage basis';
+COMMENT ON COLUMN employee_contract_wages.amount_won IS 'pd:personal — individual contract wage amount; credit classification remains HOLD';
+COMMENT ON COLUMN employee_contract_wages.monthly_standard_hours IS 'pd:personal — individual contractual working-hours term';
+COMMENT ON COLUMN employee_contract_wages.source_note IS 'pd:personal,undeclared — operator-authored wage-source note with unbounded content';
+COMMENT ON COLUMN employee_contract_wages.created_by IS 'pd:personal — user identifier for the person who recorded the wage term';
+COMMENT ON COLUMN employee_contract_wages.created_at IS 'pd:personal — timestamp associated with employee and recording user';
+
 CREATE OR REPLACE FUNCTION personal_data_columns()
 RETURNS TABLE (rel_name TEXT, col_name TEXT, tokens TEXT[])
 LANGUAGE sql
