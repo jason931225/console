@@ -321,6 +321,36 @@ export function writePrivateFile(path, contents) {
   writeFileSync(path, contents, { flag: "wx", mode: 0o600 });
 }
 
+export function topologyEnvContents(credentials) {
+  const entries = [
+    ["POSTGRES_ADMIN_PASSWORD", credentials.admin],
+    ["CONSOLE_APP_POSTGRES_PASSWORD", credentials.app],
+    ["CONSOLE_RT_POSTGRES_PASSWORD", credentials.runtime],
+    ["CONSOLE_LEAVE_COMMAND_POSTGRES_PASSWORD", credentials.leaveCommand],
+    ["CONSOLE_ONTOLOGY_COMMAND_POSTGRES_PASSWORD", credentials.ontologyCommand],
+    ["CONSOLE_PLATFORM_FORCE_COMMAND_POSTGRES_PASSWORD", credentials.platformForce],
+  ];
+  if (new Set(entries.map(([, password]) => password)).size !== entries.length) {
+    throw new Error("PostgreSQL topology credentials must be pairwise distinct");
+  }
+  return [
+    "POSTGRES_HOST=127.0.0.1",
+    "POSTGRES_DB=console_ci",
+    "POSTGRES_ADMIN_USER=postgres",
+    ...entries.map(([name, password]) => `${name}=${password}`),
+    "",
+  ].join("\n");
+}
+
+function generateDistinctPasswords(count) {
+  const passwords = [];
+  while (passwords.length < count) {
+    const candidate = captureFile("openssl", ["rand", "-hex", "16"]);
+    if (!passwords.includes(candidate)) passwords.push(candidate);
+  }
+  return passwords;
+}
+
 /** Reproduce CI's C/T/M derivation against a synthetic merge, so the console
  *  authority gates can be checked before pushing rather than after. */
 function consoleTrainEnv() {
@@ -346,8 +376,15 @@ function consoleTrainEnv() {
 function withPostgres(body) {
   const name = `console-verify-pg-${process.pid}`;
   const scratch = mkdtempSync(join(tmpdir(), "console-verify-"));
-  const adminPassword = captureFile("openssl", ["rand", "-hex", "16"]);
-  const bootstrapPassword = captureFile("openssl", ["rand", "-hex", "16"]);
+  const [
+    adminPassword,
+    appPassword,
+    runtimePassword,
+    leaveCommandPassword,
+    ontologyCommandPassword,
+    platformForceCommandPassword,
+    buckAdminPassword,
+  ] = generateDistinctPasswords(7);
   try {
     const postgresEnv = join(scratch, "postgres.env");
     writePrivateFile(postgresEnv, [
@@ -384,23 +421,19 @@ function withPostgres(body) {
 
     captureFile("docker", ["cp", "ops/postgres-reconcile-topology.sh", `${name}:/topology.sh`]);
     const topologyEnv = join(scratch, "topology.env");
-    writePrivateFile(topologyEnv, [
-      "POSTGRES_HOST=127.0.0.1",
-      "POSTGRES_DB=console_ci",
-      "POSTGRES_ADMIN_USER=postgres",
-      `POSTGRES_ADMIN_PASSWORD=${adminPassword}`,
-      `CONSOLE_APP_POSTGRES_PASSWORD=${bootstrapPassword}`,
-      `CONSOLE_RT_POSTGRES_PASSWORD=${bootstrapPassword}`,
-      `CONSOLE_LEAVE_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword}`,
-      `CONSOLE_ONTOLOGY_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword}`,
-      `CONSOLE_PLATFORM_FORCE_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword}`,
-      "",
-    ].join("\n"));
+    writePrivateFile(topologyEnv, topologyEnvContents({
+      admin: adminPassword,
+      app: appPassword,
+      runtime: runtimePassword,
+      leaveCommand: leaveCommandPassword,
+      ontologyCommand: ontologyCommandPassword,
+      platformForce: platformForceCommandPassword,
+    }));
     captureFile("docker", ["exec", "--env-file", topologyEnv, name, "bash", "/topology.sh"]);
 
     // The password reaches psql through a mode-0600 file, never argv.
     const sql = join(scratch, "buck-admin.sql");
-    writePrivateFile(sql, `CREATE ROLE console_buck_admin SUPERUSER LOGIN PASSWORD '${bootstrapPassword}';\n`);
+    writePrivateFile(sql, `CREATE ROLE console_buck_admin SUPERUSER LOGIN PASSWORD '${buckAdminPassword}';\n`);
     captureFile("docker", ["cp", sql, `${name}:/buck-admin.sql`]);
     const adminEnv = join(scratch, "admin.env");
     writePrivateFile(adminEnv, `PGPASSWORD=${adminPassword}\n`);
@@ -409,7 +442,7 @@ function withPostgres(body) {
       "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-f", "/buck-admin.sql",
     ]);
 
-    const buckAdminUrl = `postgres://console_buck_admin:${bootstrapPassword}@127.0.0.1:${port}/console_ci?${BOOTSTRAP_GUC}`;
+    const buckAdminUrl = `postgres://console_buck_admin:${buckAdminPassword}@127.0.0.1:${port}/console_ci?${BOOTSTRAP_GUC}`;
     return body({
       DATABASE_URL: buckAdminUrl,
       CONSOLE_BUCK_ADMIN_DATABASE_URL: buckAdminUrl,

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import yaml from "js-yaml";
 
 const dotSlashBootstrap = "tools/buck/install_dotslash.sh";
 const reindeerToolchainLock = "third-party/rust/reindeer/upstream.lock";
@@ -416,6 +418,10 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:workorder-adapter-postgres-use-cases-pg \\",
   "//tools/buck:workorder-rest-mobile-device-registration-pg",
 ];
+const companyConformanceCommands = [
+  "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
+  "//tools/buck:company-conformance-postgres",
+];
 const postgresWrapperContracts = [
   ["platform-db-feature-catalog-coverage", "//backend/crates/platform/db:console-platform-db-itest-feature_catalog_covers_every_feature"],
 
@@ -654,7 +660,60 @@ const protectedJobs = [
   "generated-face-authority",
   "domain-unit",
   "postgres-domain-reachability",
+  "company-conformance",
 ];
+
+// Environment and job defaults are executable inputs: BASH_ENV, NODE_OPTIONS,
+// PATH and RUSTC_WRAPPER can replace the program a visually exact `run:` line
+// actually reaches. Keep the small amount of intentional metadata explicit and
+// reject every other job/step injection on the jobs this preflight protects.
+const protectedJobExecutionMetadata = {
+  preflight: {
+    stepEnv: [{
+      name: reasoningLensAdmissionName,
+      env: Object.fromEntries(
+        reasoningLensAdmissionEnvironment.map((entry) => entry.split(": ", 2)),
+      ),
+    }],
+  },
+  "domain-unit": {},
+  "postgres-domain-reachability": {},
+  "company-conformance": {},
+  "generated-face-authority": {},
+  backend: {
+    env: {
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5432/console_ci",
+      SQLX_OFFLINE: "true",
+      CARGO_INCREMENTAL: "0",
+      CARGO_PROFILE_DEV_DEBUG: "0",
+      CARGO_PROFILE_TEST_DEBUG: "0",
+    },
+    defaults: { run: { "working-directory": "backend" } },
+  },
+  "dev-up-smoke": {
+    env: {
+      CARGO_INCREMENTAL: "0",
+      CARGO_PROFILE_DEV_DEBUG: "0",
+    },
+  },
+  "repo-gates": {},
+  "api-contract": {},
+  "kubernetes-manifests": {
+    stepEnv: [{
+      name: "Install kubectl (for kustomize renderer)",
+      env: { KUBECTL_VERSION: "v1.36.2" },
+    }, {
+      name: "Install kustomize (NetworkPolicy static render proof)",
+      env: {
+        KUSTOMIZE_VERSION: "v5.8.1",
+        KUSTOMIZE_SHA256: "029a7f0f4e1932c52a0476cf02a0fd855c0bb85694b82c338fc648dcb53a819d",
+      },
+    }, {
+      name: "Render manifests and NetworkPolicy enforcement preflight",
+      env: { CONSOLE_NETWORKPOLICY_PREFLIGHT: "warn" },
+    }],
+  },
+};
 
 function triggerPathEntries(workflow, trigger) {
   const match = workflow.match(new RegExp(`^  ${trigger}:\\n([\\s\\S]*?)(?=^  [A-Za-z0-9_-]+:|^permissions:)`, "m"));
@@ -688,6 +747,50 @@ function runScalar(step) {
 
 function isUnconditional(step) {
   return !/^        (?:if|continue-on-error):/m.test(step);
+}
+
+function hasJobDefaultShell(block) {
+  const defaults = block.match(/^    defaults:\n((?:      [^\n]*(?:\n|$))*)/m)?.[1] ?? "";
+  return /^        shell:/m.test(defaults);
+}
+
+function hasUnsafeStepShell(block) {
+  return [...block.matchAll(/^        shell: ([^\n]+)$/gm)]
+    .some(([, shell]) => shell.trim() !== "bash");
+}
+
+function requireProtectedExecutionMetadata(workflowModel, failures) {
+  if (Object.hasOwn(workflowModel, "env") || Object.hasOwn(workflowModel, "defaults")) {
+    failures.push("CI workflow must not define workflow-level env or defaults");
+  }
+
+  for (const [jobName, expected] of Object.entries(protectedJobExecutionMetadata)) {
+    const job = workflowModel.jobs?.[jobName];
+    if (!job || typeof job !== "object") continue;
+
+    const expectedEnv = Object.hasOwn(expected, "env") ? expected.env : undefined;
+    const expectedDefaults = Object.hasOwn(expected, "defaults") ? expected.defaults : undefined;
+    if (!isDeepStrictEqual(job.env, expectedEnv)
+      || !isDeepStrictEqual(job.defaults, expectedDefaults)) {
+      failures.push(`${jobName} must preserve its exact job env/defaults execution metadata`);
+    }
+
+    const actualStepEnv = (Array.isArray(job.steps) ? job.steps : [])
+      .filter((step) => step && typeof step === "object" && Object.hasOwn(step, "env"))
+      .map((step) => ({ name: step.name, env: step.env }));
+    if (!isDeepStrictEqual(actualStepEnv, expected.stepEnv ?? [])) {
+      failures.push(`${jobName} must preserve its exact step environment allowlist`);
+    }
+
+    const unsafeShell = (Array.isArray(job.steps) ? job.steps : [])
+      .some((step) => step
+        && typeof step === "object"
+        && Object.hasOwn(step, "shell")
+        && step.shell !== "bash");
+    if (unsafeShell) {
+      failures.push(`${jobName} may use only the default shell or canonical shell: bash`);
+    }
+  }
 }
 
 function multilineRunCommands(step) {
@@ -1207,6 +1310,17 @@ function requireEffectiveDotSlashBootstrap(block, job, failures) {
 
 export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBuildFile) {
   const failures = [];
+  let workflowModel;
+  try {
+    workflowModel = yaml.load(workflow);
+  } catch (error) {
+    return { failures: [`CI workflow must parse as YAML: ${error.message}`] };
+  }
+  if (!workflowModel || typeof workflowModel !== "object") {
+    return { failures: ["CI workflow must parse as a YAML mapping"] };
+  }
+  requireProtectedExecutionMetadata(workflowModel, failures);
+
   for (const trigger of ["push", "pull_request"]) {
     const triggerPaths = triggerPathEntries(workflow, trigger);
     for (const path of requiredTriggerPaths) {
@@ -1228,6 +1342,12 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   }
   if (/^    continue-on-error:/m.test(preflight)) {
     failures.push("preflight must not define job-level continue-on-error");
+  }
+  if (hasJobDefaultShell(preflight)) {
+    failures.push("preflight must not override defaults.run.shell");
+  }
+  if (hasUnsafeStepShell(preflight)) {
+    failures.push("preflight may use only the default shell or canonical shell: bash");
   }
   const checkout = preflightSteps.find((step) => step.startsWith("name: Checkout\n"));
   if (!checkout || !/^        with:\n(?:          [^\n]+\n)*          fetch-depth: 0$/m.test(checkout)) {
@@ -1256,6 +1376,10 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       ));
     if (!domainCommandsMatch || !isUnconditional(domainStep)) {
       failures.push("domain-unit must execute the locked Cargo test commands directly and unconditionally");
+    }
+    if (/^    (?:env|defaults):/m.test(domainUnit)
+      || /^        (?:env|shell):/m.test(domainUnit)) {
+      failures.push("domain-unit must use the default shell with no job or step env/defaults overrides");
     }
     const directTokens = parsedDomainCommands.flatMap((command) => command.tokens);
     for (const pkg of domainUnitPackages) {
@@ -1292,6 +1416,31 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
       steps,
       [dotSlashBootstrap, postgresDomainReachabilityCommands.join("\n")],
       "postgres-domain-reachability",
+      failures,
+    );
+  }
+
+  const companyConformance = jobBlock(workflow, "company-conformance");
+  if (companyConformance) {
+    const steps = stepBlocks(companyConformance);
+    requireOrderedStepContracts(
+      steps,
+      [{
+        name: "Install pinned DotSlash runtime",
+        run: dotSlashBootstrap,
+        if: null,
+      }, {
+        name: "Company conformance against disposable PostgreSQL",
+        run: companyConformanceCommands.join("\n"),
+        if: null,
+      }],
+      "company-conformance",
+      failures,
+    );
+    requireOnlyLockedRuns(
+      steps,
+      [dotSlashBootstrap, companyConformanceCommands.join("\n")],
+      "company-conformance",
       failures,
     );
   }
@@ -1403,17 +1552,34 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
 
   const devUpSmoke = jobBlock(workflow, "dev-up-smoke");
   if (devUpSmoke) {
+    const devUpSteps = stepBlocks(devUpSmoke);
+    const devUpRunContracts = [
+      { name: "dev-up compose contract unit test", run: "node --test scripts/dev-up-compose.test.mjs", if: null },
+      { name: "Install pinned DotSlash runtime", run: dotSlashBootstrap, if: null },
+      { name: "PostgreSQL topology integration regression", run: "ops/postgres-topology.integration.test.sh", if: null },
+      { name: "dev-up bootstrap (compose deps + migrate + backend readyz)", run: "node scripts/dev-up.mjs bootstrap", if: null },
+      { name: "Confirm /readyz reachable", run: 'curl -fsS "http://127.0.0.1:${CONSOLE_DEV_HTTP_PORT:-8090}/readyz"', if: null },
+      { name: "dev-up down", run: "node scripts/dev-up.mjs down", if: "always()" },
+    ];
     requireOrderedStepContracts(
-      stepBlocks(devUpSmoke),
+      devUpSteps,
       [
+        { name: "Checkout", run: null, if: null },
         { name: "dev-up compose contract unit test", run: "node --test scripts/dev-up-compose.test.mjs", if: null },
         { name: "Install pinned DotSlash runtime", run: dotSlashBootstrap, if: null },
         { name: "Free runner disk for Rust backend", run: null, if: null },
         { name: "Install Rust toolchain (pinned via rust-toolchain.toml)", run: null, if: null },
+        { name: "Set up Node.js", run: null, if: null },
+        ...devUpRunContracts.slice(2),
       ],
       "dev-up-smoke",
       failures,
     );
+    const actualRunNames = devUpSteps.filter((step) => runCommand(step) !== null).map(stepName);
+    const expectedRunNames = devUpRunContracts.map(({ name }) => name);
+    if (JSON.stringify(actualRunNames) !== JSON.stringify(expectedRunNames)) {
+      failures.push("dev-up-smoke must contain only the locked ordered proof and cleanup run steps");
+    }
   }
 
   const fullGeneratedFaces = jobBlock(workflow, "generated-face-authority");
@@ -1455,6 +1621,20 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
         if: "${{ !cancelled() }}",
       }],
       "repo-gates",
+      failures,
+    );
+  }
+
+  const kubernetesManifests = jobBlock(workflow, "kubernetes-manifests");
+  if (kubernetesManifests) {
+    requireOrderedStepContracts(
+      stepBlocks(kubernetesManifests),
+      [{
+        name: "Production hardening contract",
+        run: "npm run check:production-hardening",
+        if: "${{ !cancelled() }}",
+      }],
+      "kubernetes-manifests",
       failures,
     );
   }
@@ -1539,11 +1719,13 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
     const block = jobBlock(workflow, job);
     if (!block) {
       failures.push(`CI must define protected job ${job}`);
-    } else if (!needsPreflight(block)) {
-      failures.push(`${job} must need preflight`);
-    } else if (/^    if:/m.test(block)) {
-      failures.push(`${job} must not define job-level if`);
+      continue;
     }
+    if (!needsPreflight(block)) failures.push(`${job} must need preflight`);
+    if (/^    if:/m.test(block)) failures.push(`${job} must not define job-level if`);
+    if (/^    continue-on-error:/m.test(block)) failures.push(`${job} must not define job-level continue-on-error`);
+    if (hasJobDefaultShell(block)) failures.push(`${job} must not override defaults.run.shell`);
+    if (hasUnsafeStepShell(block)) failures.push(`${job} may use only the default shell or canonical shell: bash`);
   }
 
   return { failures };

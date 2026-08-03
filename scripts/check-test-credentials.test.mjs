@@ -63,6 +63,16 @@ test("recognizes Cargo toolchain, global-flag, and nextest runner forms", () => 
   }
 });
 
+test("recognizes Buck2 universal flags before the test subcommand", () => {
+  for (const runner of [
+    "tools/buck2 --isolation-dir credential-probe test",
+    "tools/buck2 -v 2 test",
+  ]) {
+    assert.equal(findingsFor(`${runner} //backend/app:tests -- password=hunter2`).length, 1, runner);
+    assert.equal(findingsFor(`${runner} //backend/app:tests postgres://u:hunter2@db/test`).length, 1, runner);
+  }
+});
+
 test("rejects a libpq URI with an empty user and nonempty password", () => {
   assert.equal(
     findingsFor("cargo test -p console-app -- postgresql://:hunter2@db/console").length,

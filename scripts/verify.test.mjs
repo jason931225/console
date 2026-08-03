@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,8 +11,11 @@ import {
   assertPlanCoversCi,
   reasoningLensLocalRunFromPlan,
   REASONING_LENS_LOCAL_RUN,
+  topologyEnvContents,
   writePrivateFile,
 } from "./verify.mjs";
+
+const root = new URL("..", import.meta.url);
 
 test("every mirrored CI run-step is classified", () => {
   const steps = assertPlanCoversCi();
@@ -107,4 +111,63 @@ test("secret-bearing temporary files are private at creation", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("topology env assembly requires pairwise-distinct role credentials", () => {
+  const credentials = {
+    admin: "admin-secret",
+    app: "app-secret",
+    runtime: "runtime-secret",
+    leaveCommand: "leave-secret",
+    ontologyCommand: "ontology-secret",
+    platformForce: "force-secret",
+  };
+  const values = topologyEnvContents(credentials)
+    .split("\n")
+    .filter((line) => /PASSWORD=/.test(line))
+    .map((line) => line.slice(line.indexOf("=") + 1));
+  assert.equal(new Set(values).size, 6);
+  assert.throws(
+    () => topologyEnvContents({ ...credentials, runtime: credentials.app }),
+    /pairwise distinct/,
+  );
+});
+
+test("the topology script rejects duplicate role passwords before DB access", () => {
+  const runTopology = (env) => spawnSync("bash", ["ops/postgres-reconcile-topology.sh"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+  const duplicate = runTopology({
+    POSTGRES_HOST: "127.0.0.1",
+    POSTGRES_DB: "does_not_matter",
+    POSTGRES_ADMIN_USER: "postgres",
+    POSTGRES_ADMIN_PASSWORD: "same",
+    CONSOLE_APP_POSTGRES_PASSWORD: "same",
+    CONSOLE_RT_POSTGRES_PASSWORD: "same",
+    CONSOLE_LEAVE_COMMAND_POSTGRES_PASSWORD: "same",
+    CONSOLE_ONTOLOGY_COMMAND_POSTGRES_PASSWORD: "same",
+    CONSOLE_PLATFORM_FORCE_COMMAND_POSTGRES_PASSWORD: "same",
+  });
+  assert.notEqual(duplicate.status, 0);
+  assert.match(duplicate.stderr, /passwords must be pairwise distinct/);
+
+  const unique = Object.fromEntries(
+    topologyEnvContents({
+      admin: "admin-secret",
+      app: "app-secret",
+      runtime: "runtime-secret",
+      leaveCommand: "leave-secret",
+      ontologyCommand: "ontology-secret",
+      platformForce: "force-secret",
+    }).trim().split("\n").map((line) => line.split(/=(.*)/s).slice(0, 2)),
+  );
+  // Port 1 is reserved and cannot host PostgreSQL. This proves the script got
+  // past the credential preflight without depending on the developer's local
+  // database state.
+  unique.POSTGRES_PORT = "1";
+  const afterPreflight = runTopology(unique);
+  assert.notEqual(afterPreflight.status, 0, "fixture intentionally has no database");
+  assert.doesNotMatch(afterPreflight.stderr, /passwords must be pairwise distinct/);
 });

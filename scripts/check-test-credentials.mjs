@@ -87,7 +87,10 @@ const TEST_RUNNERS = [
   // Keep this deliberately broader than a complete Cargo option parser so a
   // new harmless flag cannot make a credential-bearing test line invisible.
   /\bcargo\b(?=[^;&|\n]*\b(?:test|nextest\s+run)\b)/,
-  /\bbuck2\s+test\b/,
+  // Buck2 likewise accepts universal flags (and their values) before `test`,
+  // including --isolation-dir and -v. The command still has to reach `test`
+  // before a shell separator so a flag cannot hide a credential-bearing run.
+  /\bbuck2\b(?=[^;&|\n]*\btest\b)/,
   /test_needs_postgres\.sh\b/,
   /pgtest\.sh\b/,
 ];

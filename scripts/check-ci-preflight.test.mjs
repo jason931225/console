@@ -91,6 +91,14 @@ function mutateReasoningLensAdmission(mutate) {
   return workflow.replace(reasoningLensAdmissionStep, mutate(reasoningLensAdmissionStep));
 }
 
+function replaceJob(source, job, mutate) {
+  const start = source.indexOf(`  ${job}:\n`);
+  assert.notEqual(start, -1, `missing workflow job ${job}`);
+  const next = source.slice(start + 1).search(/^  [A-Za-z0-9_-]+:/m);
+  const end = next < 0 ? source.length : start + 1 + next;
+  return source.slice(0, start) + mutate(source.slice(start, end)) + source.slice(end);
+}
+
 describe("CI preflight contract", () => {
   it("accepts the workflow's cheap preflight and protected expensive jobs", () => {
     assert.deepEqual(evaluateCiPreflight(workflow).failures, []);
@@ -640,15 +648,27 @@ ${preflightRustToolchainSetup.trimEnd()}`,
   });
 
   it("rejects any expensive job without the preflight dependency", () => {
-    expectFailure(workflow.replace("  backend:\n", "  backend:\n    needs: []\n"), "backend must need preflight");
-    expectFailure(workflow.replace("  repo-gates:\n", "  repo-gates:\n    needs: []\n"), "repo-gates must need preflight");
-    expectFailure(workflow.replace("  api-contract:\n", "  api-contract:\n    needs: []\n"), "api-contract must need preflight");
-    expectFailure(workflow.replace("  kubernetes-manifests:\n", "  kubernetes-manifests:\n    needs: []\n"), "kubernetes-manifests must need preflight");
+    for (const job of ["backend", "repo-gates", "api-contract", "kubernetes-manifests", "company-conformance"]) {
+      expectFailure(
+        replaceJob(workflow, job, (block) => block.replace("    needs: preflight\n", "    needs: []\n")),
+        `${job} must need preflight`,
+      );
+    }
   });
 
   it("rejects failure-insensitive job-level conditions on protected jobs", () => {
     expectFailure(workflow.replace("  backend:\n", "  backend:\n    if: always()\n"), "backend must not define job-level if");
     expectFailure(workflow.replace("  repo-gates:\n", "  repo-gates:\n    if: ${{ !cancelled() }}\n"), "repo-gates must not define job-level if");
+    expectFailure(
+      workflow.replace("  company-conformance:\n", "  company-conformance:\n    if: false\n"),
+      "company-conformance must not define job-level if",
+    );
+    for (const job of ["backend", "dev-up-smoke", "api-contract", "company-conformance"]) {
+      expectFailure(
+        workflow.replace(`  ${job}:\n`, `  ${job}:\n    continue-on-error: true\n`),
+        `${job} must not define job-level continue-on-error`,
+      );
+    }
   });
 
   it("rejects job-level preflight failure bypasses", () => {
@@ -659,6 +679,84 @@ ${preflightRustToolchainSetup.trimEnd()}`,
     expectFailure(
       workflow.replace("  preflight:\n", "  preflight:\n    continue-on-error: true\n"),
       "preflight must not define job-level continue-on-error",
+    );
+    expectFailure(
+      workflow.replace("  preflight:\n", "  preflight:\n    defaults:\n      run:\n        shell: bash -c 'exit 0' {0}\n"),
+      "preflight must not override defaults.run.shell",
+    );
+    expectFailure(
+      workflow.replace("        shell: bash\n", "        shell: bash -c 'exit 0' {0}\n"),
+      "preflight may use only the default shell or canonical shell: bash",
+    );
+  });
+
+  it("rejects workflow-level environment and shell overrides", () => {
+    expectFailure(
+      workflow.replace("permissions:\n", "env:\n  BASH_ENV: scripts/noop.sh\n\npermissions:\n"),
+      "CI workflow must not define workflow-level env or defaults",
+    );
+    expectFailure(
+      workflow.replace(
+        "permissions:\n",
+        "defaults:\n  run:\n    shell: bash -c 'exit 0' {0}\n\npermissions:\n",
+      ),
+      "CI workflow must not define workflow-level env or defaults",
+    );
+  });
+
+  it("locks exact job-level environment and defaults metadata", () => {
+    expectFailure(
+      workflow.replace(
+        '      CARGO_PROFILE_TEST_DEBUG: "0"\n',
+        '      CARGO_PROFILE_TEST_DEBUG: "0"\n      RUSTC_WRAPPER: scripts/noop.sh\n',
+      ),
+      "backend must preserve its exact job env/defaults execution metadata",
+    );
+    expectFailure(
+      workflow.replace(
+        '      CARGO_PROFILE_DEV_DEBUG: "0"\n\n    steps:\n',
+        '      CARGO_PROFILE_DEV_DEBUG: "0"\n      NODE_OPTIONS: --require scripts/noop.js\n\n    steps:\n',
+      ),
+      "dev-up-smoke must preserve its exact job env/defaults execution metadata",
+    );
+    expectFailure(
+      workflow.replace("  repo-gates:\n", "  repo-gates:\n    env:\n      PATH: /tmp/noop\n"),
+      "repo-gates must preserve its exact job env/defaults execution metadata",
+    );
+    expectFailure(
+      workflow.replace(
+        "        working-directory: backend\n",
+        "        working-directory: backend\n        shell: bash -c 'exit 0' {0}\n",
+      ),
+      "backend must preserve its exact job env/defaults execution metadata",
+    );
+  });
+
+  it("rejects step environment injection across every protected proof class", () => {
+    const mutations = [
+      ["preflight", "      - name: CI preflight contract tests\n"],
+      ["dev-up-smoke", "      - name: dev-up bootstrap (compose deps + migrate + backend readyz)\n"],
+      ["postgres-domain-reachability", "      - name: Serialized disposable PostgreSQL integration targets\n"],
+      ["company-conformance", "      - name: Company conformance against disposable PostgreSQL\n"],
+      ["generated-face-authority", "      - name: Full generated-face closure\n"],
+      ["backend", "      - name: Layer-boundary gate\n"],
+      ["repo-gates", "      - name: Undeclared imports — every bare specifier must be declared\n"],
+      ["api-contract", "      - name: Platform contract drift gate\n"],
+      ["kubernetes-manifests", "      - name: Production hardening contract\n"],
+    ];
+    for (const [job, anchor] of mutations) {
+      expectFailure(
+        workflow.replace(anchor, `${anchor}        env:\n          BASH_ENV: scripts/noop.sh\n`),
+        `${job} must preserve its exact step environment allowlist`,
+      );
+    }
+
+    expectFailure(
+      workflow.replace(
+        '          KUBECTL_VERSION: "v1.36.2"\n',
+        '          KUBECTL_VERSION: "v1.36.2"\n          BASH_ENV: scripts/noop.sh\n',
+      ),
+      "kubernetes-manifests must preserve its exact step environment allowlist",
     );
   });
 
@@ -890,7 +988,7 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       "CI must define protected job domain-unit",
     );
     expectFailure(
-      workflow.replace("  domain-unit:\n", "  domain-unit:\n    needs: []\n"),
+      replaceJob(workflow, "domain-unit", (block) => block.replace("    needs: preflight\n", "    needs: []\n")),
       "domain-unit must need preflight",
     );
     // Dropping EITHER package must fail, which is the whole point of the pairing.
@@ -955,6 +1053,34 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       )),
       "domain-unit must execute the locked Cargo test commands directly and unconditionally",
     );
+    expectFailure(
+      replaceDomain((block) => block.replace(
+        "      - name: Domain crate unit tests\n",
+        "      - name: Domain crate unit tests\n        shell: bash -c 'exit 0' {0}\n",
+      )),
+      "domain-unit must use the default shell with no job or step env/defaults overrides",
+    );
+    expectFailure(
+      replaceDomain((block) => block.replace(
+        "  domain-unit:\n",
+        "  domain-unit:\n    defaults:\n      run:\n        shell: bash -c 'exit 0' {0}\n",
+      )),
+      "domain-unit must use the default shell with no job or step env/defaults overrides",
+    );
+    expectFailure(
+      replaceDomain((block) => block.replace(
+        "      - name: Domain crate unit tests\n",
+        "      - name: Domain crate unit tests\n        env:\n          RUSTFLAGS: --cfg skip_tests\n",
+      )),
+      "domain-unit must use the default shell with no job or step env/defaults overrides",
+    );
+    expectFailure(
+      replaceDomain((block) => block.replace(
+        "  domain-unit:\n",
+        "  domain-unit:\n    env:\n      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: true\n",
+      )),
+      "domain-unit must use the default shell with no job or step env/defaults overrides",
+    );
   });
 
   it("preserves fail-fast backend and dev-up ordering", () => {
@@ -972,6 +1098,83 @@ ${preflightRustToolchainSetup.trimEnd()}`,
       .replace("      - name: dev-up compose contract unit test\n", "      - name: Temporary dev-up step\n")
       .replace("      - name: Free runner disk for Rust backend\n", "      - name: dev-up compose contract unit test\n");
     expectFailure(devUpContractAfterDiskPurge, "dev-up-smoke must preserve the locked fail-fast step order");
+  });
+
+  it("locks the complete dev-up proof and cleanup", () => {
+    expectFailure(
+      workflow.replace(
+        "      - name: PostgreSQL topology integration regression\n        run: ops/postgres-topology.integration.test.sh\n",
+        "",
+      ),
+      "dev-up-smoke must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace("        run: node scripts/dev-up.mjs bootstrap", "        run: true"),
+      "dev-up-smoke must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace('        run: curl -fsS "http://127.0.0.1:${CONSOLE_DEV_HTTP_PORT:-8090}/readyz"', "        run: true"),
+      "dev-up-smoke must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace("        run: node scripts/dev-up.mjs down", "        run: true"),
+      "dev-up-smoke must preserve the locked fail-fast step multiset and failure semantics",
+    );
+  });
+
+  it("locks the company-conformance proof and its execution semantics", () => {
+    expectFailure(
+      workflow.replace(
+        "            //tools/buck:company-conformance-postgres",
+        "            //tools/buck:unexpected-company-target",
+      ),
+      "company-conformance must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Company conformance against disposable PostgreSQL\n",
+        "      - name: Company conformance against disposable PostgreSQL\n        continue-on-error: true\n",
+      ),
+      "company-conformance must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Company conformance against disposable PostgreSQL\n",
+        "      - name: Company conformance against disposable PostgreSQL\n        shell: bash -c 'exit 0' {0}\n",
+      ),
+      "company-conformance may use only the default shell or canonical shell: bash",
+    );
+    expectFailure(
+      workflow.replace(
+        "      - name: Company conformance against disposable PostgreSQL\n",
+        "      - name: Company conformance against disposable PostgreSQL\n        env:\n          BASH_ENV: scripts/noop.sh\n",
+      ),
+      "company-conformance must preserve its exact step environment allowlist",
+    );
+    expectFailure(
+      workflow.replace(
+        "  company-conformance:\n",
+        "  company-conformance:\n    defaults:\n      run:\n        shell: bash -c 'exit 0' {0}\n",
+      ),
+      "company-conformance must preserve its exact job env/defaults execution metadata",
+    );
+  });
+
+  it("locks the Kubernetes production-hardening proof", () => {
+    expectFailure(
+      workflow.replace(
+        "      - name: Production hardening contract\n        if: ${{ !cancelled() }}\n",
+        "      - name: Production hardening contract\n        if: ${{ !cancelled() }}\n        continue-on-error: true\n",
+      ),
+      "kubernetes-manifests must preserve the locked fail-fast step multiset and failure semantics",
+    );
+    expectFailure(
+      workflow.replace(
+        "        run: npm run check:production-hardening\n",
+        "        run: |\n          exit 0\n          npm run check:production-hardening\n",
+      ),
+      "kubernetes-manifests must preserve the locked fail-fast step multiset and failure semantics",
+    );
   });
 
   it("fails closed when optimized gates or targets are commented, weakened, or duplicated", () => {
