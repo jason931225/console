@@ -63,6 +63,13 @@ test("recognizes Cargo toolchain, global-flag, and nextest runner forms", () => 
   }
 });
 
+test("rejects a libpq URI with an empty user and nonempty password", () => {
+  assert.equal(
+    findingsFor("cargo test -p console-app -- postgresql://:hunter2@db/console").length,
+    1,
+  );
+});
+
 test("rejects a credential separated from its runner inside a folded YAML scalar", () => {
   const findings = findingsForWorkflow(`jobs:
   test:

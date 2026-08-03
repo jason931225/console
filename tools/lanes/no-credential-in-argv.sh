@@ -36,7 +36,7 @@
 # and the macOS system bash is 3.2.
 _console_password_assignment_re='[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*=[[:space:]]*[^[:space:]]'
 for _console_argv_guard_arg in "$@"; do
-  if [[ "$_console_argv_guard_arg" =~ ://[^/@[:space:]]+:[^/@[:space:]]+@ ]] \
+  if [[ "$_console_argv_guard_arg" =~ ://[^/@[:space:]]*:[^/@[:space:]]+@ ]] \
      || [[ "$_console_argv_guard_arg" =~ $_console_password_assignment_re ]]; then
     echo "pgtest: a database credential must not reach argv; export DATABASE_URL into the child environment instead" >&2
     exit 2

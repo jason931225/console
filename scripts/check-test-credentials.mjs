@@ -60,7 +60,9 @@ const HARNESS = "tools/lanes/pgtest.sh";
 // A URI carrying a userinfo password. Anchored so the `:pw@` must sit in the
 // authority: `https://host:8080/a@b` has a `/` before the `@` and is not a
 // credential.
-const CREDENTIAL_URI = /:\/\/[^/@\s"']+:[^/@\s"']+@/;
+// libpq also accepts an empty user (`postgresql://:pw@host/db`), so the user
+// part is `*`; the password remains `+` because an empty password is not a leak.
+const CREDENTIAL_URI = /:\/\/[^/@\s"']*:[^/@\s"']+@/;
 // `password=<literal>`, case-insensitive, which is three forms at once: the
 // `PGPASSWORD=`/`POSTGRES_PASSWORD=` env spelling, libpq's keyword/value DSN
 // (`host=… password=hunter2`), and the URI query parameter
@@ -163,6 +165,7 @@ export function runtimeFindings(root = ROOT) {
   // hunter2`, and `…/db?password=hunter2`.
   const poisoned = [
     "postgres://console_app:hunter2@127.0.0.1:5432/db",
+    "postgresql://:hunter2@127.0.0.1:5432/db",
     "PGPASSWORD=hunter2",
     "PGPASSWORD = hunter2",
     "host=127.0.0.1 dbname=db password=hunter2",
@@ -200,7 +203,7 @@ function main() {
     for (const finding of findings) console.error(`- ${finding}`);
     return 1;
   }
-  console.log(`Test-credential contract passed: no workflow line spelling a test runner carries a literal password, and ${GUARD} refuses all six exercised libpq password spellings while accepting a clean command line.`);
+  console.log(`Test-credential contract passed: no workflow line spelling a test runner carries a literal password, and ${GUARD} refuses all seven exercised libpq password spellings while accepting a clean command line.`);
   return 0;
 }
 
