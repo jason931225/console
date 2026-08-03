@@ -142,7 +142,7 @@ pub struct AttachObjectPolicyCommand {
 /// One org-authored FIELD policy, on its way to becoming an enforced catalog row
 /// plus the attachment that binds it to one property of one object-type version.
 ///
-/// `blocks.action` IS the activity (`read_field` or `edit`) — migration 0211
+/// `blocks.action` IS the activity (`read_field` or `edit`) — migration 0212
 /// stores it on the attachment and the read path filters on it, so the two can
 /// never disagree. SAP's authorization field is the "smallest unit … either data
 /// such as a key field of a database table or activities such as reading or
@@ -156,7 +156,7 @@ pub struct AttachObjectPolicyCommand {
 /// evaluation this path does not perform, and admitting one would silently decide
 /// every row by the first row's values.
 /// Like [`AttachObjectPolicyCommand`] it carries no `stable_key`, `title`,
-/// `natural_language_rule` or generated Cedar text: 0211 derives all four.
+/// `natural_language_rule` or generated Cedar text: 0212 derives all four.
 pub struct AttachPropertyPolicyCommand {
     pub actor: UserId,
     /// The `ont_property_defs` row id the attachment is filed under, matching the
@@ -166,7 +166,7 @@ pub struct AttachPropertyPolicyCommand {
 }
 
 /// The activities a field policy may be attached for — the Cedar action names
-/// the authoring schema already declares, and the CHECK migration 0211 puts on
+/// the authoring schema already declares, and the CHECK migration 0212 puts on
 /// `ont_property_policies.activity`. Not a second vocabulary: the attachment's
 /// activity IS the action the policy is evaluated under, so the two cannot drift.
 pub const PROPERTY_POLICY_ACTIVITIES: &[&str] = &[authoring::PROPERTY_POLICY_ACTION, "edit"];
@@ -414,7 +414,7 @@ impl PgCedarPolicyStore {
     /// catalog row plus its attachment, audited in the same transaction.
     ///
     /// The same shape as [`Self::attach_object_policy`] and for the same reasons:
-    /// the runtime role has no INSERT on the catalog (0150) and — since 0211 —
+    /// the runtime role has no INSERT on the catalog (0150) and — since 0212 —
     /// none on `ont_property_policies` either (0154 granted it and nothing ever
     /// took it back; 0205 performed exactly this revoke for the object twin and
     /// skipped this one). Everything is written by
@@ -445,7 +445,7 @@ impl PgCedarPolicyStore {
         let trace = TraceContext::generate();
         let actor = *command.actor.as_uuid();
         let org_uuid = *org.as_uuid();
-        // Activity and effect both derive from ONE value each: 0211 compares the
+        // Activity and effect both derive from ONE value each: 0212 compares the
         // stored row's `action`/`effect` to them, and the loader below rejects
         // any later disagreement between blocks, catalog and attachment.
         let activity = command.blocks.action.clone();
@@ -823,7 +823,7 @@ impl PgCedarPolicyStore {
     /// A direct mirror of [`Self::load_enforced_object_policy_blocks`], and it
     /// exists for the same non-negotiable reason: the stored
     /// `generated_policy_text` is the one column the definer can neither derive
-    /// nor re-validate, so 0211 stores NULL and every enforced row is
+    /// nor re-validate, so 0212 stores NULL and every enforced row is
     /// re-derived here from `normalized_row`. Four arms run on EVERY read — the
     /// stored row deserializes, the validator's verdict, the canonicality
     /// comparison, and effect agreement between blocks and catalog. Delete any
@@ -925,7 +925,7 @@ impl PgCedarPolicyStore {
     ///
     /// Serves both the ontology read/write gates and `POST /policy/authorize`
     /// with a `property_def_id`. It reads the RE-DERIVED set, never the stored
-    /// `generated_policy_text`: 0211 stores NULL for that column exactly as 0205
+    /// `generated_policy_text`: 0212 stores NULL for that column exactly as 0205
     /// does for object policies, so continuing to read it here would have made
     /// this endpoint permanently vacuous — and would have put a column the
     /// definer cannot re-validate into an enforcement position the moment the
@@ -1168,7 +1168,7 @@ const OBJECT_POLICY_SELECT: &str = r#"
 // A `PROPERTY_POLICY_SELECT` used to live here, reading
 // `c.generated_policy_text` — the exact forgeable column the object path already
 // excludes and documents on `load_enforced_policies`. It is DELETED rather than
-// left beside its replacement: 0211 stores NULL for that column, so the query
+// left beside its replacement: 0212 stores NULL for that column, so the query
 // could only ever have returned rows attached some other way, and a second
 // property-policy loader is precisely the kind of thing a later change
 // repoints an enforcement path at by accident.

@@ -619,7 +619,7 @@ const PROPERTY_POLICY_FOUR_EYES_KIND: &str = "ontology.property_policy";
 /// object-type version.
 ///
 /// The property must be declared `in_property_policy` on that version. That flag
-/// has existed since 0152 and meant nothing anywhere until migration 0211; it is
+/// has existed since 0152 and meant nothing anywhere until migration 0212; it is
 /// now the tenant's declaration of which fields are policy-bearing, enforced both
 /// here (so the refusal names the property) and in SQL (so no credential can
 /// route around it).

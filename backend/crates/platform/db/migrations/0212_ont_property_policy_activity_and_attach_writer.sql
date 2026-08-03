@@ -1,4 +1,4 @@
--- Field-level policy stops being an oracle and becomes enforcement.
+-- Migration 0212: field-level policy stops being an oracle and becomes enforcement.
 --
 -- WHAT WAS BUILT DARK. `ont_property_policies` has existed since 0154 with FORCE
 -- RLS and append-only triggers; `ont_property_defs.in_property_policy` (0152:59)
@@ -130,6 +130,9 @@ $$;
 ALTER TABLE ont_property_policies
     ADD COLUMN activity TEXT NOT NULL DEFAULT 'read_field'
     CHECK (activity IN ('read_field', 'edit'));
+
+COMMENT ON COLUMN ont_property_policies.activity IS
+    'pd:none — closed authorization activity vocabulary; contains no natural-person fact';
 
 -- The 0154 constraint is dropped by its generated name, then the drop is
 -- VERIFIED rather than assumed: a renamed constraint would leave the old

@@ -1346,7 +1346,7 @@ async fn the_attach_definer_is_owned_by_a_non_bypassrls_role_under_a_pinned_sear
         vec![
             "attach_object_policy|true|console_ontology_writer|true|true".to_owned(),
             "attach_object_policy_rows|true|console_ontology_writer|true|true".to_owned(),
-            // Migration 0211's field-policy pair, held to the identical bar. They
+            // Migration 0212's field-policy pair, held to the identical bar. They
             // are ADDED to this total vector rather than the vector being relaxed
             // to a subset match: the property this assertion has is that it names
             // every routine in the schema, and a `contains` form would let the
@@ -1994,7 +1994,7 @@ async fn the_attach_schema_grants_exactly_the_audited_command_credential(owner_p
             "attach_object_policy|console_ontology_cmd|EXECUTE".to_owned(),
             "attach_object_policy|console_ontology_writer|EXECUTE".to_owned(),
             "attach_object_policy_rows|console_ontology_writer|EXECUTE".to_owned(),
-            // Migration 0211, and it is the exact repair the message below
+            // Migration 0212, and it is the exact repair the message below
             // prescribes: the audited entrypoint is granted to the command
             // credential, the row-writer is owner-only so the audit row cannot be
             // skipped, and `console_rt` still appears nowhere in this vector.
