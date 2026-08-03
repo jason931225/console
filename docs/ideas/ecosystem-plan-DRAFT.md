@@ -2657,11 +2657,12 @@ Single long-lived consolidation branch, **one PR, no incremental merges**. A per
 gives CI on every push, because `.github/workflows/ci.yml` `  pull_request:` has **no `branches:`
 filter** while `ci.yml` `  push:` covers only `main` and tags.
 
-**Two caveats I verified, and both bite this plan specifically:**
+**Two caveats verified when this plan was frozen; the first is now closed:**
 
-- `pull_request:` carries a **`paths:` filter** (`ci.yml` `      - "backend/**"`) that does **not** include `docs/ideas/**`. So a
-  docs-only commit gets **no checks at all** — and *no checks* looks identical to *passing checks* in the
-  UI. Silence is not success.
+- `pull_request:` formerly carried a **`paths:` filter** that excluded `docs/ideas/**`. That false-green
+  surface is now closed: `ci.yml` `  pull_request:` is unfiltered, and
+  `check-ci-preflight.test.mjs` `forbids push and pull-request path filters so every required context is created`.
+  A docs-only commit now creates the required contexts; silence is still not success.
 - `concurrency` sets `ci.yml` `cancel-in-progress: ${{ github.event_name == 'pull_request' }}` for PRs. On a branch taking many commits, most
   intermediate runs are **cancelled, not verified**. Verify at rung boundaries deliberately rather than
   assuming per-commit CI.
