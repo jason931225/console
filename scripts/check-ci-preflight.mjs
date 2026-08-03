@@ -10,6 +10,61 @@ const reindeerToolchainInstall = 'rustup toolchain install "$REINDEER_TOOLCHAIN"
 const strictShellMode = "set -euo pipefail";
 const reindeerToolchainOverride = /^(?:export\s+)?REINDEER_TOOLCHAIN\s*=/;
 const ciPreflightTestCommand = "node --test scripts/check-ci-preflight.test.mjs";
+const reasoningLensTestCommand = "node --test scripts/check-reasoning-lens-contract.test.mjs";
+const reasoningLensRegressionName = "Reasoning lens contract regression";
+const reasoningLensAdmissionName = "Reasoning lens changed-record admission";
+const reasoningLensAdmissionEnvironment = [
+  "REASONING_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+  "REASONING_PUSH_BEFORE_SHA: ${{ github.event.before }}",
+];
+const reasoningLensAdmissionScript = [
+  "set -euo pipefail",
+  'case "$GITHUB_EVENT_NAME" in',
+  "  pull_request)",
+  '    test -n "$REASONING_PR_BASE_SHA"',
+  '    node scripts/check-reasoning-lens-contract.mjs --changed-since "$REASONING_PR_BASE_SHA"',
+  "    ;;",
+  "  push)",
+  '    case "$GITHUB_REF_TYPE" in',
+  "      branch)",
+  '        test -n "$REASONING_PUSH_BEFORE_SHA"',
+  '        if [[ "$REASONING_PUSH_BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then',
+  "          printf '%s\\n' 'push.before is all-zero; running structural reasoning-lens validation'",
+  "          node scripts/check-reasoning-lens-contract.mjs",
+  "        else",
+  '          node scripts/check-reasoning-lens-contract.mjs --changed-since "$REASONING_PUSH_BEFORE_SHA"',
+  "        fi",
+  "        ;;",
+  "      tag)",
+  "        node scripts/check-reasoning-lens-contract.mjs",
+  "        ;;",
+  "      *)",
+  "        printf 'unsupported push ref type: %s\\n' \"$GITHUB_REF_TYPE\" >&2",
+  "        exit 2",
+  "        ;;",
+  "    esac",
+  "    ;;",
+  "  workflow_dispatch)",
+  "    node scripts/check-reasoning-lens-contract.mjs",
+  "    ;;",
+  "  *)",
+  "    printf 'unsupported reasoning-lens event: %s\\n' \"$GITHUB_EVENT_NAME\" >&2",
+  "    exit 2",
+  "    ;;",
+  "esac",
+].join("\n");
+const requiredTriggerPaths = [
+  "toolchains/**",
+  "docs/program/**",
+  "docs/retros/**",
+  "AGENTS.md",
+  "README.md",
+  "CLAUDE.md",
+  "scripts/**",
+  "package.json",
+  "package-lock.json",
+  ".github/workflows/*.yml",
+];
 const consoleRouteInventoryTestCommand = "node --test scripts/console/route-inventory.test.mjs";
 const consoleTruthLedgerCommand = "npm run check:console-truth-ledger";
 const consoleAuthorityTrainTestCommand = "node --test scripts/console/verify-console-authority-train.test.mjs";
@@ -574,6 +629,7 @@ const ontologyRestCrateBuildFile = readFileSync(
 const requiredPreflightCommands = [
   "tools/buck/preflight.sh",
   "npm run check:foundation-gates",
+  reasoningLensTestCommand,
   ciPreflightTestCommand,
   consoleRouteInventoryTestCommand,
   buckPostgresEnvironmentTestCommand,
@@ -861,6 +917,38 @@ function requireUnconditionalRun(steps, command, job, failures) {
   }
 }
 
+function requireReasoningLensContracts(steps, failures) {
+  const regressionByName = steps.filter((step) => stepName(step) === reasoningLensRegressionName);
+  const regressionByCommand = steps.filter((step) => runScalar(step) === reasoningLensTestCommand);
+  if (
+    regressionByName.length !== 1
+    || regressionByCommand.length !== 1
+    || regressionByName[0] !== regressionByCommand[0]
+    || !hasOnlyExpectedCondition(regressionByName[0] ?? "", null)
+  ) {
+    failures.push("preflight must run the exact reasoning-lens regression once and unconditionally");
+  }
+
+  const admissions = steps.filter((step) => stepName(step) === reasoningLensAdmissionName);
+  const admission = admissions[0] ?? "";
+  const shells = [...admission.matchAll(/^        shell: ([^\n]+)$/gm)].map((match) => match[1]);
+  const environmentBlock = admission.match(/^        env:\n((?:          [^\n]+\n)+)/m)?.[1] ?? "";
+  const environment = environmentBlock
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.trim());
+  const script = runScript(admission).replace(/\n$/, "");
+  if (
+    admissions.length !== 1
+    || JSON.stringify(shells) !== JSON.stringify(["bash"])
+    || JSON.stringify(environment) !== JSON.stringify(reasoningLensAdmissionEnvironment)
+    || script !== reasoningLensAdmissionScript
+    || !hasOnlyExpectedCondition(admission, null)
+  ) {
+    failures.push("preflight must preserve the exact reasoning-lens event admission contract");
+  }
+}
+
 function requireConsoleExactMergeProof(workflow, steps, failures) {
   const derive = steps.filter((step) => stepName(step) === "Derive exact console C/T/M train");
   if (derive.length !== 1 || !hasOnlyExpectedCondition(derive[0], consolePrCondition) || multilineRunCommands(derive[0]).join("\n") !== consoleTrainDerivation.join("\n")) {
@@ -1120,11 +1208,11 @@ function requireEffectiveDotSlashBootstrap(block, job, failures) {
 export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBuildFile) {
   const failures = [];
   for (const trigger of ["push", "pull_request"]) {
-    if (!triggerPathEntries(workflow, trigger).includes("toolchains/**")) {
-      failures.push(`${trigger} must include toolchains/** in CI path filters`);
-    }
-    if (!triggerPathEntries(workflow, trigger).includes("docs/program/**")) {
-      failures.push(`${trigger} must include docs/program/** in CI path filters`);
+    const triggerPaths = triggerPathEntries(workflow, trigger);
+    for (const path of requiredTriggerPaths) {
+      if (!triggerPaths.includes(path)) {
+        failures.push(`${trigger} must include ${path} in CI path filters`);
+      }
     }
   }
 
@@ -1150,6 +1238,7 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   for (const command of requiredPreflightCommands) {
     requireUnconditionalRun(preflightSteps, command, "preflight", failures);
   }
+  requireReasoningLensContracts(preflightSteps, failures);
   requireConsoleExactMergeProof(workflow, preflightSteps, failures);
   // One job, both crates. They share console-kernel-core, so two jobs recompiled
   // the same dependencies and paid two runner startups and two cache restores.

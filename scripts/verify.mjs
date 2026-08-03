@@ -20,6 +20,11 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 
 const WORKFLOW = ".github/workflows/ci.yml";
+export const REASONING_LENS_LOCAL_RUN = [
+  "set -euo pipefail",
+  'reasoning_base="$(git merge-base HEAD "${CONSOLE_VERIFY_BASE:-origin/main}")"',
+  'node scripts/check-reasoning-lens-contract.mjs --changed-since "$reasoning_base"',
+].join("\n");
 
 /**
  * Every job in `ci.yml`, declared exactly once. `true` means its run-steps are
@@ -66,6 +71,11 @@ const PLAN = new Map([
   }],
   ["Cheap Buck2 generated-face admission", { tier: "fast" }],
   ["Foundation gate contract", { tier: "fast" }],
+  ["Reasoning lens contract regression", { tier: "fast" }],
+  ["Reasoning lens changed-record admission", {
+    tier: "fast",
+    run: REASONING_LENS_LOCAL_RUN,
+  }],
   ["Console truth-ledger exact-M admission", { tier: "fast" }],
   ["Console fanout planner exact-M admission", {
     tier: "fast",
@@ -278,6 +288,10 @@ export function assertPlanCoversCi(steps = ciSteps()) {
   }
   if (problems.length) throw new Error(problems.join("\n\n"));
   return steps;
+}
+
+export function reasoningLensLocalRunFromPlan() {
+  return PLAN.get("Reasoning lens changed-record admission")?.run ?? null;
 }
 
 function run(command, env, cwd = ".") {

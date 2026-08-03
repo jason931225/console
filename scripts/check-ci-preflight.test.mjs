@@ -11,6 +11,52 @@ const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta
 const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", import.meta.url), "utf8");
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
 const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
+const reasoningLensRegressionStep = `      - name: Reasoning lens contract regression
+        run: node --test scripts/check-reasoning-lens-contract.test.mjs
+
+`;
+const reasoningLensAdmissionStep = `      - name: Reasoning lens changed-record admission
+        shell: bash
+        env:
+          REASONING_PR_BASE_SHA: \${{ github.event.pull_request.base.sha }}
+          REASONING_PUSH_BEFORE_SHA: \${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -n "$REASONING_PR_BASE_SHA"
+              node scripts/check-reasoning-lens-contract.mjs --changed-since "$REASONING_PR_BASE_SHA"
+              ;;
+            push)
+              case "$GITHUB_REF_TYPE" in
+                branch)
+                  test -n "$REASONING_PUSH_BEFORE_SHA"
+                  if [[ "$REASONING_PUSH_BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
+                    printf '%s\\n' 'push.before is all-zero; running structural reasoning-lens validation'
+                    node scripts/check-reasoning-lens-contract.mjs
+                  else
+                    node scripts/check-reasoning-lens-contract.mjs --changed-since "$REASONING_PUSH_BEFORE_SHA"
+                  fi
+                  ;;
+                tag)
+                  node scripts/check-reasoning-lens-contract.mjs
+                  ;;
+                *)
+                  printf 'unsupported push ref type: %s\\n' "$GITHUB_REF_TYPE" >&2
+                  exit 2
+                  ;;
+              esac
+              ;;
+            workflow_dispatch)
+              node scripts/check-reasoning-lens-contract.mjs
+              ;;
+            *)
+              printf 'unsupported reasoning-lens event: %s\\n' "$GITHUB_EVENT_NAME" >&2
+              exit 2
+              ;;
+          esac
+
+`;
 const reachabilityPreflightCommands = [
   "node --test scripts/console/route-inventory.test.mjs",
   "tools/buck/run_test_with_postgres_env.test.sh",
@@ -26,6 +72,23 @@ const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Ca
 function expectFailure(source, message, buckBuildFile = postgresWrapperBuildFile) {
   const { failures } = evaluateCiPreflight(source, buckBuildFile);
   assert.ok(failures.some((failure) => failure.includes(message)), failures.join("\n"));
+}
+
+function withoutTriggerPath(source, trigger, path) {
+  const start = source.indexOf(`  ${trigger}:\n`);
+  const terminator = trigger === "push" ? "  pull_request:\n" : "  workflow_dispatch:\n";
+  const end = source.indexOf(terminator, start);
+  assert.notEqual(start, -1, `missing ${trigger} trigger`);
+  assert.notEqual(end, -1, `missing ${trigger} terminator`);
+  const block = source.slice(start, end);
+  const entry = `      - "${path}"\n`;
+  assert.ok(block.includes(entry), `${trigger} does not contain ${path}`);
+  return source.slice(0, start) + block.replace(entry, "") + source.slice(end);
+}
+
+function mutateReasoningLensAdmission(mutate) {
+  assert.ok(workflow.includes(reasoningLensAdmissionStep), "reasoning-lens admission fixture drifted");
+  return workflow.replace(reasoningLensAdmissionStep, mutate(reasoningLensAdmissionStep));
 }
 
 describe("CI preflight contract", () => {
@@ -51,6 +114,96 @@ describe("CI preflight contract", () => {
     const pullRequest = workflow.indexOf("  pull_request:\n");
     const withoutPullDocs = workflow.slice(0, pullRequest) + workflow.slice(pullRequest).replace('      - "docs/program/**"\n', "");
     expectFailure(withoutPullDocs, "pull_request must include docs/program/** in CI path filters");
+  });
+
+  it("requires all reasoning-lens trigger paths independently on push and pull_request", () => {
+    for (const path of [
+      "docs/retros/**",
+      "AGENTS.md",
+      "README.md",
+      "CLAUDE.md",
+      "scripts/**",
+      "package.json",
+      "package-lock.json",
+      ".github/workflows/*.yml",
+    ]) {
+      for (const trigger of ["push", "pull_request"]) {
+        expectFailure(
+          withoutTriggerPath(workflow, trigger, path),
+          `${trigger} must include ${path} in CI path filters`,
+        );
+      }
+    }
+  });
+
+  it("locks the reasoning-lens regression to one unconditional raw-Node step", () => {
+    assert.ok(workflow.includes(reasoningLensRegressionStep), "reasoning-lens regression fixture drifted");
+    expectFailure(
+      workflow.replace(reasoningLensRegressionStep, ""),
+      "exact reasoning-lens regression once and unconditionally",
+    );
+    expectFailure(
+      workflow.replace(reasoningLensRegressionStep, reasoningLensRegressionStep.repeat(2)),
+      "exact reasoning-lens regression once and unconditionally",
+    );
+    for (const bypass of ["        if: false\n", "        continue-on-error: true\n"]) {
+      expectFailure(
+        workflow.replace(
+          reasoningLensRegressionStep,
+          reasoningLensRegressionStep.replace(
+            "        run: node --test",
+            `${bypass}        run: node --test`,
+          ),
+        ),
+        "exact reasoning-lens regression once and unconditionally",
+      );
+    }
+    expectFailure(
+      workflow.replace(
+        reasoningLensRegressionStep,
+        reasoningLensRegressionStep.replace(
+          "node --test scripts/check-reasoning-lens-contract.test.mjs",
+          "npm run test:reasoning-lens-contract",
+        ),
+      ),
+      "exact reasoning-lens regression once and unconditionally",
+    );
+  });
+
+  it("locks the exact reasoning-lens event/base admission matrix", () => {
+    expectFailure(
+      workflow.replace(reasoningLensAdmissionStep, ""),
+      "exact reasoning-lens event admission contract",
+    );
+    expectFailure(
+      workflow.replace(reasoningLensAdmissionStep, reasoningLensAdmissionStep.repeat(2)),
+      "exact reasoning-lens event admission contract",
+    );
+    for (const bypass of ["        if: false\n", "        continue-on-error: true\n"]) {
+      expectFailure(
+        mutateReasoningLensAdmission((step) => step.replace("        shell: bash\n", `        shell: bash\n${bypass}`)),
+        "exact reasoning-lens event admission contract",
+      );
+    }
+    for (const [from, to] of [
+      ["github.event.pull_request.base.sha", "github.event.pull_request.head.sha"],
+      ["github.event.before", "github.sha"],
+      ["set -euo pipefail", "set -uo pipefail"],
+      ["0000000000000000000000000000000000000000", "000000000000000000000000000000000000000"],
+      [
+        "                tag)\n                  node scripts/check-reasoning-lens-contract.mjs",
+        "                tag)\n                  node scripts/check-reasoning-lens-contract.mjs --changed-since \"$REASONING_PUSH_BEFORE_SHA\"",
+      ],
+      [
+        "            workflow_dispatch)\n              node scripts/check-reasoning-lens-contract.mjs",
+        "            workflow_dispatch)\n              node scripts/check-reasoning-lens-contract.mjs --changed-since \"$REASONING_PUSH_BEFORE_SHA\"",
+      ],
+    ]) {
+      expectFailure(
+        mutateReasoningLensAdmission((step) => step.replace(from, to)),
+        "exact reasoning-lens event admission contract",
+      );
+    }
   });
 
   it("rejects toolchain entries placed outside each trigger's paths mapping", () => {

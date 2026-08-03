@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { assertJobsDeclared, assertPlanCoversCi, writePrivateFile } from "./verify.mjs";
+import {
+  assertJobsDeclared,
+  assertPlanCoversCi,
+  reasoningLensLocalRunFromPlan,
+  REASONING_LENS_LOCAL_RUN,
+  writePrivateFile,
+} from "./verify.mjs";
 
 test("every mirrored CI run-step is classified", () => {
   const steps = assertPlanCoversCi();
@@ -63,6 +69,19 @@ test("a plan entry whose CI step disappeared fails the guard", () => {
 test("domain-unit is part of the local mirror", () => {
   const domain = assertPlanCoversCi().filter((step) => step.job === "domain-unit");
   assert.deepEqual(domain.map((step) => step.name), ["Domain crate unit tests"]);
+});
+
+test("reasoning-lens admission uses the merge-base local override", () => {
+  assert.equal(
+    REASONING_LENS_LOCAL_RUN,
+    [
+      "set -euo pipefail",
+      'reasoning_base="$(git merge-base HEAD "${CONSOLE_VERIFY_BASE:-origin/main}")"',
+      'node scripts/check-reasoning-lens-contract.mjs --changed-since "$reasoning_base"',
+    ].join("\n"),
+  );
+  assert.equal(reasoningLensLocalRunFromPlan(), REASONING_LENS_LOCAL_RUN);
+  assert.doesNotMatch(REASONING_LENS_LOCAL_RUN, /--changed-since (?:origin\/main|\$\{CONSOLE_VERIFY_BASE)/);
 });
 
 test("PostgreSQL provisioning keeps generated credentials out of Docker argv", () => {

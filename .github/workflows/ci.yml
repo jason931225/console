@@ -14,6 +14,7 @@ on:
       - "deploy/**"
       - "docs/decisions/**"
       - "docs/program/**"
+      - "docs/retros/**"
       - "docs/CI-GATES.md"
       - "docs/benchmarks/**"
       - "docs/specs/**"
@@ -46,6 +47,7 @@ on:
       - "deploy/**"
       - "docs/decisions/**"
       - "docs/program/**"
+      - "docs/retros/**"
       - "docs/CI-GATES.md"
       - "docs/benchmarks/**"
       - "docs/specs/**"
@@ -133,6 +135,50 @@ jobs:
 
       - name: Foundation gate contract
         run: npm run check:foundation-gates
+
+      - name: Reasoning lens contract regression
+        run: node --test scripts/check-reasoning-lens-contract.test.mjs
+
+      - name: Reasoning lens changed-record admission
+        shell: bash
+        env:
+          REASONING_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REASONING_PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -n "$REASONING_PR_BASE_SHA"
+              node scripts/check-reasoning-lens-contract.mjs --changed-since "$REASONING_PR_BASE_SHA"
+              ;;
+            push)
+              case "$GITHUB_REF_TYPE" in
+                branch)
+                  test -n "$REASONING_PUSH_BEFORE_SHA"
+                  if [[ "$REASONING_PUSH_BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
+                    printf '%s\n' 'push.before is all-zero; running structural reasoning-lens validation'
+                    node scripts/check-reasoning-lens-contract.mjs
+                  else
+                    node scripts/check-reasoning-lens-contract.mjs --changed-since "$REASONING_PUSH_BEFORE_SHA"
+                  fi
+                  ;;
+                tag)
+                  node scripts/check-reasoning-lens-contract.mjs
+                  ;;
+                *)
+                  printf 'unsupported push ref type: %s\n' "$GITHUB_REF_TYPE" >&2
+                  exit 2
+                  ;;
+              esac
+              ;;
+            workflow_dispatch)
+              node scripts/check-reasoning-lens-contract.mjs
+              ;;
+            *)
+              printf 'unsupported reasoning-lens event: %s\n' "$GITHUB_EVENT_NAME" >&2
+              exit 2
+              ;;
+          esac
 
       - name: Console truth-ledger exact-M admission
         if: ${{ github.event_name == 'pull_request' }}
