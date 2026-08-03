@@ -30,6 +30,9 @@ test("rejects optional whitespace around a literal libpq password assignment", (
     "password= hunter2",
     "password = hunter2",
     "POSTGRES_PASSWORD = hunter2",
+    "password='hunter2'",
+    'password="hunter2"',
+    "password = 'hunter two'",
   ]) {
     assert.equal(
       findingsFor(`cargo test -p console-app -- ${spelling}`).length,
@@ -40,10 +43,24 @@ test("rejects optional whitespace around a literal libpq password assignment", (
 });
 
 test("allows a shell environment assignment sourced from a variable", () => {
-  assert.deepEqual(
-    findingsFor('PGPASSWORD="$TEST_PASSWORD" cargo test -p console-app --lib'),
-    [],
-  );
+  for (const spelling of [
+    'PGPASSWORD="$TEST_PASSWORD" cargo test -p console-app --lib',
+    'cargo test -p console-app -- password="$TEST_PASSWORD"',
+    "cargo test -p console-app -- password='${TEST_PASSWORD}'",
+  ]) {
+    assert.deepEqual(findingsFor(spelling), [], spelling);
+  }
+});
+
+test("recognizes Cargo toolchain, global-flag, and nextest runner forms", () => {
+  for (const runner of [
+    "cargo --locked test",
+    "cargo +stable test",
+    "cargo +stable --locked test",
+    "cargo nextest run",
+  ]) {
+    assert.equal(findingsFor(`${runner} -p console-app -- password='hunter2'`).length, 1, runner);
+  }
 });
 
 test("rejects a credential separated from its runner inside a folded YAML scalar", () => {

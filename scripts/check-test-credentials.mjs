@@ -67,19 +67,40 @@ const CREDENTIAL_URI = /:\/\/[^/@\s"']+:[^/@\s"']+@/;
 // (`postgres://u@h/db?password=hunter2`). The uppercase-only match this replaced
 // accepted the latter two.
 //
-// `$` and quotes are excluded on purpose: `PGPASSWORD="$X" cargo test` is a
-// shell assignment prefix, which the shell strips into the child's environment —
-// the value reaches neither cargo's argv nor the workflow file, and that is the
-// idiom this gate wants people to use. A LITERAL is a different thing: it is
-// committed, so it is in the repository and in every log that echoes the step.
+// Quoting does not make a committed literal safe: `password='hunter2'` still
+// becomes a password argument. An exact shell/GitHub variable reference is the
+// one static exemption, so `PGPASSWORD="$X" cargo test` remains the encouraged
+// environment-prefix idiom. This half checks committed literals; the runtime
+// guard below sees expanded values for commands that opt into the harness.
 //
 // The runtime guard deliberately has no such exemption. By the time it sees argv
 // the shell has already expanded `$X`, so what it is looking at really is the
 // secret.
-const PASSWORD_ASSIGNMENT = /password\s*=\s*[^\s"'$\\]/i;
+const PASSWORD_ASSIGNMENT = /password\s*=\s*(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s"'\\]+)/gi;
+const VARIABLE_VALUE = /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\}|\{\{\s*[^}]+\s*\}\})$/;
 // The things that run tests. A credential on any other line is someone
 // provisioning a database, which is a different job with different rules.
-const TEST_RUNNERS = [/\bcargo\s+test\b/, /\bbuck2\s+test\b/, /test_needs_postgres\.sh\b/, /pgtest\.sh\b/];
+const TEST_RUNNERS = [
+  // Cargo accepts toolchain selectors and global flags before its subcommand.
+  // Keep this deliberately broader than a complete Cargo option parser so a
+  // new harmless flag cannot make a credential-bearing test line invisible.
+  /\bcargo\b(?=[^;&|\n]*\b(?:test|nextest\s+run)\b)/,
+  /\bbuck2\s+test\b/,
+  /test_needs_postgres\.sh\b/,
+  /pgtest\.sh\b/,
+];
+
+function literalPasswordAssignment(text) {
+  for (const match of text.matchAll(PASSWORD_ASSIGNMENT)) {
+    let value = match[0].slice(match[0].indexOf("=") + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!VARIABLE_VALUE.test(value)) return true;
+  }
+  return false;
+}
 
 /** Every shell command in every workflow `run:` scalar. */
 function workflowCommandLines(root) {
@@ -117,7 +138,7 @@ export function staticFindings(root = ROOT) {
     if (CREDENTIAL_URI.test(entry.text)) {
       findings.push(`${entry.file}:${entry.location} passes a connection URL with a password to a test runner; export it into the environment instead`);
     }
-    if (PASSWORD_ASSIGNMENT.test(entry.text)) {
+    if (literalPasswordAssignment(entry.text)) {
       findings.push(`${entry.file}:${entry.location} puts a password on a test runner's command line; export it into the environment instead`);
     }
   }
