@@ -15,7 +15,7 @@ entrypoint. No old worktree or local branch is a continuation dependency.
 - Delivery method: [`docs/program/agentic-engineering-playbook.md`](docs/program/agentic-engineering-playbook.md).
 - `main` is the sole integration branch; start from the latest `origin/main`.
 - Machine-readable program state remains under `docs/program/`; the preserved
-  planning execution receipt is
+  planning execution status record is
   [`.omx/plans/reasoning-lens-contract-execution-handoff.json`](.omx/plans/reasoning-lens-contract-execution-handoff.json).
 
 ## Holds

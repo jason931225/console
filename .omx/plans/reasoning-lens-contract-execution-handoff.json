@@ -16,24 +16,27 @@
       "sha256": "db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2"
     }
   },
-  "execution_state": "in_progress",
+  "execution_state": "candidate_verification",
   "implemented_commits": [
     "ed8424f5153b760162545e0ea669a4be5950280a",
-    "963302685bae2c28d7c6107dc2bb0b4f902392cd"
+    "963302685bae2c28d7c6107dc2bb0b4f902392cd",
+    "b263f6da2b282e1875439d4bfaad05c95fb13f5d"
   ],
   "implementation": {
     "frozen_vocabulary": "implemented",
     "root_manifests": "implemented",
     "evidence_templates": "implemented",
     "structural_and_diff_validator": "implemented",
-    "ci_and_local_mirror_wiring": "pending",
+    "ci_and_local_mirror_wiring": "implemented",
     "durable_restart_handoff": "implemented"
   },
   "verification": {
     "validator_unit_tests": "40/40 passed",
-    "live_structural_validation": "passed with five evidence blocks",
+    "live_structural_validation": "passed with six evidence blocks",
+    "event_base_matrix": "pull request, branch push, branch creation, tag, dispatch, and unknown-event fail-closed paths covered",
+    "ci_wiring_contract": "51/51 preflight tests and 12/12 local-mirror tests passed; generated matrices rejected 525 run/action/composite bypass mutations",
     "final_pr_ci": "pending",
     "exact_sha_review": "pending"
   },
-  "continuation": "Complete PR #562, then start future work from origin/main and docs/handoffs/2026-08-03-disk-wipe-consolidation.md; do not rerun the historical plan as unstarted."
+  "continuation": "Finish exact-SHA review and hosted CI for PR #562, record the merge/release closeout on main, then start future work from origin/main and docs/handoffs/2026-08-03-disk-wipe-consolidation.md; do not rerun the historical plan as unstarted."
 }

@@ -39,8 +39,17 @@ candidate subprocesses run with a sanitized Git environment that ignores inherit
 Git config and `HOME`/XDG configuration. Only after that
 does it create a detached `C` worktree to run the candidate validator, planner, and
 their unit tests.  It has no secrets, cache restore, npm install, or PR executable
-step before authentication.  This bootstrap must be merged to `main` before PR 488
-is rerun; a workflow supplied by the PR cannot establish its own trust root.
+step before authentication. This bootstrap must remain protected-target code; a
+workflow supplied by the PR cannot establish its own trust root.
+
+The five required Security contexts inspect a candidate checkout and therefore
+are not, by themselves, an isolation boundary against deliberately hostile PR
+code. Their workflow shape and proof order are locked against accidental drift,
+but merge admission additionally depends on `authenticate-console-authority`,
+which runs protected-target code and rejects every PR—including forks and
+Dependabot—whose exact C/T train is not signed by the pinned authority. Never
+remove that required-context composition or treat a green scanner context alone
+as authentication of an untrusted contribution.
 
 On a closed, merged same-repository `main` PR, the separate squash-binding job first
 checks out exact `S`, verifies that `HEAD` is `S`, then hook-disabled detaches to
