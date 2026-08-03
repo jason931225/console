@@ -7,7 +7,9 @@
 //! actually run, which is the only place the classification is real: a
 //! `COMMENT ON COLUMN` naming a column that does not exist aborts the migration,
 //! and a `DROP COLUMN` silently discards a comment. Text and catalog can
-//! disagree, and the catalog is what the derivation reads.
+//! disagree, and the catalog is what the derivation reads. The classification
+//! reader and the completeness reader intentionally cover the same persistent
+//! table/partition/materialized-view/foreign-table universe across schemas.
 //!
 //! TWO CHECKS, AND SINCE THE BASELINE BECAME A SET OF NAMES THIS ONE CARRIES
 //! THE CLASS. The gate reads migration TEXT and sees a column the moment it is
@@ -20,10 +22,9 @@
 //! unclassified column NAMES, which has nothing to trade with — any change to
 //! membership fails here, whatever DDL produced it, FOR ANY RELATION THIS SWEEP
 //! READS. What that excludes is written out below and is not small: relations
-//! created at RUNTIME (0005's per-day `location_pings` partitions), and the
-//! `relkind`/`nspname` divergence from `personal_data_columns()`. See the crate
-//! doc of `console-gate-personal-data-classification` for the same statement
-//! from the other side.
+//! created at RUNTIME (0005's per-day `location_pings` partitions). See the
+//! crate doc of `console-gate-personal-data-classification` for the same
+//! statement from the other side.
 //!
 //! WHAT IS ASSERTED, AND WHAT IS NOT. These tests assert that the classification
 //! is present and that the derivation computes from it. They assert nothing
@@ -169,10 +170,12 @@ async fn strip_all_markers(pool: &PgPool) {
         DO $$
         DECLARE target RECORD;
         BEGIN
-            FOR target IN SELECT rel_name, col_name FROM personal_data_columns()
+            FOR target IN
+                SELECT schema_name, rel_name, col_name
+                FROM personal_data_columns()
             LOOP
-                EXECUTE format('COMMENT ON COLUMN %I.%I IS NULL',
-                               target.rel_name, target.col_name);
+                EXECUTE format('COMMENT ON COLUMN %I.%I.%I IS NULL',
+                               target.schema_name, target.rel_name, target.col_name);
             END LOOP;
         END $$;
         ",
@@ -193,6 +196,49 @@ async fn floor_years(pool: &PgPool) -> i32 {
         .fetch_one(pool)
         .await
         .unwrap()
+}
+
+/// Assert that neither an otherwise ungranted role nor the application runtime
+/// can execute either SECURITY DEFINER catalog reader.
+async fn assert_schema_derivation_owner_only(pool: &PgPool) {
+    let ungranted = format!("pd_ungranted_{}", uuid::Uuid::new_v4().simple());
+    sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+        "CREATE ROLE \"{ungranted}\" NOLOGIN"
+    )))
+    .execute(pool)
+    .await
+    .unwrap();
+
+    for role in [&ungranted, "console_rt"] {
+        for probe in [
+            "SELECT access_log_retention_floor_years()::BIGINT",
+            "SELECT COUNT(*) FROM personal_data_columns()",
+        ] {
+            let mut tx = pool.begin().await.unwrap();
+            sqlx::raw_sql(sqlx::AssertSqlSafe(format!("SET LOCAL ROLE \"{role}\"")))
+                .execute(tx.as_mut())
+                .await
+                .unwrap();
+            let refused = sqlx::query_scalar::<_, i64>(probe)
+                .fetch_one(tx.as_mut())
+                .await
+                .expect_err("owner-only schema introspection must refuse this role");
+            assert_eq!(
+                refused
+                    .as_database_error()
+                    .and_then(|e| e.code())
+                    .as_deref(),
+                Some("42501"),
+                "expected insufficient_privilege for role `{role}` and `{probe}`, got {refused:?}"
+            );
+            tx.rollback().await.unwrap();
+        }
+    }
+
+    sqlx::raw_sql(sqlx::AssertSqlSafe(format!("DROP ROLE \"{ungranted}\"")))
+        .execute(pool)
+        .await
+        .unwrap();
 }
 
 /// Create a one-column probe table carrying exactly the given classification.
@@ -224,23 +270,55 @@ const PROBE_UNDECLARED: &str = "COMMENT ON COLUMN pd_probe.probe_column IS 'pd:u
 /// projection, not to storage. If that ever stops being true, this assertion is
 /// where it gets noticed.
 #[sqlx::test(migrations = "./migrations")]
-async fn employees_raw_row_is_classified_unique_id_and_sensitive(pool: PgPool) {
-    let tokens: Vec<String> = sqlx::query_scalar(
-        "SELECT tokens FROM personal_data_columns()
-          WHERE rel_name = 'employees' AND col_name = 'raw_row'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+async fn raw_import_rows_name_known_restricted_and_unknown_content(pool: PgPool) {
+    let expected = BTreeSet::from([
+        "sensitive/health".to_owned(),
+        "undeclared".to_owned(),
+        "unique-id/rrn".to_owned(),
+    ]);
 
-    assert!(
-        tokens.iter().any(|t| t == "unique-id/rrn"),
-        "employees.raw_row must name WHICH 고유식별정보 it holds; got {tokens:?}"
-    );
-    assert!(
-        tokens.iter().any(|t| t == "sensitive/health"),
-        "employees.raw_row must record the 장애 (건강) 민감정보; got {tokens:?}"
-    );
+    for relation in ["employees", "data_import_rows"] {
+        let tokens: Vec<String> = sqlx::query_scalar(
+            "SELECT tokens FROM personal_data_columns()
+              WHERE schema_name = 'public' AND rel_name = $1 AND col_name = 'raw_row'",
+        )
+        .bind(relation)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let actual: BTreeSet<String> = tokens.into_iter().collect();
+        assert_eq!(
+            actual, expected,
+            "{relation}.raw_row must retain the known RRN and health classes while admitting arbitrary workbook content"
+        );
+    }
+}
+
+/// Rule C is semantic, so its five non-obvious JSONB cases are mutation-locked
+/// here instead of relying on prose in the migration. The two raw workbook rows
+/// are asserted above because they also carry known restricted classes.
+#[sqlx::test(migrations = "./migrations")]
+async fn user_supplied_json_objects_are_classified_undeclared(pool: PgPool) {
+    for (relation, column) in [
+        ("todos", "scopes"),
+        ("docs_evidence_custody_events", "from_custodian"),
+        ("docs_evidence_custody_events", "to_custodian"),
+    ] {
+        let tokens: Vec<String> = sqlx::query_scalar(
+            "SELECT tokens FROM personal_data_columns()
+              WHERE schema_name = 'public' AND rel_name = $1 AND col_name = $2",
+        )
+        .bind(relation)
+        .bind(column)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            tokens.into_iter().collect::<BTreeSet<_>>(),
+            BTreeSet::from(["personal".to_owned(), "undeclared".to_owned()]),
+            "{relation}.{column} accepts user-controlled JSON content and must admit that its contents are not closed"
+        );
+    }
 }
 
 /// The whole point of the control: the obligation is computed from the schema,
@@ -286,6 +364,107 @@ async fn sensitive_alone_raises_the_floor_with_no_unique_id_present(pool: PgPool
         2,
         "민감정보 alone must raise the floor to 2 years"
     );
+}
+
+/// The retention reader covers non-public schemas, not only `public`.
+#[sqlx::test(migrations = "./migrations")]
+async fn sensitive_in_a_non_public_schema_raises_the_floor(pool: PgPool) {
+    strip_all_markers(&pool).await;
+    sqlx::query("CREATE SCHEMA shadow")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("CREATE TABLE shadow.pd_probe (probe_column TEXT)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("COMMENT ON COLUMN shadow.pd_probe.probe_column IS 'pd:sensitive/health — probe'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let identity: (String, String, String) =
+        sqlx::query_as("SELECT schema_name, rel_name, col_name FROM personal_data_columns()")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        identity,
+        (
+            "shadow".to_owned(),
+            "pd_probe".to_owned(),
+            "probe_column".to_owned()
+        )
+    );
+    assert_eq!(floor_years(&pool).await, 2);
+}
+
+/// A materialized view stores rows and is part of the same classification and
+/// derivation universe as ordinary tables.
+#[sqlx::test(migrations = "./migrations")]
+async fn sensitive_on_a_materialized_view_raises_the_floor(pool: PgPool) {
+    strip_all_markers(&pool).await;
+    sqlx::query(
+        "CREATE MATERIALIZED VIEW pd_probe_mv AS
+         SELECT ''::TEXT AS probe_column WITH NO DATA",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("COMMENT ON COLUMN pd_probe_mv.probe_column IS 'pd:sensitive/health — probe'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let relkind: String = sqlx::query_scalar(
+        "SELECT c.relkind::TEXT
+           FROM pg_catalog.pg_class AS c
+           JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relname = 'pd_probe_mv'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(relkind, "m");
+    assert_eq!(floor_years(&pool).await, 2);
+}
+
+/// A foreign table can expose remote personal rows and accepts column comments;
+/// its marker must participate in the same conservative floor derivation.
+#[sqlx::test(migrations = "./migrations")]
+async fn sensitive_on_a_foreign_table_raises_the_floor(pool: PgPool) {
+    strip_all_markers(&pool).await;
+    sqlx::query("CREATE EXTENSION file_fdw")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("CREATE SERVER pd_probe_server FOREIGN DATA WRAPPER file_fdw")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "CREATE FOREIGN TABLE pd_probe_foreign (probe_column TEXT)
+         SERVER pd_probe_server OPTIONS (filename '/dev/null', format 'text')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("COMMENT ON COLUMN pd_probe_foreign.probe_column IS 'pd:sensitive/health — probe'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let relkind: String = sqlx::query_scalar(
+        "SELECT c.relkind::TEXT
+           FROM pg_catalog.pg_class AS c
+           JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relname = 'pd_probe_foreign'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(relkind, "f");
+    assert_eq!(floor_years(&pool).await, 2);
 }
 
 /// The 고유식별정보 limb, likewise on its own.
@@ -335,10 +514,11 @@ async fn an_empty_classification_derives_the_base_floor(pool: PgPool) {
 /// takes — `relkind IN ('r','p','m','f')` — not to the whole catalog. A `pd:`
 /// marker on a view or a composite-type column is ACCEPTED by PostgreSQL and
 /// lands in `pg_description` where this never looks, so a bogus token there
-/// passes. That is inert rather than a hole: `personal_data_columns()` reads a
-/// strict subset (`relkind IN ('r','p')`, `nspname = 'public'`), so nothing the
-/// retention derivation consumes can carry an unchecked token. Stated because
-/// "every marker in the catalog" would be a wider claim than the query makes.
+/// passes. That is outside both readers rather than a derivation gap:
+/// `personal_data_columns()` uses this same non-temporary `r/p/m/f` relation
+/// universe, so nothing the retention derivation consumes can carry an
+/// unchecked token. Stated because "every marker in the catalog" would be a
+/// wider claim than the query makes.
 ///
 /// This used to read `personal_data_columns()`, which is scoped
 /// `nspname = 'public'`. A bogus token in `shadow` or `leave_api` was therefore
@@ -405,51 +585,7 @@ async fn no_column_is_classified_credit_while_the_scope_question_is_open(pool: P
 /// must receive `42501 insufficient_privilege`.
 #[sqlx::test(migrations = "./migrations")]
 async fn schema_derivation_is_owner_only(pool: PgPool) {
-    // Unique per test database, so parallel runs on one cluster cannot race
-    // over a shared role name. The identifier is a fixed prefix plus a UUID's
-    // lowercase hex, so it cannot carry SQL metacharacters.
-    let ungranted = format!("pd_ungranted_{}", uuid::Uuid::new_v4().simple());
-    sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
-        "CREATE ROLE \"{ungranted}\" NOLOGIN"
-    )))
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    // Both probes yield BIGINT so a success would decode cleanly and the
-    // assertion is about privileges, not result types. The application runtime
-    // is tested explicitly because an accidental grant there would recreate an
-    // out-of-scope product surface even with PUBLIC revoked.
-    for role in [&ungranted, "console_rt"] {
-        for probe in [
-            "SELECT access_log_retention_floor_years()::BIGINT",
-            "SELECT COUNT(*) FROM personal_data_columns()",
-        ] {
-            let mut tx = pool.begin().await.unwrap();
-            sqlx::raw_sql(sqlx::AssertSqlSafe(format!("SET LOCAL ROLE \"{role}\"")))
-                .execute(tx.as_mut())
-                .await
-                .unwrap();
-            let refused = sqlx::query_scalar::<_, i64>(probe)
-                .fetch_one(tx.as_mut())
-                .await
-                .expect_err("owner-only schema introspection must refuse this role");
-            assert_eq!(
-                refused
-                    .as_database_error()
-                    .and_then(|e| e.code())
-                    .as_deref(),
-                Some("42501"),
-                "expected insufficient_privilege for role `{role}` and `{probe}`, got {refused:?}"
-            );
-            tx.rollback().await.unwrap();
-        }
-    }
-
-    sqlx::raw_sql(sqlx::AssertSqlSafe(format!("DROP ROLE \"{ungranted}\"")))
-        .execute(&pool)
-        .await
-        .unwrap();
+    assert_schema_derivation_owner_only(&pool).await;
 }
 
 // ---------------------------------------------------------------------------
@@ -4530,31 +4666,16 @@ fn completeness_violations(columns: &[CatalogColumn], baseline: &[(&str, &[&str]
 /// version that ships a different set of real tables there fails the two-sided
 /// check by name rather than passing quietly, which is the direction to fail in.
 ///
-/// EVERY APPLICATION SCHEMA, AND THAT IS LOAD-BEARING. `personal_data_columns()`
-/// is scoped `nspname = 'public'` because that is what the retention derivation
-/// reads. This is not: the whole reason the completeness question moved to the
-/// catalog was a planted `shadow.employees(raw_row)` the text gate reported
-/// PASSED on, and a check that inherited the `public` scope would have inherited
-/// that blind spot too. It returns the raw comment so the caller applies the
-/// vocabulary here rather than in a second, differently scoped query.
-///
-/// THE DIVERGENCE FROM `personal_data_columns()` HAS TWO AXES, NOT ONE, AND THE
-/// SECOND ONE UNDER-RETAINS. `personal_data_columns()` (0211:887) is also scoped
-/// `relkind IN ('r', 'p')`; this sweep takes `('r', 'p', 'm', 'f')`. So a
-/// `pd:sensitive/health` marker on a materialized view or a foreign table is a
-/// VALID classification that this assertion and the vocabulary check both
-/// accept, and that `access_log_retention_floor_years()` never sees — the floor
-/// it derives stays at 제8조제1항 본문's 1 year when 고시 제2026-9호
-/// 제8조제1항제2호 requires 2 years. That direction is the dangerous one: the
-/// schema-name axis makes the derivation miss a classification too, and both
-/// under-retain rather than over-retain.
-///
-/// LATENT TODAY, NOT CLOSED. No migration creates a materialized view or a
-/// foreign table — a planted `MATERIALIZED VIEW` moved this sweep's table count
-/// 282 → 283, which is how the emptiness was measured rather than assumed. The
-/// fix belongs in the migration that defines `personal_data_columns()`, and is
-/// deferred with the rest of the schema change; it is disclosed here so nobody
-/// reads the two readers as agreeing on more than the schema-name axis.
+/// EVERY APPLICATION SCHEMA, AND THAT IS LOAD-BEARING. The whole reason the
+/// completeness question moved to the catalog was a planted
+/// `shadow.employees(raw_row)` the text gate reported PASSED on. The
+/// `personal_data_columns()` reader now takes these exact namespace,
+/// persistence, relkind, live-attribute, and marker predicates, returning the
+/// schema-qualified identity that `strip_all_markers` needs. That alignment is
+/// executable: the retention tests plant a sensitive marker in a non-public
+/// ordinary table, a materialized view, and a foreign table, and each must
+/// derive the two-year floor. This query returns the raw comment so the caller
+/// applies the closed vocabulary over that same relation universe.
 async fn application_columns(pool: &PgPool) -> Vec<CatalogColumn> {
     sqlx::query(
         r"

@@ -2021,7 +2021,7 @@ async fn report_employee_exit_case(
     State(state): State<HrState>,
     Extension(principal): Extension<Principal>,
     Json(body): Json<ReportEmployeeExitCaseRequest>,
-) -> Result<Json<EmployeeExitCaseResponse>, HrError> {
+) -> Result<(StatusCode, Json<EmployeeExitCaseResponse>), HrError> {
     let effective_exit_date = normalize_date_text(&body.effective_exit_date)?;
     let site_manager_note =
         normalize_limited_text(body.site_manager_note, 1000, "site_manager_note")?;
@@ -2111,7 +2111,7 @@ async fn report_employee_exit_case(
     })
     .await?;
 
-    Ok(Json(exit_case))
+    Ok((StatusCode::CREATED, Json(exit_case)))
 }
 
 // M2-strangler-debt: this absence->exit->settlement flow is a hardcoded cross-module
@@ -11593,7 +11593,8 @@ E-001,홍길동,본사,2026-07-01,abc
         )
         .await
         .map_err(|err| format!("org-wide branchless report was rejected: {err:?}"))?;
-        assert_eq!(created.0.branch_id, None);
+        assert_eq!(created.0, StatusCode::CREATED);
+        assert_eq!(created.1.0.branch_id, None);
         Ok(())
     }
 
@@ -11643,7 +11644,8 @@ E-001,홍길동,본사,2026-07-01,abc
         )
         .await
         .map_err(|err| format!("report failed: {err:?}"))?;
-        let case_id = reported.0.id;
+        assert_eq!(reported.0, StatusCode::CREATED);
+        let case_id = reported.1.0.id;
 
         // (2) HR confirmation (no wage source yet, so the case stays HR_CONFIRMED
         // for the HQ tier rather than being bumped to SETTLEMENT_READY).

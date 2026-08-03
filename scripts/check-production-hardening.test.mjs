@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   evaluateCnpgContextChecks,
@@ -42,6 +43,42 @@ describe("production authority blocked observation static integration", () => {
         new URL("./check-production-authority-blocked.mjs", import.meta.url),
       ),
     );
+  });
+});
+
+describe("post-pivot production operation HOLD", () => {
+  const guardedOperations = [
+    ["../ops/backup/backup.sh", "compose-production-backup", "compose_args=(-p"],
+    ["../ops/backup/restore-drill.sh", "compose-restore-drill", "compose_args=(-p"],
+    ["../ops/dr/pitr-drill.sh", "compose-pitr-drill", "source_compose_args=(-p"],
+    ["../ops/dr/cnpg-restore-drill.sh", "cnpg-restore-drill", "recovery_cluster="],
+  ];
+
+  it("hard-fails every retained backup/restore entrypoint before substantive setup", () => {
+    for (const [relativePath, operation, firstSubstantiveSetup] of guardedOperations) {
+      const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+      const guard = source.indexOf("require-production-operation-authority.sh");
+      assert.notEqual(guard, -1, `${relativePath}: missing shared authority guard`);
+      assert.match(source.slice(guard, guard + 180), new RegExp(operation));
+      assert.ok(
+        guard < source.indexOf(firstSubstantiveSetup),
+        `${relativePath}: authority guard must precede substantive setup`,
+      );
+    }
+  });
+
+  it("the shared guard has no success path on this candidate", () => {
+    const guardUrl = new URL("./require-production-operation-authority.sh", import.meta.url);
+    const source = readFileSync(guardUrl, "utf8");
+    assert.match(source, /production_operation_authority=blocked/);
+    assert.match(source, /exit 78\s*$/);
+
+    const result = spawnSync("bash", [fileURLToPath(guardUrl), "test-operation"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 78);
+    assert.match(result.stderr, /operation=test-operation/);
+    assert.match(result.stderr, /2026-08-03-disk-wipe-consolidation\.md/);
   });
 });
 

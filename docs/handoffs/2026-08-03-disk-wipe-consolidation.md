@@ -5,6 +5,25 @@ branches, caches, ignored files, or chat context. Read it only from the latest
 `origin/main`; local refs named below are evidence identities, not continuation
 dependencies.
 
+## Manual blockers before disk erase
+
+Repository merge completion does not preserve workstation secrets or external
+business inputs. No off-device data volume or verified cloud-secret-manager
+transfer was observable during this consolidation. **Do not erase the disk**
+until the owner has completed and read-back verified the custody decisions in
+the [ignored files and secrets](#ignored-files-and-secrets) section.
+
+The highest-value blocker is `~/.ssh/id_ed25519`: the candidate and authority
+verifiers pin its public fingerprint
+`SHA256:5grGNUtX9Zgmy1SWne6wF9DR8W1ElUQaF/Z8SYRz8E8`. A newly issued key is not
+an equivalent replacement and will not pass the current trust gate. Either copy
+the exact private key to approved encrypted off-device custody and verify the
+restored public fingerprint, or complete a separately reviewed trust-root
+rotation while the old key still works. The 189 MB `~/.config/talos-mnt/**`
+recovery directory likewise needs an actual encrypted off-device archive with a
+read-back hash, or an itemized owner-approved discard/reissue decision; hashes
+listed in this handoff cannot reconstruct its bytes.
+
 ## Fresh-session entrypoint
 
 Restore GitHub authentication and the repository's signed-commit configuration
@@ -18,7 +37,17 @@ cd console
 git switch main
 git pull --ff-only
 gh pr list --state open
+git config --local user.name "Jason Lee"
+git config --local user.email "jason19931225@gmail.com"
+git config --local gpg.format ssh
+git config --local user.signingkey ~/.ssh/id_ed25519
+git config --local gpg.ssh.allowedsignersfile .github/trust/console.allowed_signers
+git config --local commit.gpgsign true
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
 ```
+
+The final command must report the pinned fingerprint above before signed work
+continues.
 
 Then read, in order:
 
@@ -69,10 +98,15 @@ newer CI run does not retroactively make this consolidation incomplete.
 - PR #562 must publish the truthful `API contract — text-only contract checks`
   context. Before merge, branch protection must replace the obsolete
   `API contract — app-served OpenAPI` requirement with that exact context and
-  add the already-running `Domain crates — unit tests` and
+  replace `Company conformance — 12/12 required target` with
+  `Company conformance — generic-engine regression`, then add the already-running
+  `Domain crates — unit tests` and
   `dev-up.mjs smoke — compose deps + migrate + /readyz` contexts. Preserve strict
   up-to-date checks, the existing GitHub Actions app binding, every other
-  required context, and read the rule back after the update.
+  required context, and read the rule back after the update. Also require one
+  approving review, dismiss stale approvals, require approval of the most recent
+  push, and require every review conversation to be resolved; read all four
+  controls back before merge.
 - Every final candidate is reviewed at its exact SHA by two independent
   adversarial reviewers. PR #562 additionally requires a formal approving
   GitHub review from someone other than its author, with no unresolved review
@@ -89,6 +123,31 @@ newer CI run does not retroactively make this consolidation incomplete.
   correctly rejected the head because a content checkpoint is not the required
   ledger-only direct-child authority tip. It is recoverable evidence, not merge
   authority; only the replacement C/T pair may proceed.
+- Signed authority tip `3885ed49b4bf2906f75c1907cfcd7f03f9aac0c3`
+  subsequently passed the protected-main simulator, 72 authenticated candidate
+  checks, and the complete fast verifier. Exact-object review nevertheless revoked
+  it: two documents listed as current authority still instructed a fresh session
+  to freeze the generic `company_conformance` fixture and dispatch a
+  JobPosition/projection pilot, contradicting the roadmap and catalog HOLD. Those
+  instructions are now reconciled. Review also found the same obsolete product-
+  target claim in the CI job label, an accepted ADR that named path filters the
+  workflow intentionally forbids, and a pre-pivot readiness record presenting
+  historical deployment and test claims as current. Those claims are narrowed or
+  retired. A later exact-object pass also reproduced a dangerous retention-floor
+  blind spot: the catalog completeness reader accepted non-public schemas,
+  materialized views, and foreign tables that the derivation ignored. It found
+  exactly five free-form JSONB columns missing the migration's own `undeclared`
+  class and two touched API-contract mismatches. The replacement repairs align
+  the readers, mutation-lock all five classifications, and reconcile those API
+  contracts. No simulation, CI, or review result from the superseded tip carries
+  forward to the final replacement pair.
+- Hosted run `30834869062` against that revoked tip also failed the serialized
+  PostgreSQL lane: `mobile_evidence_fixtures.rs` was absent from the generated
+  workorder source map. The replacement exports both shared fixture modules,
+  maps all four path-module users, and wires three previously dark dispatch/mobile
+  binaries into the PostgreSQL lane. All four Buck targets build locally and
+  their 15 PostgreSQL tests pass; hosted proof still belongs to the replacement
+  exact tip, not to this local measurement.
 - Two signed archive tags make provenance commits outside the post-pivot main
   ancestry reproducible from a fresh clone:
   `archive/pre-pivot-implementation-freeze-2026-07-24` resolves to
@@ -128,12 +187,14 @@ similarity; no source branch is a continuation dependency.
 | Ignored planning packet | The exact approved Ultragoal/ralplan context, plan, and architect/critic handoff were deliberately force-added | `dff758724f7b428584a602cee7b2429dfbd7c5c1` |
 | Domain attempt | Only the six-finding `BLOCKED` disposition was kept; no domain/DNS/credential implementation was admitted | `bdd24a16a7373522245c7ffcffb85fdedc0ec752` |
 | Branch authorization | Eighteen fabricated-branch helpers were replaced with capability authorization; the final correction also removed the three path-wide gate exemptions and repaired concrete tenant/branch boundaries in HR exit reporting, registry site creation/master import, and reporting rollups. The changed pure tests and PostgreSQL regressions are CI-reachable. | initial implementation `8d7871a96f0fdcfd387d1e05260237d4eeec9b2b`, gate `9d4a136903c4d5d7978a046d0db9d2293a944ce5`; final signed C named by its direct-child authority ledger |
-| Personal-data classification | Schema-derived closed-vocabulary column classification, exact-name baseline, database assertion, CI reachability, and payroll classifications. The final correction preserves the official instrument's one-/two-year unit, keeps schema introspection owner-only, and removes the out-of-pivot compliance product route. | `fccdf5288f916c5180045ef19d4daaa395998fbf` through `851b999f49222a4d04282088f508f552469d756d`; final signed C named by its direct-child authority ledger |
+| Personal-data classification | Schema-derived closed-vocabulary column classification, exact-name baseline, database assertion, CI reachability, and payroll classifications. The final correction preserves the official instrument's one-/two-year unit, keeps schema introspection owner-only, removes the out-of-pivot compliance product route, aligns retention and completeness over every non-temporary `r/p/m/f` relation outside `pg_catalog`, returns schema-qualified identities, and adds `undeclared` to the five audited free-form JSONB omissions. Disposable PostgreSQL proves non-public, materialized-view, foreign-table, Rule-C, floor, and owner-only cases. | `fccdf5288f916c5180045ef19d4daaa395998fbf` through `851b999f49222a4d04282088f508f552469d756d`; final signed C named by its direct-child authority ledger |
 | Gate integrity | Request-body and undeclared-import false-green repairs, plus CI preflight enforcement of `openapi_drift` | `1ec3e69d7ec3b8348561d2d699326f0949258521` |
 | Documentation gates | Stale citations were reconciled and local-link checking learned to ignore inline-code examples while still checking adjacent real links | `d90f127654e0b4b0fe423304bbf5086e3cc24228` |
-| CI/tooling ratchets | Exact executed-test named sets, Cargo/feature reachability, credential argv hardening, local-CI parity, and removal of dead post-pivot tooling. The complete ten-job surface now locks 95 run steps, 29 action steps, job/workflow envelopes, and unfiltered required-context triggers. The final repair admits registry/reporting inline tests to the generated Buck face, updates both app inline-test cardinality locks, and runs fresh command doubles through load-bearing Bash wrappers so macOS provenance checks cannot turn an expected deploy failure into a harness timeout. | reduced from `09f147a7`, `26491630`, and `eb60e2e4`; final execution lock `3d5f0b0649b21c8e647b2fa31ec40bd2aeeb8fec`; repair checkpoints `aba19c8db6fa66ee4a6e642f72471e00dc65483f` and `baadf03cf4692754fd0b964834e324d14e48f20e` |
+| CI/tooling ratchets | Exact executed-test named sets, Cargo/feature reachability, credential argv hardening, local-CI parity, and removal of dead post-pivot tooling. The complete ten-job surface now locks 95 run steps, 29 action steps, job/workflow envelopes, and unfiltered required-context triggers. The final repair admits registry/reporting inline tests to the generated Buck face, updates both app inline-test cardinality locks, runs fresh command doubles through load-bearing Bash wrappers so macOS provenance checks cannot turn an expected deploy failure into a harness timeout, derives the MJS reachability root from its own module URL, and exports/maps the dispatch/mobile shared fixtures. Three formerly dark PostgreSQL binaries are now in CI; the exact dark baseline shrank from 13 to 10. | reduced from `09f147a7`, `26491630`, and `eb60e2e4`; final execution lock `3d5f0b0649b21c8e647b2fa31ec40bd2aeeb8fec`; repair checkpoints `aba19c8db6fa66ee4a6e642f72471e00dc65483f` and `baadf03cf4692754fd0b964834e324d14e48f20e`; final signed C named by its direct-child authority ledger |
 | Security proofs | Five required security contexts have exact parsed job/proof contracts; Trivy installs checksum-pinned before checkout, Cargo audit/deny use isolated direct binaries, and exception-policy regressions execute. Hosted execution caught the direct `cargo-audit` invocation missing its required `audit` subcommand; the final correction fixes and mutation-locks that exact command. | `d6cfedfd1c8230ca6e5ea43053d1ccc7dbcc2026`; final signed C named by its direct-child authority ledger |
-| Program boundary | The generic instance-backed `company_conformance` fixture remains useful engine regression evidence but is explicitly not the Company/HR projected product target. Replacement conformance and projected Company/Person/Employment/PayRun work remain HOLD until owning-port and single-writer contracts exist. | final signed C named by its direct-child authority ledger |
+| Program boundary | The generic instance-backed `company_conformance` fixture remains useful engine regression evidence but is explicitly not the Company/HR projected product target. Replacement conformance and projected Company/Person/Employment/PayRun work remain HOLD until owning-port and single-writer contracts exist. The current lane protocol and engineering playbook now forbid product writer worktrees and named JobPosition/projection pilots until a later authority accepts those gates; neither document can dispatch the provisional catalog. Its blocking CI context is relabeled as a generic-engine regression, and the pre-pivot readiness record is retired as current evidence. | final signed C named by its direct-child authority ledger |
+| Continuation state | The machine-readable capability registry no longer points a new session at this disposable worktree or provisional lanes. Current worktree, branch, and lane assignments are null; every current capability state is `HOLD`; the exact prior state remains separately hash-bound as history. | final signed C named by its direct-child authority ledger |
+| Operations boundary | Production/readiness prose is explicitly historical or unverified, and destructive backup/restore/PITR/CNPG drill entrypoints call a common authority guard that exits 78 before substantive action. This records a HOLD; it does not establish that a deployment or recovery path works. | final signed C named by its direct-child authority ledger |
 | External PR authority | Unsigned fork and Dependabot heads fail the same protected-main C/T authentication instead of reporting a successful skip. | `e448f48ea840af2258d5bb374a9185e93b9d838e` |
 | Release | Release-please 0.3.1 manifest/changelog plus an independently reviewed authority train | PR #552, C `5e297ca0ab2134e793bb40d5999908606ef1e050`, T `bab0ff594b1b66c85aaaa8c92ffcbedc88c0c2c2` |
 
@@ -160,12 +221,18 @@ files of sessions, temporary worktrees, caches, logs, and superseded goals. `.om
 contained no durable unique plan. Exactly three immutable planning inputs were
 retained byte-for-byte, together with one tracked execution status record:
 
+The selection was time- and state-audited rather than guessed: the ignored tree
+held 294 plan files and 5,395 context files, while all 292 excluded plans and
+5,394 excluded contexts predated the July 28 pivot; `.omc` project memory had
+empty user directives/notes and its latest checkpoint had no tasks, modes, or
+jobs.
+
 | Artifact | SHA-256 |
 | --- | --- |
 | `.omx/context/reasoning-lens-contract-20260803T101035Z.md` | `dea80c0a1fa5cc47c7ba12e4ee1c62480cd675e7b26bf33434ddf1fc94be61e4` |
 | `.omx/plans/reasoning-lens-contract.md` | `76dc05561d7d6c07ee26afb68ea60841321eab7516f6d0546ba96d41825aad5c` |
 | `.omx/plans/reasoning-lens-contract-handoff.json` | `db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2` |
-| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `0604281adacaca79263e891945e40866f4d053300203b8d131a91292801ea630` at the replacement-candidate sealing stage |
+| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `bc567c4b67adc27b000c52332dbfc92765a37223c1468ee879cddb577d053fcc` at the replacement-candidate resealing stage |
 
 The original JSON correctly says execution had not started at the instant the
 architect/critic plan was frozen. Do not edit that historical claim. The sibling
@@ -186,15 +253,52 @@ configuration; preserve them externally only if those tools are still needed.
 Never commit `.env` or paste its values into an issue, PR, handoff, or log.
 
 The repository is not sufficient to reconstruct workstation identity or
-infrastructure access. Before wiping, escrow or deliberately reissue the private
-material behind the configured SSH commit-signing key (`~/.ssh/id_ed25519`), OCI
-SSH/API access (`~/.ssh/mnt_oci`, `~/.oci/config`, and
-`~/.oci/mnt_api_key.pem`), GitHub CLI/keyring authentication, and any needed
+infrastructure access. Preserve the exact configured SSH commit-signing private
+key (`~/.ssh/id_ed25519`) as described in the manual blocker above; merely
+issuing a new key is not compatible with the pinned verifier. Separately escrow
+or deliberately reissue OCI SSH/API access (`~/.ssh/mnt_oci`, `~/.oci/config`,
+and `~/.oci/mnt_api_key.pem`), GitHub CLI/keyring authentication, and any needed
 `~/.kube/config` or `~/.talos/config`. Store them only in an approved encrypted
-secret manager or backup. The kubeconfig observed during this consolidation
+secret manager or off-device backup.
+
+The entire `~/.config/talos-mnt/**` tree is in the custody boundary: it was
+approximately 189 MB across 76 files and included cluster configs, generated
+machine configuration, SSH/API material, a JWT private key, an OTP, database and
+object-store material, OCIDs, logs, and 18 helper scripts. Secret contents were
+not read into this handoff. Do not commit the directory or selectively assume
+the three hashes below preserve it. Three scripts referenced by the historical
+runbook were present at audit time:
+
+| External file | SHA-256 |
+| --- | --- |
+| `~/.config/talos-mnt/talos-up.sh` | `08c80322e7e65e86359e0aedf5549d76c46259f8516dd0252f678b2f86b78aa8` |
+| `~/.config/talos-mnt/reserve-relaunch.sh` | `a080c689c6b263359b4af03f3c0e1718f15abf1078c18f90d93dd34bc5ea2938` |
+| `~/.config/talos-mnt/deploy.sh` | `9c21c735d4d7d850fee48d2019dcfdf9be8dec5926e32c5096d35d7e8715e112` |
+
+Preserve that directory as one encrypted external bundle if OCI recovery remains
+desired, then read the archive back and record its archive hash outside this
+repository. A matching per-file hash proves custody of only those bytes, not that
+the procedure is current or safe to run. The kubeconfig observed during this consolidation
 points at the shared laptop cluster, not proven OCI production; preserving it
 does not change that authority boundary. After restore, verify `gh auth status`
 and a throwaway signed commit's displayed signer before relying on either.
+
+Four tracked historical tools/profile records point to business inputs outside
+Git. They are outside the active pivot and are not CI/package dependencies, so
+they must not be imported into this PR. They still require an explicit owner
+decision before wipe—encrypted external preservation or deliberate discard:
+
+| External input | Audit observation |
+| --- | --- |
+| iCloud `TalkFile_장비Master List.xlsx` | 90,753 bytes; SHA-256 `caf83ec76dbdf35e85096a46ffb33372d22adeacc37c49c102a213a10875eba2` |
+| `~/Desktop/COSS Group/` | Directory exists; contents were not readable to the audit process |
+| `~/Downloads/Untitled spreadsheet.xlsx` | 910,174-byte file; bytes were not readable to the audit process |
+| iCloud `TalkFile_조직도_그룹웨어_회사_20260626105223.csv` | 7,424 bytes; SHA-256 `d5f4dcf2b856e12015b2af62a59725c1f0a030e5ec4bcba5cfa785e136ad6687` |
+
+An iCloud path alone is not proof that upload/synchronization completed, and
+Desktop/Downloads paths are local unless separately backed up. Record the
+owner's decision and, for preserved inputs, verify an off-device read-back by
+hash before erase.
 
 The ignored `ops/.dev-secrets/jwt-private.pem` and `jwt-public.pem` are local
 development keys generated by the dev bootstrap and should be regenerated, not
@@ -207,9 +311,11 @@ already tracked planning/status files remain tracked. Also discard
 interim Coss approvals superseded by the final `BLOCKED` record and are a
 specific resurrection hazard.
 
-The repository is self-contained after the merge except for intentionally
-external secrets and infrastructure credentials. No unmerged local code or
-planning context is a prerequisite for the next session.
+The repository is self-contained after the merge for product source, reviewed
+history, and planning context. It is intentionally not sufficient for
+workstation identity, secret recovery, or an OCI/Talos rebuild: those require the
+external custody items above. No unmerged local product code or planning context
+is a prerequisite for the next session.
 
 ## Safety holds that survive the wipe
 

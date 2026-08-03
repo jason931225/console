@@ -31,7 +31,7 @@
     "check:package-lock": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund && git diff --exit-code -- package-lock.json",
     "test:adrs": "node --test scripts/check-adrs.test.mjs",
     "test:text-gate": "node --test scripts/lib/text-gate.test.mjs",
-    "test:executed-tests-baseline": "node --test scripts/lib/executed-tests-baseline.test.mjs",
+    "test:executed-tests-baseline": "node --test scripts/lib/executed-tests-baseline.test.mjs scripts/dev/mjs-test-reachability.test.mjs",
     "test:employee-import-contract": "node --test scripts/check-employee-import-replay-contract.test.mjs",
     "test:ontology-write-precondition": "node --test scripts/check-ontology-write-precondition.test.mjs",
     "check:pr473-migration-operational": "python3 scripts/check-pr473-migration-operational.py",

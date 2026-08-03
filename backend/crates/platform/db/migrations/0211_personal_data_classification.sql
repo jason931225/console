@@ -90,7 +90,7 @@ COMMENT ON COLUMN employees.name IS 'pd:personal — 직접 식별자 - 이름';
 COMMENT ON COLUMN employees.org_id IS 'pd:personal — row is a natural person; 개보법 제2조제1호나목 결합 식별';
 COMMENT ON COLUMN employees.org_unit IS 'pd:personal — row is a natural person; 개보법 제2조제1호나목 결합 식별';
 COMMENT ON COLUMN employees.position IS 'pd:personal — row is a natural person; 개보법 제2조제1호나목 결합 식별';
-COMMENT ON COLUMN employees.raw_row IS 'pd:unique-id/rrn,sensitive/health — 0066 헤더가 명시: 주민등록번호와 장애 항목이 평문 보존됨. hr.rs is_restricted_employee_import_header가 주민/장애를 restricted로 분류하나 정책은 retain_raw_mask_preview - 마스킹은 미리보기 투영에만 적용';
+COMMENT ON COLUMN employees.raw_row IS 'pd:unique-id/rrn,sensitive/health,undeclared — 0066 헤더가 명시: 주민등록번호와 장애 항목이 평문 보존됨. 원본 JSONB는 알 수 없는/제한/빈 셀 값도 보존하므로 undeclared이다. hr.rs is_restricted_employee_import_header가 주민/장애를 restricted로 분류하나 정책은 retain_raw_mask_preview - 마스킹은 미리보기 투영에만 적용';
 COMMENT ON COLUMN employees.source_filename IS 'pd:personal — row is a natural person; 개보법 제2조제1호나목 결합 식별';
 COMMENT ON COLUMN employees.source_key IS 'pd:personal — row is a natural person; 개보법 제2조제1호나목 결합 식별';
 COMMENT ON COLUMN employees.source_metadata IS 'pd:personal — 확인 결과 반입 출처 정보만 보유 - filename/sheet/row/header_row. 제한 항목 값 없음';
@@ -105,7 +105,7 @@ COMMENT ON COLUMN data_import_rows.canonical_row IS 'pd:personal — 허용목�
 COMMENT ON COLUMN data_import_rows.created_at IS 'pd:personal — HR 직원 반입 경로가 이 표에 사람 행을 기록함 - hr.rs:2512, 8791';
 COMMENT ON COLUMN data_import_rows.id IS 'pd:personal — HR 직원 반입 경로가 이 표에 사람 행을 기록함 - hr.rs:2512, 8791';
 COMMENT ON COLUMN data_import_rows.org_id IS 'pd:personal — HR 직원 반입 경로가 이 표에 사람 행을 기록함 - hr.rs:2512, 8791';
-COMMENT ON COLUMN data_import_rows.raw_row IS 'pd:unique-id/rrn,sensitive/health — employees.raw_row와 동일한 워크북 원본 행';
+COMMENT ON COLUMN data_import_rows.raw_row IS 'pd:unique-id/rrn,sensitive/health,undeclared — employees.raw_row와 동일한 워크북 원본 행; 알 수 없는/제한/빈 셀 값도 보존하는 비한정 JSONB';
 COMMENT ON COLUMN data_import_rows.row_status IS 'pd:personal — HR 직원 반입 경로가 이 표에 사람 행을 기록함 - hr.rs:2512, 8791';
 COMMENT ON COLUMN data_import_rows.run_id IS 'pd:personal — HR 직원 반입 경로가 이 표에 사람 행을 기록함 - hr.rs:2512, 8791';
 COMMENT ON COLUMN data_import_rows.source_key IS 'pd:personal — HR 직원 반입 경로가 이 표에 사람 행을 기록함 - hr.rs:2512, 8791';
@@ -362,7 +362,7 @@ COMMENT ON COLUMN todos.id IS 'pd:personal — owner_user_id 소유 행';
 COMMENT ON COLUMN todos.links IS 'pd:personal,undeclared — 링크 JSONB - 비한정';
 COMMENT ON COLUMN todos.org_id IS 'pd:personal — owner_user_id 소유 행';
 COMMENT ON COLUMN todos.owner_user_id IS 'pd:personal — owner_user_id 소유 행';
-COMMENT ON COLUMN todos.scopes IS 'pd:personal — owner_user_id 소유 행';
+COMMENT ON COLUMN todos.scopes IS 'pd:personal,undeclared — 사용자 제공 kind/id/label을 보존하는 스코프 JSONB';
 COMMENT ON COLUMN todos.updated_at IS 'pd:personal — owner_user_id 소유 행';
 
 -- notifications
@@ -752,7 +752,7 @@ COMMENT ON COLUMN docs_evidence_custody_events.audit_event_id IS 'pd:none — st
 COMMENT ON COLUMN docs_evidence_custody_events.created_at IS 'pd:none — structural or non-personal attribute of a non-person row';
 COMMENT ON COLUMN docs_evidence_custody_events.event_digest_sha256 IS 'pd:none — structural or non-personal attribute of a non-person row';
 COMMENT ON COLUMN docs_evidence_custody_events.evidence_object_id IS 'pd:none — structural or non-personal attribute of a non-person row';
-COMMENT ON COLUMN docs_evidence_custody_events.from_custodian IS 'pd:personal — 보관자 - 자연인일 수 있음';
+COMMENT ON COLUMN docs_evidence_custody_events.from_custodian IS 'pd:personal,undeclared — 보관자 - 자연인일 수 있고 임의 JSON 객체를 보존';
 COMMENT ON COLUMN docs_evidence_custody_events.id IS 'pd:none — structural or non-personal attribute of a non-person row';
 COMMENT ON COLUMN docs_evidence_custody_events.location_label IS 'pd:personal — 보관자와 결합 시 개인 소재 특정';
 COMMENT ON COLUMN docs_evidence_custody_events.occurred_at IS 'pd:none — structural or non-personal attribute of a non-person row';
@@ -761,7 +761,7 @@ COMMENT ON COLUMN docs_evidence_custody_events.previous_event_id IS 'pd:none —
 COMMENT ON COLUMN docs_evidence_custody_events.reason IS 'pd:undeclared — 운영자 자유입력';
 COMMENT ON COLUMN docs_evidence_custody_events.source_ref IS 'pd:undeclared — 출처 참조 - 비한정';
 COMMENT ON COLUMN docs_evidence_custody_events.stage IS 'pd:none — structural or non-personal attribute of a non-person row';
-COMMENT ON COLUMN docs_evidence_custody_events.to_custodian IS 'pd:personal — 보관자 - 자연인일 수 있음';
+COMMENT ON COLUMN docs_evidence_custody_events.to_custodian IS 'pd:personal,undeclared — 보관자 - 자연인일 수 있고 임의 JSON 객체를 보존';
 
 -- work_diary_drafts
 COMMENT ON COLUMN work_diary_drafts.body IS 'pd:personal,undeclared — 작업 일지 본문 - 근로자 이름을 담음';
@@ -901,13 +901,14 @@ COMMENT ON COLUMN employee_contract_wages.created_by IS 'pd:personal — user id
 COMMENT ON COLUMN employee_contract_wages.created_at IS 'pd:personal — timestamp associated with employee and recording user';
 
 CREATE OR REPLACE FUNCTION personal_data_columns()
-RETURNS TABLE (rel_name TEXT, col_name TEXT, tokens TEXT[])
+RETURNS TABLE (schema_name TEXT, rel_name TEXT, col_name TEXT, tokens TEXT[])
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $$
     SELECT
+        n.nspname::TEXT,
         c.relname::TEXT,
         a.attname::TEXT,
         string_to_array(
@@ -919,8 +920,9 @@ AS $$
     JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.oid
     JOIN pg_catalog.pg_description AS d
       ON d.objoid = c.oid AND d.objsubid = a.attnum
-    WHERE n.nspname = 'public'
-      AND c.relkind IN ('r', 'p')
+    WHERE n.nspname <> 'pg_catalog'
+      AND c.relpersistence <> 't'
+      AND c.relkind IN ('r', 'p', 'm', 'f')
       AND a.attnum > 0
       AND NOT a.attisdropped
       AND d.description LIKE 'pd:%';
@@ -928,8 +930,10 @@ $$;
 
 COMMENT ON FUNCTION personal_data_columns() IS
     'Field-level personal-data classification, read from the database catalog. '
-    'Each row is a column carrying a pd: marker and its token list. Records what '
-    'a column holds; asserts nothing about whether any obligation is met.';
+    'Each row is a schema-qualified column carrying a pd: marker and its token '
+    'list. The reader covers the same non-pg_catalog, non-temporary r/p/m/f '
+    'relation universe as the catalog completeness assertion. Records what a '
+    'column holds; asserts nothing about whether any obligation is met.';
 
 CREATE OR REPLACE FUNCTION access_log_retention_floor_years()
 RETURNS INTEGER

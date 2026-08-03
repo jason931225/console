@@ -155,6 +155,18 @@ RESOURCE_CONFIG = {
                 "docs/reference/master-list_251120.xlsx",
         },
     },
+    "console-dispatch-worker": {
+        "itest_external": {
+            "//backend/test_support:dispatch-worker-fixtures":
+                "backend/test_support/dispatch_worker_fixtures.rs",
+        },
+    },
+    "console-workorder-rest": {
+        "itest_external": {
+            "//backend/test_support:mobile-evidence-fixtures":
+                "backend/test_support/mobile_evidence_fixtures.rs",
+        },
+    },
 }
 
 SQLX_MACRO_MARKERS = ("query!", "query_as!", "query_scalar!")

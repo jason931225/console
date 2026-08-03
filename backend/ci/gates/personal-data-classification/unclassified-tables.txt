@@ -25,10 +25,12 @@
 #     catalog built from ./migrations. This already ships: 0005's
 #     location_pings_ensure_partition() creates a day partition per day, and the
 #     ten classified columns of the parent prove nothing about the child.
-#   * the relkind/nspname divergence against personal_data_columns() (0211), which
-#     reads ('r','p') in schema public where the sweep reads ('r','p','m','f')
-#     across every schema -- so a valid marker outside that intersection is
-#     accepted by the sweep and never reaches the retention derivation.
+#
+# The former relkind/schema divergence against personal_data_columns() is
+# closed: migration 0211 now uses this same non-pg_catalog, non-temporary
+# ('r','p','m','f') universe and returns schema-qualified identities. PostgreSQL
+# tests plant non-public, materialized-view, and foreign-table markers and
+# require each to reach the retention derivation.
 #
 # This file is what the text parser sees; that one is what PostgreSQL holds.
 # Today this file names 242 tables and the catalog's names 247. The five it has

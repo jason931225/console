@@ -3,16 +3,35 @@
 This playbook is subordinate to the pivot, accepted ADRs, roadmap, and development pipeline. It describes repeatable delivery, not product authority.
 
 ## Prepare before parallelism
-1. Establish a known reference implementation (Company and OrgUnit).
-2. Freeze an independently owned behavioral target (`company_conformance`).
-3. Publish the mechanical expansion guide (`CATALOG.md`).
-4. Run a small JobPosition/projection pilot and prove zero overlapping writes.
-5. Preserve and independently verify the test baseline before widening.
+
+The current product-specific preparation state is HOLD. The instance-backed
+`company_conformance` fixture is generic-engine regression evidence, not the
+Company/HR target, and `CATALOG.md` is a provisional preparation artifact rather
+than a dispatch queue.
+
+1. Accept explicit owning ports and single-writer boundaries for Company, Person,
+   Employment, and PayRun.
+2. Establish a known, hand-reviewed Company and OrgUnit product reference through
+   those contracts.
+3. Build and independently approve a replacement product conformance target; do
+   not freeze or repurpose the existing generic fixture.
+4. Reconcile `CATALOG.md` to the accepted contracts before any later authority
+   promotes it as a mechanical expansion guide.
+5. Only then may a later candidate authorize a small collision pilot. This
+   playbook does not dispatch JobPosition or projection fan-out while the HOLD is
+   active.
+6. Preserve and independently verify the test baseline before widening.
 
 ## Lane contract
 Every admitted lane has parser-visible registry metadata and an additive `docs/program/ledger/<lane-id>.md` receipt: outcome/non-goals, exact base SHA, owner and writable roots, forbidden shared roots, source-of-truth writer, leases, pre-mortem, rollback/stop conditions, immutable test invocation, reviewers, evidence, head SHA, result, HOLDs, and post-merge readback.
 
-Use three writer worktrees, one integration worktree, and one reserve/fix worktree. High-risk authz, migration, contract, HR, release, and compliance-sensitive changes require one implementer, two independent adversarial reviewers, and a distinct integrator. Increase concurrency only after two collision-free epochs; reduce it after collisions, stale-base rebuilds, saturation, or review backlog.
+After current authority records the preparation gate as satisfied, use at most
+three writer worktrees, one integration worktree, and one reserve/fix worktree.
+Until then, this topology is descriptive only and creates no product lanes.
+High-risk authz, migration, contract, HR, release, and compliance-sensitive
+changes require one implementer, two independent adversarial reviewers, and a
+distinct integrator. Increase concurrency only after two collision-free epochs;
+reduce it after collisions, stale-base rebuilds, saturation, or review backlog.
 
 ## Evidence and enforcement
 Preflight rejects dirty integration roots, stale bases, overlapping ownership, unowned migrations, generated-face writes, and weakened tests. Receipts retain command, revision, lockfile, runtime, counts, failures, and artifact hashes. Dry-run checks prove non-mutation. Jurisdiction records retain source locator, retrieval/effective dates, snapshot hash, applicability, reviewer, evidence links, due date, and claim type; CI never synthesizes a compliance conclusion.

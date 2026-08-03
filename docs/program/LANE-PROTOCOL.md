@@ -6,17 +6,31 @@ Status: active preparation and integration contract. Product scope comes from th
 
 Fan-out is forbidden until all are true:
 
-1. Company and OrgUnit are the hand-reviewed reference.
-2. `company_conformance` is frozen and owned outside expansion lanes.
-3. `CATALOG.md` is the mechanical guide.
-4. A two-lane JobPosition/projection pilot proves zero overlapping writes.
+1. Company, Person, Employment, and PayRun each have an accepted owning port and
+   proven single-writer boundary, and Company plus OrgUnit form a hand-reviewed
+   product reference.
+2. A replacement product conformance target exists for that reference. The
+   instance-backed `company_conformance` fixture remains a generic-engine
+   regression and must not be frozen or promoted as the product target.
+3. `CATALOG.md` has been reconciled against those accepted contracts and promoted
+   by a later current authority. Its present preparation status cannot dispatch
+   work mechanically.
+4. A later candidate explicitly authorizes a small collision pilot after the
+   preceding gates pass. JobPosition and projection fan-out remain HOLD now; this
+   protocol does not pre-authorize a two-lane pilot.
 5. The original test baseline and exact invocation have independent evidence.
 
 Person, Employment, and PayRun are domain-owned projected writers, not generic instance fan-out.
 
 ## Worktree topology
 
-Use three concurrent writer worktrees, one reserved integration worktree, and one reserve/fix worktree. Read-only reviewers inspect frozen diffs and exact SHAs. Increase writers by one only after two collision-free epochs. Reduce concurrency immediately after any collision, stale-base rebuild, resource saturation, or reviewer backlog.
+While the preparation gate is HOLD, create no product writer worktrees from this
+protocol. After a current candidate records every gate above as satisfied, use at
+most three concurrent writer worktrees, one reserved integration worktree, and
+one reserve/fix worktree. Read-only reviewers inspect frozen diffs and exact SHAs.
+Increase writers by one only after two collision-free epochs. Reduce concurrency
+immediately after any collision, stale-base rebuild, resource saturation, or
+reviewer backlog.
 
 ## Required lane receipt
 

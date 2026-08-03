@@ -6,7 +6,13 @@ const root = resolve(process.argv[2] ?? process.cwd());
 const markdown = [];
 function walk(dir) {
   for (const name of readdirSync(dir)) {
-    if (name === ".git" || name === "node_modules" || name === "target" || name === "third-party") continue;
+    if (
+      name === ".git"
+      || name === "buck-out"
+      || name === "node_modules"
+      || name === "target"
+      || name === "third-party"
+    ) continue;
     const path = join(dir, name);
     const st = statSync(path);
     if (st.isDirectory()) walk(path);

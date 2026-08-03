@@ -115,20 +115,17 @@
 //!
 //! * **Only the relations it can enumerate.** This is the whole of what is left
 //!   on that side for the column-membership class, and it is a question about
-//!   WHICH RELATIONS, not about syntax. Two named divergences, both below.
+//!   WHICH RELATIONS, not about syntax.
 //! * **Anything not yet applied.** It needs a migrated database, so it says
 //!   nothing until CI has stood one up. This gate runs in milliseconds with no
 //!   database, on a developer's machine, before the push.
-//! * **`relkind` and `nspname` divergence from `personal_data_columns()`.** The
-//!   sweep takes `relkind IN ('r','p','m','f')` across every application schema;
-//!   `personal_data_columns()` (0211:887) takes `('r','p')` scoped
-//!   `nspname = 'public'`. So a valid `pd:sensitive/health` marker on a
-//!   materialized view, a foreign table, or any non-`public` schema is accepted
-//!   by the sweep and never seen by `access_log_retention_floor_years()`, which
-//!   then derives 제8조제1항 본문's 1 year where 고시 제2026-9호 제8조제1항제2호
-//!   requires 2 years. Latent today — no migration creates a materialized view or a
-//!   foreign table, measured by planting one and watching the table count move
-//!   282 → 283 — and it under-retains, which is the dangerous direction.
+//! * **The retention reader is deliberately aligned, not a second scope.**
+//!   `personal_data_columns()` now takes this same non-`pg_catalog`,
+//!   non-temporary `r/p/m/f` universe and returns schema-qualified identities.
+//!   PostgreSQL integration tests plant sensitive markers in a non-public
+//!   table, a materialized view, and a foreign table; each must raise the
+//!   derived floor. A future predicate change on either reader must preserve
+//!   that equality.
 //! * **A relation created at RUNTIME rather than by a migration.** Neither
 //!   check sees one: it is in no migration text and in no migrated catalog.
 //!   THIS ALREADY SHIPS. `0005_create_compliance_location_store.sql:90-121`

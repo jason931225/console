@@ -21,6 +21,13 @@ record's scope and need their own decision. Deliberately split from the console 
 the contracts crate benefits the backend whether or not the console ever starts, so it stands as
 its own decision rather than as a clause of a frontend record.
 
+> **Current observation (2026-08-03):** The accepted record below is preserved as
+> written. Since acceptance, the OpenAPI title changed to `Console API`, the
+> tautological `check:openapi-app` script was retired, and
+> `check:platform-contract-drift` now compares only platform method/path inventory
+> with committed text. No contracts-crate emitter or schema-to-wire fidelity proof
+> exists, so the accepted target remains unimplemented.
+
 ## Context
 
 ADR-0009 is accepted and its Decision (`ADR-0009-dualnative-swiftkotlin-parity-strategy-via-single.md:20`)
@@ -34,15 +41,15 @@ tree rather than against the adjudication.
 `ADR-0009:20` itself and six lines under `docs/ideas/`. There is no `utoipa` dependency in any
 manifest and no derive on any type.
 
-**At acceptance, `openapi.yaml` was hand-maintained and served verbatim.** It was 35,935 lines and
-its `info.title` still used the pre-rename Maintenance identity. The app embedded the file with
-`include_str!("../../openapi/openapi.yaml")` and returned those bytes unchanged. These are
-acceptance-time measurements, not current line-number claims.
+**`openapi.yaml` is hand-maintained and served verbatim.** `backend/openapi/openapi.yaml` is 35,935
+lines. Its `info.title` (`backend/openapi/openapi.yaml:3`) still reads `Maintenance FSM Backend API`
+— the pre-rename product name. `backend/app/src/lib.rs:214` embeds the file with
+`include_str!("../../openapi/openapi.yaml")`; the route is registered at `backend/app/src/lib.rs:2889`
+and the handler returns the embedded bytes unchanged (`backend/app/src/lib.rs:3486`).
 
-**At acceptance, the client-generation and dual-build artifacts were gone.** `clients/`, `ios/`, and
-`android/` did not exist at the 2026-07-30 HEAD. `gen:api`, `check:ts`, `check:kotlin`, and
-`check:swift` were absent from `package.json`; the only remaining OpenAPI script then was
-`check:openapi-app`.
+**The client-generation and dual-build artifacts are gone.** `clients/`, `ios/`, and `android/` do
+not exist at HEAD. `gen:api`, `check:ts`, `check:kotlin`, and `check:swift` are absent from
+`package.json`; the only remaining OpenAPI script is `check:openapi-app` (`package.json:10`).
 `git grep -iln 'swift\|kotlin' -- .github/ package.json` returns nothing at all, so neither the
 T1.9 drift gate nor the T1.8 dual-build gate has a surviving artifact.
 
@@ -52,20 +59,12 @@ T1.9 drift gate nor the T1.8 dual-build gate has a surviving artifact.
 `openapi_yaml_covers_configured_route_inventory` (`:351`, which compares OpenAPI **path keys** only).
 The rest is hand-written spot-checks on named shapes (`:367`, `:410`, `:426`, `:453`) plus platform
 operation keys (`:548`, `:571`). **No test compares a documented request or response schema to the
-Rust type the handler actually serializes.** At acceptance, `scripts/check-openapi-app.mjs` proved
-only that the served document was byte-identical to the committed one — identity between two copies
-of the same hand-written text, not fidelity to code.
+Rust type the handler actually serializes.** `scripts/check-openapi-app.mjs` proves only that the
+served document is byte-identical to the committed one (`:23`, `:67`–`:73`) — identity between two
+copies of the same hand-written text, not fidelity to code. The 36k lines of schemas are therefore
+unverified prose about the API.
 
-**Current reconciliation, 2026-08-03.** The OpenAPI title now reads `Console API`. The tautological
-`check:openapi-app` command and script were subsequently retired. `check:platform-contract-drift`
-now compares only the HTTP methods and normalized
-paths under `/api/platform/` between platform REST source and the committed OpenAPI text;
-`backend/app/tests/openapi_drift.rs` retains the broader route-inventory assertions described above.
-Neither is a contracts-crate emitter or a schema-to-wire-type fidelity proof. Decisions 1–5 therefore
-remain an accepted target, not a description of completed implementation, and the hand-maintained
-schemas remain unverified prose beyond the narrower checks named here.
-
-Authority rule 6 in `docs/decisions/README.md` governs this situation: implementation divergence from an ADR is a
+`docs/decisions/README.md:6` governs this situation: implementation divergence from an ADR is a
 governance gap, not silent supersession, and is reconciled through a new decision. This record is
 that reconciliation for the contract mechanism.
 
@@ -86,7 +85,7 @@ discipline — is correct and load-bearing. Only its named mechanism was never b
    would turn every internal refactor into a frontend break.
 3. **`openapi.yaml` becomes a generated artifact with a diff gate.** The committed file is emitted
    from the contracts crate; CI regenerates it and fails when the committed and emitted documents
-   differ. Generated output must preserve the `Console API` identity and may not revive a deprecated title.
+   differ. Generation must also correct `info.title`, which must not survive into generated output.
 4. **`openapi.yaml`'s role changes from source to deliverable.** It stops being the frontend's
    source of truth and becomes an external contract document. `backend/app/tests/openapi_drift.rs`
    is retained as the instrument proving the emitted document still describes the served surface,
@@ -138,8 +137,8 @@ no gate has ever verified.
 + Request and response schemas gain their first structural enforcement; the generated document
   cannot silently disagree with the types it was emitted from.
 + 35,935 lines of hand-maintained YAML stop being authored and become build output.
-+ The corrected `Console API` identity becomes generator-owned rather than a hand-maintained
-  documentation detail.
++ The pre-rename `info.title` is corrected as a by-product of generation rather than as a
+  documentation chore.
 − **There are no DTOs to extract.** With no `utoipa` in the tree, this is new authoring across every
   REST surface, not a lift of existing derives. That cost is the honest price of the enforcement
   never having existed.

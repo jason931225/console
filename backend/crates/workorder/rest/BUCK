@@ -86,6 +86,7 @@ rust_test(
     name = "console-workorder-rest-itest-mobile_device_registration",
     mapped_srcs = repo_mapped_srcs("backend/crates/workorder/rest", ["tests/mobile_device_registration.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
+        "//backend/test_support:mobile-evidence-fixtures": "backend/test_support/mobile_evidence_fixtures.rs",
     }),
     crate = "mobile_device_registration",
     edition = "2024",
@@ -128,6 +129,7 @@ rust_test(
     name = "console-workorder-rest-itest-mobile_evidence",
     mapped_srcs = repo_mapped_srcs("backend/crates/workorder/rest", ["tests/mobile_evidence.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
+        "//backend/test_support:mobile-evidence-fixtures": "backend/test_support/mobile_evidence_fixtures.rs",
     }),
     crate = "mobile_evidence",
     edition = "2024",
@@ -170,6 +172,7 @@ rust_test(
     name = "console-workorder-rest-itest-mobile_sync",
     mapped_srcs = repo_mapped_srcs("backend/crates/workorder/rest", ["tests/mobile_sync.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
+        "//backend/test_support:mobile-evidence-fixtures": "backend/test_support/mobile_evidence_fixtures.rs",
     }),
     crate = "mobile_sync",
     edition = "2024",

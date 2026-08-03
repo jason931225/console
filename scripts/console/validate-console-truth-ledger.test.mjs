@@ -61,6 +61,89 @@ test('current candidate truth ledger is structurally complete but remains candid
   assert.ok(jurisdiction.controls.every((control) => control.release_disposition === 'HOLD'));
 });
 
+test('an unavailable governing lifecycle cannot become an absolute workstation dependency', () => {
+  const absolute = structuredClone(jurisdiction);
+  absolute.governing_lifecycle.path = '/Users/example/private-lifecycle.md';
+  assert.throws(
+    () => validateConsoleTruthLedger(registry, absolute, { expectedCandidateSha: CANDIDATE_SHA }),
+    /pathless HOLD_UNAVAILABLE provenance record/,
+  );
+
+  const unheld = structuredClone(jurisdiction);
+  unheld.governing_lifecycle.status = 'CURRENT';
+  assert.throws(
+    () => validateConsoleTruthLedger(registry, unheld, { expectedCandidateSha: CANDIDATE_SHA }),
+    /pathless HOLD_UNAVAILABLE provenance record/,
+  );
+
+  const unexplained = structuredClone(jurisdiction);
+  unexplained.governing_lifecycle.reason = '';
+  assert.throws(
+    () => validateConsoleTruthLedger(registry, unexplained, { expectedCandidateSha: CANDIDATE_SHA }),
+    /unavailable reason must be a non-empty string/,
+  );
+});
+
+test('pre-wipe paths, branches, lanes, and progress labels cannot become current continuation authority', () => {
+  const unheldReset = structuredClone(registry);
+  unheldReset.continuation_reset.lane_dispatch = 'enabled';
+  assert.throws(
+    () => validateConsoleTruthLedger(unheldReset, jurisdiction, { expectedCandidateSha: CANDIDATE_SHA }),
+    /continuation reset must keep every pre-wipe worktree, branch, and lane on HOLD/,
+  );
+
+  const worktree = structuredClone(registry);
+  worktree.capabilities[0].worktree = '/Users/example/old-worktree';
+  assert.throws(
+    () => validateConsoleTruthLedger(worktree, jurisdiction, { expectedCandidateSha: CANDIDATE_SHA }),
+    /current continuation assignment must be null while reset is HOLD/,
+  );
+
+  const branch = structuredClone(registry);
+  branch.capabilities[0].branch = 'deleted/old-branch';
+  assert.throws(
+    () => validateConsoleTruthLedger(branch, jurisdiction, { expectedCandidateSha: CANDIDATE_SHA }),
+    /current continuation assignment must be null while reset is HOLD/,
+  );
+
+  const lanes = structuredClone(registry);
+  lanes.capabilities[0].lane_assignments = { writer: { owner: 'stale' } };
+  assert.throws(
+    () => validateConsoleTruthLedger(lanes, jurisdiction, { expectedCandidateSha: CANDIDATE_SHA }),
+    /current continuation assignment must be null while reset is HOLD/,
+  );
+
+  const progress = structuredClone(registry);
+  progress.capabilities[0].state.runtime = 'live';
+  assert.throws(
+    () => validateConsoleTruthLedger(progress, jurisdiction, { expectedCandidateSha: CANDIDATE_SHA }),
+    /current continuation state must contain only HOLD values/,
+  );
+
+  const deletedHistory = structuredClone(registry);
+  delete deletedHistory.capabilities[0].historical_reset_state;
+  assert.throws(
+    () => validateConsoleTruthLedger(deletedHistory, jurisdiction, { expectedCandidateSha: CANDIDATE_SHA }),
+    /missing historical continuation field historical_reset_state/,
+  );
+
+  const rewrittenHistory = structuredClone(registry);
+  rewrittenHistory.capabilities[0].historical_reset_state.runtime = 'rewritten';
+  assert.throws(
+    () => validateConsoleTruthLedger(rewrittenHistory, jurisdiction, { expectedCandidateSha: CANDIDATE_SHA }),
+    /historical continuation fields differ from the pinned reset snapshot/,
+  );
+
+  assert.equal(
+    registry.capabilities.find((capability) => capability.id === 'CAP-CONSOLE-SHELL').historical_reset_state.frontend,
+    'frontend_surface_deleted_by_2026_07_28_clean_slate_pivot',
+  );
+  assert.equal(
+    registry.capabilities.find((capability) => capability.id === 'CAP-ONTOLOGY-ENGINE').historical_reset_state.backend,
+    '27_types_seeded_and_frozen_no_additive_upgrade_function_exists',
+  );
+});
+
 test('provenance is reproducible from advertised tags in a candidate-only clone', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'console-provenance-'));
   const source = path.join(root, 'source');

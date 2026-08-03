@@ -420,16 +420,13 @@ excludes, named rather than implied:
   All ten `location_pings` columns are classified `pd:personal — 개인위치정보`, but
   every ping row lands in a partition neither reader sees, and nothing proves the
   child inherited the parent's markers.
-- **The `relkind`/`nspname` divergence against `personal_data_columns()`.** The
-  sweep reads `relkind IN ('r','p','m','f')` across every application schema;
-  `personal_data_columns()` (migration 0211) reads `('r','p')` scoped
-  `nspname = 'public'`. A valid `pd:sensitive/health` marker outside that
-  intersection is accepted by the sweep and never reaches
-  `access_log_retention_floor_years()`, which then derives 제8조제1항 본문's 1
-  year where 고시 제2026-9호 제8조제1항제2호 requires 2 years. Latent today — no
-  migration creates a materialized view or a foreign table, measured by planting
-  one and watching the table count move 282 → 283 — and it under-retains, which
-  is the dangerous direction.
+- **The retention reader uses the same catalog universe.** Migration 0211's
+  `personal_data_columns()` now reads the same non-`pg_catalog`, non-temporary
+  `r/p/m/f` relations across schemas and returns schema-qualified identities.
+  PostgreSQL tests strip the shipped markers, then independently plant a
+  sensitive marker in a non-public table, a materialized view, and a foreign
+  table; each must derive the two-year floor. This closes the former
+  relkind/schema under-retention gap and mutation-locks the alignment.
 
 That list had a third entry that was in the query and in no text.
 `application_columns` also filtered `n.nspname <> 'information_schema'`, a

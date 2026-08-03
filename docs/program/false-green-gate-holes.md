@@ -1,3 +1,9 @@
+> **HISTORICAL INCIDENT AND MEASUREMENT LOG:** Present-tense statements below are
+> bound to their dated repository objects and later corrections; this file is not
+> the current gate inventory or merge authority. Use
+> [`docs/CI-GATES.md`](../CI-GATES.md), the exact candidate's workflows, and their
+> executable validators for current truth.
+
 # False-green gate holes — nine confirmed, one shape
 
 Recorded 2026-07-25 during the wave-4 hotfix pass; H-9 added 2026-07-26. Every item below was a

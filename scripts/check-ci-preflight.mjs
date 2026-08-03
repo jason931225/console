@@ -311,6 +311,7 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:comms-rest-mox-webhook-pg \\",
   "//tools/buck:comms-rest-readiness-pg \\",
   "//tools/buck:consulting-rest-audit-atomicity-pg \\",
+  "//tools/buck:dispatch-worker-timer-delivery-pg \\",
   "//tools/buck:docs-rest-evidence-rest-rls-surfaces-as-runtime-role-pg \\",
   "//tools/buck:finance-gl-adapter-postgres-voucher-rls-and-fsm-as-runtime-role-pg \\",
   "//tools/buck:financial-adapter-postgres-lifecycle-rls-surfaces-as-runtime-role-pg \\",
@@ -410,7 +411,9 @@ const postgresDomainReachabilityCommands = [
   "//tools/buck:workorder-adapter-postgres-m2-flag-off-parity-pg \\",
   "//tools/buck:workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg \\",
   "//tools/buck:workorder-adapter-postgres-use-cases-pg \\",
-  "//tools/buck:workorder-rest-mobile-device-registration-pg",
+  "//tools/buck:workorder-rest-mobile-device-registration-pg \\",
+  "//tools/buck:workorder-rest-mobile-evidence-pg \\",
+  "//tools/buck:workorder-rest-mobile-sync-pg",
 ];
 const companyConformanceCommands = [
   "tools/buck/test_needs_postgres.sh --num-threads=1 \\",
@@ -480,6 +483,7 @@ const postgresWrapperContracts = [
   ["comms-rest-mox-webhook-pg", "//backend/crates/comms/rest:console-comms-rest-itest-mox_webhook"],
   ["comms-rest-readiness-pg", "//backend/crates/comms/rest:console-comms-rest-itest-readiness"],
   ["consulting-rest-audit-atomicity-pg", "//backend/crates/consulting/rest:console-consulting-rest-itest-audit_atomicity"],
+  ["dispatch-worker-timer-delivery-pg", "//backend/crates/dispatch/worker:console-dispatch-worker-itest-timer_delivery"],
   ["docs-rest-evidence-rest-rls-surfaces-as-runtime-role-pg", "//backend/crates/docs/rest:console-docs-rest-itest-evidence_rest_rls_surfaces_as_runtime_role"],
   ["finance-gl-adapter-postgres-voucher-rls-and-fsm-as-runtime-role-pg", "//backend/crates/finance-gl/adapter-postgres:console-finance-gl-adapter-postgres-itest-voucher_rls_and_fsm_as_runtime_role"],
   ["financial-adapter-postgres-lifecycle-rls-surfaces-as-runtime-role-pg", "//backend/crates/financial/adapter-postgres:console-financial-adapter-postgres-itest-lifecycle_rls_surfaces_as_runtime_role"],
@@ -580,6 +584,8 @@ const postgresWrapperContracts = [
   ["workorder-adapter-postgres-rls-read-surfaces-as-runtime-role-pg", "//backend/crates/workorder/adapter-postgres:console-workorder-adapter-postgres-itest-rls_read_surfaces_as_runtime_role"],
   ["workorder-adapter-postgres-use-cases-pg", "//backend/crates/workorder/adapter-postgres:console-workorder-adapter-postgres-itest-use_cases"],
   ["workorder-rest-mobile-device-registration-pg", "//backend/crates/workorder/rest:console-workorder-rest-itest-mobile_device_registration"],
+  ["workorder-rest-mobile-evidence-pg", "//backend/crates/workorder/rest:console-workorder-rest-itest-mobile_evidence"],
+  ["workorder-rest-mobile-sync-pg", "//backend/crates/workorder/rest:console-workorder-rest-itest-mobile_sync"],
 
   // Tenant-isolation and PII tranche, 2026-07-31.
   ["platform-db-rls-isolation", "//backend/crates/platform/db:console-platform-db-itest-rls_isolation"],
@@ -809,7 +815,7 @@ const requiredJobRunContracts = Object.freeze({
   ],
   "postgres-domain-reachability": [
     setupRun("Install pinned DotSlash runtime", "tools/buck/install_dotslash.sh"),
-    proofDigest("Serialized disposable PostgreSQL integration targets", "0979e9cab4af9914aeec14b3f870a193d1ecac5d25c88de64c3741de2b8aa2f9"),
+    proofDigest("Serialized disposable PostgreSQL integration targets", "37d20ed4ab222157469f5b3dddc8993aec6ef49f2ad582166499f8ad3eea56b0"),
   ],
 });
 
@@ -890,7 +896,7 @@ const requiredJobMetadataSha256 = Object.freeze({
   "repo-gates": "da8a07f3a19a6f46a5901e6a6d8eac2f7f1c11f52818b7dea25caf362335ee92",
   "api-contract": "101b70d29b1776058160ea23296e707a4f682f5987a9873371cb57180a737d41",
   "generated-face-authority": "a9440d3b0b2e351b00a75ded87623c0c776a6dd776b2d8529f23403a1df0c5f6",
-  "company-conformance": "636445be12b271257373259702b5407169b8baee3dbab6df44d1ae4a810a3bd4",
+  "company-conformance": "bae484f4aea8b0b1ce591642e1b06bd61c0d61d1d50a029d39b4edf864877484",
   "postgres-domain-reachability": "09f80c662ebd37fe076e67d087c4f20c206a2f638ada7918049aa94bce58365c",
 });
 

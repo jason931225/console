@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -41,6 +41,14 @@ test("still checks links beside inline code", async () => {
   const root = await mkdtemp(join(tmpdir(), "doc-links-"));
   await writeFile(join(root, "README.md"), "`[example](ignored.md)` [missing](real-missing.md)\n");
   await assert.rejects(run(process.execPath, [script, root]), /missing target: real-missing\.md/);
+});
+
+test("ignores Buck output trees, including dangling artifact symlinks", async () => {
+  const root = await mkdtemp(join(tmpdir(), "doc-links-"));
+  await writeFile(join(root, "README.md"), "# Clean tracked documentation\n");
+  await mkdir(join(root, "buck-out"));
+  await symlink(join(root, "missing-artifact.md"), join(root, "buck-out", "artifact.md"));
+  await run(process.execPath, [script, root]);
 });
 
 test("rejects missing extensionless and reference-style targets", async () => {
