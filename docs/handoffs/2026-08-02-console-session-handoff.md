@@ -1,5 +1,11 @@
 # Console — full handoff, 2026-08-02
 
+> **Superseded for restart purposes on 2026-08-03.** Preserve this as historical
+> evidence, but begin a fresh session with
+> [`2026-08-03-disk-wipe-consolidation.md`](2026-08-03-disk-wipe-consolidation.md).
+> Its branch, PR, worktree, and backlog status replaces the time-sensitive state
+> below; the infrastructure and compliance cautions here remain historical input.
+
 **Audience:** an agent starting fresh on this repository with no prior context.
 **Base:** `origin/main` = `f2646890b`.
 **Shelf life:** the state in §2 and the backlog in §5 go stale within days. The constraints in §1

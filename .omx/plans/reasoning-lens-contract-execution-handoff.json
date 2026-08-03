@@ -1,0 +1,39 @@
+{
+  "schema": "console.reasoning-lens-execution-handoff.v1",
+  "task": "reasoning-lens-contract",
+  "historical_plan_handoff": ".omx/plans/reasoning-lens-contract-handoff.json",
+  "planning_artifacts": {
+    "context": {
+      "path": ".omx/context/reasoning-lens-contract-20260803T101035Z.md",
+      "sha256": "dea80c0a1fa5cc47c7ba12e4ee1c62480cd675e7b26bf33434ddf1fc94be61e4"
+    },
+    "plan": {
+      "path": ".omx/plans/reasoning-lens-contract.md",
+      "sha256": "76dc05561d7d6c07ee26afb68ea60841321eab7516f6d0546ba96d41825aad5c"
+    },
+    "architect_critic_handoff": {
+      "path": ".omx/plans/reasoning-lens-contract-handoff.json",
+      "sha256": "db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2"
+    }
+  },
+  "execution_state": "in_progress",
+  "implemented_commits": [
+    "ed8424f5153b760162545e0ea669a4be5950280a",
+    "963302685bae2c28d7c6107dc2bb0b4f902392cd"
+  ],
+  "implementation": {
+    "frozen_vocabulary": "implemented",
+    "root_manifests": "implemented",
+    "evidence_templates": "implemented",
+    "structural_and_diff_validator": "implemented",
+    "ci_and_local_mirror_wiring": "pending",
+    "durable_restart_handoff": "implemented"
+  },
+  "verification": {
+    "validator_unit_tests": "40/40 passed",
+    "live_structural_validation": "passed with five evidence blocks",
+    "final_pr_ci": "pending",
+    "exact_sha_review": "pending"
+  },
+  "continuation": "Complete PR #562, then start future work from origin/main and docs/handoffs/2026-08-03-disk-wipe-consolidation.md; do not rerun the historical plan as unstarted."
+}

@@ -49,3 +49,42 @@ copied.
 
 Every capability, evidence contract, jurisdiction binding, Korea control, review disposition, and
 exposure state remains `HOLD`.
+
+<!-- REASONING-LENS-EVIDENCE:START -->
+```json
+{
+  "lens_contract": "v1",
+  "lens_contract_digest": "ac1e7d6b8150808ef73e5e3cd1a1e54d2f37eb43e84aaa1370dbbaaff3c44373",
+  "task_class": "review",
+  "risk_class": "high",
+  "risk_domains": [
+    "release",
+    "production"
+  ],
+  "selected_lenses": [
+    "Red Team",
+    "Systems Thinking",
+    "Operability / Day-2",
+    "Blast-radius / cell-based",
+    "Telemetry-first",
+    "Zero-trust / defense-in-depth"
+  ],
+  "task_fit": {
+    "Red Team": "Challenged inherited claims and reproduced how correct commands could answer the wrong question.",
+    "Systems Thinking": "Separated repository, workstation, Kubernetes, and live OCI sources instead of treating them as one system.",
+    "Operability / Day-2": "Converted uncertain state into explicit restart holds rather than an unsafe continuation instruction.",
+    "Blast-radius / cell-based": "Kept every infrastructure and exposure mutation on HOLD while facts remained contradictory.",
+    "Telemetry-first": "Replaced remembered counts and branch inference with commands, exact identities, and direct readback.",
+    "Zero-trust / defense-in-depth": "Required each carried-forward assertion to be independently re-established at its authoritative boundary."
+  },
+  "mandatory_lens_exceptions": {},
+  "findings": [
+    "Four handoff claims failed when checked against the authoritative repository, worktree, cluster, or OCI boundary."
+  ],
+  "decisions_changed_or_rejected": [
+    "Rejected branch absence, local kubectl success, and repeated prose as sufficient evidence of current state."
+  ],
+  "lens_set_changes": []
+}
+```
+<!-- REASONING-LENS-EVIDENCE:END -->
