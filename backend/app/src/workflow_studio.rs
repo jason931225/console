@@ -3453,7 +3453,6 @@ async fn trigger_definition_run(
                     request_ref,
                     WORKFLOW_RUN_FOUR_EYES_KIND,
                     Some(id),
-                        None,
                     actor,
                 )
                 .await
@@ -3642,7 +3641,6 @@ async fn publish_definition(
                             request_ref,
                             WORKFLOW_PUBLISH_FOUR_EYES_KIND,
                             Some(id),
-                            None,
                             actor,
                         )
                         .await

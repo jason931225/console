@@ -62,10 +62,7 @@ use console_platform_authz::cedar_pbac::residual::{
 use console_platform_authz::{
     Action, AuthorizationRequest, AuthorizationResource, Feature, Principal, authorize_org_wide,
 };
-use console_platform_authz_rest::{
-    AttachObjectPolicyCommand, AttachPropertyPolicyCommand, PROPERTY_POLICY_ACTIVITIES,
-    PgCedarError, PgCedarPolicyStore, validate_property_policy_blocks,
-};
+use console_platform_authz_rest::{AttachObjectPolicyCommand, PgCedarError, PgCedarPolicyStore};
 use console_platform_db::{DbError, with_audits};
 use console_platform_request_context::current_org;
 use serde::{Deserialize, Serialize};
@@ -212,8 +209,6 @@ pub const OBJECT_TYPE_KEY_PATH: &str = "/api/v1/ontology/object-types/{key}";
 pub const OBJECT_TYPE_ACTING_PATH: &str = "/api/v1/ontology/object-types/{key}/acting";
 pub const OBJECT_TYPE_LIFECYCLE_PATH: &str = "/api/v1/ontology/object-types/{key}/lifecycle";
 pub const OBJECT_TYPE_POLICIES_PATH: &str = "/api/v1/ontology/object-types/{key}/policies";
-pub const PROPERTY_POLICIES_PATH: &str =
-    "/api/v1/ontology/object-types/{key}/properties/{property_key}/policies";
 pub const INSTANCES_PATH: &str = "/api/v1/ontology/instances";
 pub const INSTANCE_ID_PATH: &str = "/api/v1/ontology/instances/{id}";
 pub const INSTANCE_HISTORY_PATH: &str = "/api/v1/ontology/instances/{id}/history";
@@ -230,7 +225,6 @@ pub const ONTOLOGY_ROUTE_PATHS: &[&str] = &[
     OBJECT_TYPE_ACTING_PATH,
     OBJECT_TYPE_LIFECYCLE_PATH,
     OBJECT_TYPE_POLICIES_PATH,
-    PROPERTY_POLICIES_PATH,
     INSTANCES_PATH,
     INSTANCE_ID_PATH,
     INSTANCE_HISTORY_PATH,
@@ -260,7 +254,6 @@ pub fn router(state: OntologyRestState) -> Router {
             post(transition_object_type_lifecycle),
         )
         .route(OBJECT_TYPE_POLICIES_PATH, post(attach_object_policy))
-        .route(PROPERTY_POLICIES_PATH, post(attach_property_policy))
         .route(INSTANCES_PATH, get(list_instances))
         .route(INSTANCE_ID_PATH, get(get_instance))
         .route(INSTANCE_HISTORY_PATH, get(get_instance_history))
@@ -556,200 +549,6 @@ async fn attach_object_policy(
     Ok((StatusCode::CREATED, Json(AttachObjectPolicyResponse { id })))
 }
 
-#[derive(Debug, Deserialize)]
-struct AttachPropertyPolicyRequest {
-    /// `read_field` or `edit` — the activity the policy decides, which IS the
-    /// Cedar action it is evaluated under and the value stored on the attachment.
-    activity: String,
-    effect: Effect,
-    #[serde(default)]
-    conditions: Vec<Condition>,
-    /// The four-eyes approval this attach spends. REQUIRED — not `Option` —
-    /// because it is the whole of [`PROPERTY_POLICY_FOUR_EYES_KIND`]'s reason to
-    /// exist: an optional second signature is one a self-granting principal
-    /// simply omits.
-    ///
-    /// Its request must have been opened with `payload_summary.grant` equal to
-    /// `{"activity", "effect", "conditions"}` of THIS body — the approver signs
-    /// the grant, not merely the property.
-    four_eyes_request_ref: Uuid,
-}
-
-/// The four-eyes `kind` a field-policy attach is decided under, bound to the
-/// `ont_property_defs` row it governs.
-///
-/// WHY THIS EXISTS, stated so it is not "optional hardening" the next edit drops.
-/// Every ontology route gates on org-wide `RoleManage` (see
-/// [`authorize_ontology`]). The matrix grants `RoleManage` to `SUPER_ADMIN`
-/// alone, and `custom_role_runtime_feature_allowed` forbids a tenant-owned custom
-/// role from ever holding it — so the set of principals that can READ a field is
-/// exactly the set that can ATTACH a policy to it, and there is no higher ROLE in
-/// this system to promote the attach to. A control whose own subject can lift it
-/// in one request is not a control.
-///
-/// The authority that IS strictly higher is a SECOND, DISTINCT principal:
-/// `gov_approvals` carries `CHECK (approver_id <> requested_by)` (0153) and
-/// `PgGovernanceStore::decide_approval` refuses self-approval before it, and
-/// `four_eyes_consume_conn` binds the decision to (kind, target) and makes it
-/// single-use. So attaching a field policy requires the read authority PLUS an
-/// approval no single principal can manufacture, which is strictly more than
-/// reading the property the policy governs. It is the same primitive the action
-/// and lifecycle paths already spend, not a new mechanism.
-///
-/// `target_ref` is the `property_def_id`, so an approval decided for one field
-/// cannot be redirected onto another — including a more sensitive one on the same
-/// type.
-///
-/// AND the approval is bound to the GRANT, not only to the property. Binding the
-/// property alone means the second signature approves *that a field policy be
-/// written here*, never *which one* — so a signature given for `roles contains
-/// "HR"` could be spent attaching an unconditional permit to the same field, and
-/// the approver would have endorsed the opposite of what shipped. The requester
-/// records the exact grant under `payload_summary.grant` when opening the request;
-/// `four_eyes_consume_conn` requires it to equal the body being attached.
-///
-/// That binding also removes the last way to fabricate the second principal:
-/// `decide_approval` only takes `requested_by` from a pending request WHEN ONE
-/// EXISTS, so without it an approver could record an approved decision naming a
-/// requester who never asked. A grant-bound gate has no request row to match and
-/// fails closed.
-const PROPERTY_POLICY_FOUR_EYES_KIND: &str = "ontology.property_policy";
-
-/// Author one enforced FIELD policy and attach it to one property of one
-/// object-type version.
-///
-/// The property must be declared `in_property_policy` on that version. That flag
-/// has existed since 0152 and meant nothing anywhere until migration 0212; it is
-/// now the tenant's declaration of which fields are policy-bearing, enforced both
-/// here (so the refusal names the property) and in SQL (so no credential can
-/// route around it).
-///
-/// Everything else mirrors [`attach_object_policy`]: the route asserts the
-/// authoring validator's verdict and never re-encodes the rule, and the catalog
-/// row plus the attachment plus the audit row are written by one SECURITY DEFINER
-/// owned by a NOBYPASSRLS role.
-///
-/// UNLIKE [`attach_object_policy`] it spends a four-eyes approval bound to the
-/// property — see [`PROPERTY_POLICY_FOUR_EYES_KIND`] for why a field policy needs
-/// authority its own subject cannot supply alone.
-///
-/// PER-VERSION, and the operational consequence is stated rather than left to be
-/// discovered: `ont_property_defs` rows belong to one object-type VERSION, and a
-/// staged revision mints new ones. A field policy attached to v1's property does
-/// NOT carry to v2, exactly as an object policy does not. That is fail-closed —
-/// the property is withheld again until the tenant re-attaches — but it IS a
-/// re-attach the tenant has to perform, not a migration that happens for them.
-async fn attach_property_policy(
-    State(state): State<OntologyRestState>,
-    headers: HeaderMap,
-    Path((key, property_key)): Path<(String, String)>,
-    Json(body): Json<AttachPropertyPolicyRequest>,
-) -> Result<(StatusCode, Json<AttachObjectPolicyResponse>), RestError> {
-    let principal = authorize_ontology(&state, &headers).await?;
-    if body.conditions.len() > MAX_ATTACHED_CONDITIONS {
-        return Err(RestError::from_kernel(KernelError::validation(format!(
-            "a policy may carry at most {MAX_ATTACHED_CONDITIONS} conditions, got {}",
-            body.conditions.len()
-        ))));
-    }
-    let detail = state
-        .registry
-        .get_object_type(&key, None)
-        .await
-        .map_err(RestError::from_ontology)?;
-    let property = detail
-        .properties
-        .iter()
-        .find(|property| property.key == property_key)
-        // 404 with the registry's own vocabulary: an unknown property and a
-        // property of a type this principal cannot resolve must not be
-        // distinguishable.
-        .ok_or_else(|| {
-            RestError::from_kernel(KernelError::not_found(
-                "object type declares no such property",
-            ))
-        })?;
-    if !property.in_property_policy {
-        return Err(RestError::from_kernel(KernelError::validation(format!(
-            "property '{property_key}' is not declared in_property_policy on this object-type \
-             version, so no field policy may be attached to it"
-        ))));
-    }
-    let blocks = NoCodeBlocks {
-        effect: body.effect,
-        action: body.activity,
-        resource_type: detail.object_type.stable_key.clone(),
-        conditions: body.conditions,
-    };
-    let property_def_id = *property.id.as_uuid();
-
-    // Everything judgeable from the blocks alone, BEFORE the approval is spent —
-    // one four-eyes signature is not cheap and a typo must not burn it. The store
-    // re-asserts the same function at the crate boundary for every other caller;
-    // this is one definition called twice, not a copy.
-    validate_property_policy_blocks(&blocks).map_err(RestError::from_kernel)?;
-
-    // THE SEPARATION. Bound to the property the policy governs AND to the grant
-    // itself, and consumed BEFORE the write, so an attach cannot happen without a
-    // second principal's signature, and the signature cannot be replayed onto a
-    // second field or spent on a policy the approver never saw.
-    //
-    // The grant is the server's own normalization of the three client-controlled
-    // fields — the activity, the effect, and the conditions — NOT the raw body, so
-    // an omitted `conditions` and an explicit `[]` are the same signature and a
-    // reordered JSON object is too. `resource_type` is left out because it is
-    // already implied by `property_def_id`, which `target_ref` binds.
-    let grant = serde_json::json!({
-        "activity": &blocks.action,
-        "effect": &blocks.effect,
-        "conditions": &blocks.conditions,
-    });
-
-    //
-    // Consume-then-write rather than one transaction: the rows are written by
-    // `ont_policy_api.attach_property_policy` on the `console_ontology_cmd`
-    // command pool, and the approval lives under `console_rt` — there is no
-    // shared tx to make atomic. The order is the fail-closed one: a failed attach
-    // burns the approval and the tenant obtains a fresh one, whereas
-    // write-then-consume would leave a lifted field policy behind whenever the
-    // consume failed.
-    let consumed = state
-        .governance
-        .four_eyes_consume(
-            body.four_eyes_request_ref,
-            PROPERTY_POLICY_FOUR_EYES_KIND,
-            Some(property_def_id),
-            Some(grant),
-            principal.user_id,
-        )
-        .await
-        .map_err(|error| RestError::from_ontology(governance_to_ontology(error)))?;
-    if consumed != Some(true) {
-        return Err(RestError::from_kernel(KernelError::forbidden(
-            "attaching a field policy requires an unconsumed four-eyes approval of \
-             kind 'ontology.property_policy' bound to this property, whose request \
-             carries this exact grant under payload_summary.grant \
-             ({\"activity\",\"effect\",\"conditions\"}), approved by a principal \
-             other than the requester",
-        )));
-    }
-
-    // The activity whitelist and the row-independence rule are asserted by
-    // `attach_property_policy` at the store boundary, not duplicated here: they
-    // are the invariants the READ path relies on, so they belong where every
-    // caller crosses, and a copy here is how the two diverge.
-    let id = state
-        .policies
-        .attach_property_policy(AttachPropertyPolicyCommand {
-            actor: principal.user_id,
-            property_def_id,
-            blocks,
-        })
-        .await
-        .map_err(RestError::from_cedar)?;
-    Ok((StatusCode::CREATED, Json(AttachObjectPolicyResponse { id })))
-}
-
 // ---------------------------------------------------------------------------
 // Instance surface (thin over PgInstanceStore)
 // ---------------------------------------------------------------------------
@@ -766,13 +565,13 @@ async fn list_instances(
     Query(query): Query<InstanceListQuery>,
 ) -> Result<Json<Vec<InstanceState>>, RestError> {
     let principal = authorize_ontology(&state, &headers).await?;
-    let gate = type_gate(&state, &principal, query.r#type)
+    let policies = object_view_policies(&state, query.r#type)
         .await
         .map_err(RestError::from_ontology)?;
     let subject = ontology_subject(&principal);
     let list = state
         .instances
-        .list_instances_filtered(ObjectTypeId::from_uuid(query.r#type), &subject, &gate)
+        .list_instances_filtered(ObjectTypeId::from_uuid(query.r#type), &subject, &policies)
         .await
         .map_err(RestError::from_ontology)?;
     Ok(Json(list))
@@ -810,87 +609,7 @@ fn declared_attrs(properties: &[PropertyDefSummary]) -> Vec<DeclaredAttr> {
         .collect()
 }
 
-/// Every policy decision one object-type VERSION carries for one principal: which
-/// ROWS the residual admits, and which FIELDS are withheld.
-///
-/// The two travel together because they are read together on every path, and
-/// because computing them apart is how one of them gets forgotten on a new route.
-struct TypeGate {
-    policies: Vec<ObjectPolicy>,
-    /// Property keys denied `read_field`. REMOVED from every served attribute
-    /// bag — never nulled. SAP's `field ( suppress ) f;` "removes field from BDEF
-    /// derived types", and the reason is not taste: a null is indistinguishable
-    /// from a real null, and a client that reads-modifies-writes one erases the
-    /// value it was never allowed to see.
-    redacted: Vec<String>,
-    /// Property keys denied `edit`. An action whose declared edits touch one is
-    /// refused before any writeback opens.
-    unwritable: Vec<String>,
-}
-
-impl TypeGate {
-    /// Drop every withheld key from one served row.
-    fn redact(&self, state: &mut InstanceState) {
-        if self.redacted.is_empty() {
-            return;
-        }
-        redact_attributes(&mut state.revision.attributes, &self.redacted);
-    }
-}
-
-fn redact_attributes(attributes: &mut Value, keys: &[String]) {
-    if let Some(map) = attributes.as_object_mut() {
-        for key in keys {
-            map.remove(key);
-        }
-    }
-}
-
-/// The field-decision request for one property of one object-type version.
-///
-/// `resource` deliberately carries NO `resource_id`, `owner`, `branch` or
-/// `legal_hold`: this decision is taken once per (principal, type, property) and
-/// applied to every row of that type in the response, so it must not be able to
-/// depend on any one row. `PROPERTY_POLICY_CONDITION_RULE` makes that a checked
-/// invariant rather than a hope — at attach AND on every read.
-fn field_request(
-    principal: &Principal,
-    resource_type: &str,
-    field: &str,
-    activity: &str,
-) -> authoring::SimRequest {
-    authoring::SimRequest {
-        subject: authoring::SimSubject {
-            org: principal.org_id,
-            user_id: principal.user_id.to_string(),
-            roles: principal
-                .roles
-                .iter()
-                .map(|role| role.as_str().to_owned())
-                .collect(),
-            // EMPTY, and no policy can depend on it: nothing in this system
-            // resolves a clearance set for a request principal (`Principal` has
-            // no such field and `ontology_subject`, the object-policy twin, omits
-            // it too). `PROPERTY_POLICY_CONDITION_RULE` therefore refuses a
-            // `clearance_keys` condition at attach and again on every read, so
-            // this cannot silently deny a policy the tenant believed it authored.
-            clearance_keys: Vec::new(),
-        },
-        action: activity.to_owned(),
-        resource: authoring::SimResource {
-            org: principal.org_id,
-            resource_type: resource_type.to_owned(),
-            resource_id: None,
-            owner: None,
-            branch: None,
-            legal_hold: None,
-        },
-        purpose: None,
-        field: Some(field.to_owned()),
-    }
-}
-
-/// Everything the gate decides for one object-type VERSION id.
+/// The enforced `view` object policies attached to one object-type VERSION id.
 ///
 /// An unknown / cross-tenant version id is a 404 here, never an empty policy set
 /// — an unresolvable type must not be mistaken for an unpoliced one.
@@ -907,25 +626,21 @@ fn field_request(
 /// (`ActionError::Store`) already consume it. That is what lets ONE gate serve
 /// the read routes and the write routes without a second error currency — and
 /// `RestError` is private, so an `ActionError` variant holding one is E0446.
-///
-/// COST, stated: a type with no `in_property_policy` property costs exactly what
-/// it cost before this function grew field decisions — the loop below does not
-/// execute. A flagged property costs two policy loads per read.
-async fn type_gate(
+async fn object_view_policies(
     state: &OntologyRestState,
-    principal: &Principal,
     object_type_id: Uuid,
-) -> Result<TypeGate, PgOntologyError> {
+) -> Result<Vec<ObjectPolicy>, PgOntologyError> {
     let (stable_key, schema_version) = state
         .registry
         .object_type_version(ObjectTypeId::from_uuid(object_type_id))
         .await?;
-    let properties = state
-        .registry
-        .get_object_type(&stable_key, Some(schema_version))
-        .await?
-        .properties;
-    let declared = declared_attrs(&properties);
+    let declared = declared_attrs(
+        &state
+            .registry
+            .get_object_type(&stable_key, Some(schema_version))
+            .await?
+            .properties,
+    );
     let blocks = state
         .policies
         .load_enforced_object_policy_blocks(object_type_id, &declared)
@@ -938,41 +653,7 @@ async fn type_gate(
                 "unable to evaluate object visibility policy",
             ))
         })?;
-
-    let mut redacted = Vec::new();
-    let mut unwritable = Vec::new();
-    for property in properties.iter().filter(|p| p.in_property_policy) {
-        for activity in PROPERTY_POLICY_ACTIVITIES {
-            let request = field_request(principal, &stable_key, &property.key, activity);
-            let outcome = state
-                .policies
-                .authorize_property_field(*property.id.as_uuid(), &request)
-                .await
-                .map_err(|error| {
-                    tracing::error!(%error, "ontology property-policy load failed");
-                    // Fail CLOSED and loudly. Degrading a field-policy load error
-                    // to "allow" would serve the exact field the tenant declared
-                    // sensitive, with the failure visible only in a log line.
-                    PgOntologyError::Domain(KernelError::internal(
-                        "unable to evaluate field visibility policy",
-                    ))
-                })?;
-            if outcome.effect.is_allow() {
-                continue;
-            }
-            if *activity == authoring::PROPERTY_POLICY_ACTION {
-                redacted.push(property.key.clone());
-            } else {
-                unwritable.push(property.key.clone());
-            }
-        }
-    }
-
-    Ok(TypeGate {
-        policies: applicable_object_policies(&blocks, &stable_key),
-        redacted,
-        unwritable,
-    })
+    Ok(applicable_object_policies(&blocks, &stable_key))
 }
 
 /// The gate, and the only module in this crate that can reach an ungated
@@ -1022,55 +703,16 @@ mod gate {
     #[derive(Clone)]
     pub(super) struct Instances(PgInstanceStore);
 
-    /// One instance head the object-policy residual admitted for this principal,
-    /// together with the field decisions that apply to it.
+    /// One instance head the object-policy residual admitted for this principal.
     ///
-    /// The fields are private to `gate`, which is the entire point: a value of
-    /// this type is evidence that [`visible_head_inner`] ran, and no other module
-    /// can manufacture one.
-    pub(super) struct Visible {
-        state: InstanceState,
-        /// The field decisions for THIS ROW'S OWN object-type version — never the
-        /// caller-supplied one. Carried on the proof so [`Instances::get_as_of`],
-        /// [`Instances::history`] and the action path — which take the proof and
-        /// not an id — need no second gate evaluation that could disagree with,
-        /// or be resolved from a different type than, the one that admitted the
-        /// row.
-        gate: TypeGate,
-    }
+    /// The field is private to `gate`, which is the entire point: a value of this
+    /// type is evidence that [`visible_head_inner`] ran, and no other module can
+    /// manufacture one.
+    pub(super) struct Visible(InstanceState);
 
     impl Visible {
-        /// The row AS SERVED: every withheld field is REMOVED from the bag.
-        ///
-        /// The REDACTING read is the one that keeps the short, obvious name, and
-        /// that is the whole design: a new route reaching for the method it
-        /// already knows gets the safe answer, and the unredacted read has to be
-        /// asked for by a name that says what it is for.
-        pub(super) fn into_inner(mut self) -> InstanceState {
-            self.gate.redact(&mut self.state);
-            self.state
-        }
-
-        /// The row AS STORED, withheld fields included, TOGETHER WITH the gate
-        /// resolved from the row's own type — for computing the NEXT revision's
-        /// attribute bag, and for nothing else.
-        ///
-        /// The two are returned as a pair on purpose. `command.object_type_id` is
-        /// caller-supplied and nothing in the action path requires it to equal the
-        /// instance's `object_type_id`, so deriving the redaction set from it
-        /// while redacting a bag that came from the instance is the exact
-        /// inversion [`visible_head_inner`] documents as forbidden. A caller that
-        /// gets the base bag cannot get it without the matching gate.
-        ///
-        /// Serving this unredacted would be the bypass. Merging edits onto the
-        /// REDACTED bag would be worse: `apply_edits` returns the merged map and
-        /// `stage_revision_in_tx` persists it wholesale, so a principal who may
-        /// edit one field would silently DELETE every field they may not read.
-        /// That read-modify-write erasure is exactly what SAP's suppress
-        /// semantics warn about, and it is why the two reads are different
-        /// methods rather than a boolean.
-        pub(super) fn into_writeback_base(self) -> (InstanceState, TypeGate) {
-            (self.state, self.gate)
+        pub(super) fn into_inner(self) -> InstanceState {
+            self.0
         }
     }
 
@@ -1079,23 +721,15 @@ mod gate {
             Self(inner)
         }
 
-        /// The list surface, already field-redacted. Takes the whole
-        /// [`TypeGate`] rather than its `policies`, so a caller cannot obtain the
-        /// row filter without also obtaining the field filter.
         pub(super) async fn list_instances_filtered(
             &self,
             object_type_id: ObjectTypeId,
             subject: &SubjectAttrs,
-            gate: &TypeGate,
+            policies: &[ObjectPolicy],
         ) -> Result<Vec<InstanceState>, PgOntologyError> {
-            let mut rows = self
-                .0
-                .list_instances_filtered(object_type_id, subject, &gate.policies)
-                .await?;
-            for row in &mut rows {
-                gate.redact(row);
-            }
-            Ok(rows)
+            self.0
+                .list_instances_filtered(object_type_id, subject, policies)
+                .await
         }
 
         pub(super) async fn visible_instances(
@@ -1119,41 +753,18 @@ mod gate {
             head: &Visible,
             at: OffsetDateTime,
         ) -> Result<InstanceState, PgOntologyError> {
-            let mut state = self.0.get_as_of(head.state.instance.id, at).await?;
-            // The as-of revision carries the SAME schema and therefore the same
-            // withheld keys as the head that admitted it. Redacting it here and
-            // not at the route is what keeps `?as_of=` from being the time-travel
-            // hole the head gate already refuses to be.
-            head.gate.redact(&mut state);
-            Ok(state)
+            self.0.get_as_of(head.0.instance.id, at).await
         }
 
         /// The revision chain of a row whose HEAD the caller has already been
         /// granted, INTACT. Never filtered per revision: `verify_chain` breaks on
         /// the first `prev_hash` gap, so a per-revision security filter would
         /// masquerade as a tamper alarm.
-        ///
-        /// FAIL-CLOSED on any withheld field, and this is a STATED decision
-        /// rather than an emergent one. Fixity and redaction are in direct
-        /// conflict here: the chain is only evidence if it is served whole, and a
-        /// bag with a key removed no longer hashes to its recorded `row_hash`.
-        /// There is no third option that is both honest evidence and a redacted
-        /// read, so the read is refused — with the adapter's own `not_found`, so
-        /// a principal who may not read a field cannot use this endpoint to learn
-        /// that the field, or the row, exists.
-        ///
-        /// It costs nothing when nothing is withheld, which is every type that
-        /// declares no `in_property_policy` property.
         pub(super) async fn history(
             &self,
             head: &Visible,
         ) -> Result<Vec<RevisionSummary>, PgOntologyError> {
-            if !head.gate.redacted.is_empty() {
-                return Err(PgOntologyError::Domain(KernelError::not_found(
-                    "instance was not found",
-                )));
-            }
-            self.0.history(head.state.instance.id).await
+            self.0.history(head.0.instance.id).await
         }
     }
 
@@ -1185,20 +796,15 @@ mod gate {
             .get_current(InstanceId::from_uuid(id))
             .await?;
         let object_type_id = head.instance.object_type_id;
-        let gate = type_gate(state, principal, *object_type_id.as_uuid()).await?;
+        let policies = object_view_policies(state, *object_type_id.as_uuid()).await?;
         let subject = ontology_subject(principal);
         state
             .instances
-            .visible_instances(object_type_id, Some(&[id]), &subject, &gate.policies)
+            .visible_instances(object_type_id, Some(&[id]), &subject, &policies)
             .await?
             .into_iter()
             .next()
-            // Stored UNREDACTED, with the gate resolved from THIS ROW'S OWN
-            // `object_type_id` travelling beside it: the action path merges edits
-            // onto this bag and persists the result, so redacting here would make
-            // every action a silent erasure of every field the actor may not
-            // read. Redaction happens on the way OUT, in `Visible::into_inner`.
-            .map(|state| Visible { state, gate })
+            .map(Visible)
             .ok_or_else(|| {
                 PgOntologyError::Domain(KernelError::not_found("instance was not found"))
             })
@@ -1256,15 +862,12 @@ mod gate {
         }
         let mut visible: HashSet<Uuid> = HashSet::new();
         for (object_type_id, ids) in by_type {
-            // No redaction pass here, and none is missing: a `TraversalNode`
-            // carries id, type, title, lifecycle and depth — never an attribute
-            // bag. The gate is still evaluated for its ROW filter.
-            let gate = type_gate(state, principal, *object_type_id.as_uuid())
+            let policies = object_view_policies(state, *object_type_id.as_uuid())
                 .await
                 .map_err(RestError::from_ontology)?;
             let rows = state
                 .instances
-                .visible_instances(object_type_id, Some(&ids), &subject, &gate.policies)
+                .visible_instances(object_type_id, Some(&ids), &subject, &policies)
                 .await
                 .map_err(RestError::from_ontology)?;
             visible.extend(rows.iter().map(|row| *row.instance.id.as_uuid()));
@@ -1634,15 +1237,8 @@ struct Prepared {
     action: ActionTypeSummary,
     config: GateChainConfig,
     params: Value,
-    /// The target's CURRENT attributes, UNREDACTED — this is the base the next
-    /// revision is merged onto and persisted from. See
-    /// [`gate::Visible::into_writeback_base`] for why a redacted base would be an
-    /// erasure rather than a protection.
     base_attrs: Value,
     criteria: Result<(), KernelError>,
-    /// Property keys withheld from this principal on the acting object type;
-    /// stripped from the outcome this action returns.
-    redacted: Vec<String>,
 }
 
 impl OntologyRestState {
@@ -1742,13 +1338,7 @@ impl OntologyRestState {
                     let (kind, bound_target) = action_four_eyes_binding(&prepared, &command);
                     let consumed = self
                         .governance
-                        .four_eyes_consume(
-                            request_ref,
-                            kind,
-                            Some(bound_target),
-                            None,
-                            principal.user_id,
-                        )
+                        .four_eyes_consume(request_ref, kind, Some(bound_target), principal.user_id)
                         .await
                         .map_err(|e| ActionError::Store(governance_to_ontology(e)))?;
                     if consumed != Some(true) {
@@ -1786,7 +1376,7 @@ impl OntologyRestState {
                     &prepared.base_attrs,
                 )
                 .map_err(|e| ActionError::Validation(e.message))?;
-                let mut receipt = self
+                let receipt = self
                     .execute_instance_revision(
                         principal, action_key, &command, &prepared, new_attrs,
                     )
@@ -1801,15 +1391,6 @@ impl OntologyRestState {
                         }
                         _ => ActionError::Store(error),
                     })?;
-                // The PERSISTED receipt (`ont_action_command_receipts`) keeps the
-                // full bag: it is the replay evidence for this command_id, and a
-                // redacted one would hand a differently-redacted answer back to
-                // whoever replays it. Redaction happens on the copy that leaves,
-                // after the writeback has committed.
-                redact_attributes(
-                    &mut receipt.instance.revision.attributes,
-                    &prepared.redacted,
-                );
                 Ok(ExecuteOutcome {
                     dispatch: ActionDispatch::InstanceRevision,
                     gates: receipt.gates.clone(),
@@ -1854,68 +1435,17 @@ impl OntologyRestState {
         // so a hidden row is refused before a revision, an approval or a dispatch
         // can be spent. A denied row raises the adapter's own `not_found`, so it
         // is indistinguishable from a genuinely missing one — 404, never 403.
-        let (base_attrs, instance_gate) = match (action.dispatch, command.instance_id) {
+        let base_attrs = match (action.dispatch, command.instance_id) {
             (ActionDispatch::InstanceRevision, Some(id)) => {
-                // UNREDACTED on purpose: `apply_edits` merges the action's edits
-                // onto this map and `stage_revision_in_tx` persists the whole
-                // result. Handing it a redacted bag would make every action a
-                // silent DELETE of every field the actor may not read — a worse
-                // outcome than the disclosure it looks like it is preventing.
-                // What the caller is SERVED is redacted below.
-                let (state, gate) = visible_head_inner(self, principal, *id.as_uuid())
+                visible_head_inner(self, principal, *id.as_uuid())
                     .await
                     .map_err(ActionError::Store)?
-                    .into_writeback_base();
-                (state.revision.attributes, Some(gate))
+                    .into_inner()
+                    .revision
+                    .attributes
             }
-            _ => (Value::Object(serde_json::Map::new()), None),
+            _ => Value::Object(serde_json::Map::new()),
         };
-
-        // Field policy on the WRITE side. SAP's authorization field is the
-        // smallest unit of an authorization object and represents "activities
-        // such as reading OR CHANGING"; a field policy that only masked reads
-        // would be half of it, and the half that does not stop an automation.
-        //
-        // Resolved from the INSTANCE'S OWN `object_type_id` whenever there is an
-        // instance — the same rule `visible_head_inner` states, and for the same
-        // reason. `command.object_type_id` is caller-supplied and nothing here
-        // requires it to equal the target's type, so deriving the withheld set
-        // from it would let a caller name a type with no field policy and be
-        // handed another type's row with nothing removed. Only a CREATE falls
-        // back to the command's type, and only because there is no instance to
-        // derive one from.
-        let gate = match instance_gate {
-            Some(gate) => gate,
-            None => type_gate(self, principal, *command.object_type_id.as_uuid())
-                .await
-                .map_err(ActionError::Store)?,
-        };
-        if !gate.unwritable.is_empty() {
-            // Declared edits, read straight off the stored action. `apply_edits`
-            // performs the authoritative parse and rejects a malformed list; this
-            // only needs the property names, and a name it cannot see is a name
-            // no edit can write.
-            let blocked: Vec<&str> = action
-                .edits
-                .as_array()
-                .map(|edits| {
-                    edits
-                        .iter()
-                        .filter_map(|edit| edit.get("property").and_then(Value::as_str))
-                        .filter(|property| gate.unwritable.iter().any(|denied| denied == property))
-                        .collect()
-                })
-                .unwrap_or_default();
-            if !blocked.is_empty() {
-                // BEFORE any writeback opens, and before a four-eyes approval can
-                // be spent: `prepare` is the first thing both `preflight_action`
-                // and `execute_action` call.
-                return Err(ActionError::GateDenied(format!(
-                    "a field policy denies changing {}",
-                    blocked.join(", ")
-                )));
-            }
-        }
 
         let context = evaluation_context(&base_attrs, &params);
         let criteria = evaluate_submission_criteria(&action.submission_criteria, &context);
@@ -1926,7 +1456,6 @@ impl OntologyRestState {
             params,
             base_attrs,
             criteria,
-            redacted: gate.redacted,
         })
     }
 
@@ -2121,7 +1650,6 @@ async fn instance_revision_writeback(
                     request_ref,
                     &expected_kind,
                     Some(expected_target),
-                    None,
                     actor,
                 )
                 .await
@@ -2499,7 +2027,6 @@ async fn lifecycle_writeback(
                     request_ref,
                     LIFECYCLE_FOUR_EYES_KIND,
                     Some(expected_target),
-                    None,
                     actor,
                 )
                 .await

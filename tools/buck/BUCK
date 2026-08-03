@@ -248,25 +248,6 @@ sh_test(
     labels = ["test.integration", "resource.postgres", "needs-postgres"],
 )
 
-# FIELD-level policy enforcement. `ont_property_policies` (0154),
-# `in_property_policy` (0152) and `authorize_property_field` all existed and
-# NOTHING acted on any of them: the system computed a field decision, stamped it
-# into the append-only Integrity feed, and served every field to everyone. This
-# suite is the proof that the decision now removes the key, refuses the edit, and
-# refuses a history it cannot serve whole -- through the real router, as the
-# genuine non-superuser `console_rt`.
-#
-# Wired here, in ci.yml, and in BOTH locked lists in scripts/check-ci-preflight.mjs
-# at the same time: a rust_test with no sh_test wrapper resolves, builds, and
-# never executes -- the false-green class this repo has already shipped six times.
-sh_test(
-    name = "ontology-property-policy-enforcement-postgres",
-    test = "run_test_with_postgres_env.sh",
-    args = ["$(location //backend/crates/ontology/rest:console-ontology-rest-itest-property_policy_enforcement_as_runtime_role)"],
-    deps = ["//backend/crates/ontology/rest:console-ontology-rest-itest-property_policy_enforcement_as_runtime_role"],
-    labels = ["test.integration", "resource.postgres", "needs-postgres"],
-)
-
 # The only committed proof that the instance READ path works: it publishes a
 # type, seeds an enforced catalog row plus an attachment, and asserts the list
 # returns EXACTLY the permitted rows as the genuine non-superuser `console_rt` --

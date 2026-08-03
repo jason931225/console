@@ -380,15 +380,11 @@ impl PgGovernanceStore {
     /// was newly consumed; `Some(false)` if none matched or it was already consumed
     /// (replay). Callers with their own write tx MUST use [`four_eyes_consume_conn`]
     /// so the consumption is atomic with the mutation.
-    ///
-    /// `expected_grant` binds the approval to the body being applied — see
-    /// [`four_eyes_consume_conn`] for why (kind, target) alone is not enough.
     pub async fn four_eyes_consume(
         &self,
         request_ref: Uuid,
         expected_kind: &str,
         expected_target: Option<Uuid>,
-        expected_grant: Option<serde_json::Value>,
         consumed_by: UserId,
     ) -> Result<Option<bool>, PgGovernanceError> {
         let org = current_org().map_err(KernelError::from)?;
@@ -400,7 +396,6 @@ impl PgGovernanceStore {
                     request_ref,
                     &expected_kind,
                     expected_target,
-                    expected_grant.as_ref(),
                     consumed_by,
                 )
                 .await
@@ -537,25 +532,18 @@ async fn transition_requirements_conn(
     }))
 }
 
-// The bound-approval predicate below is shared by the peek and the consume: an
-// `approved` decision for THIS `request_ref` whose recorded (kind, target) match the
-// action's server-derived `expected_kind` / `expected_target`, and which has not
-// already been consumed. `target_ref IS NOT DISTINCT FROM $3` matches a NULL
-// expected target against a NULL bound target and nothing else — a legacy/unbound
-// row never satisfies a target-bound gate. RLS scopes every row to the caller's org.
-// It is inlined as a literal in each query (not a `const` + `format!`) because sqlx
-// only accepts `&'static str` SQL.
-//
-// The CONSUME carries one extra conjunct the peek does not: the optional
-// `expected_grant` body binding. Deliberate — the peek has no committing effect and
-// the divergence is fail-closed in the safe direction (a preview may say "would
-// pass" where the consume then refuses, never the reverse). No production caller
-// pairs a grant-bound consume with a peek.
+// The bound-approval predicate below is shared, word-for-word, by the peek and the
+// consume: an `approved` decision for THIS `request_ref` whose recorded (kind,
+// target) match the action's server-derived `expected_kind` / `expected_target`,
+// and which has not already been consumed. `target_ref IS NOT DISTINCT FROM $3`
+// matches a NULL expected target against a NULL bound target and nothing else — a
+// legacy/unbound row never satisfies a target-bound gate. RLS scopes every row to
+// the caller's org. It is inlined as a literal in each query (not a `const` +
+// `format!`) because sqlx only accepts `&'static str` SQL.
 
 /// Non-consuming peek: does a matching, unconsumed, approved decision exist? For
 /// preview/preflight only. `Some(true)` = the gate would pass now; `Some(false)` =
 /// it would fail closed (wrong kind/target, unapproved, or already consumed).
-/// Does NOT evaluate the body binding — see [`four_eyes_consume_conn`].
 pub async fn four_eyes_check_conn(
     conn: &mut PgConnection,
     request_ref: Uuid,
@@ -590,34 +578,11 @@ pub async fn four_eyes_check_conn(
 /// index and exactly one gets a returned row — the other sees `Some(false)` (replay
 /// denied). `Some(true)` = newly consumed (gate passes); `Some(false)` = no match or
 /// already consumed (gate fails closed).
-///
-/// `expected_grant` binds the approval to WHAT IS BEING DONE, not only to the object
-/// it is done to. (kind, target) alone say "somebody approved *something* about this
-/// object"; a gate whose payload varies — a field policy body, a grant, a limit —
-/// can otherwise spend a signature given for a narrow change on a broad one. When
-/// `Some`, the approval only matches if the pending `gov_approval_requests` row for
-/// this ref carries the identical body under `payload_summary -> 'grant'`.
-///
-/// The comparison is `jsonb =`, and that IS the normalization: Postgres stores jsonb
-/// in a canonical form (key order and whitespace are not represented), so the
-/// requester declares the body as JSON and the server serializes the body it is
-/// about to apply — no digest to agree on, no canonical-bytes contract for a client
-/// to reproduce, and no collision surface. Array order IS significant, which is the
-/// stricter reading.
-///
-/// It also closes a hole the (kind, target) binding leaves open on its own:
-/// `decide_approval` only takes `requested_by` from a pending request WHEN ONE
-/// EXISTS, so an approver can otherwise mint an approved row naming a requester who
-/// never asked. A grant-bound gate has no such row to match and fails closed.
-///
-/// `None` = no body binding, the pre-existing behaviour, for gates whose action is
-/// fully described by (kind, target).
 pub async fn four_eyes_consume_conn(
     conn: &mut PgConnection,
     request_ref: Uuid,
     expected_kind: &str,
     expected_target: Option<Uuid>,
-    expected_grant: Option<&serde_json::Value>,
     consumed_by: UserId,
 ) -> Result<Option<bool>, PgGovernanceError> {
     let consumed: Option<Uuid> = sqlx::query_scalar(
@@ -629,11 +594,6 @@ pub async fn four_eyes_consume_conn(
           AND a.kind = $2
           AND a.target_ref IS NOT DISTINCT FROM $3
           AND a.decision = 'approved'
-          AND ($5::jsonb IS NULL OR EXISTS (
-                SELECT 1 FROM gov_approval_requests r
-                WHERE r.org_id = a.org_id
-                  AND r.request_ref = a.request_ref
-                  AND r.payload_summary -> 'grant' = $5::jsonb))
           AND NOT EXISTS (SELECT 1 FROM gov_approval_consumptions c WHERE c.approval_id = a.id)
         ON CONFLICT (org_id, approval_id) DO NOTHING
         RETURNING approval_id
@@ -643,7 +603,6 @@ pub async fn four_eyes_consume_conn(
     .bind(expected_kind)
     .bind(expected_target)
     .bind(*consumed_by.as_uuid())
-    .bind(expected_grant)
     .fetch_optional(conn)
     .await?;
     Ok(Some(consumed.is_some()))

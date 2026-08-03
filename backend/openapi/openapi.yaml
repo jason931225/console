@@ -12384,173 +12384,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
-  /api/v1/ontology/object-types/{key}/properties/{property_key}/policies:
-    post:
-      tags:
-        - Ontology
-      operationId: attachObjectTypePropertyPolicy
-      summary: Attach a field policy to one property of an object type
-      description: >
-        Authors one enforced Cedar catalog policy and attaches it to a single
-        property of the object type identified by stable key, in one audited
-        transaction. This is the FIELD half of ontology policy: an object policy
-        decides which rows are served, this decides which properties of a served
-        row are.
-
-
-        A withheld property is REMOVED from every attribute bag the API serves —
-        single read, list, `?as_of=` and action execute — never returned as
-        `null`. A null is indistinguishable from a genuine null and invites a
-        read-modify-write that erases a value the caller was never allowed to
-        see. `GET .../history` is refused with 404 while any property of the type
-        is withheld from the caller: the revision chain is only evidence if it is
-        served whole, and a bag with a key removed no longer hashes to its
-        recorded row hash.
-
-
-        The property must be declared `in_property_policy` on the current
-        object-type version, otherwise 422. Attachments are PER-VERSION: a staged
-        revision mints new property definitions, so a field policy attached to v1
-        does not carry to v2 and the property is withheld again until the tenant
-        re-attaches.
-
-
-        `activity` selects what the policy decides and IS the Cedar action it is
-        evaluated under: `read_field` withholds the value, `edit` refuses any
-        action whose declared edits touch the property — refused before any
-        writeback opens or any four-eyes approval is spent.
-
-
-        `conditions` is restricted to `roles contains "<literal>"`. The decision
-        is taken once per (principal, object type, property) and applied to every
-        row of that type in the response, so a condition over a row attribute
-        would be evaluated against no row and then applied to all of them.
-        `clearance_keys` is rejected for a separate reason: no clearance set is
-        resolved for a request principal anywhere in this system, so such a
-        policy would attach and then deny forever. Both are 422.
-
-
-        SEPARATION OF DUTY. `four_eyes_request_ref` is REQUIRED. Every ontology
-        route authorizes on org-wide `role_manage`, which only `SUPER_ADMIN`
-        holds, so every principal a field policy can withhold from is also
-        authorized to reach this route — a control its own subject could lift in
-        one request. The approval must be of kind `ontology.property_policy`,
-        bound to the property's definition id, unconsumed, and decided by a
-        principal other than the requester; it is consumed here (single-use, and
-        it cannot be replayed onto a second property). Without one this route is
-        403.
-
-
-        THE APPROVAL BINDS THE GRANT, NOT ONLY THE PROPERTY. When opening the
-        request at `POST /api/v1/governance/approvals`, the requester MUST record
-        the exact grant under `payload_summary.grant` as
-        `{"activity", "effect", "conditions"}` — the same three fields posted
-        here, with `conditions` defaulted to `[]`. The comparison is JSONB
-        equality, so key order and whitespace do not matter and array order does.
-        Binding the property alone would let a signature given for a narrow
-        policy be spent attaching a broader one to the same field. A mismatch, or
-        an approved decision with no pending request behind it, is 403.
-
-
-        Deny-by-default, and it applies to BOTH activities independently: a
-        property declared `in_property_policy` with no attached `read_field`
-        policy is withheld from everyone, and with no attached `edit` policy no
-        action may change it — declaring a property policy-bearing therefore
-        stops writes to it as well as reads until both halves are attached. An
-        attachment cannot be revoked — both tables are append-only and no role
-        holds UPDATE on the policy catalog — and at most one policy may exist per
-        (property, activity), so a second attach for the same pair is 409.
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: key
-          in: path
-          required: true
-          description: Object-type stable key.
-          schema:
-            type: string
-        - name: property_key
-          in: path
-          required: true
-          description: Property key, as declared on the current object-type version.
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - activity
-                - effect
-                - four_eyes_request_ref
-              properties:
-                activity:
-                  type: string
-                  enum: [read_field, edit]
-                effect:
-                  type: string
-                  enum: [permit, forbid]
-                four_eyes_request_ref:
-                  $ref: '#/components/schemas/Uuid'
-                conditions:
-                  type: array
-                  default: []
-                  maxItems: 32
-                  items:
-                    type: object
-                    required:
-                      - attr
-                      - op
-                      - value
-                    properties:
-                      attr:
-                        type: string
-                        enum: [roles]
-                      op:
-                        type: string
-                        enum: [contains]
-                      value:
-                        type: object
-                        required:
-                          - kind
-                          - value
-                        properties:
-                          kind:
-                            type: string
-                            enum: [literal]
-                          value:
-                            type: string
-      responses:
-        '201':
-          description: >
-            The field policy was authored, attached and audited, and the
-            four-eyes approval was consumed.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - id
-                properties:
-                  id:
-                    type: string
-                    format: uuid
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/ontology/instances:
     get:
       operationId: listOntologyInstances
@@ -12589,8 +12422,7 @@ paths:
     get:
       operationId: getOntologyInstance
       summary: Get an object instance card
-      description: Returns one instance's current (or as-of) state. A property withheld by a field policy is REMOVED from `revision.attributes`,
-        never returned as null (deny-by-omission); `?as_of=` is redacted by the same decision as the head, so it is not a time-travel hole.
+      description: Returns one instance's current (or as-of) state. Property policies null forbidden fields (deny-by-omission).
       tags:
       - Ontology
       security:
@@ -12627,9 +12459,7 @@ paths:
     get:
       operationId: listOntologyInstanceHistory
       summary: List an instance's revision history
-      description: Returns the append-only, fixity-chained revision timeline for one instance (hash-verified). Refused with 404 when any
-        property of the instance's object type is withheld from the caller by a field policy - the chain is only evidence if served whole,
-        and a bag with a key removed no longer hashes to its recorded row hash, so it is not served at all rather than served broken.
+      description: Returns the append-only, fixity-chained revision timeline for one instance (hash-verified).
       tags:
       - Ontology
       security:
