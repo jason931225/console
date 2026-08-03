@@ -155,8 +155,15 @@ newer CI run does not retroactively make this consolidation incomplete.
   found twelve OMX files still named by tracked records and disproved the
   handoff's broad self-contained-planning claim. Ten stale pre-pivot reference
   edges are now explicitly retired by hash; two workbook-derived profiles remain
-  in restricted external custody with their source. No result on that tip carries
-  merge authority into the custody-corrected pair.
+  classified as restricted external inputs alongside their source. Preservation
+  or discard and any read-back remain pending. No result on that tip carries
+  merge authority into any later correction pair.
+- Local signed tip `17f84f210a9dbf32987cdff36d4aeabaff4540ac`
+  was never pushed. Independent exact-object review refused it because three
+  durable statements implied the restricted workbook inputs had already reached
+  external encrypted custody even though no usable destination or read-back
+  exists. Those statements are now conditional on the still-pending custody-or-
+  discard decision; no result on that local tip carries merge authority.
 - Two signed archive tags make provenance commits outside the post-pivot main
   ancestry reproducible from a fresh clone:
   `archive/pre-pivot-implementation-freeze-2026-07-24` resolves to
@@ -244,7 +251,7 @@ Their explicit dispositions follow; none is an unstated fresh-clone dependency.
 | `.omx/context/reasoning-lens-contract-20260803T101035Z.md` | `dea80c0a1fa5cc47c7ba12e4ee1c62480cd675e7b26bf33434ddf1fc94be61e4` |
 | `.omx/plans/reasoning-lens-contract.md` | `76dc05561d7d6c07ee26afb68ea60841321eab7516f6d0546ba96d41825aad5c` |
 | `.omx/plans/reasoning-lens-contract-handoff.json` | `db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2` |
-| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `c43624729910a392bbec720eb1a7e07bbf63e7f2ef11b19c025b4d3d29c8b471` at the custody-correction resealing stage |
+| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `49333378c2c756107798609be42c3266b7ef1bfbbe526a38618a0d3c11a76ce2` at the custody-truth-correction resealing stage |
 
 The original JSON correctly says execution had not started at the instant the
 architect/critic plan was frozen. Do not edit that historical claim. The sibling
