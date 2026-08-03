@@ -125,3 +125,16 @@ test("foundation gate executes the structural security-workflow hardening gate",
     },
   );
 });
+
+test("foundation gate rejects required-context path filters", () => {
+  withInjectedTextBefore(
+    ".github/workflows/ci.yml",
+    "  workflow_dispatch:",
+    "    paths:\n      - \"backend/**\"",
+    () => {
+      const result = runChecker();
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /must not define paths or paths-ignore filters/i);
+    },
+  );
+});

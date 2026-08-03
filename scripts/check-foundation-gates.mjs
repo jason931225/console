@@ -27,16 +27,6 @@ function requireFile(path, label = path) {
   throw new Error(`${label}: missing (${path})`);
 }
 
-function requireIncludesAtLeast(path, needle, minimumCount, label) {
-  const text = read(path);
-  const count = text.split(needle).length - 1;
-  if (count >= minimumCount) {
-    passes.push(`${label}: ${count} occurrences`);
-    return;
-  }
-  throw new Error(`${label}: ${path} must include ${JSON.stringify(needle)} at least ${minimumCount} times (found ${count})`);
-}
-
 function uniqueSorted(values) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
@@ -218,8 +208,10 @@ requireIncludes("package.json", "\"check:foundation-gates\": \"node scripts/chec
 requireIncludes("package.json", "\"test:text-gate\": \"node --test scripts/lib/text-gate.test.mjs\"", "package script test:text-gate");
 requireIncludes(".github/workflows/ci.yml", "npm run check:foundation-gates", "CI runs foundation gate contract");
 requireIncludes(".github/workflows/ci.yml", "npm run test:text-gate", "CI runs shared text-gate tests");
-requireIncludes(".github/workflows/ci.yml", "docs/specs/**", "CI watches docs/specs gate inputs");
-requireIncludesAtLeast(".github/workflows/ci.yml", '"docs/CI-GATES.md"', 2, "CI watches CI gate documentation for push and pull_request");
+if (/^    paths(?:-ignore)?:/m.test(read(".github/workflows/ci.yml"))) {
+  throw new Error("CI required-context triggers: .github/workflows/ci.yml must not define paths or paths-ignore filters");
+}
+passes.push("CI required-context triggers: push and pull_request are unfiltered");
 requireCiGateDocsDriftInventory();
 requireNotIncludes("docs/CI-GATES.md", "test:contract", "live CI gate docs exclude retired generated-client round-trip");
 requireNotIncludes("docs/CI-GATES.md", "check:openapi-app", "live CI gate docs exclude retired app-served OpenAPI gate");

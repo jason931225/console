@@ -4,11 +4,16 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import yaml from "js-yaml";
 
 import { evaluateCiPreflight } from "./check-ci-preflight.mjs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
 const postgresWrapperBuildFile = readFileSync(new URL("../tools/buck/BUCK", import.meta.url), "utf8");
+const freeRunnerDiskAction = readFileSync(
+  new URL("../.github/actions/free-runner-disk/action.yml", import.meta.url),
+  "utf8",
+);
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
 const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
 const reasoningLensRegressionStep = `      - name: Reasoning lens contract regression
@@ -69,21 +74,14 @@ const preflightRustToolchainSetup = `      - name: Install Rust toolchain for Ca
 
 `;
 
-function expectFailure(source, message, buckBuildFile = postgresWrapperBuildFile) {
-  const { failures } = evaluateCiPreflight(source, buckBuildFile);
+function expectFailure(
+  source,
+  message,
+  buckBuildFile = postgresWrapperBuildFile,
+  actionFile = freeRunnerDiskAction,
+) {
+  const { failures } = evaluateCiPreflight(source, buckBuildFile, actionFile);
   assert.ok(failures.some((failure) => failure.includes(message)), failures.join("\n"));
-}
-
-function withoutTriggerPath(source, trigger, path) {
-  const start = source.indexOf(`  ${trigger}:\n`);
-  const terminator = trigger === "push" ? "  pull_request:\n" : "  workflow_dispatch:\n";
-  const end = source.indexOf(terminator, start);
-  assert.notEqual(start, -1, `missing ${trigger} trigger`);
-  assert.notEqual(end, -1, `missing ${trigger} terminator`);
-  const block = source.slice(start, end);
-  const entry = `      - "${path}"\n`;
-  assert.ok(block.includes(entry), `${trigger} does not contain ${path}`);
-  return source.slice(0, start) + block.replace(entry, "") + source.slice(end);
 }
 
 function mutateReasoningLensAdmission(mutate) {
@@ -99,48 +97,354 @@ function replaceJob(source, job, mutate) {
   return source.slice(0, start) + mutate(source.slice(start, end)) + source.slice(end);
 }
 
+function mutateNamedStep(source, job, name, mutate) {
+  return replaceJob(source, job, (block) => {
+    const anchor = `      - name: ${name}\n`;
+    const start = block.indexOf(anchor);
+    assert.notEqual(start, -1, `missing ${job} step ${name}`);
+    const next = block.indexOf("      - ", start + anchor.length);
+    const end = next < 0 ? block.length : next;
+    const step = block.slice(start, end);
+    const mutated = mutate(step);
+    assert.notEqual(mutated, step, `mutation did not change ${job} step ${name}`);
+    return block.slice(0, start) + mutated + block.slice(end);
+  });
+}
+
+function addFalseCondition(step) {
+  if (/^        if: /m.test(step)) {
+    return step.replace(/^        if: .*$/m, "        if: false");
+  }
+  return step.replace(/^      - name: .*$/m, (name) => `${name}\n        if: false`);
+}
+
+function addContinueOnError(step) {
+  assert.ok(!/^        continue-on-error:/m.test(step), "baseline step already continues on error");
+  return step.replace(
+    /^      - name: .*$/m,
+    (name) => `${name}\n        continue-on-error: true`,
+  );
+}
+
+function addRetainedTextEarlyExit(step) {
+  if (/^        run: \|$/m.test(step)) {
+    return step.replace(/^        run: \|$/m, "        run: |\n          exit 0");
+  }
+  return step.replace(
+    /^        run: (.+)$/m,
+    (_, command) => `        run: |\n          exit 0\n          ${command}`,
+  );
+}
+
+function mutateActionReference(step) {
+  return step.replace(
+    /^(        uses: )(\S+)(.*)$/m,
+    (_, prefix, action, suffix) => `${prefix}${action}-mutated${suffix}`,
+  );
+}
+
+function addUnexpectedActionInput(step) {
+  if (/^        with:$/m.test(step)) {
+    return step.replace(/^        with:$/m, "        with:\n          proof-lock-extra: forbidden");
+  }
+  return step.replace(
+    /^(        uses: .*?)$/m,
+    "$1\n        with:\n          proof-lock-extra: forbidden",
+  );
+}
+
+function mutateActionInput(step, input, replacement) {
+  const escaped = input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^          ${escaped}: .*\\n`, "m");
+  assert.match(step, pattern, `missing action input ${input}`);
+  return step.replace(pattern, replacement === null
+    ? ""
+    : `          ${input}: ${replacement}\n`);
+}
+
+function duplicateNamedStep(step, name) {
+  return step + step.replace(
+    `      - name: ${name}\n`,
+    `      - name: ${name} duplicate\n`,
+  );
+}
+
+function swapNamedSteps(source, job, firstName, secondName) {
+  return replaceJob(source, job, (block) => {
+    const starts = [...block.matchAll(/^      - name: /gm)].map((match) => match.index);
+    const ranges = starts.map((start, index) => ({
+      start,
+      end: starts[index + 1] ?? block.length,
+      text: block.slice(start, starts[index + 1] ?? block.length),
+    }));
+    const first = ranges.find((range) => range.text.startsWith(`      - name: ${firstName}\n`));
+    const second = ranges.find((range) => range.text.startsWith(`      - name: ${secondName}\n`));
+    assert.ok(first && second && first.start < second.start, `cannot swap ${job} actions`);
+    return block.slice(0, first.start)
+      + second.text
+      + block.slice(first.end, second.start)
+      + first.text
+      + block.slice(second.end);
+  });
+}
+
 describe("CI preflight contract", () => {
   it("accepts the workflow's cheap preflight and protected expensive jobs", () => {
     assert.deepEqual(evaluateCiPreflight(workflow).failures, []);
   });
 
-  it("rejects CI path filters that omit toolchain changes", () => {
-    expectFailure(
-      workflow.replace('      - "toolchains/**"\n', ""),
-      "push must include toolchains/** in CI path filters",
-    );
-    const pullRequest = workflow.indexOf("  pull_request:\n");
-    const pullWithoutToolchains = workflow.slice(0, pullRequest) + workflow.slice(pullRequest).replace(
-      '      - "toolchains/**"\n',
-      "",
-    );
-    expectFailure(pullWithoutToolchains, "pull_request must include toolchains/** in CI path filters");
+  it("rejects every run-step condition, soft-failure, and retained-text early-exit bypass", () => {
+    const requiredRunStepCounts = {
+      preflight: 24,
+      "domain-unit": 1,
+      backend: 23,
+      "dev-up-smoke": 6,
+      "kubernetes-manifests": 6,
+      "repo-gates": 23,
+      "api-contract": 4,
+      "generated-face-authority": 4,
+      "company-conformance": 2,
+      "postgres-domain-reachability": 2,
+    };
+    const workflowModel = yaml.load(workflow);
+    const bypasses = [
+      ["if: false", addFalseCondition],
+      ["continue-on-error: true", addContinueOnError],
+      ["retained command text after exit 0", addRetainedTextEarlyExit],
+    ];
+    let runStepCount = 0;
+    let mutationCount = 0;
+
+    for (const [job, expectedCount] of Object.entries(requiredRunStepCounts)) {
+      const runSteps = workflowModel.jobs[job].steps.filter((step) => typeof step.run === "string");
+      assert.equal(runSteps.length, expectedCount, `${job} exhaustive mutation inventory drifted`);
+      runStepCount += runSteps.length;
+
+      for (const step of runSteps) {
+        for (const [bypass, mutate] of bypasses) {
+          const mutated = mutateNamedStep(workflow, job, step.name, mutate);
+          const { failures } = evaluateCiPreflight(mutated);
+          assert.ok(
+            failures.some((failure) => failure.startsWith(`${job} `) && failure.includes("run step")),
+            `${job} :: ${step.name} accepted ${bypass}:\n${failures.join("\n")}`,
+          );
+          mutationCount += 1;
+        }
+      }
+    }
+
+    assert.equal(runStepCount, 95, "required and planned job run-step coverage must not shrink");
+    assert.equal(mutationCount, 285, "exhaustive bypass matrix must not shrink");
   });
 
-  it("rejects docs/program path removal independently for push and pull_request", () => {
-    expectFailure(workflow.replace('      - "docs/program/**"\n', ""), "push must include docs/program/** in CI path filters");
-    const pullRequest = workflow.indexOf("  pull_request:\n");
-    const withoutPullDocs = workflow.slice(0, pullRequest) + workflow.slice(pullRequest).replace('      - "docs/program/**"\n', "");
-    expectFailure(withoutPullDocs, "pull_request must include docs/program/** in CI path filters");
+  it("rejects every setup-action condition and soft-failure bypass", () => {
+    const requiredActionStepCounts = {
+      preflight: 3,
+      "domain-unit": 3,
+      backend: 4,
+      "dev-up-smoke": 4,
+      "kubernetes-manifests": 1,
+      "repo-gates": 2,
+      "api-contract": 2,
+      "generated-face-authority": 4,
+      "company-conformance": 3,
+      "postgres-domain-reachability": 3,
+    };
+    const workflowModel = yaml.load(workflow);
+    const bypasses = [
+      ["if: false", addFalseCondition],
+      ["continue-on-error: true", addContinueOnError],
+    ];
+    let actionStepCount = 0;
+    let mutationCount = 0;
+
+    for (const [job, expectedCount] of Object.entries(requiredActionStepCounts)) {
+      const actionSteps = workflowModel.jobs[job].steps.filter((step) => typeof step.uses === "string");
+      assert.equal(actionSteps.length, expectedCount, `${job} setup-action inventory drifted`);
+      actionStepCount += actionSteps.length;
+
+      for (const step of actionSteps) {
+        for (const [bypass, mutate] of bypasses) {
+          const mutated = mutateNamedStep(workflow, job, step.name, mutate);
+          const { failures } = evaluateCiPreflight(mutated);
+          assert.ok(
+            failures.some((failure) => failure.startsWith(`${job} setup action step`)),
+            `${job} :: ${step.name} accepted ${bypass}:\n${failures.join("\n")}`,
+          );
+          mutationCount += 1;
+        }
+      }
+    }
+
+    assert.equal(actionStepCount, 29, "required and planned job setup-action coverage must not shrink");
+    assert.equal(mutationCount, 58, "setup-action bypass matrix must not shrink");
   });
 
-  it("requires all reasoning-lens trigger paths independently on push and pull_request", () => {
-    for (const path of [
-      "docs/retros/**",
-      "AGENTS.md",
-      "README.md",
-      "CLAUDE.md",
-      "scripts/**",
-      "package.json",
-      "package-lock.json",
-      ".github/workflows/*.yml",
-    ]) {
-      for (const trigger of ["push", "pull_request"]) {
-        expectFailure(
-          withoutTriggerPath(workflow, trigger, path),
-          `${trigger} must include ${path} in CI path filters`,
+  it("locks every setup action's identity, inputs, totality, and interleaving", () => {
+    const jobs = [
+      "preflight",
+      "domain-unit",
+      "backend",
+      "dev-up-smoke",
+      "kubernetes-manifests",
+      "repo-gates",
+      "api-contract",
+      "generated-face-authority",
+      "company-conformance",
+      "postgres-domain-reachability",
+    ];
+    const workflowModel = yaml.load(workflow);
+    let mutationCount = 0;
+    const assertActionFailure = (mutated, job, mutation) => {
+      const { failures } = evaluateCiPreflight(mutated);
+      assert.ok(
+        failures.some((failure) => failure.startsWith(`${job} `)
+          && (failure.includes("setup action step") || failure.includes("locked ordered action"))),
+        `${job} accepted ${mutation}:\n${failures.join("\n")}`,
+      );
+      mutationCount += 1;
+    };
+
+    for (const job of jobs) {
+      const actionSteps = workflowModel.jobs[job].steps.filter((step) => typeof step.uses === "string");
+      for (const step of actionSteps) {
+        assertActionFailure(
+          mutateNamedStep(workflow, job, step.name, mutateActionReference),
+          job,
+          `${step.name} action-reference mutation`,
+        );
+        assertActionFailure(
+          mutateNamedStep(workflow, job, step.name, addUnexpectedActionInput),
+          job,
+          `${step.name} extra input`,
+        );
+        assertActionFailure(
+          mutateNamedStep(workflow, job, step.name, (text) => duplicateNamedStep(text, step.name)),
+          job,
+          `${step.name} duplicate action injection`,
+        );
+
+        for (const input of Object.keys(step.with ?? {})) {
+          assertActionFailure(
+            mutateNamedStep(workflow, job, step.name, (text) => mutateActionInput(text, input, null)),
+            job,
+            `${step.name} deleted ${input} input`,
+          );
+          assertActionFailure(
+            mutateNamedStep(workflow, job, step.name, (text) => (
+              mutateActionInput(text, input, '"proof-lock-mutated"')
+            )),
+            job,
+            `${step.name} changed ${input} input`,
+          );
+        }
+      }
+
+      for (let index = 1; index < actionSteps.length; index += 1) {
+        assertActionFailure(
+          swapNamedSteps(workflow, job, actionSteps[index - 1].name, actionSteps[index].name),
+          job,
+          `${actionSteps[index - 1].name}/${actionSteps[index].name} order swap`,
         );
       }
+    }
+
+    assert.equal(mutationCount, 180, "setup-action identity/input/interleaving matrix must not shrink");
+  });
+
+  it("locks the candidate-controlled local free-runner-disk action body", () => {
+    expectFailure(
+      workflow,
+      "free-runner-disk must preserve its exact composite action execution contract",
+      postgresWrapperBuildFile,
+      freeRunnerDiskAction.replace("      run: |\n", "      run: |\n        exit 0\n"),
+    );
+    expectFailure(
+      workflow,
+      "free-runner-disk must preserve its exact composite action execution contract",
+      postgresWrapperBuildFile,
+      freeRunnerDiskAction.replace("docker system prune -af || true", "printf '%s\\n' skipped"),
+    );
+  });
+
+  it("locks every required job's complete execution envelope", () => {
+    for (const job of [
+      "preflight",
+      "domain-unit",
+      "backend",
+      "dev-up-smoke",
+      "kubernetes-manifests",
+      "repo-gates",
+      "api-contract",
+      "generated-face-authority",
+      "company-conformance",
+      "postgres-domain-reachability",
+    ]) {
+      expectFailure(
+        replaceJob(workflow, job, (block) => block.replace(
+          /^    runs-on: .*$/m,
+          "    runs-on: ubuntu-24.04",
+        )),
+        `${job} must preserve its exact job execution envelope`,
+      );
+      expectFailure(
+        replaceJob(workflow, job, (block) => block.replace(
+          /^    timeout-minutes: (\d+)$/m,
+          (_, timeout) => `    timeout-minutes: ${Number(timeout) + 1}`,
+        )),
+        `${job} must preserve its exact job execution envelope`,
+      );
+    }
+
+    expectFailure(
+      replaceJob(workflow, "backend", (block) => block.replace(
+        "      image: postgres:18.4",
+        "      image: postgres:latest",
+      )),
+      "backend must preserve its exact job execution envelope",
+    );
+    expectFailure(
+      workflow.replace("  preflight:\n", "  preflight:\n    permissions:\n      contents: read\n"),
+      "preflight must preserve its exact job execution envelope",
+    );
+  });
+
+  it("locks the top-level trigger, permission, concurrency, and job-id envelope", () => {
+    const envelopeFailure = "CI workflow must preserve its exact trigger, permission, and concurrency execution envelope";
+    expectFailure(
+      workflow.replace("  contents: read", "  contents: write"),
+      envelopeFailure,
+    );
+    expectFailure(
+      workflow.replace("  cancel-in-progress: ${{ github.event_name == 'pull_request' }}", "  cancel-in-progress: true"),
+      envelopeFailure,
+    );
+    expectFailure(workflow.replace("name: CI", "name: Candidate CI"), envelopeFailure);
+    expectFailure(
+      workflow.replace(
+        "  kubernetes-manifests:\n",
+        "  candidate-shim:\n    runs-on: ubuntu-latest\n    steps: []\n\n  kubernetes-manifests:\n",
+      ),
+      "CI workflow must preserve its exact job-id set",
+    );
+  });
+
+  it("forbids push and pull-request path filters so every required context is created", () => {
+    for (const filter of ["paths", "paths-ignore"]) {
+      expectFailure(
+        workflow.replace(
+          '    tags:\n      - "v*"\n',
+          `    tags:\n      - "v*"\n    ${filter}:\n      - "backend/**"\n`,
+        ),
+        "push must create required CI contexts for every change without path filters",
+      );
+      expectFailure(
+        workflow.replace(
+          "  pull_request:\n",
+          `  pull_request:\n    ${filter}:\n      - "backend/**"\n`,
+        ),
+        "pull_request must create required CI contexts for every change without path filters",
+      );
     }
   });
 
@@ -212,44 +516,6 @@ describe("CI preflight contract", () => {
         "exact reasoning-lens event admission contract",
       );
     }
-  });
-
-  it("rejects toolchain entries placed outside each trigger's paths mapping", () => {
-    const pushWithoutToolchains = workflow.replace('      - "toolchains/**"\n', "");
-    expectFailure(
-      pushWithoutToolchains.replace(
-        "  pull_request:\n",
-        "    paths-ignore:\n      - \"toolchains/**\"\n  pull_request:\n",
-      ),
-      "push must include toolchains/** in CI path filters",
-    );
-    expectFailure(
-      pushWithoutToolchains.replace(
-        "    paths:\n",
-        "    branches-ignore:\n      - \"toolchains/**\"\n    paths:\n",
-      ),
-      "push must include toolchains/** in CI path filters",
-    );
-
-    const pullRequest = workflow.indexOf("  pull_request:\n");
-    const pullWithoutToolchains = workflow.slice(0, pullRequest) + workflow.slice(pullRequest).replace(
-      '      - "toolchains/**"\n',
-      "",
-    );
-    expectFailure(
-      pullWithoutToolchains.replace(
-        "  workflow_dispatch:\n",
-        "    paths-ignore:\n      - \"toolchains/**\"\n  workflow_dispatch:\n",
-      ),
-      "pull_request must include toolchains/** in CI path filters",
-    );
-    expectFailure(
-      pullWithoutToolchains.replace(
-        "  workflow_dispatch:\n",
-        "    branches-ignore:\n      - \"toolchains/**\"\n  workflow_dispatch:\n",
-      ),
-      "pull_request must include toolchains/** in CI path filters",
-    );
   });
 
   it("rejects Buck2 jobs that do not bootstrap pinned DotSlash before invocation", () => {
