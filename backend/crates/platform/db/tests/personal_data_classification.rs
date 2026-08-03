@@ -188,8 +188,8 @@ async fn strip_all_markers(pool: &PgPool) {
     assert_eq!(remaining, 0, "strip_all_markers left markers behind");
 }
 
-async fn floor_days(pool: &PgPool) -> i32 {
-    sqlx::query_scalar("SELECT access_log_retention_floor_days()")
+async fn floor_years(pool: &PgPool) -> i32 {
+    sqlx::query_scalar("SELECT access_log_retention_floor_years()")
         .fetch_one(pool)
         .await
         .unwrap()
@@ -248,8 +248,8 @@ async fn employees_raw_row_is_classified_unique_id_and_sensitive(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn shipped_classification_derives_the_two_year_floor(pool: PgPool) {
     assert_eq!(
-        floor_days(&pool).await,
-        730,
+        floor_years(&pool).await,
+        2,
         "a schema classified 고유식별정보 must derive the 2-year 접속기록 floor \
          (고시 제2026-9호 제8조제1항제2호)"
     );
@@ -282,8 +282,8 @@ async fn sensitive_alone_raises_the_floor_with_no_unique_id_present(pool: PgPool
     );
 
     assert_eq!(
-        floor_days(&pool).await,
-        730,
+        floor_years(&pool).await,
+        2,
         "민감정보 alone must raise the floor to 2 years"
     );
 }
@@ -293,7 +293,7 @@ async fn sensitive_alone_raises_the_floor_with_no_unique_id_present(pool: PgPool
 async fn unique_id_alone_raises_the_floor(pool: PgPool) {
     strip_all_markers(&pool).await;
     probe_with(&pool, PROBE_UNIQUE_ID_RRN).await;
-    assert_eq!(floor_days(&pool).await, 730);
+    assert_eq!(floor_years(&pool).await, 2);
 }
 
 /// 가명정보 is exempt from a list of duties that widens on 2026-09-11
@@ -303,8 +303,8 @@ async fn pseudonymous_alone_does_not_raise_the_floor(pool: PgPool) {
     strip_all_markers(&pool).await;
     probe_with(&pool, PROBE_PSEUDONYMOUS).await;
     assert_eq!(
-        floor_days(&pool).await,
-        365,
+        floor_years(&pool).await,
+        1,
         "가명정보 must not trigger 제8조제1항제2호"
     );
 }
@@ -316,7 +316,7 @@ async fn pseudonymous_alone_does_not_raise_the_floor(pool: PgPool) {
 async fn undeclared_alone_does_not_fabricate_a_two_year_floor(pool: PgPool) {
     strip_all_markers(&pool).await;
     probe_with(&pool, PROBE_UNDECLARED).await;
-    assert_eq!(floor_days(&pool).await, 365);
+    assert_eq!(floor_years(&pool).await, 1);
 }
 
 /// With nothing classified at all the derivation must not invent an obligation.
@@ -325,7 +325,7 @@ async fn undeclared_alone_does_not_fabricate_a_two_year_floor(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn an_empty_classification_derives_the_base_floor(pool: PgPool) {
     strip_all_markers(&pool).await;
-    assert_eq!(floor_days(&pool).await, 365);
+    assert_eq!(floor_years(&pool).await, 1);
 }
 
 /// Every marker on a relation this sweep reads is in the closed vocabulary, in
@@ -392,20 +392,19 @@ async fn no_column_is_classified_credit_while_the_scope_question_is_open(pool: P
     );
 }
 
-/// A ROLE WITHOUT THE GRANT IS REFUSED — and only then does the positive half
-/// mean anything.
+/// Schema introspection stays owner-only: PUBLIC and the application runtime
+/// role are both refused.
 ///
 /// An earlier version of this file asserted only that `console_rt` may execute
 /// the two functions, and the accompanying report called that "proven by test,
 /// not assumed". It was not. Both functions are SECURITY DEFINER, and
 /// PostgreSQL grants EXECUTE on a new function to PUBLIC by default; the
 /// migration carried no `REVOKE ALL … FROM PUBLIC`, so every role in the
-/// cluster already held EXECUTE and the assertion would have passed with the
-/// `GRANT` lines deleted. The migration now revokes first, and this drives a
-/// role holding no grant at all into `42501 insufficient_privilege` before
-/// asserting the runtime role succeeds.
+/// cluster already held EXECUTE. The migration now revokes first and exposes no
+/// runtime product route, so both an otherwise ungranted role and `console_rt`
+/// must receive `42501 insufficient_privilege`.
 #[sqlx::test(migrations = "./migrations")]
-async fn only_a_granted_role_may_execute_the_derivation(pool: PgPool) {
+async fn schema_derivation_is_owner_only(pool: PgPool) {
     // Unique per test database, so parallel runs on one cluster cannot race
     // over a shared role name. The identifier is a fixed prefix plus a UUID's
     // lowercase hex, so it cannot carry SQL metacharacters.
@@ -417,61 +416,35 @@ async fn only_a_granted_role_may_execute_the_derivation(pool: PgPool) {
     .await
     .unwrap();
 
-    // (1) The negative. A role nobody granted anything to must be refused.
-    //     Both probes yield BIGINT so a success would decode cleanly and the
-    //     assertion below would be about privileges, not about types.
-    for probe in [
-        "SELECT access_log_retention_floor_days()::BIGINT",
-        "SELECT COUNT(*) FROM personal_data_columns()",
-    ] {
-        let mut tx = pool.begin().await.unwrap();
-        sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
-            "SET LOCAL ROLE \"{ungranted}\""
-        )))
-        .execute(tx.as_mut())
-        .await
-        .unwrap();
-        let refused = sqlx::query_scalar::<_, i64>(probe)
-            .fetch_one(tx.as_mut())
-            .await
-            .expect_err(
-                "a role with no EXECUTE grant must be REFUSED — if this succeeds the \
-                 REVOKE ALL … FROM PUBLIC is missing and the positive assertion below \
-                 proves nothing",
+    // Both probes yield BIGINT so a success would decode cleanly and the
+    // assertion is about privileges, not result types. The application runtime
+    // is tested explicitly because an accidental grant there would recreate an
+    // out-of-scope product surface even with PUBLIC revoked.
+    for role in [&ungranted, "console_rt"] {
+        for probe in [
+            "SELECT access_log_retention_floor_years()::BIGINT",
+            "SELECT COUNT(*) FROM personal_data_columns()",
+        ] {
+            let mut tx = pool.begin().await.unwrap();
+            sqlx::raw_sql(sqlx::AssertSqlSafe(format!("SET LOCAL ROLE \"{role}\"")))
+                .execute(tx.as_mut())
+                .await
+                .unwrap();
+            let refused = sqlx::query_scalar::<_, i64>(probe)
+                .fetch_one(tx.as_mut())
+                .await
+                .expect_err("owner-only schema introspection must refuse this role");
+            assert_eq!(
+                refused
+                    .as_database_error()
+                    .and_then(|e| e.code())
+                    .as_deref(),
+                Some("42501"),
+                "expected insufficient_privilege for role `{role}` and `{probe}`, got {refused:?}"
             );
-        assert_eq!(
-            refused
-                .as_database_error()
-                .and_then(|e| e.code())
-                .as_deref(),
-            Some("42501"),
-            "expected insufficient_privilege for `{probe}`, got {refused:?}"
-        );
-        tx.rollback().await.unwrap();
+            tx.rollback().await.unwrap();
+        }
     }
-
-    // (2) The positive. The runtime role the application actually connects as
-    //     must reach the derivation, or the route in `console-compliance-rest`
-    //     fails at runtime while every owner-privileged test passes.
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("SET LOCAL ROLE console_rt")
-        .execute(tx.as_mut())
-        .await
-        .unwrap();
-
-    let days: i32 = sqlx::query_scalar("SELECT access_log_retention_floor_days()")
-        .fetch_one(tx.as_mut())
-        .await
-        .expect("console_rt must hold EXECUTE on access_log_retention_floor_days()");
-    assert_eq!(days, 730);
-
-    let classified: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM personal_data_columns()")
-        .fetch_one(tx.as_mut())
-        .await
-        .expect("console_rt must hold EXECUTE on personal_data_columns()");
-    assert!(classified > 0);
-
-    tx.rollback().await.unwrap();
 
     sqlx::raw_sql(sqlx::AssertSqlSafe(format!("DROP ROLE \"{ungranted}\"")))
         .execute(&pool)
@@ -4570,9 +4543,9 @@ fn completeness_violations(columns: &[CatalogColumn], baseline: &[(&str, &[&str]
 /// `relkind IN ('r', 'p')`; this sweep takes `('r', 'p', 'm', 'f')`. So a
 /// `pd:sensitive/health` marker on a materialized view or a foreign table is a
 /// VALID classification that this assertion and the vocabulary check both
-/// accept, and that `access_log_retention_floor_days()` never sees — the floor
-/// it derives stays at 제8조제1항 본문's 365 days when 고시 제2026-9호
-/// 제8조제1항제2호 requires 730. That direction is the dangerous one: the
+/// accept, and that `access_log_retention_floor_years()` never sees — the floor
+/// it derives stays at 제8조제1항 본문's 1 year when 고시 제2026-9호
+/// 제8조제1항제2호 requires 2 years. That direction is the dangerous one: the
 /// schema-name axis makes the derivation miss a classification too, and both
 /// under-retain rather than over-retain.
 ///

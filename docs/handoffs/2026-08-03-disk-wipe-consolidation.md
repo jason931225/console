@@ -77,6 +77,19 @@ newer CI run does not retroactively make this consolidation incomplete.
   adversarial reviewers. PR #562 additionally requires a formal approving
   GitHub review from someone other than its author, with no unresolved review
   findings and all required checks green, before squash merge.
+- Interim signed tip `900c1749a94f945deaa85cc5097a51287620dd95` was
+  pushed to PR #562 as a remote disaster-recovery checkpoint and then made draft
+  after hosted verification exposed defects. It is superseded by the later exact
+  C/T pair recorded in the final authority ledger and must never be merged on the
+  strength of its partial checks.
+- Two signed archive tags make provenance commits outside the post-pivot main
+  ancestry reproducible from a fresh clone:
+  `archive/pre-pivot-implementation-freeze-2026-07-24` resolves to
+  `78cb5197927a031ead30c6dc0426c23455d3cb16`, and
+  `archive/pivot-authority-base-2026-07-28` resolves to
+  `d138ed28b65fa6dbec01bd8022be5a4e1db57687`. The truth-ledger validator
+  binds the advertised refs to their exact commits; a bare SHA is no longer
+  accepted as durable custody.
 
 ## Non-authoritative external opinion
 
@@ -107,12 +120,13 @@ similarity; no source branch is a continuation dependency.
 | Test-graph decision | Proposed One Graph ADR records the Cargo-native direction without prematurely deleting Buck2 | `fcca3fab3fcf1a784e1794c6edf2c61bdfc6abb9` |
 | Ignored planning packet | The exact approved Ultragoal/ralplan context, plan, and architect/critic handoff were deliberately force-added | `dff758724f7b428584a602cee7b2429dfbd7c5c1` |
 | Domain attempt | Only the six-finding `BLOCKED` disposition was kept; no domain/DNS/credential implementation was admitted | `bdd24a16a7373522245c7ffcffb85fdedc0ec752` |
-| Branch authorization | Eighteen fabricated-branch helpers were replaced with capability authorization; a fail-closed defense-in-depth gate and tests were added | `8d7871a96f0fdcfd387d1e05260237d4eeec9b2b`, `9d4a136903c4d5d7978a046d0db9d2293a944ce5` |
-| Personal-data classification | Schema-derived closed-vocabulary column classification, exact-name baseline, database assertion, OpenAPI/CI reachability, and payroll classifications | `fccdf5288f916c5180045ef19d4daaa395998fbf` through `851b999f49222a4d04282088f508f552469d756d` |
+| Branch authorization | Eighteen fabricated-branch helpers were replaced with capability authorization; the final correction also removed the three path-wide gate exemptions and repaired concrete tenant/branch boundaries in HR exit reporting, registry site creation/master import, and reporting rollups. The changed pure tests and PostgreSQL regressions are CI-reachable. | initial implementation `8d7871a96f0fdcfd387d1e05260237d4eeec9b2b`, gate `9d4a136903c4d5d7978a046d0db9d2293a944ce5`; final signed C named by its direct-child authority ledger |
+| Personal-data classification | Schema-derived closed-vocabulary column classification, exact-name baseline, database assertion, CI reachability, and payroll classifications. The final correction preserves the official instrument's one-/two-year unit, keeps schema introspection owner-only, and removes the out-of-pivot compliance product route. | `fccdf5288f916c5180045ef19d4daaa395998fbf` through `851b999f49222a4d04282088f508f552469d756d`; final signed C named by its direct-child authority ledger |
 | Gate integrity | Request-body and undeclared-import false-green repairs, plus CI preflight enforcement of `openapi_drift` | `1ec3e69d7ec3b8348561d2d699326f0949258521` |
 | Documentation gates | Stale citations were reconciled and local-link checking learned to ignore inline-code examples while still checking adjacent real links | `d90f127654e0b4b0fe423304bbf5086e3cc24228` |
 | CI/tooling ratchets | Exact executed-test named sets, Cargo/feature reachability, credential argv hardening, local-CI parity, and removal of dead post-pivot tooling. The complete ten-job surface now locks 95 run steps, 29 action steps, job/workflow envelopes, and unfiltered required-context triggers. | reduced from `09f147a7`, `26491630`, and `eb60e2e4`; final execution lock `3d5f0b0649b21c8e647b2fa31ec40bd2aeeb8fec` |
-| Security proofs | Five required security contexts have exact parsed job/proof contracts; Trivy installs checksum-pinned before checkout, Cargo audit/deny use isolated direct binaries, and exception-policy regressions execute. | `d6cfedfd1c8230ca6e5ea43053d1ccc7dbcc2026` |
+| Security proofs | Five required security contexts have exact parsed job/proof contracts; Trivy installs checksum-pinned before checkout, Cargo audit/deny use isolated direct binaries, and exception-policy regressions execute. Hosted execution caught the direct `cargo-audit` invocation missing its required `audit` subcommand; the final correction fixes and mutation-locks that exact command. | `d6cfedfd1c8230ca6e5ea43053d1ccc7dbcc2026`; final signed C named by its direct-child authority ledger |
+| Program boundary | The generic instance-backed `company_conformance` fixture remains useful engine regression evidence but is explicitly not the Company/HR projected product target. Replacement conformance and projected Company/Person/Employment/PayRun work remain HOLD until owning-port and single-writer contracts exist. | final signed C named by its direct-child authority ledger |
 | External PR authority | Unsigned fork and Dependabot heads fail the same protected-main C/T authentication instead of reporting a successful skip. | `e448f48ea840af2258d5bb374a9185e93b9d838e` |
 | Release | Release-please 0.3.1 manifest/changelog plus an independently reviewed authority train | PR #552, C `5e297ca0ab2134e793bb40d5999908606ef1e050`, T `bab0ff594b1b66c85aaaa8c92ffcbedc88c0c2c2` |
 
@@ -126,7 +140,7 @@ Discarded means “do not reconstruct it from reflogs or backups after the wipe.
 | Ontology field-policy lane (`20ce7536`, integrated/reviewed as `090b927a314699a80d11ac655bfab4bdc19a71bf`) | Rejected by two independent high-risk reviews and signed-reverted in `3a3619a5a8c8c3871f5bbf3d7446ec3fb02e1033`. The granted command-role SQL entrypoint could bypass four-eyes and spoof/null the actor; migration 0212 activated previously untrusted attachments as `read_field`; and rollback to pre-enforcement application code would expose protected fields with no detach/repair or compatibility floor. A future implementation must atomically consume the exact grant in the definer, quarantine or reject historical rows, and design forward repair plus rollback-safe deployment. |
 | Cosskorea domain code (`f3a0d9d8`; 13 paths in the final reviewed package, of which eight code/deploy paths remain dirty in the original root checkout) | Rejected after five correction rounds. Six sustained defects include session-takeover risk, unbound WebAuthn evidence, unsafe consent provenance, unusable ordinary-user recovery, missing served-certificate proof, and broken rollback cleanup. The authoritative disposition is [`docs/program/ledger/2026-08-03-cosskorea-domain-swap-blocked.md`](../program/ledger/2026-08-03-cosskorea-domain-swap-blocked.md). It explicitly revokes the superseded 2026-08-02 handoff's “ready to execute” instructions; the blocker ledger is the only durable artifact. |
 | Generic work graph/handover slice (`7390720`) | Outside the hard post-pivot boundary and overlapping current authz/ontology objects; retaining it would create an unowned second design. |
-| Workflow notifications, workflow approval, reporting, broad audit, and other dirty feature lanes | Outside the active pivot and not necessary for a stable restart. |
+| Workflow notifications, workflow approval, the broad reporting feature lane, broad audit, and other dirty feature lanes | Outside the active pivot and not necessary for a stable restart. This does not discard the narrow reporting tenant-scope repair preserved above. |
 | KubeSpan worker ADR/work | Live topology was not authoritatively established and the work was not needed for this consolidation. The irreplaceable OCI node must not be used as an experiment. |
 | Full Buck2 deletion | Deferred, not forgotten. Deleting it before Cargo reaches every current test would create invisible tests; ADR-0039 preserves the measured replacement direction. |
 | Stash `546f0` | Obsolete employee-import fragments and removed React work; current main contains the fuller backend implementation and the frontend was intentionally deleted by the pivot. |
@@ -144,7 +158,7 @@ retained byte-for-byte, together with one tracked execution status record:
 | `.omx/context/reasoning-lens-contract-20260803T101035Z.md` | `dea80c0a1fa5cc47c7ba12e4ee1c62480cd675e7b26bf33434ddf1fc94be61e4` |
 | `.omx/plans/reasoning-lens-contract.md` | `76dc05561d7d6c07ee26afb68ea60841321eab7516f6d0546ba96d41825aad5c` |
 | `.omx/plans/reasoning-lens-contract-handoff.json` | `db3ca7563223e271c6cf481a5766cfe6b96d2c73dbcf8dbaa5fa12092c010fc2` |
-| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `3e9b429c98a4f6b05ce216f13258e69049593ff0315988bf004126076e4b0537` at the PR #562 candidate stage |
+| `.omx/plans/reasoning-lens-contract-execution-handoff.json` | `39476f6bda2a3fc282b99cf5b98ad63d986165222bb9082f1c910d900a7ce3fb` at the PR #562 candidate stage |
 
 The original JSON correctly says execution had not started at the instant the
 architect/critic plan was frozen. Do not edit that historical claim. The sibling
@@ -210,4 +224,6 @@ equivalence and advance the bounded ontology/company/HR/payroll program. Recheck
 the pivot before accepting any resurrected branch. For every proposed recovery,
 ask whether main already contains the outcome, whether it is inside the current
 scope, whether its source of truth is singular, and whether its exact tests are
-reachable from CI. Default to leaving rejected branches dead.
+reachable from CI. Do not use the existing `company_conformance` fixture to
+dispatch projected Company/HR work; its current HOLD is recorded in
+`docs/program/CATALOG.md`. Default to leaving rejected branches dead.

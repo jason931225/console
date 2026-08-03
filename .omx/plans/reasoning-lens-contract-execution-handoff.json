@@ -28,13 +28,20 @@
     "evidence_templates": "implemented",
     "structural_and_diff_validator": "implemented",
     "ci_and_local_mirror_wiring": "implemented",
-    "durable_restart_handoff": "implemented"
+    "durable_restart_handoff": "implemented",
+    "provenance_ref_custody": "implemented",
+    "tenant_scope_corrections": "implemented",
+    "security_workflow_direct_binary_fix": "implemented",
+    "pivot_boundary_reconciliation": "implemented"
   },
   "verification": {
     "validator_unit_tests": "40/40 passed",
-    "live_structural_validation": "passed with six evidence blocks",
+    "live_structural_validation": "passed; every current governed evidence block accepted",
     "event_base_matrix": "pull request, branch push, branch creation, tag, dispatch, and unknown-event fail-closed paths covered",
     "ci_wiring_contract": "51/51 preflight tests and 12/12 local-mirror tests passed; generated matrices rejected 525 run/action/composite bypass mutations",
+    "changed_rust_units": "153 app, 55 platform-authz, 4 compliance REST, 3 reporting REST, and 2 registry REST tests passed; all-target clippy passed with warnings denied",
+    "changed_postgres_regressions": "HR exit evidence 1/1, registry adapter 6/6, registry REST 19/19, and personal-data classification 23/23 with one intentional generator ignored",
+    "security_and_contracts": "cargo-audit 0.22.2 direct-binary invocation passed with the governed warning; security workflow, OpenAPI drift 11/11, ADR 29/29, and 395-file link gates passed",
     "final_pr_ci": "pending",
     "exact_sha_review": "pending"
   },

@@ -5,7 +5,7 @@ Console is a Rust platform for a governed company object engine: **Ontology / Fo
 ## Repository map
 - `backend/` — Rust workspace, ontology, authorization, HR/payroll substrate, REST application, migrations.
 - `docs/PIVOT-2026-07-28.md` — canonical product and repository truth.
-- `docs/decisions/` — immutable accepted decisions (historical decisions are never rewritten).
+- `docs/decisions/` — accepted decisions plus explicit amendment, supersession, and current-reconciliation history.
 - `docs/program/` — current delivery method and machine-readable registers; historical records are labelled.
 - `scripts/` — executable CI/preflight and verification gates.
 

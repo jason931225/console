@@ -228,14 +228,16 @@ names only, not incidental workflow prose or runner setup text.
 - `test:production-hardening`
 - `test:text-gate`
 
-- **Backend — fmt / clippy / test / gates**: `cargo fmt --all -- --check`,
-  `SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings`,
-  `SQLX_OFFLINE=true cargo test`, ten `console-gate-*` binaries
+- **Domain crates — unit tests**: an explicit, ratchet-checked set of Cargo
+  `--lib`, doctest, and named non-PostgreSQL test targets. This is broad selected
+  reachability, not a claim that one full-workspace `cargo test` runs.
+- **Backend — fmt / clippy / gates**: `cargo fmt --all -- --check`,
+  `SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings`, ten `console-gate-*` binaries
   (`layer-boundary`, `audit-coverage`, `migration-safety`, `tenant-isolation`,
   `pii-no-logs`, `rls-arming`, `dev-auth-absence`, `iac-tier`,
-  `fabricated-branch`, `personal-data-classification`), and three dev-auth
-  feature tests for `console-platform-auth-rest`, `console-app`, and
-  `console-platform-provisioning`.
+  `fabricated-branch`, `personal-data-classification`), their named mutation
+  suites, and the explicitly named PostgreSQL harness targets in this and the
+  dedicated reachability jobs. `check:executed-tests` is the inventory ratchet.
 - **dev-up.mjs smoke — compose deps + migrate + /readyz**:
   the compose contract unit test, PostgreSQL topology integration regression,
   `node scripts/dev-up.mjs bootstrap`, `/readyz` curl, and unconditional
@@ -265,12 +267,15 @@ names only, not incidental workflow prose or runner setup text.
 is an error, including in tests and benches. This also doubles as the offline
 compile check (it fails if the `.sqlx` cache is stale or a query is malformed).
 
-### `cargo test` — workspace tests
+### `cargo test` execution — selected and named inventory
 
-The full workspace suite, including the DB-backed integration tests under
-`backend/app/tests/` and per-crate `tests/`. Requires a `DATABASE_URL` pointing
-at a Postgres database migrated to head (the suite is isolation-safe: tests key
-on fresh UUIDs and do not assert on global counts, so they run in parallel).
+CI does not currently execute a single full-workspace `cargo test`. The
+`Domain crates — unit tests` context runs the selected non-database library,
+doctest, and integration targets enumerated in `.github/workflows/ci.yml`.
+Database-backed suites run through explicitly named disposable-PostgreSQL
+targets, some serialized because they mutate cluster-global roles. The
+`check:executed-tests` ratchet must reject newly dark test roots; neither that
+ratchet nor clippy is represented here as execution of every workspace test.
 
 ### `console-gate-layer-boundary` — clean-architecture + manifest hygiene
 
@@ -420,8 +425,8 @@ excludes, named rather than implied:
   `personal_data_columns()` (migration 0211) reads `('r','p')` scoped
   `nspname = 'public'`. A valid `pd:sensitive/health` marker outside that
   intersection is accepted by the sweep and never reaches
-  `access_log_retention_floor_days()`, which then derives 제8조제1항 본문's 365
-  days where 고시 제2026-9호 제8조제1항제2호 requires 730. Latent today — no
+  `access_log_retention_floor_years()`, which then derives 제8조제1항 본문's 1
+  year where 고시 제2026-9호 제8조제1항제2호 requires 2 years. Latent today — no
   migration creates a materialized view or a foreign table, measured by planting
   one and watching the table count move 282 → 283 — and it under-retains, which
   is the dangerous direction.

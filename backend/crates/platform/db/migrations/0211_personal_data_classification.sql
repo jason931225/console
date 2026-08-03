@@ -845,9 +845,10 @@ COMMENT ON COLUMN audit_events.user_agent IS 'pd:personal — 이용자 단말 �
 --
 -- SOUNDNESS UNDER A PARTIAL CLASSIFICATION. With a non-empty baseline this is a
 -- LOWER BOUND: it can under-report, never over-report. Under-retention is the
--- legally dangerous direction and 730 is the ceiling, so once a single
--- 고유식별정보 or 민감정보 column is classified the answer is already at the
--- ceiling and further classification cannot move it down. That is why a partial
+-- legally dangerous direction and two years is the higher tier in this
+-- derivation, so once a single 고유식별정보 or 민감정보 column is classified the
+-- answer is already at that tier and further classification cannot move it
+-- down. That is why a partial
 -- rollout is safe for this obligation and would not be safe for a destruction
 -- schedule.
 --
@@ -930,7 +931,7 @@ COMMENT ON FUNCTION personal_data_columns() IS
     'Each row is a column carrying a pd: marker and its token list. Records what '
     'a column holds; asserts nothing about whether any obligation is met.';
 
-CREATE OR REPLACE FUNCTION access_log_retention_floor_days()
+CREATE OR REPLACE FUNCTION access_log_retention_floor_years()
 RETURNS INTEGER
 LANGUAGE sql
 STABLE
@@ -947,35 +948,32 @@ AS $$
                  LATERAL unnest(pdc.tokens) AS token
             WHERE token = 'unique-id' OR token LIKE 'unique-id/%'
                OR token = 'sensitive' OR token LIKE 'sensitive/%'
-        ) THEN 730
-        ELSE 365
+        ) THEN 2
+        ELSE 1
     END;
 $$;
 
-COMMENT ON FUNCTION access_log_retention_floor_days() IS
-    '접속기록 보관 기간의 하한(일). 「개인정보의 안전성 확보조치 기준」 '
+COMMENT ON FUNCTION access_log_retention_floor_years() IS
+    '접속기록 보관 기간의 하한(원문 단위: 년). 「개인정보의 안전성 확보조치 기준」 '
     '개인정보보호위원회 고시 제2026-9호(발령ㆍ시행 2026-07-01, '
     '행정규칙일련번호 2100000281400) 제8조제1항: 1년 이상, 다만 제2호의 '
-    '고유식별정보 또는 민감정보를 처리하는 경우 2년 이상. 분류가 부분적인 '
-    '동안 이 값은 하한이며 과대 산출되지 않는다. 이 함수는 의무 이행 여부를 '
-    '주장하지 않는다.';
+    '고유식별정보 또는 민감정보를 처리하는 경우 2년 이상. 법문이 년 단위이므로 '
+    '고정 일수로 환산하지 않는다. 분류가 부분적인 동안 이 값은 하한이며 과대 '
+    '산출되지 않는다. 이 함수는 의무 이행 여부를 주장하지 않는다. '
+    'HR/payroll 개인정보 스키마의 내부 안전성 검증용이며 제품 API가 아니다.';
 
 -- --------------------------------------------------------------------------
 -- Grants. THE REVOKE IS THE LOAD-BEARING HALF.
 --
 -- Both functions are SECURITY DEFINER, and PostgreSQL grants EXECUTE on a new
 -- function to PUBLIC by default. Without the REVOKE below, every role in the
--- cluster could already run them and the GRANT would be decoration -- a test
--- asserting that `console_rt` may execute would pass no matter what the grants
--- said, and prove nothing. `console_rt` must reach these because the route in
--- `console-compliance-rest` runs as that role; nobody else needs them.
+-- cluster could run them. They are internal schema-safety introspection for the
+-- in-scope HR/payroll substrate, not a compliance product surface, so the
+-- runtime role receives no grant.
 --
 -- Proved by `personal_data_classification.rs`, which drives a freshly created
--- role holding no grant at all into `42501 insufficient_privilege` and only
--- then asserts `console_rt` succeeds. A test that cannot fail is not evidence.
+-- role and `console_rt` into `42501 insufficient_privilege`; owner-privileged
+-- derivation tests elsewhere in that file still exercise the functions.
 -- --------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION personal_data_columns() FROM PUBLIC;
-REVOKE ALL ON FUNCTION access_log_retention_floor_days() FROM PUBLIC;
-
-GRANT EXECUTE ON FUNCTION personal_data_columns() TO console_rt;
-GRANT EXECUTE ON FUNCTION access_log_retention_floor_days() TO console_rt;
+REVOKE ALL ON FUNCTION access_log_retention_floor_years() FROM PUBLIC;

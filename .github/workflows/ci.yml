@@ -280,7 +280,7 @@ jobs:
             -p console-payroll-rest -p console-platform-email -p console-platform-jobs \
             -p console-platform-push -p console-platform-realtime -p console-platform-request-context \
             -p console-production-rest -p console-reporting-adapter-postgres -p console-support-adapter-postgres \
-            -p console-kernel-core \
+            -p console-kernel-core -p console-registry-rest -p console-reporting-rest \
             -p console-workflow-runtime-adapter-postgres -p console-workorder-rest \
             -p console-financial-domain -p console-identity-application -p console-integrity \
             -p console-platform-auth -p console-platform-authz-rest -p console-workflow-runtime

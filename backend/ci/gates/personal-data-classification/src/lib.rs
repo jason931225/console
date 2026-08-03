@@ -124,9 +124,9 @@
 //!   `personal_data_columns()` (0211:887) takes `('r','p')` scoped
 //!   `nspname = 'public'`. So a valid `pd:sensitive/health` marker on a
 //!   materialized view, a foreign table, or any non-`public` schema is accepted
-//!   by the sweep and never seen by `access_log_retention_floor_days()`, which
-//!   then derives 제8조제1항 본문's 365 days where 고시 제2026-9호 제8조제1항제2호
-//!   requires 730. Latent today — no migration creates a materialized view or a
+//!   by the sweep and never seen by `access_log_retention_floor_years()`, which
+//!   then derives 제8조제1항 본문's 1 year where 고시 제2026-9호 제8조제1항제2호
+//!   requires 2 years. Latent today — no migration creates a materialized view or a
 //!   foreign table, measured by planting one and watching the table count move
 //!   282 → 283 — and it under-retains, which is the dangerous direction.
 //! * **A relation created at RUNTIME rather than by a migration.** Neither

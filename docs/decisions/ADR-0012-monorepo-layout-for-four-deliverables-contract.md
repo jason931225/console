@@ -13,6 +13,13 @@ related: [ADR-0009]
 ## Status
 Accepted (consensus-approved plan §2.1).
 
+**Current reconciliation, 2026-08-03.** The React, Swift, Kotlin, and generated-client trees named
+below were removed by the canonical pivot. Required CI contexts now run without workflow path
+filters so every protected context is created on every pull request; selected Cargo packages and
+named integration targets provide the executable inventory. No accepted ADR amends this record's
+four-deliverable or path-filter clauses, so they remain accepted but divergent from HEAD under
+authority rule 6. This note records the gap; it does not silently withdraw those clauses.
+
 ## Context
 Four deliverables (Rust backend, React web, Swift iOS, Kotlin Android) must stay in lockstep with one API contract; the consensus Architect steelmanned polyrepo-with-published-contract seriously (macOS CI runners tax on every PR).
 

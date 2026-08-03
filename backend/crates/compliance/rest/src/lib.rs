@@ -45,7 +45,6 @@ pub const COMPLIANCE_ROUTE_PATHS: &[&str] = &[
     "/api/v1/compliance/control-obligation-coverage",
     "/api/v1/compliance/evidence-bindings",
     "/api/v1/compliance/evidence-bindings/{id}/accept",
-    "/api/v1/compliance/personal-data/access-log-retention-floor",
     "/api/v1/location-consent/status",
     "/api/v1/location-consent/grant",
     "/api/v1/location-consent/suspend",
@@ -110,10 +109,6 @@ pub fn router(state: ComplianceRestState) -> Router {
         .route(
             "/api/v1/compliance/evidence-bindings/{id}/accept",
             post(accept_evidence_binding),
-        )
-        .route(
-            "/api/v1/compliance/personal-data/access-log-retention-floor",
-            get(get_access_log_retention_floor),
         )
         .route("/api/v1/location-consent/status", get(get_status))
         .route("/api/v1/location-consent/grant", post(grant_consent))
@@ -423,64 +418,6 @@ fn require_obligation_scope_manage(
         );
     }
     require_compliance_manage(principal)
-}
-
-/// The 접속기록 retention floor implied by the field-level personal-data
-/// classification, with the citation it rests on and the counts that produced
-/// it.
-///
-/// `compliance_assertion` is deliberately a constant string and deliberately
-/// negative. A response that reported only a number would be read as a verdict.
-#[derive(Debug, Serialize)]
-struct AccessLogRetentionFloorResponse {
-    floor_days: i32,
-    classified_columns: i64,
-    unique_id_columns: i64,
-    sensitive_columns: i64,
-    basis: &'static str,
-    instrument: &'static str,
-    article: &'static str,
-    effective_date: &'static str,
-    administrative_rule_serial: &'static str,
-    derivation_is_lower_bound: bool,
-    compliance_assertion: &'static str,
-}
-
-/// Report the 접속기록 retention floor derived from the schema's own
-/// personal-data classification.
-///
-/// This is a read of a DERIVED value, not a measurement of practice: nothing in
-/// this codebase observes how long access logs are actually retained, so this
-/// endpoint states what the classification implies and nothing more. Every
-/// Korea compliance control remains on HOLD.
-async fn get_access_log_retention_floor(
-    State(state): State<ComplianceRestState>,
-    headers: HeaderMap,
-) -> Result<Json<AccessLogRetentionFloorResponse>, RestError> {
-    let principal = principal_from_headers(&state, &headers).await?;
-    require_compliance_read(&principal)?;
-    let floor = state
-        .store
-        .access_log_retention_floor()
-        .await
-        .map_err(RestError::from_store)?;
-    Ok(Json(AccessLogRetentionFloorResponse {
-        floor_days: floor.floor_days,
-        classified_columns: floor.classified_columns,
-        unique_id_columns: floor.unique_id_columns,
-        sensitive_columns: floor.sensitive_columns,
-        basis: "고유식별정보 또는 민감정보를 처리하는 개인정보처리시스템은 2년 이상, \
-                그 밖에는 1년 이상",
-        instrument: "개인정보의 안전성 확보조치 기준 (개인정보보호위원회 고시 제2026-9호)",
-        article: "제8조제1항",
-        effective_date: "2026-07-01",
-        administrative_rule_serial: "2100000281400",
-        derivation_is_lower_bound: true,
-        compliance_assertion: "none — this reports what the field-level classification implies. \
-                               It does not measure actual retention, does not assert that any \
-                               statutory obligation is met, and moves no compliance control off \
-                               HOLD.",
-    }))
 }
 
 async fn list_regulations(

@@ -116,8 +116,8 @@ test("foundation gate rejects a nonexistent package command in the live CI runbo
 test("foundation gate executes the structural security-workflow hardening gate", () => {
   withReplacedContractText(
     ".github/workflows/security.yml",
-    '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071',
-    '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071 || true',
+    '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" audit --ignore RUSTSEC-2023-0071',
+    '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" audit --ignore RUSTSEC-2023-0071 || true',
     () => {
       const result = runChecker();
       assert.notEqual(result.status, 0);

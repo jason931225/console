@@ -19,9 +19,9 @@
 //! branches, so `allows` is true on every iteration. The branch dimension does not
 //! fail loudly — it disappears silently.
 //!
-//! This pattern was copy-pasted into 18 production helpers across 18 crates, and
-//! one of them documented it as correct and cited another as precedent. A doc
-//! comment is what already failed; hence a gate.
+//! This pattern was copy-pasted across production helpers, and one of them
+//! documented it as correct and cited another as precedent. A doc comment is
+//! what already failed; hence a gate.
 //!
 //! # READ THIS BEFORE TRUSTING A GREEN
 //!
@@ -100,35 +100,6 @@
 use std::path::{Path, PathBuf};
 use std::{collections::BTreeSet, fs};
 
-/// Paths whose fabrications belong to a lane that owns them and are handed off
-/// rather than fixed here. Each entry is a debt: delete it when that lane lands.
-const HANDED_OFF: &[(&str, &str)] = &[
-    (
-        "crates/reporting/rest/src/lib.rs",
-        "reporting lane: KpiScope::Branch already passes a real branch; the \
-         Company/Region/Technician scopes want authorize_capability",
-    ),
-    (
-        "crates/registry/rest/src/lib.rs",
-        "registry lane: the fabricating helpers at :1929 and :1985 — \
-         registry_equipment/customers/sites all carry a NOT NULL branch_id, so \
-         thread the real scope, do not make it branch-less. \
-         `principal_create_branch` (:713) is a default-branch pick for row \
-         CREATION and never reaches authorize; it wants a \
-         `// fabricated-branch: ok` marker, not a fix. It is unflagged today only \
-         because this entry skips the whole file, which is exactly why the entry \
-         must be deleted rather than left to rot.",
-    ),
-    (
-        "app/src/hr.rs",
-        "HR lane: authorize_hr_scoped's .iter().any(|b| authorize(..).is_ok()) is \
-         the same tautology. `employees` DOES have a branch column — \
-         `home_branch_id` (migration 0166, FK to branches(id, org_id)) — so \
-         whether these sites are branch-less or want that column threaded is the \
-         HR lane's call, not an assumption this entry may make for it",
-    ),
-];
-
 /// Inline escape hatch for a representative branch that never feeds `authorize`.
 const MARKER: &str = "fabricated-branch: ok";
 
@@ -196,17 +167,9 @@ pub fn check_source_tree(root: &Path) -> Result<GateResult, String> {
         let source = fs::read_to_string(&file)
             .map_err(|e| format!("cannot read {}: {e}", file.display()))?;
         result.files_scanned += 1;
-        if is_handed_off(&file) {
-            continue;
-        }
         check_source_file(&file, &source, &mut result);
     }
     Ok(result)
-}
-
-fn is_handed_off(file: &Path) -> bool {
-    let path = file.to_string_lossy().replace('\\', "/");
-    HANDED_OFF.iter().any(|(suffix, _)| path.ends_with(suffix))
 }
 
 fn check_source_file(file: &Path, source: &str, result: &mut GateResult) {

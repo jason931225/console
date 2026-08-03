@@ -6901,7 +6901,9 @@
   },
   "provenance": {
     "authority_base_sha": "8e42b9a2ea42c4d79ed498044a9f50f623299f7f",
+    "authority_base_ref": "refs/tags/v0.2.1",
     "historical_implementation_freeze_sha": "78cb5197927a031ead30c6dc0426c23455d3cb16",
+    "historical_implementation_freeze_ref": "refs/tags/archive/pre-pivot-implementation-freeze-2026-07-24",
     "candidate_evidence_status": "HOLD: P0 structure is current; no module completion claim is admitted."
   },
   "design_reference": {

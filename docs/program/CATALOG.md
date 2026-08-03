@@ -9,6 +9,12 @@
 >
 > Status: **prep artifact.** Not authority. The reference implementation (Company + OrgUnit) does not exist yet;
 > until it does, every rule here is provisional and the reference wins where they disagree.
+>
+> **Current HOLD (2026-08-03):** the existing `company_conformance` suite is an isolated
+> generic-engine regression over five instance-backed fixtures. It omits Person and does not prove
+> the projected single-writer boundaries this catalog requires for Company, Person, Employment, or
+> PayRun. It must not be frozen or used as a product/fan-out target. Replacement conformance and
+> projection work wait for explicit owning-port contracts.
 
 ## The one rule that matters
 
@@ -63,14 +69,16 @@ Scope boundary is load-bearing: **org, employee, HR, payroll. That's it.**
 
 | # | Type | Backing | Notes |
 |---|---|---|---|
-| 1 | **Company** | `Projected` | projects existing organization truth; part of **the reference implementation** — built by hand, exceptionally well; every later type transliterates from it and reviewers check fidelity *against it* |
-| 2 | **OrgUnit** | `Instance` | reference type; links to Company |
-| 3 | **JobPosition** | `Instance` | links to OrgUnit (`OneMany`); the seat, distinct from its occupant |
+| 1 | **Company** | `Projected` | planned projection of existing organization truth; owning port and conformance are not yet designed — **HOLD** |
+| 2 | **OrgUnit** | `Instance` | proposed reference type linked to Company — **HOLD** until Company projection is defined |
+| 3 | **JobPosition** | `Instance` | proposed link to OrgUnit (`OneMany`); the seat, distinct from its occupant — **HOLD** |
 | 4 | Person | `Projected` | projects existing employee truth; no platform-party auto-linking |
 | 5 | Employment | `Projected` | canonical HR application writer; Person × JobPosition over time |
 | 6 | PayRun | `Projected` | existing payroll writer; period-scoped, derived from Employment + attendance |
 
-JobPosition is the bounded two-lane pilot. Person, Employment, and PayRun remain domain-owned projected writers and are not generic fan-out work. Expansion waits for `company_conformance` and proof of zero overlapping writes.
+Person, Employment, and PayRun remain domain-owned projected writers and are not generic fan-out
+work. All expansion is HOLD until replacement product conformance plus explicit owning ports prove
+zero overlapping writes; the existing `company_conformance` suite cannot satisfy that condition.
 
 ## Anti-patterns (each has already cost this repo)
 

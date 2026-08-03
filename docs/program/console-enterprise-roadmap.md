@@ -16,15 +16,27 @@ Land disjoint lanes for ResourceBranch/branchless capability APIs and ADR-0032 t
 
 ## Wave 2 — engine and organization reference
 
-Use one validation path for true preflight and atomic execute. Hand-build Company and OrgUnit, freeze `company_conformance`, pilot JobPosition and projection work in two non-overlapping lanes, add the six-type aggregate read model, and complete contracts/OpenAPI cutover.
+Use one validation path for true preflight and atomic execute. Retain `company_conformance` only as
+an isolated generic-engine regression: its instance-backed fixtures omit Person and are not the
+Company/HR product target. A replacement conformance target, Company projection, and any
+JobPosition fan-out remain HOLD until Company, Person, Employment, and PayRun each have an explicit
+owning port and a proven single-writer boundary. Complete the contracts/OpenAPI cutover without
+inventing those projection contracts.
 
 ## Wave 3 — operational HR
 
-Create the canonical HR assignment writer for appointment, promotion, and transfer. Close/open assignment and grant intervals at the same effective instant; preserve deterministic identity, replay, conflict, revision, audit, receipt, nondisclosure, and no-mutation preflight behavior. `orgchange` invokes HR ports and never writes assignment truth.
+After the projected ownership contracts above are accepted, create the canonical HR assignment
+writer for appointment, promotion, and transfer. Close/open assignment and grant intervals at the
+same effective instant; preserve deterministic identity, replay, conflict, revision, audit,
+receipt, nondisclosure, and no-mutation preflight behavior. `orgchange` invokes HR ports and never
+writes assignment truth.
 
 ## Wave 4 — payroll
 
-Project the existing payroll writer as PayRun. Consume versioned employment/attendance inputs and preserve deterministic rounding, golden cases, immutable receipts, and payslip drafts. Payment execution and compliance claims remain excluded.
+After the PayRun owning-port contract is accepted, project the existing payroll writer without a
+second write path. Consume versioned employment/attendance inputs and preserve deterministic
+rounding, golden cases, immutable receipts, and payslip drafts. Payment execution and compliance
+claims remain excluded.
 
 ## Wave 5 — Leptos
 

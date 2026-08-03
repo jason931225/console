@@ -182,6 +182,11 @@ const domainUnitPackages = [
   "console-reporting-adapter-postgres",
   "console-support-adapter-postgres",
   "console-kernel-core",
+  // Added 2026-08-03: the consolidation changed authorization decisions in these
+  // REST libraries. Their pure unit tests must remain part of the protected job,
+  // rather than becoming implementation-specific tests that exist but never run.
+  "console-registry-rest",
+  "console-reporting-rest",
   "console-workflow-runtime-adapter-postgres",
   "console-workorder-rest",
   "console-financial-domain",
@@ -718,7 +723,7 @@ const requiredJobRunContracts = Object.freeze({
     proofRun("Workflow test-runner credential literals", "npm run check:test-credentials"),
   ],
   "domain-unit": [
-    proofDigest("Domain crate unit tests", "bb0a4851f7e33d6657971c8b136952cc5ea1aeddb29031c092faa874a750b8ab"),
+    proofDigest("Domain crate unit tests", "5a1888f6a67b92f3448b4a5e532170a3eb53bf1f12679a755670235d764d1edc"),
   ],
   backend: [
     setupRun("Install pinned DotSlash runtime", "../tools/buck/install_dotslash.sh"),

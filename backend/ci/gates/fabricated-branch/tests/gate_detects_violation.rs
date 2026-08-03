@@ -225,6 +225,56 @@ fn gate_errors_when_it_walked_zero_rust_files() -> Result<(), Box<dyn std::error
     Ok(())
 }
 
+/// A production file may never disappear behind a path-wide handoff. These are
+/// the three exact suffixes that were once excluded while still being counted as
+/// scanned; planting the known shape at each suffix proves the scanner actually
+/// opens every one of them.
+#[test]
+fn gate_scans_every_formerly_excluded_production_path() -> Result<(), Box<dyn std::error::Error>> {
+    let ws = temp_workspace("former-path-exclusions")?;
+    let fabrication = r#"
+fn authorize_feature(principal: &Principal, feature: Feature) -> Result<(), RestError> {
+    let branch = match &principal.branch_scope {
+        BranchScope::All => BranchId::new(),
+        BranchScope::Branches(branches) => branches.iter().next().copied().unwrap(),
+    };
+    authorize(principal, Action::new(feature), branch).map_err(RestError::from_kernel)
+}
+"#;
+    for suffix in [
+        "crates/reporting/rest/src/lib.rs",
+        "crates/registry/rest/src/lib.rs",
+        "app/src/hr.rs",
+    ] {
+        write_file(&ws.join(suffix), fabrication)?;
+    }
+
+    let result = check_source_tree(&ws)?;
+    assert_eq!(result.files_scanned, 3);
+    assert_eq!(
+        result
+            .violations
+            .iter()
+            .filter(|violation| violation.kind == ViolationKind::FabricatedAllArm)
+            .count(),
+        3,
+        "every former path exclusion must be scanned: {:#?}",
+        result.violations
+    );
+    assert_eq!(
+        result
+            .violations
+            .iter()
+            .filter(|violation| violation.kind == ViolationKind::TautologicalBranchesArm)
+            .count(),
+        3,
+        "every former path exclusion must reject the principal-member pick: {:#?}",
+        result.violations
+    );
+    fs::remove_dir_all(&ws)?;
+    Ok(())
+}
+
 /// The migrated shape must be clean, or the gate would block its own fix.
 #[test]
 fn gate_passes_the_migrated_capability_shape() -> Result<(), Box<dyn std::error::Error>> {

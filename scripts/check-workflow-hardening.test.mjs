@@ -180,8 +180,13 @@ test("locks each required context's executable proof rather than matching retain
     ],
     [
       "cargo-audit masking",
+      '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" audit --ignore RUSTSEC-2023-0071',
+      '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" audit --ignore RUSTSEC-2023-0071 || true',
+    ],
+    [
+      "cargo-audit direct-binary subcommand deletion",
+      '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" audit --ignore RUSTSEC-2023-0071',
       '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071',
-      '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071 || true',
     ],
     [
       "cargo-deny retained as echo text",
@@ -252,7 +257,7 @@ test("rejects candidate-controlled setup shims, missing checksums, lifecycle scr
   rejected(
     replaceOnce(
       workflow,
-      '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071',
+      '          "${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" audit --ignore RUSTSEC-2023-0071',
       "          cargo audit --ignore RUSTSEC-2023-0071",
     ),
     "root Cargo audit alias",

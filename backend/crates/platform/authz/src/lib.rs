@@ -161,8 +161,11 @@ pub enum Feature {
     AuditLogRead,
     ExcelDownload,
     /// Read the per-tenant operational dashboard (work-order funnel, SLA risk,
-    /// utilization, equipment/substitution rollups). SUPER_ADMIN / ADMIN only —
-    /// it surfaces an org-wide operational picture.
+    /// utilization, equipment/substitution rollups). The current route is an
+    /// org-wide picture with no branch filter and therefore also passes through
+    /// `authorize_org_wide`; that makes SUPER_ADMIN the only built-in role that
+    /// satisfies both gates. The ADMIN matrix cell is retained for a future
+    /// branch-filtered projection, not authority over today's tenant-wide route.
     OpsDashboardRead,
     /// Manage the public sales catalog (#6 지게차 매매): create/update/withdraw
     /// used-forklift listings and triage inbound customer inquiries. ADMIN tier.

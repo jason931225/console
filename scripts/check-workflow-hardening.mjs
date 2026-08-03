@@ -125,7 +125,7 @@ const REQUIRED_SECURITY_JOBS = Object.freeze({
         "working-directory": "backend",
         run: [
           "printf '%s\\n' 'running cargo audit through the directly installed cargo-audit binary'",
-          '"${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" --ignore RUSTSEC-2023-0071',
+          '"${RUNNER_TEMP}/cargo-security-tools/bin/cargo-audit" audit --ignore RUSTSEC-2023-0071',
         ].join("\n"),
       },
     ],

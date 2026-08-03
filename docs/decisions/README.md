@@ -1,11 +1,13 @@
 # Architecture decision records
 
-This directory is the local decision authority for Maintenance. The index is reviewed against `origin/main` and must be updated atomically with every ADR status, identity, amendment, or supersession change.
+This directory is the local decision authority for Console within the product boundary fixed by
+[`docs/PIVOT-2026-07-28.md`](../PIVOT-2026-07-28.md). The index is reviewed against `origin/main` and
+must be updated atomically with every ADR status, identity, amendment, or supersession change.
 
 ## Authority rules
 
-1. An **accepted** local ADR is authoritative within its stated scope.
-2. Only another **accepted** local ADR may amend or supersede it.
+1. An **accepted** local ADR is authoritative within its stated scope. It applies only when consistent with the canonical pivot.
+2. Within the ADR set, only another **accepted** local ADR may amend or supersede it.
 3. A later number does not win automatically. Amendment or supersession must be explicit in both records.
 4. `proposed`, `draft`, `design-note`, plan, prototype, and DARK material cannot supersede an accepted ADR.
 5. Sibling-project records must be namespaced (for example, `oyatie ADR-0240`). They are references until a local accepted ADR adopts a specific rule.
@@ -65,7 +67,7 @@ related: []
 | [ADR-0034](ADR-0034-delegation-of-authority-routing.md) | accepted | 전결규정 routing as a delta on ADR-0023's approval-line model: routing is a lookup that may resolve above, laterally or below the raising unit; competence is a third relation beside control and structure; a signature records the capacity it was made under |
 | [ADR-0035](ADR-0035-conserved-quantity-lineage.md) | accepted | Quantity-bearing split/merge lineage deferred; conservation requires row-level `FOR UPDATE` locking and a pure domain predicate, and the row CHECK is a per-row backstop only |
 | [ADR-0036](ADR-0036-object-dimensioned-economics.md) | accepted | Cost is a query over the double-entry voucher dimensioned by object reference; the finance subsystem is a peer plan, and the missing line dimension, `accounting_date` + period-lock caller, account master, and currency shape must stay additive |
-| [ADR-0037](ADR-0037-erasure-versus-pitr-conflict.md) | proposed, question only | Names the conflict between ADR-0014's shipped destruction paths and ADR-0015's restore to an arbitrary timestamp over an archive with no retention policy, prices crypto-shredding, a shortened window, a segregated store and an accepted conflict against that proof, and routes the choice to privacy counsel — distinct from the 노무사/세무사 payroll sign-off; decides nothing and asserts no Korean legal conclusion |
+| [ADR-0037](ADR-0037-erasure-versus-pitr-conflict.md) | proposed, question only | Names the conflict between ADR-0014's shipped destruction paths and ADR-0015's restore capability over the live 35-day restorable window, prices crypto-shredding, a shorter window, a segregated store and an accepted conflict against that proof, and routes the choice to privacy counsel — distinct from the 노무사/세무사 payroll sign-off; decides nothing and asserts no Korean legal conclusion |
 | [ADR-0038](ADR-0038-location-erasure-unlogged-then-crypto-shred.md) | proposed, mechanism for one data class | Decides HOW 개인위치정보 is erased, where ADR-0037 only names the conflict: declare `location_pings` UNLOGGED so coordinates never enter the WAL, base backups or standbys; run the never-called `purge_expired_location_data`; then envelope-encrypt per subject in a gated phase 2. Places the segregation boundary at `relpersistence` rather than a second cluster, which keeps the outbound RESTRICT foreign keys, FORCE-RLS enrolment, five org-removal deletes and single-transaction consent withdrawal intact. Retracts its own draft's collapse-to-one-row-per-subject after its falsification test found dispatch eligibility reads a time window. Asserts no Korean legal conclusion |
 | [ADR-0039](ADR-0039-one-graph-tests-run-by-existing.md) | proposed | Proposes replacing hand-maintained test-registration lists with Cargo/nextest workspace discovery, while retaining credential refusal and serializing only cluster-global tests; grants no authority unless accepted |
 

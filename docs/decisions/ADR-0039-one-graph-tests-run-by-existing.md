@@ -12,6 +12,15 @@ related: [ADR-0037, ADR-0038]
 
 **Status:** Proposed · **Date:** 2026-08-02 · **Supersedes:** nothing · **Relates to:** ADR-0037, ADR-0038
 
+> **Measurement boundary and current disposition (2026-08-03).** Quantities and failure examples in
+> this proposal describe the pre-consolidation snapshot measured on 2026-08-02; they are not
+> present-tense claims about HEAD. Since that measurement,
+> `//tools/buck:equipment-3r-http-postgres` has been restored,
+> `check-executed-tests.mjs` discovers JavaScript suites and `#[cfg(test)]` modules throughout crate
+> `src/` trees and fails closed when a target root is missing, and `tools/lanes/pgtest.sh` refuses
+> credentials in argv. Those repairs close the named immediate holes. The proposed Cargo/nextest
+> convergence remains a future simplification and grants no authority while this ADR is proposed.
+
 ## The obligation this is anchored to
 
 Not a statute — a measured defect. Commit `2340fa99c` (#550) spent **1,847 lines of registration** to
@@ -33,7 +42,7 @@ A cost that scales with the thing you most want to do is not a cost, it is a bra
 
 ## The defect is not Buck2. It is hand-maintained cross-file agreement.
 
-Three lists must agree today, and **they already do not**:
+At the proposal snapshot, three lists had to agree, and **they did not**:
 
     .github/workflows/ci.yml         184 `//tools/buck:` names
     scripts/check-ci-preflight.mjs   185 `//tools/buck:` names
@@ -83,7 +92,7 @@ test-group = 'cluster-global'
   run: tools/lanes/pgtest.sh "$PWD" cargo nextest run --workspace
 ```
 
-Today the same property is bought with `--num-threads=1` at four sites in `ci.yml:345,564,928,966`,
+At the proposal snapshot the same property was bought with `--num-threads=1` at four sites in CI,
 which serialises **every** test in the job to protect **six files**. That is why one job takes 41
 minutes. A `test-group` serialises the six and leaves the rest parallel.
 
@@ -104,10 +113,10 @@ provisions and drops a database per test. That was never Buck2's contribution.
 
 `scripts/check-executed-tests.mjs` is **deleted, not extended.**
 
-Today it measures one of three populations — it tracks `tests/*.rs` crate roots, is blind to
-`.test.mjs` suites (19 of 28 dark) and to `#[cfg(test)]` inside `src/` (which hid 43 `kernel-core`
-tests that had never run while 152 crates depended on it), and it **fails open** at line 117:
-`if (root) executed.set(...)` with no `else`.
+At the proposal snapshot it measured one of three populations: it tracked `tests/*.rs` crate roots,
+was blind to `.test.mjs` suites and to `#[cfg(test)]` inside `src/`, and failed open when a target
+root was absent. Those implementation defects are now fixed as recorded in the reconciliation
+above; they remain historical evidence for why duplicated inventories are risky, not current bugs.
 
 Under `--workspace` there is no set of executed tests distinct from the set of tests. The question the
 gate answers stops being askable.
@@ -132,11 +141,11 @@ In each case the fix was not a better detector. It was removing the condition th
 - **Compile time is unchanged.** This ADR claims no wall-clock win from the build system. The win is
   the 41-minute job becoming parallel except for six files, and 1,847 lines of registration not being
   written next time.
-- **One control must be re-homed before anything is deleted.**
+- **One control had to be re-homed before anything could be deleted.**
   `tools/buck/test_needs_postgres.sh:26` exits 2 when handed a raw `//backend/...` target, forcing
-  credentials through a 0600 env file instead of argv. `tools/lanes/pgtest.sh` provides the disposable
-  container and per-run random passwords but not the refusal. **The refusal is the deliverable of
-  step 1 and no Buck2 file is deleted until it exists.**
+  credentials through a 0600 env file instead of argv. `tools/lanes/pgtest.sh` now sources
+  `no-credential-in-argv.sh` before creating its disposable container, so this step-1 safety
+  prerequisite is met. **No Buck2 file is deleted merely because that prerequisite landed.**
 - **Dependency-direction enforcement does not change.** `backend/ci/gates/layer-boundary/` (839 src
   lines) keeps doing it. Buck2's `within_view` would have been a better mechanism — a load-time
   refusal rather than an after-the-fact judgement — but it has **zero occurrences** in this repository

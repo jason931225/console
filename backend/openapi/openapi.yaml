@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Maintenance FSM Backend API
+  title: Console API
   version: 0.1.0
 paths:
   /healthz:
@@ -706,7 +706,8 @@ paths:
       summary: Per-tenant operational dashboard rollup
       description: 'Point-in-time operational rollup for the authenticated tenant: work-order funnel counts by stage, aging
         work orders, P1 SLA risk, mechanic utilization, equipment-status distribution, active substitutions, pending approvals,
-        and open support tickets. Authorized for SUPER_ADMIN / ADMIN; every read is org-scoped under RLS.'
+        and open support tickets. The current unfiltered tenant-wide view requires org-wide authority (SUPER_ADMIN for built-in
+        roles); every read is org-scoped under RLS. Branch-scoped ADMIN principals are denied until the query itself is branch-filtered.'
       security:
       - bearerAuth: []
       responses:
@@ -1640,8 +1641,9 @@ paths:
         - equipment
       operationId: importEquipmentMasterList
       summary: Import the 지게차 master-list workbook into a fresh registry
-      description: Admin-gated (MasterListImport) multipart upload of the K&L master-list .xlsx. Upserts equipment by equipment
-        number and returns a created/updated/error summary.
+      description: Org-wide-authority-gated (SUPER_ADMIN for built-in roles; MasterListImport) multipart upload of the K&L
+        master-list .xlsx. The importer writes the tenant HQ master and therefore denies branch-scoped ADMIN principals. Upserts
+        equipment by equipment number and returns a created/updated/error summary.
       security:
       - bearerAuth: []
       requestBody:
@@ -2123,8 +2125,17 @@ paths:
                   $ref: '#/components/schemas/Uuid'
                 branch_id:
                   $ref: '#/components/schemas/Uuid'
+                  description: >-
+                    Optional consistency assertion only. It must match the
+                    durable branch derived from the named absence alert, the
+                    employee home branch, or the latest attendance fact. It
+                    never assigns or overrides authorization; a mismatch is 404.
                 absence_alert_id:
                   $ref: '#/components/schemas/Uuid'
+                  description: >-
+                    Optional durable absence signal. When supplied, it must
+                    exist for this exact employee or the request is 404; its
+                    stored branch takes precedence in branch authorization.
                 effective_exit_date:
                   type: string
                 site_manager_note:
@@ -3329,41 +3340,6 @@ paths:
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalServerError' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
-  /api/v1/compliance/personal-data/access-log-retention-floor:
-    get:
-      tags:
-        - compliance
-      operationId: getAccessLogRetentionFloor
-      summary: Read the access-log retention floor derived from the field-level personal-data classification
-      description: >-
-        Reports the 접속기록 retention floor implied by the personal-data
-        classification recorded on the database columns themselves, together
-        with the instrument it rests on. 730 days when any classified column
-        carries a 고유식별정보 or 민감정보 token, otherwise 365 —
-        「개인정보의 안전성 확보조치 기준」 (개인정보보호위원회 고시 제2026-9호,
-        발령ㆍ시행 2026-07-01) 제8조제1항.
-
-
-        This is a DERIVED value, not a measurement: nothing observes how long
-        access logs are actually retained. The response asserts no compliance
-        with any statutory obligation and moves no compliance control off HOLD.
-        While the classification is partial the value is a lower bound — it can
-        under-report and never over-report.
-      security:
-      - bearerAuth: []
-      responses:
-        '200':
-          description: Derived retention floor with its citation and the counts that produced it.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccessLogRetentionFloor'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
   /api/v1/location-consent/status:
     get:
       tags:
@@ -24954,76 +24930,6 @@ components:
       - GRANTED
       - SUSPENDED
       - WITHDRAWN
-    AccessLogRetentionFloor:
-      type: object
-      description: >-
-        The 접속기록 retention floor DERIVED from the field-level personal-data
-        classification held on the database columns, with the instrument it
-        rests on and the counts that produced it. Records what the
-        classification implies; asserts no compliance.
-      required:
-      - floor_days
-      - classified_columns
-      - unique_id_columns
-      - sensitive_columns
-      - basis
-      - instrument
-      - article
-      - effective_date
-      - administrative_rule_serial
-      - derivation_is_lower_bound
-      - compliance_assertion
-      properties:
-        floor_days:
-          type: integer
-          format: int32
-          description: >-
-            Minimum 접속기록 retention in days implied by the classification.
-            730 when any classified column carries a 고유식별정보 or 민감정보
-            token, otherwise 365.
-          enum: [365, 730]
-        classified_columns:
-          type: integer
-          format: int64
-          description: Columns carrying any personal-data classification marker.
-        unique_id_columns:
-          type: integer
-          format: int64
-          description: Columns classified 고유식별정보 (개인정보 보호법 제24조제1항).
-        sensitive_columns:
-          type: integer
-          format: int64
-          description: >-
-            Columns classified 민감정보 (개인정보 보호법 제23조제1항). Carried
-            separately from unique_id_columns because 고시 제8조제1항제2호 reads
-            고유식별정보 OR 민감정보, and a floor firing only on the former
-            under-retains.
-        basis:
-          type: string
-          description: The operative rule, quoted.
-        instrument:
-          type: string
-          description: Instrument name and version.
-        article:
-          type: string
-          description: Article the floor rests on.
-        effective_date:
-          type: string
-          format: date
-          description: 시행일자 of the cited instrument.
-        administrative_rule_serial:
-          type: string
-          description: 행정규칙일련번호 on the official legislation portal.
-        derivation_is_lower_bound:
-          type: boolean
-          description: >-
-            True while the classification is partial: the value can under-report
-            and never over-report.
-        compliance_assertion:
-          type: string
-          description: >-
-            Always states that no compliance is asserted. Present so a caller
-            cannot read the number alone as a verdict.
     LocationConsentStatus:
       type: object
       required:
