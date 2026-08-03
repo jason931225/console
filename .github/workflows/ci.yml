@@ -154,6 +154,9 @@ jobs:
       - name: Console PR authority bootstrap regression
         run: node --test scripts/console/verify-console-pr-authority-bootstrap.test.mjs
 
+      - name: Executed-tests baseline set regression
+        run: npm run test:executed-tests-baseline
+
       - name: Local CI mirror contract
         run: node --test scripts/verify.test.mjs
 
@@ -177,6 +180,16 @@ jobs:
 
       - name: Cargo.lock consistency
         run: cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null
+
+      # Moved here from repo-gates, which has npm and no Rust: the ratchet now
+      # resolves `cargo metadata` as well as the BUCK graph, so it has to run
+      # where cargo does. The step above it is `cargo metadata` on the same
+      # manifest, and preflight is the only job carrying both toolchains.
+      - name: Executed-tests ratchet — a test binary must have a path from a workflow step
+        run: npm run check:executed-tests
+
+      - name: Test credentials — none may reach argv or a workflow log
+        run: npm run check:test-credentials
 
   domain-unit:
     name: Domain crates — unit tests
@@ -242,6 +255,17 @@ jobs:
         # They need no database (zero #[sqlx::test]), so they belong in this job.
         # Runs the SAME 15 tests as the retired Buck2 target, verified by count.
         # --locked so a drifted Cargo.lock fails rather than silently resolving.
+        #
+        # The last six were added on 2026-08-02, and they are here because
+        # check:executed-tests could not see them until that same change. It asked
+        # whether src/lib.rs itself carried #[cfg(test)], and these crates keep
+        # every one of theirs in src/<module>.rs, so their lib binaries were not
+        # even in the population that can be reported dark. 61 tests that executed
+        # nowhere, all pure, zero #[sqlx::test] — among them workflow/runtime's
+        # `unknown_policy_fails_closed` and `delegated_finalize_denies_when_legacy_guard_denies`,
+        # and platform/auth's two WebAuthn step-up replay-binding cases. The seventh
+        # crate the same measurement exposed, platform/db, is 9 #[sqlx::test] and
+        # needs a database, so it is named in executed-tests-baseline.json instead.
         run: |
           SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml --lib \
             -p console-support-domain -p console-payroll-domain -p console-payroll-adapter-postgres \
@@ -274,7 +298,9 @@ jobs:
             -p console-platform-push -p console-platform-realtime -p console-platform-request-context \
             -p console-production-rest -p console-reporting-adapter-postgres -p console-support-adapter-postgres \
             -p console-kernel-core \
-            -p console-workflow-runtime-adapter-postgres -p console-workorder-rest
+            -p console-workflow-runtime-adapter-postgres -p console-workorder-rest \
+            -p console-financial-domain -p console-identity-application -p console-integrity \
+            -p console-platform-auth -p console-platform-authz-rest -p console-workflow-runtime
           # Doc tests, same step so no new step name has to be declared anywhere.
           # `compile_fail` doctests are the only artifact that can hold a NEGATIVE
           # type-boundary claim ("this must not compile"), and they execute nowhere
@@ -1086,10 +1112,6 @@ jobs:
       - name: ADR governance tests
         if: ${{ !cancelled() }}
         run: npm run test:adrs
-
-      - name: Executed-tests ratchet — a test file must have a path from a workflow step
-        if: ${{ !cancelled() }}
-        run: npm run check:executed-tests
 
       - name: ADR governance gate
         if: ${{ !cancelled() }}

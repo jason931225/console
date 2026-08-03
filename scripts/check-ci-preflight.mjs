@@ -579,6 +579,13 @@ const requiredPreflightCommands = [
   "npm run check:ci-preflight",
   "npm run check:package-lock",
   "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null",
+  // Locked on arrival. repo-gates taught this repository that a step wired into
+  // ci.yml is not thereby protected — deleting `run: npm run check:adrs` from it
+  // returned zero preflight failures. These two are the only thing standing
+  // between the Buck2 exit and a silently smaller test population, so they are
+  // locked in the same commit that moves them here rather than a commit later.
+  "npm run check:executed-tests",
+  "npm run check:test-credentials",
 ];
 const protectedJobs = [
   "backend",

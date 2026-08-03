@@ -207,6 +207,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:g008-payroll-readiness`
 - `check:k8s`
 - `check:openapi-app`
+- `check:test-credentials`
 - `check:package-lock`
 - `check:payroll-release-gate`
 - `check:people-hr-maturity`
@@ -221,6 +222,7 @@ names only, not incidental workflow prose or runner setup text.
 - `check:workflow-runtime-spine`
 - `test:adrs`
 - `test:employee-import-contract`
+- `test:executed-tests-baseline`
 - `test:ontology-write-precondition`
 - `test:production-hardening`
 - `test:text-gate`

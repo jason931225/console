@@ -29,6 +29,7 @@
     "check:package-lock": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund && git diff --exit-code -- package-lock.json",
     "test:adrs": "node --test scripts/check-adrs.test.mjs",
     "test:text-gate": "node --test scripts/lib/text-gate.test.mjs",
+    "test:executed-tests-baseline": "node --test scripts/lib/executed-tests-baseline.test.mjs",
     "test:employee-import-contract": "node --test scripts/check-employee-import-replay-contract.test.mjs",
     "test:ontology-write-precondition": "node --test scripts/check-ontology-write-precondition.test.mjs",
     "check:pr473-migration-operational": "python3 scripts/check-pr473-migration-operational.py",
@@ -68,7 +69,8 @@
     "test:node-audit-exceptions": "node --test scripts/check-node-audit-exceptions.test.mjs",
     "check:trivy-dev-codegen-exceptions": "node scripts/generate-trivy-dev-codegen-exceptions.mjs --check",
     "test:trivy-dev-codegen-exceptions": "node --test scripts/generate-trivy-dev-codegen-exceptions.test.mjs",
-    "check:executed-tests": "node scripts/check-executed-tests.mjs"
+    "check:executed-tests": "node scripts/check-executed-tests.mjs",
+    "check:test-credentials": "node scripts/check-test-credentials.mjs"
   },
   "devDependencies": {
     "js-yaml": "4.3.0"

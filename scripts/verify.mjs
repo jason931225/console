@@ -79,6 +79,7 @@ const PLAN = new Map([
   // learn after it started running: the step existed on main and was declared
   // nowhere, so the job-completeness check would have failed closed on it.
   ["Console PR authority bootstrap regression", { tier: "fast" }],
+  ["Executed-tests baseline set regression", { tier: "fast" }],
   // The guard that keeps THIS file honest. It ran in no workflow until 2026-08-01,
   // which is why `support-domain-unit` outlived its rename to `domain-unit` on main
   // and `npm run verify` was red for everyone.
@@ -90,6 +91,15 @@ const PLAN = new Map([
   ["CI preflight contract", { tier: "fast" }],
   ["Canonical npm lockfile", { tier: "fast" }],
   ["Cargo.lock consistency", { tier: "fast" }],
+  // The Buck2-exit safety net. It lives in preflight and not in repo-gates
+  // because it now resolves `cargo metadata` as well as the BUCK graph, and
+  // preflight is the job that already has both a pinned Rust toolchain and npm —
+  // the step above it is `cargo metadata` on the same manifest. Pure analysis,
+  // no Docker, so `fast`.
+  ["Executed-tests ratchet — a test binary must have a path from a workflow step", { tier: "fast" }],
+  // Execs tools/lanes/no-credential-in-argv.sh directly. No container, no
+  // bypass env var, so `fast`.
+  ["Test credentials — none may reach argv or a workflow log", { tier: "fast" }],
 
   // ---- backend -----------------------------------------------------------
   ["rustfmt check", { tier: "fast" }],
@@ -102,9 +112,11 @@ const PLAN = new Map([
   ["RLS-arming gate", { tier: "fast" }],
   ["Dev-auth-absence gate", { tier: "fast" }],
   ["IaC tier-discipline gate", { tier: "fast" }],
-  // The eight `cargo run -p console-gate-*` steps above prove only that each
+  ["Fabricated-branch gate", { tier: "fast" }],
+  ["Personal-data-classification gate", { tier: "fast" }],
+  // The ten `cargo run -p console-gate-*` steps above prove only that each
   // gate exits 0 against THIS tree — which a gate scanning an empty directory
-  // also does. These five suites plant a violation in a throwaway tree and
+  // also does. These six suites plant a violation in a throwaway tree and
   // assert the gate rejects it, so they are what distinguishes "scanned and
   // found nothing" from "scanned nothing". Unsets DATABASE_URL: none of the
   // five touch a database.
@@ -144,6 +156,8 @@ const PLAN = new Map([
   // the entries above cover both jobs.
   ["ADR governance tests", { tier: "fast" }],
   ["ADR governance gate", { tier: "fast" }],
+  ["Documentation link tests", { tier: "fast" }],
+  ["Documentation local-link gate", { tier: "fast" }],
   ["Shared text gate unit tests", { tier: "fast" }],
   ["G004 identity group org people policy foundation gate", { tier: "fast" }],
   ["G005 workflow approval Work Hub lifecycle gate", { tier: "fast" }],
@@ -157,7 +171,6 @@ const PLAN = new Map([
   ["G008 import HR payroll readiness gate", { tier: "fast" }],
   ["People HR lifecycle maturity gate", { tier: "fast" }],
   ["Payroll release-gate contract", { tier: "fast" }],
-  ["Executed-tests ratchet — a test file must have a path from a workflow step", { tier: "fast" }],
   ["Undeclared imports — every bare specifier must be declared", { tier: "fast" }],
   ["Request-body contract — spec fields must exist on the handler", { tier: "fast" }],
   // The step name promises the whole repository; the gate resolves a declared

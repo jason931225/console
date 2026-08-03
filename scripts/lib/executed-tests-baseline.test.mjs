@@ -1,0 +1,107 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import { evaluateBaseline } from "./executed-tests-baseline.mjs";
+
+const LABEL = "executed-tests-baseline.json";
+
+// Mirrors the committed shape: a derived count plus named buckets carrying the reason.
+function baseline(buckets, darkBaseline) {
+  const doc = { recorded_on: "2026-07-31", note: "why these are accepted", ...buckets };
+  const named = Object.values(buckets).flat().length;
+  doc.dark_baseline = darkBaseline ?? named;
+  return doc;
+}
+
+describe("evaluateBaseline", () => {
+  it("passes when the measured dark set equals the named set", () => {
+    const doc = baseline({ deferred_fixture_or_defect: ["a/tests/x.rs", "b/tests/y.rs"] });
+    const { fatal, advisory } = evaluateBaseline(["a/tests/x.rs", "b/tests/y.rs"], doc, LABEL);
+    assert.equal(fatal, null);
+    assert.equal(advisory, null);
+  });
+
+  it("is order-independent across buckets", () => {
+    const doc = baseline({
+      deferred_fixture_or_defect: ["b/tests/y.rs"],
+      deferred_shared_fixture_not_in_mapped_srcs: ["a/tests/x.rs"],
+    });
+    assert.equal(evaluateBaseline(["a/tests/x.rs", "b/tests/y.rs"], doc, LABEL).fatal, null);
+  });
+
+  it("fails a newly dark file that is not named", () => {
+    const doc = baseline({ deferred_fixture_or_defect: ["a/tests/x.rs"] });
+    const { fatal } = evaluateBaseline(["a/tests/x.rs", "new/tests/unwired.rs"], doc, LABEL);
+    assert.match(fatal, /new\/tests\/unwired\.rs/);
+    assert.match(fatal, /execute nowhere and are not named/);
+  });
+
+  // THE REGRESSION THIS FILE EXISTS FOR. The previous gate compared only a count, so
+  // swapping one dark file for another kept it green while the repository changed which
+  // test could not fail. The set must reject the substitution even though the count holds.
+  it("fails substitution even when the count is unchanged", () => {
+    const doc = baseline({ deferred_fixture_or_defect: ["a/tests/x.rs", "b/tests/y.rs"] });
+    const measured = ["a/tests/x.rs", "c/tests/swapped_in.rs"];
+    assert.equal(measured.length, doc.dark_baseline, "count is unchanged — a count-only gate sees nothing");
+
+    const { fatal } = evaluateBaseline(measured, doc, LABEL);
+    assert.match(fatal, /c\/tests\/swapped_in\.rs/);
+  });
+
+  it("fails closed when a named binary starts executing until the baseline is updated", () => {
+    const doc = baseline({ deferred_fixture_or_defect: ["a/tests/x.rs", "b/tests/y.rs"] });
+    const { fatal, advisory } = evaluateBaseline(["a/tests/x.rs"], doc, LABEL);
+    assert.match(fatal, /b\/tests\/y\.rs/);
+    assert.match(fatal, /lock the gain in/);
+    assert.equal(advisory, null);
+  });
+
+  it("rejects a count that disagrees with the named set", () => {
+    const doc = baseline({ deferred_fixture_or_defect: ["a/tests/x.rs"] }, 11);
+    const { fatal } = evaluateBaseline(["a/tests/x.rs"], doc, LABEL);
+    assert.match(fatal, /dark_baseline is 11 but 1 files are named/);
+  });
+
+  it("rejects a baseline that names nothing, rather than falling back to a count", () => {
+    const { fatal } = evaluateBaseline(["a/tests/x.rs"], { dark_baseline: 1 }, LABEL);
+    assert.match(fatal, /names no accepted-dark files/);
+  });
+
+  it("ignores unrelated arrays of non-strings", () => {
+    const doc = { dark_baseline: 1, deferred_fixture: ["a/tests/x.rs"], counts_by_year: [2025, 2026] };
+    assert.equal(evaluateBaseline(["a/tests/x.rs"], doc, LABEL).fatal, null);
+  });
+
+  it("does not treat defined feature variants as accepted-dark binaries", () => {
+    const doc = {
+      dark_baseline: 1,
+      deferred_fixture: ["a/tests/x.rs"],
+      defined_feature_variants: ["dark/tests/unnamed.rs --features dev-auth"],
+    };
+    const { fatal } = evaluateBaseline(
+      ["a/tests/x.rs", "dark/tests/unnamed.rs --features dev-auth"],
+      doc,
+      LABEL,
+    );
+    assert.match(fatal, /dark\/tests\/unnamed\.rs --features dev-auth/);
+  });
+
+  it("rejects a malformed deferred bucket rather than ignoring it", () => {
+    const doc = { dark_baseline: 1, deferred_fixture: [2025] };
+    assert.match(evaluateBaseline([], doc, LABEL).fatal, /malformed accepted-dark bucket/);
+  });
+
+  describe("the derived count is mandatory", () => {
+    it("rejects a missing dark_baseline", () => {
+      const doc = { deferred_fixture: ["a/tests/x.rs"], reviewers: ["dark/tests/unnamed.rs"] };
+      const { fatal } = evaluateBaseline(["dark/tests/unnamed.rs"], doc, LABEL);
+      assert.match(fatal, /no non-negative integer dark_baseline/);
+    });
+
+    it("rejects a non-numeric dark_baseline", () => {
+      const doc = { dark_baseline: "11", deferred_fixture: ["a/tests/x.rs"] };
+      const { fatal } = evaluateBaseline(["dark/tests/unnamed.rs"], doc, LABEL);
+      assert.match(fatal, /no non-negative integer dark_baseline/);
+    });
+  });
+});
