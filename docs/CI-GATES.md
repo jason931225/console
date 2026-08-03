@@ -6,14 +6,14 @@ The GitHub Actions workflow in `.github/workflows/ci.yml` is the source of truth
 for CI enforcement. This document mirrors the current gate inventory and splits
 the checks into two groups: core local gates that a fresh development session can
 run directly, and CI-contextual/heavy gates that need platform-specific runner
-setup, services, browser/device runtimes, or optional secrets.
+setup, services, or deployment access.
 
 The gates encode the project's non-negotiable invariants (clean-architecture
 layering, audit-first discipline, 위치정보법/PIPA data handling, multi-tenant
-isolation, cross-client contract, and cross-surface parity) so that a violation
-fails before production. Do not treat a lightweight local loop as full CI
-confidence: a change is not "done" until the relevant local gates, review/user
-story evidence, and CI jobs for the touched surfaces are green.
+isolation, and the committed API contract) so that a violation fails before
+production. Do not treat a lightweight local loop as full CI confidence: a
+change is not "done" until the relevant local gates, review evidence, and CI
+jobs for the touched surfaces are green.
 
 ## Review evidence gate
 
@@ -47,11 +47,10 @@ and requires its SHA to equal the closed-event authority-tip SHA, so a deleted P
 branch cannot make the signed `T` object unavailable.
 
 For user-facing features, PR/review evidence must prove the shipped workflow, not
-just the transport seam. API endpoint tests, handler tests, or generated-client
-round trips are necessary contract evidence, but they are **not sufficient** for
-UI feature claims. When UI is involved, reviewers must require browser/E2E or
-equivalent real-surface proof that walks the user story: sign-up, organization
-onboarding, passkey setup, and the actual domain workflow.
+just the transport seam. API endpoint, handler, and contract tests are necessary
+contract evidence, but they are **not sufficient** for UI feature claims. UI
+evidence belongs with the implementation that owns that surface; this post-pivot
+repository no longer contains the former web/mobile clients or their E2E jobs.
 
 The product guardrail is CRUD-first SaaS: database-backed create/read/update/
 delete UI and normal editing workflows come before upload/import/Excel paths.
@@ -70,32 +69,31 @@ so a fresh session does not gain false confidence from a partial run.
 cargo fmt --all -- --check
 SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings
 SQLX_OFFLINE=true DATABASE_URL=postgres://<user>@localhost/console_dev cargo test
-for g in layer-boundary audit-coverage migration-safety tenant-isolation pii-no-logs rls-arming dev-auth-absence; do
+for g in \
+  layer-boundary audit-coverage migration-safety tenant-isolation pii-no-logs \
+  rls-arming dev-auth-absence iac-tier fabricated-branch \
+  personal-data-classification; do
   cargo run -q -p console-gate-$g            # each must exit 0
 done
 SQLX_OFFLINE=true cargo test -p console-platform-auth-rest --features dev-auth
 SQLX_OFFLINE=true cargo test -p console-app --features dev-auth --test dev_auth_persona_guard_feature
 SQLX_OFFLINE=true cargo test -p console-platform-provisioning --test dev_principal_upsert_race
 
-# API/client contract gates (from repo root after npm ci)
-npm run check:api-drift:portable          # regenerate ts+kotlin, expect no diff
-npm run check:ts
-npm run check:kotlin
-npm run check:api-drift:swift             # macOS/Swift toolchain gate
-npm run check:swift                       # macOS/Swift toolchain gate
+# API contract gates (from repo root after npm ci)
 npm run check:platform-contract-drift     # platform route inventory vs committed openapi.yaml
-CONTRACT_DATABASE_URL=postgres://<user>@localhost/console_contract npm run test:contract
+npm run test:employee-import-contract
+npm run test:ontology-write-precondition
 
-# Product-maturity and repo gates (from repo root after npm ci)
-# 962fb98b7 (#503) deleted the frontend and the ts/kotlin/swift client codegen. Every script
-# this block used to invoke around them went with it; each line below was executed and exits 0.
+# Root repository gates (from repo root after npm ci)
 npm run test:adrs
 npm run check:adrs
 for s in \
   check:foundation-gates \
   check:executed-tests \
+  check:test-credentials \
   check:request-body-contract \
   check:doc-citations \
+  check:doc-links \
   check:package-lock \
   check:ci-preflight \
   check:g004-identity-foundation \
@@ -114,61 +112,25 @@ for s in \
   npm run "$s"
 done
 
-# Deployment and mobile parity gates
+# Deployment gates
 npm run check:k8s                         # render manifests; CI warns if no live cluster
 CONSOLE_NETWORKPOLICY_PREFLIGHT=require npm run check:k8s:networkpolicy
 CONSOLE_NETWORKPOLICY_EXPECTED_ENFORCER=cilium \
   CONSOLE_NETWORKPOLICY_SMOKE_POSTGRES=auto \
   npm run smoke:k8s:networkpolicy-deny
 npm run check:production-hardening
-node scripts/check-i18n.mjs
-
-# Android local build/unit/screenshot gates
-( cd android && ./gradlew build -x testReleaseUnitTest -x testDebugUnitTest )
-( cd android && ./gradlew testDebugUnitTest )
-( cd android && ./gradlew verifyRoborazziDebug )
-
-# iOS local gates (macOS with Swift toolchain)
-swift build --package-path ios
-swift test --package-path ios
-swift run --package-path ios ConsoleCoreBehaviorTests
 ```
 
 CI also runs heavier or runner-contextual gates. Reproduce them locally only when
 their prerequisites are available:
 
-- `npm run dev:bootstrap`, `/readyz`,
-  `CONSOLE_DEV_AUTH_E2E=1 npm run dev:bootstrap`, and
-  `CONSOLE_DEV_AUTH_E2E=1 npx playwright test --project=dev-auth`
-  for the dev-up/dev-auth smoke.
-- `VITE_CONSOLE_DEV_PREVIEW=1 npm run dev:bootstrap` for the independent,
-  Vite-development-only full console preview. Do not add this flag to the
-  fail-closed dev-auth gate, which must retain production-faithful rollout
-  behavior.
-- `bash e2e/run.sh` for the full browser user-story suite after Postgres, Python
-  helpers, Rust backend, Node dependencies, and Playwright Chromium are ready.
-- `./gradlew fieldApi34DebugAndroidTest` for Android instrumented E2E after
-  KVM/Gradle Managed Device setup. CI provisions PostgreSQL 18.4, migrates and
-  seeds an isolated database, boots the backend built from the exact candidate
-  SHA, and mints a job-local mechanic session through a random short-lived OTP.
-  The required `WorkOrderFlowTest` must execute with zero skips, failures, or
-  errors; no external backend or long-lived refresh-token secret is required.
-- `.github/workflows/ios-ui-tests.yml` for Simulator-bound XCUITest/accessibility
-  audit on one GitHub-hosted `macos-26` VM. The current merge authority is Xcode
-  26.6 build `17F113`, Apple Swift 6.3.3 in strict Swift 6 language mode, and the
-  iOS 26.5 runtime. The job builds checksum-pinned PostgreSQL 18.4 and the exact
-  candidate Rust backend under a job-local root, then runs 15 named fail-slow
-  shards. Each shard receives a fresh random one-use-OTP session, its own
-  presentation precondition/readback, a 45-to-360-second hard budget, timing
-  telemetry, and separate result artifacts. Structured results across all shards
-  must match the source-discovered test set exactly with zero skips, failures, or
-  errors; no external backend/session secret or fork skip path is permitted.
-- Swift client and iOS app gates require macOS/Swift; Linux developers should use
-  CI or a macOS runner for those surfaces.
+- `npm run dev:bootstrap`, `/readyz`, and `npm run dev:down` for the dev-up
+  smoke. CI also runs the compose contract unit test and PostgreSQL topology
+  integration regression before the bootstrap.
 
 The initial **CI preflight** job runs the foundation-gate, CI-preflight,
-workspace-integrity, and deterministic-lockfile contracts before the expensive
-backend, mobile, and browser jobs begin.
+executed-test reachability, credential-argument, and deterministic-lockfile
+contracts before the expensive backend and database jobs begin.
 
 `SQLX_OFFLINE=true` uses the committed `.sqlx/` query cache; regenerate it with
 `cargo sqlx prepare --workspace -- --all-targets` (note `--all-targets`, so test
@@ -176,7 +138,7 @@ queries are cached too) against a database migrated to head.
 
 ## Current CI workflow gate inventory
 
-This inventory is sourced from `.github/workflows/ci.yml` and the root/web
+This inventory is sourced from `.github/workflows/ci.yml` and the root
 `package.json` scripts. When the workflow changes, update this table and the
 runbook together.
 
@@ -235,79 +197,26 @@ names only, not incidental workflow prose or runner setup text.
 
 - **Backend — fmt / clippy / test / gates**: `cargo fmt --all -- --check`,
   `SQLX_OFFLINE=true cargo clippy --all-targets -- -D warnings`,
-  `SQLX_OFFLINE=true cargo test`, seven `console-gate-*` binaries
+  `SQLX_OFFLINE=true cargo test`, ten `console-gate-*` binaries
   (`layer-boundary`, `audit-coverage`, `migration-safety`, `tenant-isolation`,
-  `pii-no-logs`, `rls-arming`, `dev-auth-absence`), and three dev-auth feature
-  tests for `console-platform-auth-rest`, `console-app`, and
+  `pii-no-logs`, `rls-arming`, `dev-auth-absence`, `iac-tier`,
+  `fabricated-branch`, `personal-data-classification`), and three dev-auth
+  feature tests for `console-platform-auth-rest`, `console-app`, and
   `console-platform-provisioning`.
-- **dev-up.mjs smoke — compose deps + migrate + /readyz + dev-auth e2e**:
-  `node scripts/dev-up.mjs bootstrap`, `/readyz` curl, `node scripts/dev-up.mjs
-  down`, dev-auth bootstrap with
-  `CONSOLE_DEV_AUTH_E2E=1 node scripts/dev-up.mjs bootstrap`, and
-  `CONSOLE_DEV_AUTH_E2E=1 npx playwright test --project=dev-auth`.
-- **API clients — TypeScript / Kotlin generation and compile**:
-  `npm run gen:api:portable`, `git diff --exit-code -- clients/ts
-  clients/kotlin`, `npm run check:ts`, and `npm run check:kotlin`. The local
-  wrapper for the generation+diff check is `npm run check:api-drift:portable`.
-- **Web console — lint / test / production artifact isolation**: ADR governance scripts `test:adrs`
-  and `check:adrs`, followed by root product-maturity scripts
-  `check:foundation-gates`, `check:enterprise-ux-parity`,
-  `check:browser-persona-matrix`, `check:ios-ui-test-fail-closed`,
-  `check:android-e2e-fail-closed`, `check:g004-identity-foundation`,
-  `check:g005-workflow-lifecycle`, `check:workflow-runtime-spine`,
-  `check:workflow-runtime-m2-strangler`, `check:workflow-runtime-m2-cedar-guards`,
-  `check:workflow-runtime-m2-runtime`, `check:workflow-runtime-m2-drainer`,
-  `check:g006-asset-dispatch-lifecycle`, `check:g007-collaboration-mobile-lifecycle`,
-  `check:g008-payroll-readiness`, `check:people-hr-maturity`,
-  `check:payroll-release-gate`, `check:financial-maturity`,
-  `check:cx-reporting-maturity`, and `check:operations-intelligence-maturity`,
-  followed by `npm run lint --workspace @console/web`,
-  `npm run test --workspace @console/web`,
-  `npm run test:production-dev-auth-guards --workspace @console/web`, and
-  `npm run check:production-dev-auth-absence --workspace @console/web`.
-  The last command builds the production bundle before asserting that dev-auth
-  entrypoints are absent. Root shortcuts are `web:lint` and `web:test`.
+- **dev-up.mjs smoke — compose deps + migrate + /readyz**:
+  the compose contract unit test, PostgreSQL topology integration regression,
+  `node scripts/dev-up.mjs bootstrap`, `/readyz` curl, and unconditional
+  `node scripts/dev-up.mjs down` cleanup.
+- **Repository gates — governance and domain contracts**: ADR, documentation,
+  foundation, package-lock, workflow, domain-maturity, undeclared-import, and
+  request-body gates named in the root-script inventory above.
 - **API contract — platform route inventory (text-only)**:
   `npm run check:platform-contract-drift` plus the employee-import and
-  ontology-write-precondition contract suites. The job builds nothing.
+  ontology-write-precondition contract suites. The job builds and boots
+  nothing.
 - **Kubernetes manifests — render / hardening / NetworkPolicy preflight**:
   `npm run check:k8s` (render plus `scripts/check-networkpolicy-enforcement.sh`)
   and `npm run check:production-hardening`.
-- **API client — Swift generation and build**: `swift --version`,
-  `npm run gen:api:swift`, `git diff --exit-code -- clients/swift`, and
-  `npm run check:swift`. The local wrapper for generation+diff is
-  `npm run check:api-drift:swift`.
-- **Mobile parity — checklist and strings**: `node scripts/check-i18n.mjs` plus
-  the inline workflow check that validates `docs/parity-checklist.md`, Android
-  string keys, and iOS localized string keys. There is not currently a named root
-  package script for the inline checklist/string-key check.
-- **Android app — Gradle build**: `./gradlew build -x testReleaseUnitTest -x
-  testDebugUnitTest`, `./gradlew testDebugUnitTest`, and
-  `./gradlew verifyRoborazziDebug` from `android/`.
-- **Android app — instrumented post-login E2E (emulator)**:
-  `./gradlew fieldApi34DebugAndroidTest` with Gradle Managed Device/KVM setup,
-  a job-local PostgreSQL 18.4 database, and the backend built from the exact
-  checked-out SHA. CI redeems a random short-lived mechanic OTP, supplies the
-  resulting tokens through a mode-0600 runner-temp androidTest asset, and parses
-  JUnit output to require `WorkOrderFlowTest` with zero skips/failures/errors.
-- **iOS app — Swift build and behavior tests**: `swift build`, `swift test`, and
-  `swift run ConsoleCoreBehaviorTests` from `ios/` on macOS.
-- **iOS UI tests — XCUITest/accessibility audit (Simulator)**:
-  `.github/workflows/ios-ui-tests.yml` runs on a GitHub-hosted `macos-26` VM and
-  treats Xcode 26.6 build `17F113`, Apple Swift 6.3.3 in strict Swift 6 language
-  mode, and the iOS 26.5 runtime as the current merge authority. It generates the
-  Xcode project with XcodeGen and executes 15 named fail-slow shards against an
-  exact-SHA backend and checksum-pinned PostgreSQL 18.4. Each shard gets a fresh
-  random one-use-OTP session, a shell-owned Simulator presentation with exact
-  readback, a measured 45-to-360-second hard timeout, and independent timing and
-  result artifacts. The mode-`0600` `.xctestrun`, Cargo/Rust homes and target,
-  PostgreSQL, backend state, DerivedData, and results remain under the job-local
-  runner-temporary root. Missing inputs, entitlements, fixtures, expected tests,
-  secret-scan evidence, or cleanup proof fail; there is no external session
-  secret, `XCTSkip`, or fork-reduced test path.
-- **Browser E2E — Playwright (all user stories)**: backend `console-app` build,
-  Postgres/psql/Python helper setup, `npx playwright install --with-deps
-  chromium`, and `bash e2e/run.sh`.
 
 ---
 
@@ -686,63 +595,13 @@ SQLX_OFFLINE=true cargo test -p console-platform-provisioning --test dev_princip
 
 ---
 
-## Cross-client contract gates
+## API contract gates
 
-The backend serves the committed `backend/openapi/openapi.yaml`; the TypeScript,
-Kotlin, and Swift clients are **generated** from it. These gates keep the three
-clients and the spec in lockstep.
-
-The authoritative platform-admin API contract is the same OpenAPI document, not a
-sidecar or undocumented internal surface. `/api/platform/*` route definitions in
-`console-platform-rest` must match the OpenAPI path+method inventory, and
-`web/src/api/platform.ts` must consume the generated `@console/api-client-ts`
-types for platform DTOs/request/response shapes. The raw fetch wrapper in the web
-module is transport-only: it preserves bearer/cookie/device behavior while the
-contract remains schema-driven.
-
-### Generated-client drift — `check:api-drift:portable` / `:swift`
-
-Regenerates the clients from `openapi.yaml` and runs `git diff --exit-code`. Any
-drift between the committed generated code and a fresh regeneration fails. (Hand-
-editing generated client files therefore fails the gate — regenerate instead.)
-`check:ts` / `check:kotlin` / `check:swift` additionally compile each client.
-
-Generated clients are generated artifacts. Durable parser or model changes must
-start from the OpenAPI schema (`backend/openapi/openapi.yaml`) or the generator
-configuration/template/script that produces the checked-in client, then commit the
-regenerated output. Hand-editing `clients/kotlin/src/main/...` to relax JSON
-parsing is only acceptable as a throwaway diagnosis step; the shipped source of
-truth must be schema or generator-driven so the drift gates can reproduce it.
-
-Generated-client source-control policy for cleanup issue #108:
-- `backend/openapi/openapi.yaml` is the reviewed source of truth for generated
-  clients. Keep generated TypeScript, Kotlin, and Swift client output committed
-  and versioned atomically with OpenAPI changes so web/mobile consumers have
-  reproducible source and CI can fail on drift.
-- Regenerate clients with `npm run gen:api:portable` and `npm run gen:api:swift`;
-  do not hand-edit `clients/ts/src/schema.d.ts`, `clients/kotlin/**`, or
-  `clients/swift/Sources/ConsoleAPIClient/Generated/**`.
-- Code review and audit de-emphasize generated hunks and instead review
-  `backend/openapi/openapi.yaml`, generator scripts/configuration, and the drift
-  gate output for intent.
-- This policy can change only after a replacement release path proves consumer
-  builds, package publishing, and drift checks without committed generated
-  clients.
-
-Kotlin generated clients must parse JSON fail-closed by default: unknown response
-keys, non-standard lenient JSON, and malformed payloads are contract drift and
-must fail client/contract tests unless an explicit compatibility exception exists.
-Broad defaults such as `ignoreUnknownKeys = true` or `isLenient = true` are not
-allowed on the shared generated-client `Json` instance because they hide OpenAPI
-or backend/client drift.
-
-Compatibility exceptions must be route- or schema-scoped and documented before
-implementation. Each exception must name the endpoint/`operationId`, request vs.
-response direction, exact parser relaxation, production compatibility reason,
-owner, expiry or removal trigger, source-of-truth change point (schema vs.
-generator config/template/script), and the fixture/test that proves the exception
-is narrow. Exception tests must still run under `check:kotlin` or the relevant
-contract/drift gate so future routes do not inherit compatibility mode silently.
+The committed `backend/openapi/openapi.yaml` remains the reviewed API contract.
+The post-pivot repository contains no generated client or frontend workspaces, so
+the surviving CI job does not build or boot an application and does not claim a
+client round-trip. It checks the committed document and source inventories
+directly.
 
 ### `check:platform-contract-drift` — spec covers mounted routes
 
@@ -759,56 +618,6 @@ drift on already-documented paths.
 Verification notes for platform route or DTO changes must name both halves of the
 contract check: the route inventory comparison (`npm run check:platform-contract-drift`)
 and the backend `openapi_drift.rs` suite.
-
-### `test:contract` — generated client ↔ app round-trip
-
-`npm run test:contract` exercises the generated TS client against the running app
-to confirm request/response shapes round-trip against the real handlers (needs
-`CONTRACT_DATABASE_URL`).
-
----
-
-## Web console and product-maturity gates
-
-The web job runs root-level product maturity scripts before its exact web
-verification sequence. These scripts are local Node gates, not Playwright runtime
-tests:
-
-- `npm run check:foundation-gates`
-- `npm run check:enterprise-ux-parity`
-- `npm run check:browser-persona-matrix`
-- `npm run check:ios-ui-test-fail-closed`
-- `npm run check:g004-identity-foundation`
-- `npm run check:g005-workflow-lifecycle`
-- `npm run check:workflow-runtime-spine`
-- `npm run check:workflow-runtime-m2-strangler`
-- `npm run check:workflow-runtime-m2-cedar-guards`
-- `npm run check:workflow-runtime-m2-runtime`
-- `npm run check:workflow-runtime-m2-drainer`
-- `npm run check:g006-asset-dispatch-lifecycle`
-- `npm run check:g007-collaboration-mobile-lifecycle`
-- `npm run check:g008-payroll-readiness`
-- `npm run check:people-hr-maturity`
-- `npm run check:payroll-release-gate`
-- `npm run check:financial-maturity`
-- `npm run check:cx-reporting-maturity`
-- `npm run check:operations-intelligence-maturity`
-
-### Exact web CI verification sequence
-
-The workflow runs these commands in order against `web/package.json`:
-
-1. `npm run lint --workspace @console/web` runs ESLint and
-   `web/scripts/check-ui-strings.mjs`.
-2. `npm run test --workspace @console/web` runs Vitest.
-3. `npm run test:production-dev-auth-guards --workspace @console/web` verifies
-   production dev-auth entrypoint guards.
-4. `npm run check:production-dev-auth-absence --workspace @console/web` owns the
-   production build (`tsc -b` plus `vite build`) and proves dev-auth entrypoints
-   are absent from the emitted artifact.
-
-Root shortcuts `web:lint` and `web:test` reproduce only the first two commands;
-the production artifact proof is intentionally the explicit workspace sequence.
 
 ---
 
@@ -902,7 +711,12 @@ the enforcement notes in
 
 ---
 
-## Mobile parity gates
+## Retired pre-pivot mobile gates (historical)
+
+> **Not current or runnable.** The `web/`, `android/`, and `ios/` trees and their
+> workflows/scripts were removed after the pivot. The present-tense descriptions
+> below are retained only as context for older review evidence; they do not
+> describe the current repository or a merge gate.
 
 ### `check-i18n.mjs` — UI string-key parity
 
@@ -1088,8 +902,8 @@ runner-temp androidTest asset before `./gradlew fieldApi34DebugAndroidTest` runs
 The workflow deliberately avoids external backend/session secrets, GitHub step
 outputs, and raw Gradle CLI arguments for token values.
 
-`npm run check:android-e2e-fail-closed` is the lightweight regression guard for
-issue #359: it statically inspects the workflow and Android debug/release network
+The former `check:android-e2e-fail-closed` package script was the lightweight
+regression guard for issue #359: it statically inspects the workflow and Android debug/release network
 boundaries, while its mutation suite proves that external secrets, a non-PG18
 database, missing exact-SHA verification, deterministic/unhashed OTPs, credential
 leaks, skip-permitting result gates, and release cleartext regressions fail. It
@@ -1116,31 +930,27 @@ case, failure, or error fails the job; there is no optional self-skip path.
 
 ---
 
-## CI-contextual browser/dev-up gates
+## CI-contextual dev-up gate
 
-The dev-up smoke and browser E2E jobs are local only when their service/runtime
-dependencies are available:
+The dev-up smoke is local only when its service/runtime dependencies are
+available:
 
 - **dev-up smoke:** `node scripts/dev-up.mjs bootstrap`, `/readyz`, cleanup with
-  `node scripts/dev-up.mjs down`, dev-auth bootstrap with
-  `CONSOLE_DEV_AUTH_E2E=1 node scripts/dev-up.mjs bootstrap`, and
-  `CONSOLE_DEV_AUTH_E2E=1 npx playwright test --project=dev-auth`.
-- **Browser E2E:** `bash e2e/run.sh` after CI-equivalent setup for Postgres,
-  `psql`, Python E2E helpers, Rust `console-app`, Node dependencies, and Playwright
-  Chromium. This is the all-user-stories browser gate and should be used for UI
-  feature completion evidence when applicable.
+  `node scripts/dev-up.mjs down`. CI precedes bootstrap with the compose contract
+  unit test and PostgreSQL topology integration regression.
 
 ---
 
 ## Notes
 
-- The seven `console-gate-*` binaries exit non-zero on the first violation with a
+- The ten `console-gate-*` binaries exit non-zero on the first violation with a
   `file:detail` message; run an individual gate locally to see what it caught.
-- When a change touches OpenAPI routes/schemas, the generated-client drift,
-  client compile, `check:platform-contract-drift`, and `test:contract` gates must all be
-  re-run; a backend-only internal change that does not move API/client surfaces
-  still needs the backend fmt/clippy/test/gate binaries and any touched-surface
-  CI-contextual gates.
+- When a change touches OpenAPI routes/schemas, run
+  `npm run check:platform-contract-drift` and the backend `openapi_drift.rs` suite, plus
+  the employee-import or ontology-write contract suite when that surface moves.
+  A backend-only internal change that does not move API surfaces still needs the
+  backend fmt/clippy/test/gate binaries and any touched-surface CI-contextual
+  gates.
 - Gate provenance and the incidents that motivated several checks are recorded in
   [MISTAKES-LEDGER.md](MISTAKES-LEDGER.md).
 

@@ -182,7 +182,7 @@ const PLAN = new Map([
   // This job became text-only when the tautological app-served OpenAPI comparison
   // and its Buck2 binary handoff were deleted, so every remaining command is safe
   // to mirror locally.
-  ["Install client tooling", {
+  ["Install Node tooling", {
     tier: "ci-only",
     why: "`npm ci` deletes node_modules; `Canonical npm lockfile` covers lockfile drift",
   }],

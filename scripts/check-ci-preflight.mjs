@@ -1017,11 +1017,12 @@ function requireOrderedStepContracts(steps, contracts, job, failures) {
 const apiContractAllowedSteps = [
   "name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7",
   "name: Set up Node.js\n        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0\n        with:\n          node-version: \"24\"\n          cache: npm",
-  "name: Install client tooling\n        run: npm ci",
+  "name: Install Node tooling\n        run: npm ci",
   "name: Platform contract drift gate\n        if: ${{ !cancelled() }}\n        run: npm run check:platform-contract-drift",
   "name: Employee import replay contract\n        if: ${{ !cancelled() }}\n        run: npm run test:employee-import-contract",
   "name: Ontology write precondition contract\n        if: ${{ !cancelled() }}\n        run: npm run test:ontology-write-precondition",
 ];
+const apiContractJobName = "API contract — text-only contract checks";
 
 function hasOnlyAllowedApiContractSteps(steps) {
   return steps.length === apiContractAllowedSteps.length
@@ -1363,6 +1364,9 @@ export function evaluateCiPreflight(workflow, buckBuildFile = postgresWrapperBui
   const apiContract = jobBlock(workflow, "api-contract");
   if (apiContract) {
     const apiContractSteps = stepBlocks(apiContract);
+    if (!apiContract.startsWith(`    name: ${apiContractJobName}\n`)) {
+      failures.push(`api-contract job name must be ${JSON.stringify(apiContractJobName)}`);
+    }
     if (!hasOnlyAllowedApiContractSteps(apiContractSteps)) {
       failures.push("api-contract must contain only the approved ordered steps");
     }

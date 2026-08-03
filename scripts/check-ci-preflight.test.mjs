@@ -224,6 +224,16 @@ describe("CI preflight contract", () => {
     assert.deepEqual(evaluateCiPreflight(workflow).failures, []);
   });
 
+  it("rejects an API contract job name that claims the app is served", () => {
+    expectFailure(
+      workflow.replace(
+        "    name: API contract — text-only contract checks\n",
+        "    name: API contract — app-served OpenAPI\n",
+      ),
+      'api-contract job name must be "API contract — text-only contract checks"',
+    );
+  });
+
   it("rejects services and job-level environment on the text-only API contract", () => {
     for (const block of [
       "    services:\n      postgres:\n        image: postgres:18.4\n",

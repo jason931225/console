@@ -126,6 +126,12 @@ function requireCiGateDocsDriftInventory() {
 
   const backendGatePackages = extractCiBackendGatePackages(ci);
   const rootScripts = uniqueSorted(npmInvocations.map(({ script }) => script));
+  const liveDocs = docs.split("\n## Backend gates\n", 1)[0];
+  const liveDocScripts = uniqueSorted(
+    extractCiNpmRunInvocations(liveDocs)
+      .map(({ script }) => script.replace(/[`),.]+$/g, ""))
+      .filter((script) => !script.includes("$")),
+  );
   // The repo has no npm workspaces left, so any `--workspace` invocation in CI
   // is by definition uncovered by the drift policy.
   const unknownWorkspaceInvocations = npmInvocations.filter(({ options }) =>
@@ -144,6 +150,12 @@ function requireCiGateDocsDriftInventory() {
   }
 
   requireNoMissingPackageScripts("root CI package scripts", rootScripts, rootPackage, rootPackagePath);
+  requireNoMissingPackageScripts(
+    "live CI gate documentation package scripts",
+    liveDocScripts,
+    rootPackage,
+    rootPackagePath,
+  );
 
   compareInventory(
     "docs/CI-GATES.md backend console-gate binaries run by CI",
@@ -208,6 +220,11 @@ requireIncludes(".github/workflows/ci.yml", "npm run test:text-gate", "CI runs s
 requireIncludes(".github/workflows/ci.yml", "docs/specs/**", "CI watches docs/specs gate inputs");
 requireIncludesAtLeast(".github/workflows/ci.yml", '"docs/CI-GATES.md"', 2, "CI watches CI gate documentation for push and pull_request");
 requireCiGateDocsDriftInventory();
+requireNotIncludes("docs/CI-GATES.md", "test:contract", "live CI gate docs exclude retired generated-client round-trip");
+requireNotIncludes("docs/CI-GATES.md", "check:openapi-app", "live CI gate docs exclude retired app-served OpenAPI gate");
+requireNotIncludes("docs/CI-GATES.md", "CONTRACT_DATABASE_URL", "live CI gate docs exclude retired contract database handoff");
+requireNotIncludes("docs/GO-LIVE-CHECKLIST.md", "check:openapi-app", "go-live status excludes retired app-served OpenAPI command");
+requireNotIncludes(".github/workflows/ci.yml", "API contract — app-served OpenAPI", "API contract job does not claim an app-served document");
 for (const ciNeedle of [
   "cargo fmt --all -- --check",
   "cargo clippy --all-targets -- -D warnings",

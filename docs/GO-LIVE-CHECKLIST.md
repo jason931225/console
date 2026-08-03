@@ -28,14 +28,14 @@ Deployment-context shorthand used below:
 
 ## 1. Code & CI readiness — Eng
 
-- [x] **All CI gates green on `main`.** fmt, `clippy --all-targets -D warnings`,
-  `cargo test --workspace` (170 suites / 302 tests / 0 failed), the four
-  `console-gate-*` binaries (layer-boundary, audit-coverage, migration-safety,
-  pii-no-logs), `openapi_drift`, `check:platform-contract-drift`, contract
-  round-trip, i18n + parity. See [CI-GATES.md](CI-GATES.md). Retired since this
-  item was first written and no longer runnable, so do not look for them:
-  tri-client drift (ts/kotlin/swift), `check:openapi-app`, iOS build + behavior
-  tests.
+- [x] **Historical CI snapshot; not current go-live evidence.** When this item
+  was recorded, fmt, clippy, workspace tests, the then-current backend gates,
+  API/client checks, parity checks, and mobile checks were green. The client,
+  frontend, mobile, and app-served contract machinery was retired after the
+  pivot and is no longer runnable. Current surviving API evidence is the backend
+  `openapi_drift` suite plus `check:platform-contract-drift`; use the live
+  inventory in [CI-GATES.md](CI-GATES.md), not this snapshot, for present-day
+  verification.
 - [x] **Supply-chain CI shipped** — Eng. `image-release.yml` builds the
   `console-app` + `console-web` linux/arm64 images reproducibly for the current
   `oci-guest` A1 target (digest-pinned bases, `SOURCE_DATE_EPOCH`), with SBOM +
