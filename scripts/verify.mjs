@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Local mirror of the CI jobs whose commands have safe local equivalents.
 //
-// Why this exists: those two jobs run ~35 commands in a specific order, several
+// Why this exists: the mirrored jobs run many commands in a specific order, several
 // of which need a PostgreSQL identity that migration 0196 restricts to
 // `console_buck_admin`. Nobody can hold that in their head, so defects were reaching
 // CI and costing a 45-minute round trip *each*, and because failures mask one
@@ -13,7 +13,7 @@
 // the workspace-test run went missing for many commits (H-8 in
 // docs/program/false-green-gate-holes.md).
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -34,7 +34,7 @@ const JOBS = new Map([
   ["backend", true],
   ["repo-gates", true],
   ["kubernetes-manifests", true],
-  ["domain-unit", "cargo unit tests for the domain crates behind a pinned toolchain; the `fast` tier already runs the workspace suite"],
+  ["domain-unit", true],
   ["postgres-domain-reachability", "serialized Buck2 PostgreSQL targets; the `db` tier already exercises that harness"],
   ["generated-face-authority", "needs pinned Java + Reindeer toolchains to rebuild the full generated-face closure"],
   ["dev-up-smoke", "brings up the whole shared `console-dev` compose project; running it locally tears down other lanes' stacks"],
@@ -99,7 +99,12 @@ const PLAN = new Map([
   ["Executed-tests ratchet — a test binary must have a path from a workflow step", { tier: "fast" }],
   // Execs tools/lanes/no-credential-in-argv.sh directly. No container, no
   // bypass env var, so `fast`.
-  ["Test credentials — none may reach argv or a workflow log", { tier: "fast" }],
+  ["Workflow test-runner credential literals", { tier: "fast" }],
+
+  // ---- domain-unit -------------------------------------------------------
+  // This is the exact no-database Cargo selection from CI. A former exemption
+  // incorrectly claimed fast verification ran a workspace suite; it did not.
+  ["Domain crate unit tests", { tier: "fast" }],
 
   // ---- backend -----------------------------------------------------------
   ["rustfmt check", { tier: "fast" }],
@@ -290,6 +295,18 @@ function capture(command) {
   return result.stdout.trim();
 }
 
+function captureFile(command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(`failed: ${command} ${args.join(" ")}\n${result.stderr}`);
+  }
+  return result.stdout.trim();
+}
+
+export function writePrivateFile(path, contents) {
+  writeFileSync(path, contents, { flag: "wx", mode: 0o600 });
+}
+
 /** Reproduce CI's C/T/M derivation against a synthetic merge, so the console
  *  authority gates can be checked before pushing rather than after. */
 function consoleTrainEnv() {
@@ -315,38 +332,68 @@ function consoleTrainEnv() {
 function withPostgres(body) {
   const name = `console-verify-pg-${process.pid}`;
   const scratch = mkdtempSync(join(tmpdir(), "console-verify-"));
-  const adminPassword = capture("openssl rand -hex 16");
-  const bootstrapPassword = capture("openssl rand -hex 16");
+  const adminPassword = captureFile("openssl", ["rand", "-hex", "16"]);
+  const bootstrapPassword = captureFile("openssl", ["rand", "-hex", "16"]);
   try {
-    capture(
-      `docker run -d --rm --name ${name} -p 127.0.0.1:0:5432 ` +
-        `-e POSTGRES_DB=console_ci -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=${adminPassword} ` +
-        `${POSTGRES_IMAGE}`,
-    );
-    capture(
-      `for i in $(seq 1 60); do docker exec ${name} pg_isready -U postgres -d console_ci >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1`,
-    );
-    const port = capture(`docker port ${name} 5432/tcp | head -1 | sed 's/.*://'`);
+    const postgresEnv = join(scratch, "postgres.env");
+    writePrivateFile(postgresEnv, [
+      "POSTGRES_DB=console_ci",
+      "POSTGRES_USER=postgres",
+      `POSTGRES_PASSWORD=${adminPassword}`,
+      "",
+    ].join("\n"));
+    captureFile("docker", [
+      "run", "-d", "--rm", "--name", name,
+      "-p", "127.0.0.1:0:5432",
+      "--env-file", postgresEnv,
+      POSTGRES_IMAGE,
+    ]);
 
-    capture(`docker cp ops/postgres-reconcile-topology.sh ${name}:/topology.sh`);
-    capture(
-      `docker exec -e POSTGRES_HOST=127.0.0.1 -e POSTGRES_DB=console_ci ` +
-        `-e POSTGRES_ADMIN_USER=postgres -e POSTGRES_ADMIN_PASSWORD=${adminPassword} ` +
-        `-e CONSOLE_APP_POSTGRES_PASSWORD=${bootstrapPassword} -e CONSOLE_RT_POSTGRES_PASSWORD=${bootstrapPassword} ` +
-        `-e CONSOLE_LEAVE_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword} ` +
-        `-e CONSOLE_ONTOLOGY_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword} ` +
-        `-e CONSOLE_PLATFORM_FORCE_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword} ` +
-        `${name} bash /topology.sh`,
-    );
+    let ready = false;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const result = spawnSync(
+        "docker",
+        ["exec", name, "pg_isready", "-U", "postgres", "-d", "console_ci"],
+        { stdio: "ignore" },
+      );
+      if (result.status === 0) {
+        ready = true;
+        break;
+      }
+      spawnSync("sleep", ["1"], { stdio: "ignore" });
+    }
+    if (!ready) throw new Error(`PostgreSQL container ${name} did not become ready`);
+
+    const portOutput = captureFile("docker", ["port", name, "5432/tcp"]);
+    const port = portOutput.split(/\r?\n/).map((line) => line.match(/:(\d+)$/)?.[1]).find(Boolean);
+    if (!port) throw new Error(`could not parse PostgreSQL port from: ${portOutput}`);
+
+    captureFile("docker", ["cp", "ops/postgres-reconcile-topology.sh", `${name}:/topology.sh`]);
+    const topologyEnv = join(scratch, "topology.env");
+    writePrivateFile(topologyEnv, [
+      "POSTGRES_HOST=127.0.0.1",
+      "POSTGRES_DB=console_ci",
+      "POSTGRES_ADMIN_USER=postgres",
+      `POSTGRES_ADMIN_PASSWORD=${adminPassword}`,
+      `CONSOLE_APP_POSTGRES_PASSWORD=${bootstrapPassword}`,
+      `CONSOLE_RT_POSTGRES_PASSWORD=${bootstrapPassword}`,
+      `CONSOLE_LEAVE_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword}`,
+      `CONSOLE_ONTOLOGY_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword}`,
+      `CONSOLE_PLATFORM_FORCE_COMMAND_POSTGRES_PASSWORD=${bootstrapPassword}`,
+      "",
+    ].join("\n"));
+    captureFile("docker", ["exec", "--env-file", topologyEnv, name, "bash", "/topology.sh"]);
 
     // The password reaches psql through a mode-0600 file, never argv.
     const sql = join(scratch, "buck-admin.sql");
-    writeFileSync(sql, `CREATE ROLE console_buck_admin SUPERUSER LOGIN PASSWORD '${bootstrapPassword}';\n`);
-    chmodSync(sql, 0o600);
-    capture(`docker cp ${sql} ${name}:/buck-admin.sql`);
-    capture(
-      `docker exec -e PGPASSWORD=${adminPassword} ${name} psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /buck-admin.sql`,
-    );
+    writePrivateFile(sql, `CREATE ROLE console_buck_admin SUPERUSER LOGIN PASSWORD '${bootstrapPassword}';\n`);
+    captureFile("docker", ["cp", sql, `${name}:/buck-admin.sql`]);
+    const adminEnv = join(scratch, "admin.env");
+    writePrivateFile(adminEnv, `PGPASSWORD=${adminPassword}\n`);
+    captureFile("docker", [
+      "exec", "--env-file", adminEnv, name,
+      "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-f", "/buck-admin.sql",
+    ]);
 
     const buckAdminUrl = `postgres://console_buck_admin:${bootstrapPassword}@127.0.0.1:${port}/console_ci?${BOOTSTRAP_GUC}`;
     return body({

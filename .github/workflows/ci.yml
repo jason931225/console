@@ -188,7 +188,7 @@ jobs:
       - name: Executed-tests ratchet — a test binary must have a path from a workflow step
         run: npm run check:executed-tests
 
-      - name: Test credentials — none may reach argv or a workflow log
+      - name: Workflow test-runner credential literals
         run: npm run check:test-credentials
 
   domain-unit:

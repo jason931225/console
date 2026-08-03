@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
-import { assertJobsDeclared, assertPlanCoversCi } from "./verify.mjs";
+import { assertJobsDeclared, assertPlanCoversCi, writePrivateFile } from "./verify.mjs";
 
 test("every mirrored CI run-step is classified", () => {
   const steps = assertPlanCoversCi();
@@ -55,4 +58,34 @@ test("a plan entry whose CI step disappeared fails the guard", () => {
     /no matching CI step/,
     "a stale mirror entry must fail closed, not silently linger",
   );
+});
+
+test("domain-unit is part of the local mirror", () => {
+  const domain = assertPlanCoversCi().filter((step) => step.job === "domain-unit");
+  assert.deepEqual(domain.map((step) => step.name), ["Domain crate unit tests"]);
+});
+
+test("PostgreSQL provisioning keeps generated credentials out of Docker argv", () => {
+  const source = readFileSync(new URL("./verify.mjs", import.meta.url), "utf8");
+  for (const oldArgvShape of [
+    "-e POSTGRES_PASSWORD=${adminPassword}",
+    "-e POSTGRES_ADMIN_PASSWORD=${adminPassword}",
+    "-e CONSOLE_APP_POSTGRES_PASSWORD=${bootstrapPassword}",
+    "-e PGPASSWORD=${adminPassword}",
+  ]) {
+    assert.doesNotMatch(source, new RegExp(oldArgvShape.replace(/[${}]/g, "\\$&")));
+  }
+  assert.match(source, /\[\s*"exec",\s*"--env-file",\s*topologyEnv,\s*name/);
+  assert.match(source, /\[\s*"exec",\s*"--env-file",\s*adminEnv,\s*name/);
+});
+
+test("secret-bearing temporary files are private at creation", () => {
+  const root = mkdtempSync(join(tmpdir(), "console-verify-mode-"));
+  const path = join(root, "secret.env");
+  try {
+    writePrivateFile(path, "PASSWORD=fixture\n");
+    assert.equal(statSync(path).mode & 0o777, 0o600);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

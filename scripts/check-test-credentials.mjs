@@ -51,6 +51,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import yaml from "js-yaml";
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD = "tools/lanes/no-credential-in-argv.sh";
 const HARNESS = "tools/lanes/pgtest.sh";
@@ -74,26 +76,36 @@ const CREDENTIAL_URI = /:\/\/[^/@\s"']+:[^/@\s"']+@/;
 // The runtime guard deliberately has no such exemption. By the time it sees argv
 // the shell has already expanded `$X`, so what it is looking at really is the
 // secret.
-const PASSWORD_ASSIGNMENT = /password=[^\s"'$\\]/i;
+const PASSWORD_ASSIGNMENT = /password\s*=\s*[^\s"'$\\]/i;
 // The things that run tests. A credential on any other line is someone
 // provisioning a database, which is a different job with different rules.
 const TEST_RUNNERS = [/\bcargo\s+test\b/, /\bbuck2\s+test\b/, /test_needs_postgres\.sh\b/, /pgtest\.sh\b/];
 
-/** Every `run:` line in every workflow, continuations joined, comments dropped. */
+/** Every shell command in every workflow `run:` scalar. */
 function workflowCommandLines(root) {
   const dir = join(root, ".github/workflows");
   const lines = [];
   for (const file of readdirSync(dir).filter((name) => /\.ya?ml$/.test(name))) {
     const text = readFileSync(join(dir, file), "utf8");
-    // Join FIRST: matching a runner against raw text stops at the trailing
-    // backslash, so every argument on a following line becomes invisible and
-    // the check silently passes on exactly the multi-line invocations that are
-    // most likely to carry one.
-    const joined = text.replace(/\\\s*\n\s*/g, " ");
-    joined.split("\n").forEach((line, index) => {
-      if (/^\s*#/.test(line)) return;
-      lines.push({ file, line: index + 1, text: line });
-    });
+    const doc = yaml.load(text);
+    for (const [jobName, job] of Object.entries(doc?.jobs ?? {})) {
+      for (const [stepIndex, step] of (job?.steps ?? []).entries()) {
+        if (typeof step?.run !== "string") continue;
+        // Parse YAML first. A folded scalar (`>-`) is one space-joined shell
+        // command even though its runner and credential may occupy different
+        // physical YAML lines. Literal scalars retain command-separating
+        // newlines, while shell continuations are joined explicitly.
+        const joined = step.run.replace(/\\\s*\n\s*/g, " ");
+        joined.split(/\r?\n/).forEach((command) => {
+          if (!command.trim() || /^\s*#/.test(command)) return;
+          lines.push({
+            file,
+            location: step.name ?? `${jobName} step ${stepIndex + 1}`,
+            text: command,
+          });
+        });
+      }
+    }
   }
   return lines;
 }
@@ -103,10 +115,10 @@ export function staticFindings(root = ROOT) {
   for (const entry of workflowCommandLines(root)) {
     if (!TEST_RUNNERS.some((runner) => runner.test(entry.text))) continue;
     if (CREDENTIAL_URI.test(entry.text)) {
-      findings.push(`${entry.file}:${entry.line} passes a connection URL with a password to a test runner; export it into the environment instead`);
+      findings.push(`${entry.file}:${entry.location} passes a connection URL with a password to a test runner; export it into the environment instead`);
     }
     if (PASSWORD_ASSIGNMENT.test(entry.text)) {
-      findings.push(`${entry.file}:${entry.line} puts a password on a test runner's command line; export it into the environment instead`);
+      findings.push(`${entry.file}:${entry.location} puts a password on a test runner's command line; export it into the environment instead`);
     }
   }
   return findings;
@@ -125,12 +137,15 @@ export function runtimeFindings(root = ROOT) {
   const findings = [];
   const run = (...args) => spawnSync("bash", [join(root, GUARD), ...args], { cwd: root, encoding: "utf8" });
 
-  // One per escape shape. libpq accepts all four; a gate that knew only the
-  // first two accepted `password=hunter2` and `…/db?password=hunter2`.
+  // One per escape shape, plus whitespace variants accepted by libpq. A gate
+  // that knew only the first two accepted `password=hunter2`, `password =
+  // hunter2`, and `…/db?password=hunter2`.
   const poisoned = [
     "postgres://console_app:hunter2@127.0.0.1:5432/db",
     "PGPASSWORD=hunter2",
+    "PGPASSWORD = hunter2",
     "host=127.0.0.1 dbname=db password=hunter2",
+    "host=127.0.0.1 dbname=db password = hunter2",
     "postgres://console_app@127.0.0.1:5432/db?password=hunter2",
   ];
   for (const arg of poisoned) {
@@ -164,7 +179,7 @@ function main() {
     for (const finding of findings) console.error(`- ${finding}`);
     return 1;
   }
-  console.log(`Test-credential contract passed: no workflow test invocation carries a credential, and ${GUARD} refuses all four libpq password forms while accepting a clean command line.`);
+  console.log(`Test-credential contract passed: no workflow line spelling a test runner carries a literal password, and ${GUARD} refuses all six exercised libpq password spellings while accepting a clean command line.`);
   return 0;
 }
 
