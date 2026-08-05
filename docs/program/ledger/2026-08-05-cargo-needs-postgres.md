@@ -105,3 +105,7 @@ reduction lands (or in parallel after admission). First domain code still requir
 }
 ```
 <!-- REASONING-LENS-EVIDENCE:END -->
+
+## Authority tip
+
+T is the signed authority tip for this candidate train. C prebinds this ledger blob.
