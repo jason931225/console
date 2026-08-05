@@ -66,3 +66,7 @@ P3 nextest serial group · P4 switch residual to cargo · P5 drop Buck product j
 }
 ```
 <!-- REASONING-LENS-EVIDENCE:END -->
+
+## Authority tip
+
+T is the signed authority tip for this candidate train. C prebinds this ledger blob.
