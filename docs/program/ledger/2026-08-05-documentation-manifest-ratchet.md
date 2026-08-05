@@ -2,7 +2,7 @@
 
 ## Scope and authority
 
-- Issue: [#567](https://github.com/gastownhall/console/issues/567), cross-referencing [#565](https://github.com/gastownhall/console/issues/565).
+- Issue: [#567](https://github.com/jason931225/console/issues/567), cross-referencing [#565](https://github.com/jason931225/console/issues/565).
 - Protected base: `684f89371c4bfbd65bcf4a96a9edae49e4e032b6`.
 - Slice worktree: `slice/s1-doc-manifest`, created from that exact base.
 - This record describes candidate evidence. It is not current product authority and does not authorize S2 until S1 is merged and read back.
