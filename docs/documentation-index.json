@@ -3314,6 +3314,16 @@
       "archive_tag": null
     },
     {
+      "path": "docs/program/ledger/2026-08-05-image-release-registry-cache-hygiene.md",
+      "class": "evidence",
+      "owner": "repository maintainers",
+      "status": "frozen",
+      "replacement": null,
+      "retention": "retain",
+      "blob_sha": "559d2f4c4fc8b9b443c2e06d9bdd189738b89edb",
+      "archive_tag": null
+    },
+    {
       "path": "docs/program/ledger/2026-08-05-js-test-reachability-ratchet.md",
       "class": "evidence",
       "owner": "repository maintainers",
