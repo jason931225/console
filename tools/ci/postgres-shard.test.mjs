@@ -76,7 +76,10 @@ test("real postgres-cargo-map workflow set partitions cleanly with balanced doma
   const da = parts["domain-a"].length;
   const db = parts["domain-b"].length;
   assert.ok(Math.abs(da - db) <= 5, `domain halves unbalanced: ${da} vs ${db}`);
-  assert.equal(da + db, 78, `expected 78 domain entries, got ${da + db}`);
+  // Inventory tripwire, not a safety property: the balance assertion above is the invariant.
+  // 78 -> 80 when identity-rest org_setup and production-rest production_lifecycle_http were
+  // repaired and joined the workflow set (P1 dark-test wiring, console-5lh.6).
+  assert.equal(da + db, 80, `expected 80 domain entries, got ${da + db}`);
 });
 
 test("shardIdForPackage with domain map resolves domain packages", () => {
