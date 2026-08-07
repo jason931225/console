@@ -163,6 +163,16 @@ async fn authenticated_runtime_role_completes_pilot_lifecycle_without_finance_po
             "POD must reject evidence reference of length {}: {body}",
             rejected.len()
         );
+        // A malformed reference is a CLIENT error. Before the boundary validation
+        // landed this surfaced as a 500 raised out of the store, because the CHECK
+        // constraint was the only validator. Asserting the exact status keeps that
+        // from silently regressing to an internal error again.
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "POD must reject evidence reference of length {} as a client error, not an internal one: {body}",
+            rejected.len()
+        );
     }
     let stored: i64 =
         sqlx::query_scalar("SELECT count(*) FROM logistics_pod_evidence WHERE shipment_id = $1")
