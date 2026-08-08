@@ -139,12 +139,30 @@ const REVIEW_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['severity', 'claim', 'failureScenario', 'location'],
+        required: ['severity', 'claim', 'failureScenario', 'location', 'provenByExecution', 'ownerLease'],
         properties: {
           severity: { type: 'string', enum: ['blocker', 'major', 'minor'] },
           claim: { type: 'string' },
           failureScenario: { type: 'string' },
           location: { type: 'string' },
+          // Severity alone is the wrong convergence signal, measured: a round converged on
+          // blockers=0 while both reviewers returned accept_with_findings carrying SIX distinct
+          // fail-opens they had each PROVEN BY RUNNING -- a census blind to the table owner, a
+          // partial-roster shrink that passed, a contains() wiring check defeated by a '#', a
+          // silent Docker-absent skip that certified an unexecuted census as green. Every one was
+          // labelled "major" and every one was waved through. What separates those from prose
+          // is not severity, it is whether the reviewer OBSERVED the failure.
+          provenByExecution: {
+            type: 'boolean',
+            description: 'TRUE only if YOU ran a command and OBSERVED the failure -- you have the output. Reasoning from source, however sound, is FALSE. Be strict: this field decides whether the lane rebuilds.',
+          },
+          // The lease carve-out is a rule about WHOSE work it is, so it must survive the severity
+          // it was filed under; a lease item labelled blocker would otherwise make every
+          // test-adding lane permanently unconvergeable.
+          ownerLease: {
+            type: 'boolean',
+            description: 'TRUE if this is a companion edit the INTEGRATION OWNER must land (a leased path), not a defect in the lane. These never block convergence at any severity.',
+          },
         },
       },
     },
@@ -208,6 +226,16 @@ const LENSES = [
 // classify what each round was actually spent on, and let the numbers say whether the next
 // improvement belongs in the brief or in the code.
 const TELEMETRY = { rounds: [], startedAt: null }
+
+// What holds a lane open. Severity is the reviewer's opinion; provenByExecution is a fact about
+// whether they watched it fail. A proven fail-open holds the lane regardless of the label it was
+// filed under, and an owner lease releases it regardless -- because a lease is a statement about
+// whose work it is, not about how bad it is.
+function isBlocking(f) {
+  if (f.ownerLease === true) return false
+  if (f.severity === 'blocker') return true
+  return f.severity === 'major' && f.provenByExecution === true
+}
 
 function classifyRejection(blockers, weakened, verifierOk, status) {
   // Coarse, deliberately: the point is to see the SHAPE of wasted rounds, not to be precise.
@@ -291,10 +319,21 @@ Some files are deliberately withheld from every lane and are applied by the inte
   backend/openapi/**, lockfiles, backend/crates/platform/db/migrations/**
 A change that ADDS TESTS will therefore, by construction, leave the executed-tests ratchet red and
 its new binaries unwired until the owner lands the companion edit. That is EXPECTED and is NOT a
-defect in the lane's work. Report it as severity "major" with the exact companion edit required —
-never as a blocker, and never as grounds to reject. Rejecting on it makes any test-adding lane
-permanently unconvergeable, which would penalise exactly the changes that add the most coverage.
+defect in the lane's work. Report it with ownerLease=true and the exact companion edit required —
+never as grounds to reject. Rejecting on it makes any test-adding lane permanently unconvergeable,
+which would penalise exactly the changes that add the most coverage.
 Do still reject if the lane EDITED one of those paths itself.
+
+*** TWO FIELDS DECIDE WHETHER THE LANE REBUILDS — SET THEM DELIBERATELY ***
+provenByExecution: true ONLY if you ran a command and OBSERVED the failure, and you have the output
+  to show. A finding you reasoned out from the source is false here no matter how confident you are.
+  A "major" you PROVED forces another build round; a "major" you argued does not. This exists
+  because a previous round converged clean while both reviewers were holding six separately proven
+  fail-opens, each filed as an unproven-looking "major" and each waved through.
+ownerLease: true for companion edits belonging to the integration owner, per the section above.
+  These never block at any severity, so a lease item is never a reason to withhold convergence.
+If you proved a fail-open by running it, say so with provenByExecution=true even when you are
+otherwise willing to accept the change. Your verdict and this field are independent.
 
 === IN-SCOPE PATHS (authorised) ===
 ${l.owned}
@@ -410,7 +449,7 @@ async function runLane(l) {
     const checks = await parallel(LENSES.map((lens) => () =>
       agent(reviewPrompt(l, lens), { label: `review:${l.key}`, phase: 'Review', schema: REVIEW_SCHEMA })))
     const reviews = checks.filter(Boolean)
-    const blockers = reviews.flatMap((v) => (v.findings || []).filter((f) => f.severity === 'blocker'))
+    const blockers = reviews.flatMap((v) => (v.findings || []).filter(isBlocking))
     const weakened = reviews.some((v) => v.oracleWeakened)
     recordDefects(l.key, blockers, weakened)
     const converged = blockers.length === 0 && !weakened
@@ -450,7 +489,7 @@ async function runLane(l) {
     const verify = claimsGreen ? (checks[LENSES.length] || null) : null
     if (!claimsGreen) log(`${l.key}: round ${round} reported "${fix.status}" — verifier skipped, nothing green to falsify`)
 
-    const blockers = reviews.flatMap((v) => (v.findings || []).filter((f) => f.severity === 'blocker'))
+    const blockers = reviews.flatMap((v) => (v.findings || []).filter(isBlocking))
     const weakened = reviews.some((v) => v.oracleWeakened)
     recordDefects(l.key, blockers, weakened)
 
@@ -477,7 +516,7 @@ async function runLane(l) {
     }
     // Carry lower-severity findings and the status so the next round always has something concrete
     // even when no blocker was raised.
-    const lesser = reviews.flatMap((v) => (v.findings || []).filter((f) => f.severity !== 'blocker')).slice(0, 6)
+    const lesser = reviews.flatMap((v) => (v.findings || []).filter((f) => !isBlocking(f))).slice(0, 6)
     fb = {
       round: round + 1,
       blockers,
