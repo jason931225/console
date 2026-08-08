@@ -310,8 +310,12 @@ async fn list_cases_is_confined_to_the_callers_branch_scope(pool: PgPool) {
     assert_eq!(mine.status, StatusCode::OK);
 
     let other_branch = fixture.other_branch().await;
-    let other_obligation =
-        seed_obligation(&pool, other_branch, OffsetDateTime::now_utc() + Duration::days(1)).await;
+    let other_obligation = seed_obligation(
+        &pool,
+        other_branch,
+        OffsetDateTime::now_utc() + Duration::days(1),
+    )
+    .await;
     let other_admin = fixture
         .token_for(UserId::new(), vec!["ADMIN"], vec![other_branch])
         .await;
