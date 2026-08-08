@@ -386,13 +386,22 @@ async function runLane(l) {
       break
     }
 
-    // Two adversarial readers plus one independent re-runner, concurrently.
+    // Two adversarial readers plus, when there is something to falsify, one independent re-runner.
+    //
+    // The verifier exists to test a CLAIMED green by re-running the lane's own commands. A lane
+    // reporting "partial" or "blocked" is claiming nothing, so there is nothing to falsify and the
+    // round cannot converge regardless. Running it anyway re-executes full test suites for no
+    // decision value: in one measured phase, two consecutive rounds converged zero lanes, so six
+    // verifiers re-ran suites whose result could not have changed any outcome. Reviews still run
+    // on every round -- a rejected round's findings are exactly what the next build needs.
+    const claimsGreen = fix.status === 'done'
     const checks = await parallel([
       ...LENSES.map((lens) => () => agent(reviewPrompt(l, lens), { label: `review:${l.key}${sfx}`, phase: 'Review', schema: REVIEW_SCHEMA })),
-      () => agent(verifyPrompt(l, fix), { label: `verify:${l.key}${sfx}`, phase: 'Review', schema: VERIFY_SCHEMA }),
+      ...(claimsGreen ? [() => agent(verifyPrompt(l, fix), { label: `verify:${l.key}${sfx}`, phase: 'Review', schema: VERIFY_SCHEMA })] : []),
     ])
     const reviews = checks.slice(0, LENSES.length).filter(Boolean)
-    const verify = checks[LENSES.length] || null
+    const verify = claimsGreen ? (checks[LENSES.length] || null) : null
+    if (!claimsGreen) log(`${l.key}: round ${round} reported "${fix.status}" — verifier skipped, nothing green to falsify`)
 
     const blockers = reviews.flatMap((v) => (v.findings || []).filter((f) => f.severity === 'blocker'))
     const weakened = reviews.some((v) => v.oracleWeakened)
