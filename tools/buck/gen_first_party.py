@@ -668,6 +668,14 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/publish_auto_create_action_as_runtime_role.rs': 'postgres',
         },
     },
+    'console-orgchange-adapter-postgres': {
+        # No 'unit' key: this crate generates no unit-test target, and
+        # validate_resource_metadata raises on a STALE declaration as readily as
+        # on a missing one -- declaring 'unit': 'none' here fails the gate.
+        'integration': {
+            'tests/preflight_persists_nothing.rs': 'postgres',
+        },
+    },
     'console-orgchange-domain': {
         'unit': 'none',
     },
