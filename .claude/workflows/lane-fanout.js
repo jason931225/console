@@ -36,6 +36,29 @@ if (typeof ARGS === 'string') {
 }
 ARGS = ARGS || {}
 
+// AN OPTION THIS HARNESS DOES NOT READ MUST ABORT, NEVER BE SILENTLY DROPPED.
+// Borrowed from a sibling runner where exactly this defect cost six lanes and ~2.3M tokens: a
+// top-level option was accepted, ignored, and the run looked normal. The arg blobs passed here are
+// kilobytes of hand-written JSON, so a single typo -- `lens` for `lenses`, `maxRound` for
+// `maxRounds` -- silently changes what runs while every log line still looks right. Fail loudly at
+// dispatch instead, where it costs seconds.
+const KNOWN_ARGS = ['tip', 'lanes', 'maxRounds', 'lockExtra', 'lenses', 'land', 'integrationBranch']
+const KNOWN_LANE_KEYS = ['key', 'bead', 'wt', 'owned', 'brief', 'accept', 'reviewOnly', 'priorResult']
+{
+  const unknown = Object.keys(ARGS).filter((k) => !KNOWN_ARGS.includes(k))
+  for (const l of ARGS.lanes || []) {
+    for (const k of Object.keys(l || {})) {
+      if (!KNOWN_LANE_KEYS.includes(k)) unknown.push(`lanes[${(l && l.key) || '?'}].${k}`)
+    }
+  }
+  if (unknown.length) {
+    throw new Error(
+      `lane-fanout: unknown option(s) ${unknown.join(', ')} — this harness would ignore them silently. ` +
+      `Known top-level: ${KNOWN_ARGS.join(', ')}. Known per-lane: ${KNOWN_LANE_KEYS.join(', ')}.`,
+    )
+  }
+}
+
 const TIP = ARGS.tip
 const LANES = ARGS.lanes || []
 const MAX_ROUNDS = ARGS.maxRounds || 3
@@ -593,6 +616,95 @@ const stuck = out.filter((o) => !o.converged).map((o) => `${o.lane}(${o.rounds}r
 log(`CONVERGED: ${conv.join(', ') || 'none'} | UNCONVERGED: ${stuck.join(', ') || 'none'}`)
 if (DEFECT_LEDGER.length) log(`defect classes seen this run: ${DEFECT_LEDGER.length}`)
 
+// --- terminal phase: LAND ---------------------------------------------------
+// This phase exists because the harness did not have one, and its absence was a process defect
+// rather than an oversight. A lane used to converge and stop, leaving its commits on a detached
+// HEAD in a worktree nobody landed. Accumulation was therefore guaranteed by construction: measured
+// 2026-08-08, ZERO open PRs against a main that twelve-plus worktrees sat above -- one at +99, one
+// at +95, one at +61 -- which is hours of correct work nobody could review.
+//
+// The fix is NOT a consolidation phase. Consolidation-as-an-institution is the bureaucracy you get
+// from refusing to fix the thing that generates the debt. The fix is that landing is part of the
+// pipeline, because the cost curve is superlinear: one lane's diff onto an integration branch is a
+// minutes-long rebase and STAYS minutes; twelve lanes at once is not twelve times worse, because
+// conflicts multiply and the authority train rebinds on every fix.
+//
+// So: neither N PRs nor one heroic merge. ONE long-lived integration branch that every converged
+// lane lands on immediately, kept continuously mergeable, PR'd on a cadence the human chooses.
+//
+// ONE WRITER. A single agent lands every lane in sequence. Landing is the one place where parallel
+// agents would share a write target, and two writers on one branch is the failure that has already
+// cost this program a round.
+const LAND = ARGS.land !== false && conv.length > 0
+const INTEGRATION_BRANCH = ARGS.integrationBranch || 'integration/lane-fanout'
+let landed = null
+if (LAND) {
+  phase('Land')
+  const landable = out.filter((o) => o.converged)
+  landed = await agent(
+    `You are the integration owner. ${landable.length} lane(s) converged and must be LANDED NOW, in one sequence, by you alone.
+
+INTEGRATION BRANCH: ${INTEGRATION_BRANCH}   BASE: ${TIP}
+
+LANES TO LAND, in this order:
+${landable.map((o, i) => `${i + 1}. ${o.lane.key} — worktree ${o.lane.wt}\n   files: ${(o.fix && o.fix.filesChanged ? o.fix.filesChanged : []).join(', ') || '(see the worktree)'}\n   leased edits it reported instead of making: ${(o.fix && o.fix.followUps) || 'none'}`).join('\n')}
+
+WHY THIS RUNS AT ALL: work that converges but does not land accumulates, and the cost of landing it
+grows faster than linearly. Landing one lane now is cheap; landing twelve later is not.
+
+BEFORE YOU TOUCH ANYTHING:
+  For each lane's worktree run 'git status --porcelain' and 'git log --oneline -3'. A worktree with
+  uncommitted changes has a LIVE WRITER -- do not land it, report it as skipped and say so. A
+  finished workflow id is NOT evidence that nothing is writing; the working tree is.
+
+HOW TO LAND:
+  Create or fast-forward ${INTEGRATION_BRANCH} from ${TIP} in the PRIMARY repo. For each lane in
+  order, apply that lane's commits (cherry-pick its range, or format-patch/am). After EACH lane:
+  build and test the packages that lane touched, and stop at the first failure rather than piling
+  the next lane on top of a broken tree.
+  PERMITTED: branch create, checkout of the integration branch, cherry-pick, am, add, commit, and
+  read-only git everywhere.
+  FORBIDDEN: push, force-push, PR creation, reset --hard, clean, stash, rebase of anything already
+  landed, and ANY write inside a lane worktree. Pushing and PR-opening are the human's call; your
+  job is to make the branch exist, be correct, and be continuously mergeable.
+  NEVER use a merge that would create an unsigned two-parent head -- that breaks the authority train
+  and the error will blame the signature.
+
+CONFLICTS: if a lane conflicts, resolve ONLY if the resolution is mechanical and obvious; otherwise
+stop, leave the branch at the last good lane, and report the conflicting hunks exactly. A wrong
+conflict resolution is far more expensive than a skipped lane.
+
+REPORT: the branch and its head SHA, which lanes landed and which were skipped and why, the exact
+verification you ran after each lane with its real output, every leased edit still outstanding across
+all lanes (deduplicated -- these are what the human must apply before the PR is green), and the
+exact 'gh pr create' command you did NOT run.`,
+    { label: 'land', phase: 'Land', schema: {
+      type: 'object',
+      required: ['branch', 'headSha', 'landedLanes', 'skippedLanes', 'verification', 'outstandingLeasedEdits'],
+      properties: {
+        branch: { type: 'string' },
+        headSha: { type: 'string' },
+        landedLanes: { type: 'array', items: { type: 'string' } },
+        skippedLanes: { type: 'array', items: { type: 'string' }, description: 'lane key + the reason, e.g. "p4-tai: live writer, 4 files dirty"' },
+        verification: { type: 'string', description: 'exact commands and real output, per lane' },
+        conflicts: { type: 'string' },
+        outstandingLeasedEdits: { type: 'string', description: 'deduplicated across lanes; what the human must apply before a PR can be green' },
+        prCommand: { type: 'string', description: 'the gh pr create command, NOT run' },
+      },
+    } },
+  )
+  if (landed) {
+    log(`LANDED on ${landed.branch} @ ${landed.headSha}: ${(landed.landedLanes || []).join(', ') || 'none'}`)
+    if ((landed.skippedLanes || []).length) log(`NOT LANDED: ${landed.skippedLanes.join(' | ')}`)
+  } else {
+    log('LAND phase returned nothing — converged work is still sitting in worktrees; land it by hand')
+  }
+} else if (conv.length === 0) {
+  log('nothing converged, so nothing to land')
+} else {
+  log(`land disabled by args; ${conv.length} converged lane(s) left in their worktrees — this is how the +99 backlog happened`)
+}
+
 // Where did the rounds go? Rounds are the scarce resource, so this is the number that should drive
 // the next improvement. A run dominated by scope-brief-defect means fix the BRIEF; by code-defect
 // means the lanes are genuinely hard; by owner-lease means the lease boundary is drawn wrong.
@@ -624,6 +736,11 @@ log(`HEADLINE | ${headline.join(' | ')}`)
 return {
   headline,
   lanes: out,
+  // The landing result must be RETURNED, not merely logged. Caught by the offline preflight on its
+  // first run: the Land phase executed and its branch and head SHA went nowhere, so the caller could
+  // not tell where the work went -- a phase that runs and reports nothing is barely better than the
+  // missing phase it replaced.
+  landed,
   defectClasses: DEFECT_LEDGER.map((d) => ({ lane: d.laneKey, claim: d.claim })),
   telemetry: {
     buildRounds,
