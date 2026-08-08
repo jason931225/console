@@ -2,14 +2,15 @@
 
 use std::collections::BTreeSet;
 
-use console_kernel_core::{BranchId, BranchScope, ErrorKind, OrgId, UserId};
+use console_kernel_core::{BranchId, BranchScope, ErrorKind, OrgId, Timestamp, UserId};
 use console_platform_authz::{
     Action, AuthorizationContext, AuthorizationRequest, AuthorizationResource, BranchColumn,
-    CedarEvaluation, CoexistenceMapEntry, CompiledBundleCacheKey, DecisionEffect, DecisionEngine,
-    DecisionReason, DualEngineMode, EffectiveFeatureGrant, Feature, PermissionLevel, Principal,
-    RlsScopeProof, Role, SubjectFreshness, SubjectFreshnessRequirement, authorize,
-    authorize_org_wide, evaluate_cedar_pbac_boundary, evaluate_legacy_contract,
-    observe_cedar_pbac_decision, permission_for, repository_filter, resolve_branch_scope_in_org,
+    BranchScopedResource, CedarEvaluation, CoexistenceMapEntry, CompiledBundleCacheKey,
+    DecisionEffect, DecisionEngine, DecisionReason, DualEngineMode, EffectiveFeatureGrant, Feature,
+    PermissionLevel, Principal, ResourceBranch, RlsScopeProof, Role, SubjectFreshness,
+    SubjectFreshnessRequirement, authorize, authorize_org_wide, authorize_scoped,
+    evaluate_cedar_pbac_boundary, evaluate_legacy_contract, observe_cedar_pbac_decision,
+    permission_for, repository_filter, resolve_branch_scope_in_org,
     resolve_effective_feature_grants_in_org,
 };
 use sqlx::PgPool;
@@ -1528,5 +1529,86 @@ async fn assign_policy_roles(pool: &PgPool, user_id: uuid::Uuid, role_ids: &[uui
         .execute(pool)
         .await
         .unwrap();
+    }
+}
+
+/// `ResourceBranch::lookup` is the ONLY production way into a `ResourceBranch`,
+/// so it is proven against a real row rather than trusted.
+///
+/// The branch it yields must be the RESOURCE's branch — allowed for the branch
+/// the principal is a member of, denied for the sibling it is not. The caller
+/// picks the row and the resource KIND; it does not pick the table or the
+/// column, so it has no way to aim this at the principal's own membership row.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn a_resource_branch_looked_up_by_id_decides_as_the_resources_branch(pool: PgPool) {
+    let seeded = seed_user_with_two_branches_and_one_membership(&pool, "ADMIN").await;
+    let principal = Principal::new(
+        UserId::from_uuid(seeded.user),
+        OrgId::knl(),
+        BTreeSet::from([Role::Admin]),
+        BranchScope::single(BranchId::from_uuid(seeded.member_branch)),
+    );
+    let action = Action::new(Feature::CompletionReview);
+    let at = Timestamp::now_utc();
+
+    for (branch, expected_ok) in [(seeded.member_branch, true), (seeded.other_branch, false)] {
+        let customer: uuid::Uuid = sqlx::query_scalar(
+            "INSERT INTO registry_customers (branch_id, name, org_id)
+             VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(branch)
+        .bind(format!("Customer {branch}"))
+        .bind(*OrgId::knl().as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let resource_branch =
+            ResourceBranch::lookup(&pool, BranchScopedResource::RegistryCustomer, customer)
+                .await
+                .unwrap();
+
+        assert_eq!(resource_branch.get(), BranchId::from_uuid(branch));
+        assert_eq!(
+            authorize_scoped(&principal, action, Some(resource_branch), at).is_ok(),
+            expected_ok,
+            "a branch looked up by resource id must decide as the RESOURCE's branch"
+        );
+    }
+}
+
+/// A resource that does not exist has no branch, and that must surface as a
+/// typed refusal. It must NOT collapse into the branch-less (`None`) arm:
+/// "the row is missing" and "the row has no branch" authorize differently.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn a_missing_resource_row_is_a_typed_refusal_not_a_branchless_pass(pool: PgPool) {
+    let absent = ResourceBranch::lookup(
+        &pool,
+        BranchScopedResource::RegistryCustomer,
+        uuid::Uuid::new_v4(),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(absent.kind, ErrorKind::NotFound);
+}
+
+/// TOTALITY. Every `BranchScopedResource` variant must name a table and a branch
+/// column that really exist: a wrong name is a database error, which surfaces as
+/// `Internal`, never as `NotFound`. Without this, a variant added with a typo
+/// would fail every authorization at runtime and no test would say why.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn every_resource_kind_names_a_table_and_branch_column_that_exist(pool: PgPool) {
+    for resource in BranchScopedResource::ALL {
+        let err = ResourceBranch::lookup(&pool, resource, uuid::Uuid::new_v4())
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.kind,
+            ErrorKind::NotFound,
+            "{resource:?} did not resolve against the live schema: {}",
+            err.message
+        );
     }
 }
