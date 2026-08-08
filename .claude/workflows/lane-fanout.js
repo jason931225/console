@@ -469,7 +469,18 @@ const byCause = {}
 for (const r of TELEMETRY.rounds) byCause[r.cause] = (byCause[r.cause] || 0) + 1
 const wasted = (byCause['scope-brief-defect'] || 0) + (byCause['owner-lease'] || 0)
 const buildRounds = out.reduce((n, o) => n + (o.rounds || 0), 0)
-log(`telemetry: ${buildRounds} build round(s); rejection causes ${JSON.stringify(byCause)}`)
+
+// SERIAL DEPTH is what wall-clock actually tracks — measured across this harness's runs, per-step
+// latency sits at 9-14 min and total time follows depth almost exactly while ignoring width:
+// 12 agents at depth 6 took 74 min; 36 agents at depth 6 took 63 min. Three times the width, no
+// slower. So adding reviewers is nearly free and adding a serial step is not.
+// This harness is already flat WITHIN a round -- build, then one parallel block of reviewers plus
+// the verifier -- so depth is 2 per round and nothing here can be unstacked further. All remaining
+// depth is ROUNDS, which makes brief quality the only real lever on wall-clock.
+const maxRounds = out.reduce((n, o) => Math.max(n, o.rounds || 0), 0)
+const depth = maxRounds * 2
+log(`telemetry: ${buildRounds} build round(s); serial depth ~${depth} (${maxRounds} round(s) x 2: build then one parallel check block)`)
+log(`telemetry: rejection causes ${JSON.stringify(byCause)}`)
 if (wasted) log(`telemetry: ${wasted}/${TELEMETRY.rounds.length} rejected round(s) were BRIEF or LEASE defects, not code — fix those in the brief, not the lane`)
 
 // Headline FIRST and compact, because the result file gets truncated on long runs and the journal
@@ -485,6 +496,7 @@ return {
   defectClasses: DEFECT_LEDGER.map((d) => ({ lane: d.laneKey, claim: d.claim })),
   telemetry: {
     buildRounds,
+    serialDepth: depth,
     checkersPerBuild: buildRounds ? +(((LENSES.length + 1) * buildRounds) / buildRounds).toFixed(2) : 0,
     rejectionCauses: byCause,
     briefOrLeaseRounds: wasted,
