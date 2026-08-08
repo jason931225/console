@@ -239,6 +239,44 @@ const threw = async (args) => {
   check('land:false is honoured (and warns)', !off.seen.some((s) => s.label === 'land'), off.seen.map((s) => s.label))
 }
 
+// --- 10b. A DEAD REVIEWER IS NOT AN ABSENT FINDING. -----------------------------------------
+// Measured: session-limit kills took 4 of 7 agents from one run and 3 of 3 from another, and
+// `.filter(Boolean)` made them vanish — a lane could converge on one surviving reviewer in silence.
+{
+  const standingDied = mkAgent({ review: (prompt) => (/ORACLE INTEGRITY/.test(prompt) ? null : REVIEW()) })
+  const logs = []
+  const r = await go(ARGS(), standingDied, logs)
+  check('a dead STANDING lens blocks convergence', r.lanes[0].converged === false, r.headline)
+  check('and says which one died', logs.some((m) => /CANNOT CONVERGE.*ORACLE INTEGRITY/.test(m)),
+    logs.filter((m) => /CONVERGE|DIED/.test(m)))
+
+  const customDied = mkAgent({ review: (prompt) => (/CUSTOM A/.test(prompt) ? null : REVIEW()) })
+  const logs2 = []
+  const r2 = await go(ARGS({ lenses: ['CUSTOM A', 'CUSTOM B'] }), customDied, logs2)
+  check('a dead CUSTOM lens is tolerated (a rebuild round costs more than it saves)',
+    r2.lanes[0].converged === true, r2.headline)
+  check('but the death is still logged', logs2.some((m) => /DIED/.test(m)),
+    logs2.filter((m) => /DIED|reviewers returned/.test(m)))
+}
+
+// --- 10c. Telemetry must be able to be WRONG, i.e. must observe reality. --------------------
+// The old expression was ((LENSES.length + 1) * buildRounds) / buildRounds — algebraically a
+// constant. It could not detect a dead agent no matter how many died.
+{
+  const oneDied = mkAgent({ review: (prompt) => (/BLAST RADIUS/.test(prompt) ? null : REVIEW()) })
+  const r = await go(ARGS(), oneDied)
+  const t = r.telemetry
+  check('telemetry reports dispatched > returned when a checker dies',
+    t.checkersDispatched > t.checkersReturned, { d: t.checkersDispatched, r: t.checkersReturned })
+  check('telemetry names the dead checker', (t.deadCheckers || []).length === 1, t.deadCheckers)
+
+  const allLived = mkAgent()
+  const r2 = await go(ARGS(), allLived)
+  check('telemetry reports equality when none die',
+    r2.telemetry.checkersDispatched === r2.telemetry.checkersReturned,
+    { d: r2.telemetry.checkersDispatched, r: r2.telemetry.checkersReturned })
+}
+
 // --- 11. The required-field trio must stay required, or the clause is skimmable again. ------
 {
   const req = (SRC.match(/required: \[[^\]]*'enforcementPlacement'[^\]]*\]/) || [''])[0]

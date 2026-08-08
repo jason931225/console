@@ -282,7 +282,7 @@ const LENSES = [
 // The lever follows directly: another reviewer is cheap, another BUILD ROUND is expensive. So
 // classify what each round was actually spent on, and let the numbers say whether the next
 // improvement belongs in the brief or in the code.
-const TELEMETRY = { rounds: [], startedAt: null }
+const TELEMETRY = { rounds: [], startedAt: null, checkers: [] }
 
 // What holds a lane open. Severity is the reviewer's opinion; provenByExecution is a fact about
 // whether they watched it fail. A proven fail-open holds the lane regardless of the label it was
@@ -505,12 +505,19 @@ async function runLane(l) {
   if (l.reviewOnly) {
     const checks = await parallel(LENSES.map((lens) => () =>
       agent(reviewPrompt(l, lens), { label: `review:${l.key}`, phase: 'Review', schema: REVIEW_SCHEMA })))
+    // Same death accounting as the main path: a review-only lane that lost a standing lens has not
+    // been reviewed for the thing that lens exists to catch, and must not report converged.
+    const deadStanding = checks
+      .slice(0, STANDING_LENSES.length)
+      .map((r, i) => (r ? null : STANDING_LENSES[i].split(' —')[0]))
+      .filter(Boolean)
     const reviews = checks.filter(Boolean)
     const blockers = reviews.flatMap((v) => (v.findings || []).filter(isBlocking))
     const weakened = reviews.some((v) => v.oracleWeakened)
     recordDefects(l.key, blockers, weakened)
-    const converged = blockers.length === 0 && !weakened
-    log(`${l.key}: review-only -> ${blockers.length} blocker(s)${weakened ? ', ORACLE WEAKENED' : ''}`)
+    TELEMETRY.checkers.push({ dispatched: LENSES.length, returned: reviews.length, deadLenses: deadStanding })
+    const converged = blockers.length === 0 && !weakened && deadStanding.length === 0
+    log(`${l.key}: review-only -> ${reviews.length}/${LENSES.length} reviewers, ${blockers.length} blocker(s)${weakened ? ', ORACLE WEAKENED' : ''}${deadStanding.length ? `, STANDING LENS DIED: ${deadStanding.join(', ')}` : ''}`)
     return { lane: l, fix: l.priorResult || null, reviews, verify: null, blockers, rounds: 0, converged }
   }
 
@@ -542,13 +549,40 @@ async function runLane(l) {
       ...LENSES.map((lens) => () => agent(reviewPrompt(l, lens), { label: `review:${l.key}${sfx}`, phase: 'Review', schema: REVIEW_SCHEMA })),
       ...(claimsGreen ? [() => agent(verifyPrompt(l, fix), { label: `verify:${l.key}${sfx}`, phase: 'Review', schema: VERIFY_SCHEMA })] : []),
     ])
-    const reviews = checks.slice(0, LENSES.length).filter(Boolean)
+    // A DEAD REVIEWER IS NOT AN ABSENT FINDING. parallel() resolves a died agent to null, and
+    // .filter(Boolean) used to make it disappear -- so a round could converge on one surviving
+    // reviewer while three others died, and the log said nothing. That is a false-green path, and
+    // it fired repeatedly in one measured session: session-limit kills took 4 of 7 agents from one
+    // run, 3 of 3 from another, and an adjacent workflow's synthesis step silently ran on 2 of 3
+    // inputs. Convergence must know how many eyes actually reported.
+    //
+    // Index order from parallel() matches the dispatch order, so a null identifies WHICH lens died.
+    // STANDING lenses are non-negotiable: if one of them did not report, the lane has not been
+    // reviewed for oracle integrity, enforcement placement or peripheral drift, and it may not
+    // converge no matter what the survivors said. A custom lens dying is logged and tolerated,
+    // because forcing a whole rebuild round over it costs more than it saves.
+    const reviewSlots = checks.slice(0, LENSES.length)
+    const deadLenses = reviewSlots
+      .map((r, i) => (r ? null : LENSES[i].split(' —')[0].split(' ').slice(0, 3).join(' ')))
+      .filter(Boolean)
+    const deadStanding = reviewSlots
+      .slice(0, STANDING_LENSES.length)
+      .map((r, i) => (r ? null : STANDING_LENSES[i].split(' —')[0]))
+      .filter(Boolean)
+    const reviews = reviewSlots.filter(Boolean)
     const verify = claimsGreen ? (checks[LENSES.length] || null) : null
     if (!claimsGreen) log(`${l.key}: round ${round} reported "${fix.status}" — verifier skipped, nothing green to falsify`)
+    if (deadLenses.length) {
+      log(`${l.key}: round ${round} — ${reviews.length}/${LENSES.length} reviewers returned; DIED: ${deadLenses.join(', ')}`)
+    }
+    if (deadStanding.length) {
+      log(`${l.key}: round ${round} CANNOT CONVERGE — standing lens(es) never reported: ${deadStanding.join(', ')}`)
+    }
 
     const blockers = reviews.flatMap((v) => (v.findings || []).filter(isBlocking))
     const weakened = reviews.some((v) => v.oracleWeakened)
     recordDefects(l.key, blockers, weakened)
+    TELEMETRY.checkers.push({ dispatched: LENSES.length + (claimsGreen ? 1 : 0), returned: reviews.length + (verify ? 1 : 0), deadLenses })
 
     // A lane is not green because it says so. The verifier must have reproduced it.
     // The verifier judges whether its own findings contradict the claim; contradictsClaim is a
@@ -558,9 +592,9 @@ async function runLane(l) {
 
     last = { lane: l, fix, reviews, verify, blockers, rounds: round, converged: false }
 
-    if (fix.status === 'done' && blockers.length === 0 && !weakened && verifierOk) {
+    if (fix.status === 'done' && blockers.length === 0 && !weakened && verifierOk && deadStanding.length === 0) {
       last.converged = true
-      log(`${l.key}: CONVERGED round ${round} (independently re-verified)`)
+      log(`${l.key}: CONVERGED round ${round} (independently re-verified by ${reviews.length}/${LENSES.length} reviewers)`)
       break
     }
 
@@ -745,7 +779,16 @@ return {
   telemetry: {
     buildRounds,
     serialDepth: depth,
-    checkersPerBuild: buildRounds ? +(((LENSES.length + 1) * buildRounds) / buildRounds).toFixed(2) : 0,
+    // Report what ACTUALLY reported, not what was dispatched. The previous expression was
+    // ((LENSES.length + 1) * buildRounds) / buildRounds -- algebraically just LENSES.length + 1,
+    // a constant that could never observe a dead agent. Telemetry that cannot be wrong is not
+    // telemetry, and this harness lost checkers to session limits in most of its measured runs.
+    checkersDispatched: TELEMETRY.checkers.reduce((n, c) => n + c.dispatched, 0),
+    checkersReturned: TELEMETRY.checkers.reduce((n, c) => n + c.returned, 0),
+    checkersPerBuild: TELEMETRY.checkers.length
+      ? +(TELEMETRY.checkers.reduce((n, c) => n + c.returned, 0) / TELEMETRY.checkers.length).toFixed(2)
+      : 0,
+    deadCheckers: TELEMETRY.checkers.flatMap((c) => c.deadLenses),
     rejectionCauses: byCause,
     briefOrLeaseRounds: wasted,
     rounds: TELEMETRY.rounds,
