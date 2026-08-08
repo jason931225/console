@@ -1314,6 +1314,41 @@ pub fn authorize_capability(principal: &Principal, action: Action) -> Result<(),
     authorize_inner(principal, action, None, None)
 }
 
+/// [`authorize_capability`] at a decision instant — the branch-LESS half of the
+/// spine, and the ONLY door that takes no resource.
+///
+/// It is a separate function rather than a `None` on [`authorize_scoped`] on
+/// purpose. An `Option<ResourceBranch>` parameter is a type boundary its own
+/// caller can step around: every fabricating call site that
+/// [`ResourceBranch`] makes uncompilable stays compilable by passing `None`,
+/// and the branch dimension disappears exactly as silently as it did before —
+/// a convention wearing a type's clothes. With two doors there is no argument
+/// to omit, so CONVERTING a branch-scoped call site to the branch-less one is a
+/// changed function name and visible in a diff.
+///
+/// That is the whole of the claim. A NEW handler for a branch-scoped resource
+/// can still call this one and drop the branch dimension exactly as quietly as
+/// `authorize_scoped(.., None, ..)` did — nothing here can tell that its caller
+/// had a resource. Choosing the right door is still a judgement; the split only
+/// removes the way to get it wrong by omission.
+///
+/// The temporal contract is [`authorize_scoped`]'s: `at` is the decision
+/// instant, [`Principal::dated_feature_grants`] are resolved against it on
+/// every call, and nothing is carried across the boundary (ADR-0032 §3, §6).
+///
+/// # Errors
+///
+/// [`console_kernel_core::ErrorKind::Forbidden`] when the principal has no
+/// branch scope at all, or when neither a built-in role nor a grant effective
+/// AT `at` and covering that whole scope permits the action.
+pub fn authorize_capability_at(
+    principal: &Principal,
+    action: Action,
+    at: Timestamp,
+) -> Result<(), KernelError> {
+    authorize_inner(principal, action, None, Some(at))
+}
+
 /// The single body behind [`authorize`], [`authorize_capability`] and
 /// [`authorize_scoped`], so the branch dimension and the grant predicate cannot
 /// drift apart across three copies.
@@ -1389,17 +1424,21 @@ fn authorize_inner(
     Ok(())
 }
 
-/// The authorization spine: one entry point where the presence of a branch is a
-/// value, and the decision instant is an argument.
+/// The BRANCH-SCOPED authorization door: the decision instant is an argument and
+/// the resource's branch is a value that only Postgres can have produced.
 ///
-/// * `resource = None` — branch-less capability authorization, identical to
-///   [`authorize_capability`]. The resource has no `branch_id` column, or the
-///   gate's confinement is the caller's whole scope.
-/// * `resource = Some(b)` — branch authorization, identical to [`authorize`],
-///   against a branch that came off the RESOURCE. It cannot have come from
-///   anywhere else: [`ResourceBranch`] has no constructor that takes a
-///   `BranchId`, so the fabricating shapes do not compile rather than needing to
-///   be recognised.
+/// `resource` is branch authorization, identical to [`authorize`], against a
+/// branch that came off the RESOURCE. It cannot have come from anywhere else:
+/// [`ResourceBranch`] has no constructor that takes a `BranchId`, so the
+/// fabricating shapes do not compile rather than needing to be recognised.
+///
+/// When the resource has NO branch — no `branch_id` column, or a list gate whose
+/// confinement is the caller's whole scope — the door is
+/// [`authorize_capability_at`], which is a different function and not an omitted
+/// argument. This one took `Option<ResourceBranch>` until the option was removed:
+/// a boundary a caller can step around by passing `None` is a convention, not a
+/// type, and `None` is the one spelling of a fabricated branch that a compiler
+/// cannot object to.
 ///
 /// `at` is the instant the decision is made. The grant set is resolved against
 /// it on every call and the result is never cached across the boundary
@@ -1407,11 +1446,85 @@ fn authorize_inner(
 /// freshness counter can record it and nothing but re-evaluating the predicate
 /// can notice it (§6).
 ///
-/// # A fabricated branch does not compile
+/// # The parameter IS a `ResourceBranch`
 ///
-/// The branch-less call is ordinary:
+/// THE CONTROL, and the positive form of the claim: the signature is asserted
+/// whole, so re-widening the parameter is a compile error here rather than a
+/// convention nobody re-reads.
 ///
 /// ```
+/// use console_kernel_core::{KernelError, Timestamp};
+/// use console_platform_authz::{Action, Principal, ResourceBranch, authorize_scoped};
+///
+/// let branch_scoped_door: fn(&Principal, Action, ResourceBranch, Timestamp)
+///     -> Result<(), KernelError> = authorize_scoped;
+/// ```
+///
+/// The same coercion with the parameter back in an `Option` — one token's
+/// difference — no longer describes this function:
+///
+/// ```compile_fail,E0308
+/// use console_kernel_core::{KernelError, Timestamp};
+/// use console_platform_authz::{Action, Principal, ResourceBranch, authorize_scoped};
+///
+/// let branch_scoped_door: fn(&Principal, Action, Option<ResourceBranch>, Timestamp)
+///     -> Result<(), KernelError> = authorize_scoped;
+/// ```
+///
+/// # A fabricated branch does not compile
+///
+/// The branch-LESS call is ordinary, and it is its own function:
+///
+/// ```
+/// use std::collections::BTreeSet;
+///
+/// use console_kernel_core::{BranchId, BranchScope, OrgId, Timestamp, UserId};
+/// use console_platform_authz::{Action, Feature, Principal, Role, authorize_capability_at};
+///
+/// let principal = Principal::new(
+///     UserId::new(),
+///     OrgId::knl(),
+///     BTreeSet::from([Role::Admin]),
+///     BranchScope::single(BranchId::new()),
+/// );
+/// let decision = authorize_capability_at(
+///     &principal,
+///     Action::new(Feature::CompletionReview),
+///     Timestamp::now_utc(),
+/// );
+/// assert!(decision.is_ok());
+/// ```
+///
+/// Aiming that same call at the branch-scoped door with a minted branch is
+/// rejected by the compiler, not by a scan:
+///
+/// ```compile_fail,E0308
+/// use std::collections::BTreeSet;
+///
+/// use console_kernel_core::{BranchId, BranchScope, OrgId, Timestamp, UserId};
+/// use console_platform_authz::{Action, Feature, Principal, Role, authorize_scoped};
+///
+/// let principal = Principal::new(
+///     UserId::new(),
+///     OrgId::knl(),
+///     BTreeSet::from([Role::Admin]),
+///     BranchScope::single(BranchId::new()),
+/// );
+/// let decision = authorize_scoped(
+///     &principal,
+///     Action::new(Feature::CompletionReview),
+///     BranchId::new(),
+///     Timestamp::now_utc(),
+/// );
+/// assert!(decision.is_ok());
+/// ```
+///
+/// # Nor does `None`, because that is not a resource
+///
+/// The escape hatch this door used to have. It is the identical example with the
+/// branch replaced by `None` and nothing else changed:
+///
+/// ```compile_fail,E0308
 /// use std::collections::BTreeSet;
 ///
 /// use console_kernel_core::{BranchId, BranchScope, OrgId, Timestamp, UserId};
@@ -1429,52 +1542,40 @@ fn authorize_inner(
 ///     None,
 ///     Timestamp::now_utc(),
 /// );
-/// assert!(decision.is_ok());
 /// ```
 ///
-/// The same call with a minted branch is rejected by the compiler, not by a
-/// scan. This is the identical example with `None` replaced by
-/// `Some(BranchId::new())` and nothing else changed:
+/// # The TENANT is checked here, not trusted from the lookup
 ///
-/// ```compile_fail,E0308
-/// use std::collections::BTreeSet;
+/// [`ResourceBranch::lookup`] binds `org_id` in its statement, but the org it
+/// binds is an argument: a handler that takes it from the same request path as
+/// the row id (`path.org_id`) names a tenant the principal need not belong to,
+/// and the lookup then succeeds against THAT tenant's row. For a
+/// `BranchScope::All` principal `allows(branch)` is unconditionally true, so
+/// the decision would be an ALLOW against another tenant's resource.
 ///
-/// use console_kernel_core::{BranchId, BranchScope, OrgId, Timestamp, UserId};
-/// use console_platform_authz::{Action, Feature, Principal, Role, authorize_scoped};
-///
-/// let principal = Principal::new(
-///     UserId::new(),
-///     OrgId::knl(),
-///     BTreeSet::from([Role::Admin]),
-///     BranchScope::single(BranchId::new()),
-/// );
-/// let decision = authorize_scoped(
-///     &principal,
-///     Action::new(Feature::CompletionReview),
-///     Some(BranchId::new()),
-///     Timestamp::now_utc(),
-/// );
-/// assert!(decision.is_ok());
-/// ```
+/// So the branch carries the org it was read under and this door compares it to
+/// the principal's own. The tenant cannot be supplied independently of the
+/// principal being authorized — it can only be supplied wrongly, which denies.
 ///
 /// # Errors
 ///
-/// [`console_kernel_core::ErrorKind::Forbidden`] when the resource branch is
-/// outside the principal's scope, when a branch-less decision finds no scope at
-/// all, or when neither a built-in role nor a grant effective AT `at` permits
-/// the action.
+/// [`console_kernel_core::ErrorKind::Forbidden`] when the resource was read
+/// under a different tenant than the principal's, when the resource branch is
+/// outside the principal's scope, or when neither a built-in role nor a grant
+/// effective AT `at` permits the action.
 pub fn authorize_scoped(
     principal: &Principal,
     action: Action,
-    resource: Option<ResourceBranch>,
+    resource: ResourceBranch,
     at: Timestamp,
 ) -> Result<(), KernelError> {
-    authorize_inner(
-        principal,
-        action,
-        resource.map(ResourceBranch::get),
-        Some(at),
-    )
+    if resource.org() != principal.org_id {
+        return Err(KernelError::forbidden(
+            "resource was read under a different tenant than the principal",
+        ));
+    }
+
+    authorize_inner(principal, action, Some(resource.get()), Some(at))
 }
 
 /// Authorize a principal for a feature against a concrete resource branch.
@@ -1493,6 +1594,35 @@ pub fn authorize_scoped(
 /// call [`authorize_capability`]; when the action genuinely spans every branch,
 /// call [`authorize_org_wide`]. `console-gate-fabricated-branch` fails CI on the
 /// fabricating shapes.
+///
+/// # A [`ResourceBranch`] cannot be unwrapped into this door
+///
+/// This door takes a bare [`BranchId`] and so has no tenant to compare: a caller
+/// that unwrapped a [`ResourceBranch`] here would reach the same decision while
+/// skipping the org check only [`authorize_scoped`] performs, which is an ALLOW
+/// against another tenant's resource for any `BranchScope::All` principal. That
+/// spelling does not exist — the branch accessor is crate-private, so the
+/// unwrap does not compile outside this crate:
+///
+/// ```compile_fail,E0624
+/// fn unwrap_the_resource(
+///     resource: console_platform_authz::ResourceBranch,
+/// ) -> console_kernel_core::BranchId {
+///     resource.get()
+/// }
+/// ```
+///
+/// THE CONTROL, and a one-token delta: the same argument, the same call syntax,
+/// the accessor that IS public — so the failure above is the unwrap and not the
+/// imports, the type name or the method-call shape.
+///
+/// ```
+/// fn read_the_tenant(
+///     resource: console_platform_authz::ResourceBranch,
+/// ) -> console_kernel_core::OrgId {
+///     resource.org()
+/// }
+/// ```
 pub fn authorize(
     principal: &Principal,
     action: Action,
@@ -1519,6 +1649,10 @@ pub fn authorize_service(
 
 #[derive(Debug)]
 struct RuntimePolicyPermissionRow {
+    /// The `user_role_assignments` row this permission was reached through. A
+    /// role with three permissions joins to three rows and is still ONE
+    /// assignment; ADR-0032 §1's non-overlap constraint is about assignments.
+    assignment_id: uuid::Uuid,
     role_id: uuid::Uuid,
     feature_key: String,
     permission_level: String,
@@ -1567,7 +1701,7 @@ pub async fn resolve_effective_feature_grants_in_org(
 
     let permission_rows = sqlx::query(
         r#"
-        SELECT pr.id AS role_id, prp.feature_key, prp.permission_level
+        SELECT ura.id AS assignment_id, pr.id AS role_id, prp.feature_key, prp.permission_level
         FROM user_role_assignments AS ura
         JOIN policy_roles AS pr
           ON pr.org_id = ura.org_id
@@ -1590,6 +1724,7 @@ pub async fn resolve_effective_feature_grants_in_org(
     .into_iter()
     .map(|row| {
         Ok(RuntimePolicyPermissionRow {
+            assignment_id: row.try_get("assignment_id")?,
             role_id: row.try_get("role_id")?,
             feature_key: row.try_get("feature_key")?,
             permission_level: row.try_get("permission_level")?,
@@ -1662,7 +1797,76 @@ pub async fn resolve_effective_feature_grants_in_org(
         }
     }
 
-    let grants = permission_rows
+    effective_grants_from_checked_assignments(permission_rows, &effective_scopes_by_role)
+}
+
+/// One entry per 발령, for [`enforce_assignment_non_overlap`] to group by role.
+///
+/// The permission join repeats one assignment once per permission, so the rows
+/// are folded by ASSIGNMENT id. Keying this by `role_id` instead reads as a
+/// tidy-up and is not one: two records for a role would collapse into one entry
+/// and the guard downstream could never fire again.
+///
+/// Every interval is [`GrantValidity::always()`] because
+/// `user_role_assignments` has no `valid_from`/`valid_to` columns yet — the
+/// migration is ADR-0032's other half. That is not a placeholder that weakens
+/// the check today: `always()` overlaps `always()`, so two rows for one role
+/// are still refused.
+///
+/// It is NOT, however, the shape the columns arrive in. When they land, THIS
+/// function must read them; leaving `always()` here would fold two legitimately
+/// consecutive 발령 — `[100, 200)` then `[200, 300)`, the case
+/// `touching_half_open_intervals_for_one_role_do_not_overlap` exists to permit —
+/// into two `always()` intervals that overlap, and the resolver would return
+/// `Conflict` instead of that user's whole custom-role authority.
+///
+/// That obligation is executable, not a note: the integration test
+/// `assignment_validity_is_stamped_only_while_the_schema_has_no_intervals`
+/// asserts against the live schema that the columns are absent, so the
+/// migration that adds them fails here first and names this function.
+fn assignment_validities(
+    permission_rows: &[RuntimePolicyPermissionRow],
+) -> Vec<(uuid::Uuid, GrantValidity)> {
+    permission_rows
+        .iter()
+        .map(|row| (row.assignment_id, row.role_id))
+        .collect::<BTreeMap<_, _>>()
+        .into_values()
+        .map(|role_id| (role_id, GrantValidity::always()))
+        .collect()
+}
+
+/// The fold from assignment rows to runtime authority — behind ADR-0032 §1.
+///
+/// The check is FIRST and the fold is only reachable through it, so an
+/// ambiguous assignment set cannot become a grant by a caller forgetting to
+/// ask. `enforce_assignment_non_overlap` is otherwise a predicate with no
+/// production caller, which is indistinguishable from not having one.
+///
+/// The checked set is derived HERE, from the same rows that are about to be
+/// folded. It was a separate argument, and that made the wiring provable only
+/// by inspection: the resolver could pass an empty slice — accidentally, or
+/// through an edit to what it collected — and the guard would still be called,
+/// still return `Ok`, and no test could tell, because the assignments a test
+/// passes are not the rows it folds. One argument means the two cannot be
+/// different sets.
+///
+/// The rows checked are the ones that are about to become authority:
+/// assignments to ACTIVE, non-system roles that carry a permission. A duplicate
+/// on a DRAFT role grants nothing either way, and the database constraint (still
+/// unwritten) covers the rest.
+///
+/// # Errors
+///
+/// [`console_kernel_core::ErrorKind::Conflict`] when two assignments of one role
+/// cover a shared instant.
+fn effective_grants_from_checked_assignments(
+    permission_rows: Vec<RuntimePolicyPermissionRow>,
+    effective_scopes_by_role: &BTreeMap<uuid::Uuid, BranchScope>,
+) -> Result<Vec<EffectiveFeatureGrant>, KernelError> {
+    enforce_assignment_non_overlap(&assignment_validities(&permission_rows))?;
+
+    Ok(permission_rows
         .into_iter()
         .filter_map(|row| {
             let scope = effective_scopes_by_role.get(&row.role_id)?;
@@ -1678,9 +1882,7 @@ pub async fn resolve_effective_feature_grants_in_org(
                 scope.clone(),
             ))
         })
-        .collect();
-
-    Ok(grants)
+        .collect())
 }
 
 fn custom_role_runtime_feature_allowed(feature: Feature) -> bool {
@@ -2574,9 +2776,9 @@ mod tests {
                         Action::request(feature),
                     ] {
                         assert_eq!(
-                            authorize_scoped(&principal, action, None, ts(1_000)).is_ok(),
+                            authorize_capability_at(&principal, action, ts(1_000)).is_ok(),
                             authorize_capability(&principal, action).is_ok(),
-                            "{role:?}/{feature:?}: None must BE authorize_capability"
+                            "{role:?}/{feature:?}: the branch-less door must BE authorize_capability"
                         );
                     }
                 }
@@ -2601,17 +2803,58 @@ mod tests {
                             authorize_scoped(
                                 &principal,
                                 action,
-                                Some(ResourceBranch::for_test(branch)),
+                                ResourceBranch::for_test(principal.org_id, branch),
                                 ts(1_000),
                             )
                             .is_ok(),
                             authorize(&principal, action, branch).is_ok(),
-                            "{role:?}/{feature:?}: Some(b) must BE authorize"
+                            "{role:?}/{feature:?}: a resource branch must BE authorize"
                         );
                     }
                 }
             }
         }
+    }
+
+    /// CROSS-TENANT. The tenant a branch was read under is part of what makes a
+    /// `ResourceBranch` a proof: a row id is a bare uuid, so a call site that
+    /// takes the org from the same request path as the id (`path.org_id`) can
+    /// name a tenant the principal does not belong to. The lookup then succeeds
+    /// against THAT tenant's row, and for a `BranchScope::All` principal
+    /// `allows(branch)` is unconditionally true — an ALLOW against another
+    /// tenant's resource.
+    ///
+    /// So the decision checks the org too, and the principal is the only side
+    /// that can supply it.
+    #[test]
+    fn a_resource_branch_read_under_another_tenant_is_denied_however_wide_the_scope() {
+        let branch = BranchId::new();
+        let principal = principal_with([Role::Admin], BranchScope::All);
+        let action = Action::new(Feature::CompletionReview);
+        let other_tenant = OrgId::from_uuid(uuid::Uuid::from_u128(0xb0b));
+        assert_ne!(other_tenant, principal.org_id);
+
+        // THE CONTROL: the same branch, read under the principal's own org, is
+        // an ordinary allow — so the refusal below is the tenant and nothing
+        // else about the fixture.
+        assert!(
+            authorize_scoped(
+                &principal,
+                action,
+                ResourceBranch::for_test(principal.org_id, branch),
+                ts(1),
+            )
+            .is_ok()
+        );
+
+        let err = authorize_scoped(
+            &principal,
+            action,
+            ResourceBranch::for_test(other_tenant, branch),
+            ts(1),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::Forbidden);
     }
 
     /// The fold every REST list gate performs over
@@ -2658,13 +2901,8 @@ mod tests {
             "a dated grant must never appear in the field time-blind callers fold over"
         );
         assert!(
-            authorize_scoped(
-                &expired,
-                Action::new(Feature::WorkOrderCreate),
-                None,
-                ts(250)
-            )
-            .is_err(),
+            authorize_capability_at(&expired, Action::new(Feature::WorkOrderCreate), ts(250))
+                .is_err(),
             "and the decision-time door must still deny it after valid_to"
         );
     }
@@ -2690,21 +2928,21 @@ mod tests {
         let principal = dated_grant(GrantValidity::half_open(ts(100), Some(ts(200))).unwrap());
         let action = Action::new(Feature::WorkOrderCreate);
 
-        assert!(authorize_scoped(&principal, action, None, ts(99)).is_err());
+        assert!(authorize_capability_at(&principal, action, ts(99)).is_err());
         assert!(
-            authorize_scoped(&principal, action, None, ts(100)).is_ok(),
+            authorize_capability_at(&principal, action, ts(100)).is_ok(),
             "valid_from is INSIDE the interval"
         );
-        assert!(authorize_scoped(&principal, action, None, ts(199)).is_ok());
+        assert!(authorize_capability_at(&principal, action, ts(199)).is_ok());
         assert!(
-            authorize_scoped(&principal, action, None, ts(200)).is_err(),
+            authorize_capability_at(&principal, action, ts(200)).is_err(),
             "valid_to is OUTSIDE the interval"
         );
-        assert!(authorize_scoped(&principal, action, None, ts(201)).is_err());
+        assert!(authorize_capability_at(&principal, action, ts(201)).is_err());
     }
 
-    /// The same two ends on the branch arm, so `Some(b)` cannot quietly skip the
-    /// interval predicate that `None` enforces.
+    /// The same two ends on the branch-scoped door, so it cannot quietly skip the
+    /// interval predicate the branch-less door enforces.
     #[test]
     fn the_branch_arm_honors_both_interval_ends_too() {
         let branch = BranchId::new();
@@ -2718,7 +2956,7 @@ mod tests {
                 GrantValidity::half_open(ts(100), Some(ts(200))).unwrap(),
             )]);
         let action = Action::new(Feature::WorkOrderCreate);
-        let resource = Some(ResourceBranch::for_test(branch));
+        let resource = ResourceBranch::for_test(principal.org_id, branch);
 
         assert!(authorize_scoped(&principal, action, resource, ts(99)).is_err());
         assert!(authorize_scoped(&principal, action, resource, ts(100)).is_ok());
@@ -2737,7 +2975,7 @@ mod tests {
 
         let verdicts: Vec<bool> = [ts(50), ts(150), ts(250), ts(150)]
             .into_iter()
-            .map(|at| authorize_scoped(&principal, action, None, at).is_ok())
+            .map(|at| authorize_capability_at(&principal, action, at).is_ok())
             .collect();
 
         assert_eq!(verdicts, vec![false, true, false, true]);
@@ -2775,7 +3013,7 @@ mod tests {
         assert!(authorize_capability(&dated, action).is_err());
         assert!(authorize(&dated, action, branch).is_err());
         // ...but it does through the decision-time door, inside its interval.
-        assert!(authorize_scoped(&dated, action, None, ts(150)).is_ok());
+        assert!(authorize_capability_at(&dated, action, ts(150)).is_ok());
     }
 
     /// An all-branch principal whose org-wide authority comes only from a dated
@@ -2803,6 +3041,81 @@ mod tests {
         assert!(authorize_org_wide(&dated, action).is_err());
     }
 
+    /// ADR-0032 §1 is enforced HERE or nowhere. `enforce_assignment_non_overlap`
+    /// was defined, unit tested and never called: every reference to it in the
+    /// tree was its own definition, its re-export or its own tests, and the
+    /// resolver folded straight over the assignment rows. A predicate that is
+    /// never applied is not a guard.
+    ///
+    /// The fold lives behind the check, so grants cannot be produced without it
+    /// having run — and this test says what happens when it does. Delete the
+    /// `enforce_assignment_non_overlap(..)?` line and the second half returns
+    /// one grant instead of a `Conflict`.
+    ///
+    /// The input is the ROWS, not a hand-built assignment set: the checked set
+    /// used to be a separate argument, and an argument the resolver supplies is
+    /// an argument a resolver edit can supply empty — with the guard still
+    /// nominally called, still returning `Ok`, and no test able to tell. There
+    /// is no such argument now, so this drives the same derivation production
+    /// drives.
+    #[test]
+    fn an_ambiguous_assignment_set_refuses_to_produce_grants() {
+        let role = uuid::Uuid::from_u128(0xa);
+        let scopes = BTreeMap::from([(role, BranchScope::All)]);
+        let row = |assignment: u128| RuntimePolicyPermissionRow {
+            assignment_id: uuid::Uuid::from_u128(assignment),
+            role_id: role,
+            feature_key: Feature::WorkOrderCreate.as_str().to_owned(),
+            permission_level: PermissionLevel::Allow.as_str().to_owned(),
+        };
+
+        // THE CONTROL: one 발령 for the role folds into one grant, so the
+        // refusal below is the overlap and not the fixture.
+        let unambiguous = effective_grants_from_checked_assignments(vec![row(1)], &scopes).unwrap();
+        assert_eq!(unambiguous.len(), 1);
+
+        // Two records claiming when this one authority began. The resolver must
+        // refuse the set, not pick one and fold.
+        let ambiguous =
+            effective_grants_from_checked_assignments(vec![row(1), row(2)], &scopes).unwrap_err();
+        assert_eq!(ambiguous.kind, ErrorKind::Conflict);
+    }
+
+    /// The guard above is only a guard if the resolver hands it one entry per
+    /// 발령. The permission join repeats an assignment once per permission, so
+    /// the rows are folded to the assignment first — and that fold is where the
+    /// guard can be switched off without any other test noticing: key the map
+    /// by `role_id` instead of the assignment id and two records for one role
+    /// collapse into one entry, after which `enforce_assignment_non_overlap`
+    /// can never fire again.
+    #[test]
+    fn one_assignment_is_one_entry_however_many_permissions_it_carries() {
+        let role = uuid::Uuid::from_u128(0xa);
+        let row = |assignment: u128, feature: Feature| RuntimePolicyPermissionRow {
+            assignment_id: uuid::Uuid::from_u128(assignment),
+            role_id: role,
+            feature_key: feature.as_str().to_owned(),
+            permission_level: PermissionLevel::Allow.as_str().to_owned(),
+        };
+
+        // One 발령 carrying two permissions is ONE assignment. Two entries here
+        // would refuse every user who holds a role with more than one feature.
+        let one_appointment = assignment_validities(&[
+            row(1, Feature::WorkOrderCreate),
+            row(1, Feature::CompletionReview),
+        ]);
+        assert_eq!(one_appointment.len(), 1);
+
+        // Two 발령 for the same role are TWO assignments — the ambiguity the
+        // guard exists to refuse. One entry here is the guard going silent.
+        let two_appointments = assignment_validities(&[
+            row(1, Feature::WorkOrderCreate),
+            row(2, Feature::WorkOrderCreate),
+        ]);
+        assert_eq!(two_appointments.len(), 2);
+        assert!(enforce_assignment_non_overlap(&two_appointments).is_err());
+    }
+
     /// A grant carrying no interval keeps today's behaviour exactly, on every
     /// door. This is the whole no-regression claim of the temporal change.
     #[test]
@@ -2824,7 +3137,7 @@ mod tests {
                     Action::request(feature),
                 ] {
                     assert_eq!(
-                        authorize_scoped(&principal, action, None, ts(1)).is_ok(),
+                        authorize_capability_at(&principal, action, ts(1)).is_ok(),
                         authorize_capability(&principal, action).is_ok(),
                         "{feature:?}/{permission:?}: branchless verdict moved"
                     );
@@ -2832,7 +3145,7 @@ mod tests {
                         authorize_scoped(
                             &principal,
                             action,
-                            Some(ResourceBranch::for_test(branch)),
+                            ResourceBranch::for_test(principal.org_id, branch),
                             ts(1),
                         )
                         .is_ok(),

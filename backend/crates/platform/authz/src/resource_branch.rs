@@ -6,8 +6,9 @@
 //! property of reading text rather than a bug. The gate's own doc names the
 //! control that closes all three — this module.
 //!
-//! [`ResourceBranch`] wraps a [`BranchId`] in a field that is private to THIS
-//! module. Not `pub(crate)`: private. So no expression anywhere — not in a
+//! [`ResourceBranch`] wraps a [`BranchId`] — and the [`OrgId`] it was read
+//! under — in fields that are private to THIS module. Not `pub(crate)`:
+//! private. So no expression anywhere — not in a
 //! caller, not in this crate, not one function away, not behind an import alias
 //! — can put a `BranchId` the caller invented into one. `BranchId::new()`,
 //! `branches.iter().next()`, `.nth(0)`, `branches.first().copied()` and every
@@ -25,8 +26,9 @@
 //! PRINCIPAL's own membership row — the original tautology, re-spelled as a read.
 //!
 //! So the only entrance is [`ResourceBranch::lookup`], and the caller does not
-//! choose its SQL. It supplies a [`BranchScopedResource`] — a closed enum — and a
-//! row id; the table name and the branch column come from this module. There is
+//! choose its SQL. It supplies its tenant, a [`BranchScopedResource`] — a closed
+//! enum — and a row id; the table name, the branch column and the `org_id`
+//! predicate come from this module. There is
 //! no variant for `user_branches` or any other principal-side table and a caller
 //! cannot add one, so the tautology has no spelling here rather than being
 //! discouraged.
@@ -54,7 +56,7 @@
 //! observed — each snippet was compiled against the built rlib and the code
 //! copied off the output, not guessed from the shape of the example.
 
-use console_kernel_core::{BranchId, KernelError};
+use console_kernel_core::{BranchId, KernelError, OrgId};
 use sqlx::{Executor, Postgres};
 
 /// The branch-scoped resource kinds authorization can read a branch for.
@@ -71,9 +73,9 @@ use sqlx::{Executor, Postgres};
 ///
 /// Add a variant when a call site moves to [`crate::authorize_scoped`]. A
 /// resource whose branch column is nullable does not belong here: those rows are
-/// branch-LESS and belong on the `None` arm. If one is added anyway, a `NULL`
-/// fails to decode as a uuid and [`ResourceBranch::lookup`] returns `Internal` —
-/// closed, not defaulted.
+/// branch-LESS, and their door is [`crate::authorize_capability_at`]. If one is
+/// added anyway, a `NULL` fails to decode as a uuid and
+/// [`ResourceBranch::lookup`] returns `Internal` — closed, not defaulted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BranchScopedResource {
     WorkOrder,
@@ -84,51 +86,71 @@ pub enum BranchScopedResource {
     RegistryEquipment,
 }
 
-impl BranchScopedResource {
-    pub const ALL: [Self; 6] = [
-        Self::WorkOrder,
-        Self::P1Dispatch,
-        Self::InventoryItem,
-        Self::RegistryCustomer,
-        Self::RegistrySite,
-        Self::RegistryEquipment,
-    ];
+/// [`BranchScopedResource::ALL`] and each variant's statement come from ONE
+/// list below, because two hand-maintained lists drift: `ALL` carried its own
+/// length, so a seventh variant compiled while both tests — which iterate `ALL`
+/// — silently never visited it.
+///
+/// Now `select_branch_sql`'s `match` is exhaustive, so a variant that is not in
+/// the list does not compile, and `ALL` is built from the same line.
+///
+/// The statement is a template with ONE hole, and the hole is a literal table
+/// name. There is no string built at runtime, so no caller-supplied text can
+/// reach the SQL even in principle (`sqlx`'s injection lint is satisfied without
+/// an `AssertSqlSafe` bypass) — and a join, a CTE or an extra predicate has no
+/// spelling here at all rather than being something a test must recognise.
+macro_rules! branch_scoped_resources {
+    ($($variant:ident => $table:literal,)+) => {
+        impl BranchScopedResource {
+            pub const ALL: &[Self] = &[$(Self::$variant),+];
 
-    /// The whole statement, as one `'static` literal per variant. Not a table
-    /// name interpolated into a template: there is no string built at runtime,
-    /// so no caller-supplied text can reach the SQL even in principle, and
-    /// `sqlx`'s injection lint is satisfied without an `AssertSqlSafe` bypass.
-    const fn select_branch_sql(self) -> &'static str {
-        match self {
-            Self::WorkOrder => "SELECT branch_id FROM work_orders WHERE id = $1",
-            Self::P1Dispatch => "SELECT branch_id FROM p1_dispatches WHERE id = $1",
-            Self::InventoryItem => "SELECT branch_id FROM inventory_items WHERE id = $1",
-            Self::RegistryCustomer => "SELECT branch_id FROM registry_customers WHERE id = $1",
-            Self::RegistrySite => "SELECT branch_id FROM registry_sites WHERE id = $1",
-            Self::RegistryEquipment => "SELECT branch_id FROM registry_equipment WHERE id = $1",
+            const fn select_branch_sql(self) -> &'static str {
+                match self {
+                    $(Self::$variant => concat!(
+                        "SELECT branch_id FROM ", $table, " WHERE org_id = $1 AND id = $2"
+                    ),)+
+                }
+            }
         }
-    }
+    };
 }
 
-/// The branch a resource row lives in, read from that row by this crate.
+branch_scoped_resources! {
+    WorkOrder => "work_orders",
+    P1Dispatch => "p1_dispatches",
+    InventoryItem => "inventory_items",
+    RegistryCustomer => "registry_customers",
+    RegistrySite => "registry_sites",
+    RegistryEquipment => "registry_equipment",
+}
+
+/// The branch a resource row lives in, and the TENANT it was read under, read
+/// from that row by this crate.
 ///
-/// [`crate::authorize_scoped`] takes `Option<ResourceBranch>`: `Some(b)` is
-/// branch authorization against a branch the RESOURCE has, `None` is branch-less
-/// capability authorization for a resource that has no branch at all.
+/// [`crate::authorize_scoped`] takes one of these and nothing else. A resource
+/// that has no branch at all is a different door,
+/// [`crate::authorize_capability_at`] — not an `Option` on this one.
+///
+/// The org travels WITH the branch because the two are one claim. `lookup`'s
+/// tenant is an argument, and an argument can be taken from the request path
+/// rather than from the principal; carrying it here lets
+/// [`crate::authorize_scoped`] check that the tenant the row was read under is
+/// the tenant the principal belongs to, so a mismatched pair is a denial at the
+/// decision rather than an ALLOW against another tenant's resource.
 ///
 /// # A fabricated branch does not compile
 ///
-/// THE CONTROL. Everything the failing examples below rely on — both imports,
-/// the type name, the `::from` path, the `.get()` accessor — resolves and
-/// compiles here. `From<T> for T` is reflexive, so `ResourceBranch::from` is a
-/// real, callable path:
+/// THE CONTROL. Everything the failing example below relies on — both imports,
+/// the type name, the `::from` path — resolves and compiles here.
+/// `From<T> for T` is reflexive, so `ResourceBranch::from` is a real, callable
+/// path:
 ///
 /// ```
 /// use console_kernel_core::BranchId;
 /// use console_platform_authz::ResourceBranch;
 ///
-/// fn one_function_away(branch: ResourceBranch) -> BranchId {
-///     ResourceBranch::from(branch).get()
+/// fn one_function_away(branch: ResourceBranch) -> ResourceBranch {
+///     ResourceBranch::from(branch)
 /// }
 /// ```
 ///
@@ -140,8 +162,8 @@ impl BranchScopedResource {
 /// use console_kernel_core::BranchId;
 /// use console_platform_authz::ResourceBranch;
 ///
-/// fn one_function_away(branch: BranchId) -> BranchId {
-///     ResourceBranch::from(branch).get()
+/// fn one_function_away(branch: BranchId) -> ResourceBranch {
+///     ResourceBranch::from(branch)
 /// }
 /// ```
 ///
@@ -207,25 +229,48 @@ impl BranchScopedResource {
 /// let authz_chose_the_table = console_platform_authz::ResourceBranch::lookup::<&sqlx::PgPool>;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ResourceBranch(BranchId);
+pub struct ResourceBranch {
+    org: OrgId,
+    branch: BranchId,
+}
 
 impl ResourceBranch {
-    /// Read one resource row's branch. The ONLY entrance.
+    /// Read one resource row's branch, within one tenant. The ONLY entrance.
     ///
     /// `resource` picks the table and its branch column from
     /// [`BranchScopedResource`]; `id` picks the row. No part of the SQL comes
     /// from the caller, so there is no argument that could aim this at a
     /// principal-side table.
     ///
+    /// # `org` is not optional and not a convenience
+    ///
+    /// A row id is a bare uuid: nothing about it names a tenant. Without the
+    /// `org_id` predicate this reads ANY tenant's row, so the value it returned
+    /// proved "a uuid made a round trip through Postgres" and not "this is this
+    /// tenant's resource branch" — and the branch it handed back was one the
+    /// principal's own org never contained. A row belonging to any other tenant
+    /// is `NotFound`, exactly as a row that does not exist.
+    ///
+    /// `org` is still an ARGUMENT, so it can be taken from the request path
+    /// instead of from the principal. That is why the value it names is kept on
+    /// the returned [`ResourceBranch`] and re-checked against the principal by
+    /// [`crate::authorize_scoped`]: passing the wrong tenant here cannot become
+    /// an allow, it can only become a denial.
+    ///
+    /// This is the same predicate RLS enforces, applied here rather than relied
+    /// on: authorization must not be correct only for connections that happen to
+    /// have armed `app.current_org`.
+    ///
     /// # Errors
     ///
-    /// [`console_kernel_core::ErrorKind::NotFound`] when no such row exists —
-    /// never a defaulted or absent branch, because "the resource is missing" and
-    /// "the resource is branch-less" authorize differently and must not collapse
-    /// into one another. [`console_kernel_core::ErrorKind::Internal`] on any
-    /// other database failure.
+    /// [`console_kernel_core::ErrorKind::NotFound`] when no such row exists IN
+    /// THIS ORG — never a defaulted or absent branch, because "the resource is
+    /// missing" and "the resource is branch-less" authorize differently and must
+    /// not collapse into one another. [`console_kernel_core::ErrorKind::Internal`]
+    /// on any other database failure.
     pub async fn lookup<'e, E>(
         executor: E,
+        org: OrgId,
         resource: BranchScopedResource,
         id: uuid::Uuid,
     ) -> Result<Self, KernelError>
@@ -233,6 +278,7 @@ impl ResourceBranch {
         E: Executor<'e, Database = Postgres>,
     {
         let branch: Option<uuid::Uuid> = sqlx::query_scalar(resource.select_branch_sql())
+            .bind(*org.as_uuid())
             .bind(id)
             .fetch_optional(executor)
             .await
@@ -241,60 +287,114 @@ impl ResourceBranch {
             })?;
 
         branch
-            .map(|id| Self(BranchId::from_uuid(id)))
+            .map(|branch| Self {
+                org,
+                branch: BranchId::from_uuid(branch),
+            })
             .ok_or_else(|| {
                 KernelError::not_found(format!("no {resource:?} row {id} to authorize against"))
             })
     }
 
-    /// The branch this resource lives in.
+    /// The branch this resource lives in — readable only inside this crate.
+    ///
+    /// Not `pub`. A public accessor keeps the tenant check optional by another
+    /// route: [`crate::authorize`] takes a bare [`BranchId`] and has no org to
+    /// compare, so `authorize(principal, action, resource.get())` reaches the
+    /// same decision as [`crate::authorize_scoped`] while skipping the
+    /// comparison, and for a `BranchScope::All` principal that is an ALLOW
+    /// against another tenant's resource. Keeping the unwrap inside the crate
+    /// leaves [`crate::authorize_scoped`] as the only way out of this type, so
+    /// the org check is not a step a caller can decline to take. The proof is a
+    /// `compile_fail` doctest on [`crate::authorize`].
     #[must_use]
-    pub const fn get(self) -> BranchId {
-        self.0
+    pub(crate) const fn get(self) -> BranchId {
+        self.branch
+    }
+
+    /// The tenant this branch was read under — the `org_id` the row matched, not
+    /// a claim about who is asking.
+    #[must_use]
+    pub const fn org(self) -> OrgId {
+        self.org
     }
 
     /// Unit-test constructor. `#[cfg(test)]` and `pub(crate)`, so it exists only
     /// in this crate's own test build and is not part of the published surface —
     /// a downstream crate cannot reach it even in ITS tests.
     #[cfg(test)]
-    pub(crate) const fn for_test(branch: BranchId) -> Self {
-        Self(branch)
+    pub(crate) const fn for_test(org: OrgId, branch: BranchId) -> Self {
+        Self { org, branch }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use console_kernel_core::BranchId;
+    use console_kernel_core::{BranchId, OrgId};
 
     #[test]
-    fn a_resource_branch_carries_the_branch_it_was_read_from() {
+    fn a_resource_branch_carries_the_branch_and_tenant_it_was_read_from() {
         let branch = BranchId::new();
+        let org = OrgId::knl();
 
-        assert_eq!(ResourceBranch::for_test(branch).get(), branch);
+        assert_eq!(ResourceBranch::for_test(org, branch).get(), branch);
+        assert_eq!(ResourceBranch::for_test(org, branch).org(), org);
     }
 
-    /// No variant may read from a principal-side table. A `ResourceBranch` read
-    /// off `user_branches` would make `branch_scope.allows(b)` true by
-    /// construction — the exact tautology this type replaces, re-spelled as a
-    /// row read. The closed enum is the control; this is the tripwire on the
-    /// one way the enum could be extended into the hole again.
+    /// The tripwire on the one way the enum could be extended into the hole
+    /// again: a `ResourceBranch` read off `user_branches` would make
+    /// `branch_scope.allows(b)` true by construction — the exact tautology this
+    /// type replaces, re-spelled as a row read.
+    ///
+    /// It asserts what each statement MUST be, character for character. The
+    /// earlier form asserted what it must not CONTAIN, over a hand-maintained
+    /// four-entry denylist matched as a substring: a principal-side table
+    /// spelled with different whitespace, reached through a join, or named in a
+    /// CTE passed it silently, and so did any table nobody had thought to list.
+    /// Exact equality has no such gap — every deviation is a failure, including
+    /// the ones nobody enumerated.
+    ///
+    /// The `match` is exhaustive, so a variant added without a line here does
+    /// not compile; `RESOURCE_SIDE_TABLES` is the second half, because the
+    /// match alone would be satisfied by editing both sides at once. `ALL` is
+    /// generated from the same list the statements are, so this loop cannot
+    /// skip a variant that exists.
     #[test]
-    fn no_resource_kind_reads_from_a_principal_side_table() {
-        for resource in BranchScopedResource::ALL {
-            let sql = resource.select_branch_sql();
+    fn every_resource_kind_reads_exactly_one_resource_side_table_by_org_and_id() {
+        // The tables authorization may read a resource's branch from. This is
+        // the whole set, not a set of exclusions: `user_branches`, `users`,
+        // `branches` and `user_role_assignments` are absent because they are
+        // not resource tables, and so is every table nobody has named.
+        const RESOURCE_SIDE_TABLES: [&str; 6] = [
+            "work_orders",
+            "p1_dispatches",
+            "inventory_items",
+            "registry_customers",
+            "registry_sites",
+            "registry_equipment",
+        ];
 
-            for principal_table in [
-                "user_branches",
-                "users",
-                "branches",
-                "user_role_assignments",
-            ] {
-                assert!(
-                    !sql.contains(&format!("FROM {principal_table} ")),
-                    "{resource:?} reads the principal's own table `{principal_table}`: {sql}"
-                );
-            }
+        for &resource in BranchScopedResource::ALL {
+            let table = match resource {
+                BranchScopedResource::WorkOrder => "work_orders",
+                BranchScopedResource::P1Dispatch => "p1_dispatches",
+                BranchScopedResource::InventoryItem => "inventory_items",
+                BranchScopedResource::RegistryCustomer => "registry_customers",
+                BranchScopedResource::RegistrySite => "registry_sites",
+                BranchScopedResource::RegistryEquipment => "registry_equipment",
+            };
+
+            assert!(
+                RESOURCE_SIDE_TABLES.contains(&table),
+                "{resource:?} names `{table}`, which is not a resource-side table"
+            );
+            assert_eq!(
+                resource.select_branch_sql(),
+                format!("SELECT branch_id FROM {table} WHERE org_id = $1 AND id = $2"),
+                "{resource:?} must read its own row's branch, scoped by tenant and row id, \
+                 and nothing else"
+            );
         }
     }
 }
