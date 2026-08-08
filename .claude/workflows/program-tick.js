@@ -119,12 +119,30 @@ does all of that; your only failure mode that matters is reporting something you
 1. CANDIDATE FILE SET
    git --no-pager diff --name-only ${BASE}..${CAND_TIP}
 
-2. WORKTREES — 'git worktree list --porcelain'. For EACH one, and there may be many:
-     git -C <path> rev-parse --short HEAD
-     git -C <path> status --porcelain | wc -l
-     git -C <path> --no-pager diff --name-only ${BASE}
-     git -C <path> rev-list --count ${CAND_TIP}..HEAD
-   If a worktree is unreadable (missing gitdir), set prunable true, filesVsBase [] and
+2. WORKTREES — there may be a HUNDRED of them. Do NOT run four separate commands per worktree:
+   that is hundreds of shell round-trips and it is the slowest thing in this survey by far. Run ONE
+   batched loop and parse its output:
+
+     git worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r w; do
+       printf '@@WT\\t%s\\t%s\\t%s\\t%s\\n' \\
+         "$w" \\
+         "$(git -C "$w" rev-parse --short HEAD 2>/dev/null || echo MISSING)" \\
+         "$(git -C "$w" status --porcelain 2>/dev/null | wc -l | tr -d ' ')" \\
+         "$(git -C "$w" rev-list --count ${CAND_TIP}..HEAD 2>/dev/null || echo -1)"
+       n=$(git -C "$w" --no-pager diff --name-only ${BASE} 2>/dev/null | wc -l | tr -d ' ')
+       printf '@@N\\t%s\\n' "$n"
+       [ "$n" -le 60 ] && git -C "$w" --no-pager diff --name-only ${BASE} 2>/dev/null | sed 's/^/@@F\\t/'
+     done
+
+   One pass, one round-trip per worktree instead of four. Measured on this repository: 89 worktrees
+   in ~5 seconds, against many minutes for the per-worktree form.
+
+   The 60-file cap is deliberate. A worktree differing from base by thousands of files is an old
+   branch, not a lane: its file list is worthless to the classification and would swamp your
+   output (unfiltered, this repository emits 25,000+ lines). Report its @@N count with an empty
+   filesVsBase and let the count speak. A LANE worktree is small by construction.
+
+   A worktree whose HEAD prints MISSING has no gitdir: set prunable true, filesVsBase [] and
    commitsAheadOfCandidate -1. Do NOT skip it and do NOT guess its contents.
 
 3. PULL REQUESTS
