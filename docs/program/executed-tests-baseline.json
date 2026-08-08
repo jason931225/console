@@ -235,6 +235,7 @@
     "backend/crates/ontology/rest/tests/ont_gaps_as_runtime_role.rs": 5,
     "backend/crates/ontology/rest/tests/projected_dispatch_as_runtime_role.rs": 5,
     "backend/crates/ontology/rest/tests/publish_auto_create_action_as_runtime_role.rs": 2,
+    "backend/crates/orgchange/adapter-postgres/tests/preflight_persists_nothing.rs": 5,
     "backend/crates/orgchange/domain/src/lib.rs": 8,
     "backend/crates/payroll/adapter-postgres/src/lib.rs": 12,
     "backend/crates/payroll/adapter-postgres/tests/payroll_lifecycle_rls_as_runtime_role.rs": 1,
