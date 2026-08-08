@@ -88,6 +88,17 @@ AN ENFORCEMENT MUST BE ABLE TO SEE ITS SUBJECT:
   THEREFORE: "examined zero subjects" MUST be a FAILURE, never a pass. And never claim a control
   covers a distinction its data source cannot express — say what it actually enforces, and name the
   residual gap in followUps.
+THE THIRD SPELLING MEANS THE MECHANISM IS WRONG, NOT THE LIST:
+  If you are fixing the SAME class of bug for the third time in a different spelling, stop patching
+  and replace the mechanism. Measured: a gate hand-lexed Rust and was defeated by '} // end tests',
+  then 'use path::{A, B}', then a char literal, a block comment and a raw string; its hand-written
+  cfg rule was defeated by not(all(test)) and then by any(test, X). Each fix was correct and each
+  left a sibling live, because the set of spellings is open-ended. In both cases a total primitive
+  already existed (a real parser; has_table_privilege, which answers ownership, recursive
+  membership, column grants and superuser in one call) and replacing the enumeration DELETED more
+  code than it added. Before the third patch, ask: what already answers this question totally?
+  Say so in followUps if the total answer needs a dependency or a leased file -- a precise request
+  is a complete result.
 TEST THE CONTROL BY EXECUTING IT, NOT BY READING IT:
   A contains()/substring assertion over a gate's own source text is not evidence the gate works. A
   reviewer inverted a census to 'IF leaked IS NOT NULL AND false THEN', killing it entirely, and all
@@ -201,7 +212,7 @@ const VERIFY_SCHEMA = {
 // default, it is dead code that reads as coverage.
 const STANDING_LENSES = [
   'CORRECTNESS + ORACLE INTEGRITY — does the change address the root cause, and does the suite still prove as much as before? Hunt for tests conformed to defects and assertions that would pass even if the behaviour were broken. Pick the load-bearing assertion, break the code it guards, and say whether it actually goes RED.',
-  'ENFORCEMENT PLACEMENT — for every gate/check/census/guard this change touches, ignore whether its LOGIC is right and ask only whether it can SEE its subject. (a) Where does it run in the sequence, and does its subject exist yet at that point? (b) What is the finest distinction its data source can express, and does the change claim a finer one? (c) Does "examined zero subjects" fail, or pass? (d) Is it tested by EXECUTING it, or by a contains() over its own source text — mutate the control and check the tests go RED. Both failure modes have shipped here: a census that ran before migrations existed, and a per-crate rule enforced by a data source that only distinguishes roles. Verify the answers in enforcementPlacement rather than trusting them.',
+  'ENFORCEMENT PLACEMENT — for every gate/check/census/guard this change touches, ignore whether its LOGIC is right and ask only whether it can SEE its subject. (a) Where does it run in the sequence, and does its subject exist yet at that point? (b) What is the finest distinction its data source can express, and does the change claim a finer one? (c) Is the rule TOTAL over its domain, or is it an enumeration of spellings that a reviewer can always add one more to? If the change closes named cases rather than making the class unrepresentable, name the total primitive it should have used instead. (d) Does "examined zero subjects" fail, or pass? (d) Is it tested by EXECUTING it, or by a contains() over its own source text — mutate the control and check the tests go RED. Both failure modes have shipped here: a census that ran before migrations existed, and a per-crate rule enforced by a data source that only distinguishes roles. Verify the answers in enforcementPlacement rather than trusting them.',
 ]
 
 const LENSES = [
