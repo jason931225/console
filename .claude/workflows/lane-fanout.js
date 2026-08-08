@@ -88,6 +88,21 @@ AN ENFORCEMENT MUST BE ABLE TO SEE ITS SUBJECT:
   THEREFORE: "examined zero subjects" MUST be a FAILURE, never a pass. And never claim a control
   covers a distinction its data source cannot express — say what it actually enforces, and name the
   residual gap in followUps.
+PERIPHERALS ARE PART OF THE CHANGE, NOT A FOLLOW-UP:
+  A change is not done when the code compiles. Before you report done, find everything that
+  DESCRIBES the behaviour you changed and bring it with you:
+    - the module doc (//! and ///) of every file you touched, especially any comment that
+      ENUMERATES something you just made total, or claims a property you just changed;
+    - registries, rosters, baselines and ratchets that name what you added or removed;
+    - the bead / issue text, if the change makes its description wrong;
+    - any doc under docs/** that states the thing you changed as fact.
+  Docs here rot in ONE direction: they describe holds already lifted and problems already fixed, so
+  a stale doc reads as a live constraint and someone re-solves a solved problem. A module doc that
+  says "the three ways X can happen are each pinned separately" after you found a fourth is not an
+  inaccuracy, it is a false claim about a control.
+  SCOPE RULE, same as everywhere else: update the peripherals you OWN; for a leased one, report the
+  exact edit in followUps. Never leave a doc contradicting the code you just shipped, and never
+  silently widen scope to fix a doc you were not given.
 THE THIRD SPELLING MEANS THE MECHANISM IS WRONG, NOT THE LIST:
   If you are fixing the SAME class of bug for the third time in a different spelling, stop patching
   and replace the mechanism. Measured: a gate hand-lexed Rust and was defeated by '} // end tests',
@@ -121,7 +136,7 @@ const LOCK = BASE_LOCK + (ARGS.lockExtra || '')
 
 const BUILD_SCHEMA = {
   type: 'object',
-  required: ['status', 'summary', 'filesChanged', 'redBaseline', 'verification', 'contractBreaches', 'enforcementPlacement'],
+  required: ['status', 'summary', 'filesChanged', 'redBaseline', 'verification', 'contractBreaches', 'enforcementPlacement', 'peripheralsUpdated'],
   properties: {
     status: { type: 'string', enum: ['done', 'partial', 'blocked'] },
     summary: { type: 'string' },
@@ -136,6 +151,13 @@ const BUILD_SCHEMA = {
       type: 'string',
       description:
         'If this change adds or modifies any gate/check/census/guard: WHERE in the sequence it runs and whether its subject exists at that point, and the FINEST distinction its data source can express. State how "examined zero subjects" fails. If the change adds no enforcement, write exactly: n/a - adds no enforcement.',
+    },
+    // Required for the same reason as enforcementPlacement: a lock clause can be skimmed, a schema
+    // field cannot. Doc drift is invisible in a test count, which is exactly why it accumulates.
+    peripheralsUpdated: {
+      type: 'string',
+      description:
+        'Every doc/comment/registry/bead that DESCRIBED the behaviour you changed: what you updated (you own it), and what you are reporting instead (leased). Include module docs whose claims your change invalidates. If nothing described this behaviour, write exactly: n/a - nothing described this behaviour, and say how you checked.',
     },
     followUps: { type: 'string' },
   },
@@ -212,6 +234,7 @@ const VERIFY_SCHEMA = {
 // default, it is dead code that reads as coverage.
 const STANDING_LENSES = [
   'CORRECTNESS + ORACLE INTEGRITY — does the change address the root cause, and does the suite still prove as much as before? Hunt for tests conformed to defects and assertions that would pass even if the behaviour were broken. Pick the load-bearing assertion, break the code it guards, and say whether it actually goes RED.',
+  'PERIPHERAL DRIFT — read the diff, then go looking for what it made WRONG somewhere else. Does any module doc, /// comment, registry, roster, baseline, docs/** page or bead text still describe the behaviour as it was before this change? Pay closest attention to comments that ENUMERATE ("the three ways X can happen", "these are the cases") next to code this change made total or extended — those are false claims about a control, not stale prose. Verify the build agent\'s peripheralsUpdated field against the actual tree rather than trusting it, and check the reverse direction too: a doc updated to describe something the code does NOT do is worse than a stale one. Leased peripherals correctly reported in followUps are ownerLease=true, not defects.',
   'ENFORCEMENT PLACEMENT — for every gate/check/census/guard this change touches, ignore whether its LOGIC is right and ask only whether it can SEE its subject. (a) Where does it run in the sequence, and does its subject exist yet at that point? (b) What is the finest distinction its data source can express, and does the change claim a finer one? (c) Is the rule TOTAL over its domain, or is it an enumeration of spellings that a reviewer can always add one more to? If the change closes named cases rather than making the class unrepresentable, name the total primitive it should have used instead. (d) Does "examined zero subjects" fail, or pass? (d) Is it tested by EXECUTING it, or by a contains() over its own source text — mutate the control and check the tests go RED. Both failure modes have shipped here: a census that ran before migrations existed, and a per-crate rule enforced by a data source that only distinguishes roles. Verify the answers in enforcementPlacement rather than trusting them.',
 ]
 
