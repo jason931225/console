@@ -73,6 +73,25 @@ NEVER WEAKEN THE ORACLE:
   No deleted tests, no #[ignore], no relaxed or loosened assertions, and above all NEVER make a
   test pass by conforming it to the defect. Multiple lanes in this program were rejected for
   exactly that, and in each case the "green" test was hiding a live production outage.
+AN ENFORCEMENT MUST BE ABLE TO SEE ITS SUBJECT:
+  If your change adds or modifies a gate, check, census, guard or invariant, answer TWO questions
+  in writing BEFORE you build it, and put the answers in enforcementPlacement:
+    (1) WHERE does it run in the sequence, and does its subject EXIST yet at that point?
+    (2) What is the FINEST distinction its data source can express?
+  Both have already shipped as no-ops in this program. A canonical-writer census was placed in a
+  reconcile script that runs BEFORE migrations, so it matched zero tables and its REVOKE loop
+  iterated nothing in every automated path — and the lane recorded "succeeds on a bare cluster" as a
+  feature, which is exactly how the no-op hid. Separately, a database-capability control was
+  specified to enforce per-CRATE ownership, but every crate connects as the same role (console_rt),
+  so the finest distinction available to it was per-ROLE and the crate boundary was never drawn.
+  A check that never runs and a check that runs blind both exit 0. Neither shows up in a test count.
+  THEREFORE: "examined zero subjects" MUST be a FAILURE, never a pass. And never claim a control
+  covers a distinction its data source cannot express — say what it actually enforces, and name the
+  residual gap in followUps.
+TEST THE CONTROL BY EXECUTING IT, NOT BY READING IT:
+  A contains()/substring assertion over a gate's own source text is not evidence the gate works. A
+  reviewer inverted a census to 'IF leaked IS NOT NULL AND false THEN', killing it entirely, and all
+  16 tests stayed green. Mutate the control itself and prove each mutation goes RED.
 ROOT CAUSE, NOT SYMPTOM:
   Before editing, grep every caller of the function you are about to touch. One guard in the shared
   function beats a guard in each caller, and patching only the reported path leaves siblings broken.
@@ -91,7 +110,7 @@ const LOCK = BASE_LOCK + (ARGS.lockExtra || '')
 
 const BUILD_SCHEMA = {
   type: 'object',
-  required: ['status', 'summary', 'filesChanged', 'redBaseline', 'verification', 'contractBreaches'],
+  required: ['status', 'summary', 'filesChanged', 'redBaseline', 'verification', 'contractBreaches', 'enforcementPlacement'],
   properties: {
     status: { type: 'string', enum: ['done', 'partial', 'blocked'] },
     summary: { type: 'string' },
@@ -100,6 +119,13 @@ const BUILD_SCHEMA = {
     verification: { type: 'string', description: 'EXACT commands run and EXACT pass/fail counts; an independent agent will re-run these' },
     commands: { type: 'array', items: { type: 'string' }, description: 'the verbatim commands an independent verifier should re-run' },
     contractBreaches: { type: 'string' },
+    // Required, with an explicit n/a escape, so that OMITTING the answer is impossible rather than
+    // merely discouraged. A prose clause in the lock can be skimmed; a schema field cannot.
+    enforcementPlacement: {
+      type: 'string',
+      description:
+        'If this change adds or modifies any gate/check/census/guard: WHERE in the sequence it runs and whether its subject exists at that point, and the FINEST distinction its data source can express. State how "examined zero subjects" fails. If the change adds no enforcement, write exactly: n/a - adds no enforcement.',
+    },
     followUps: { type: 'string' },
   },
 }
@@ -148,9 +174,23 @@ const VERIFY_SCHEMA = {
   },
 }
 
-const LENSES = ARGS.lenses || [
-  'CORRECTNESS + ORACLE INTEGRITY — does the change address the root cause, and does the suite still prove as much as before? Hunt for tests conformed to defects and assertions that would pass even if the behaviour were broken.',
-  'BLAST RADIUS — does any public wire contract, stored format, or authorization outcome change shape? Who can now do what they could not before, or vice versa? Consider generated clients, rows already written under the old format, and callers in other crates.',
+// STANDING lenses run on EVERY lane, every round. They are not defaults.
+//
+// They used to be defaults -- `ARGS.lenses || [...]` -- and every single invocation of this harness
+// passed `lenses`, so the fallback never once evaluated. Oracle integrity is the most common
+// rejection cause in this program and it had never been reviewed for; it was only ever caught
+// incidentally by a custom lens that happened to look. A default that is always overridden is not a
+// default, it is dead code that reads as coverage.
+const STANDING_LENSES = [
+  'CORRECTNESS + ORACLE INTEGRITY — does the change address the root cause, and does the suite still prove as much as before? Hunt for tests conformed to defects and assertions that would pass even if the behaviour were broken. Pick the load-bearing assertion, break the code it guards, and say whether it actually goes RED.',
+  'ENFORCEMENT PLACEMENT — for every gate/check/census/guard this change touches, ignore whether its LOGIC is right and ask only whether it can SEE its subject. (a) Where does it run in the sequence, and does its subject exist yet at that point? (b) What is the finest distinction its data source can express, and does the change claim a finer one? (c) Does "examined zero subjects" fail, or pass? (d) Is it tested by EXECUTING it, or by a contains() over its own source text — mutate the control and check the tests go RED. Both failure modes have shipped here: a census that ran before migrations existed, and a per-crate rule enforced by a data source that only distinguishes roles. Verify the answers in enforcementPlacement rather than trusting them.',
+]
+
+const LENSES = [
+  ...STANDING_LENSES,
+  ...(ARGS.lenses || [
+    'BLAST RADIUS — does any public wire contract, stored format, or authorization outcome change shape? Who can now do what they could not before, or vice versa? Consider generated clients, rows already written under the old format, and callers in other crates.',
+  ]),
 ]
 
 // --- telemetry -------------------------------------------------------------
