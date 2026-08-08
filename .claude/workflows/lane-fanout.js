@@ -132,11 +132,18 @@ const REVIEW_SCHEMA = {
 // check part of the pipeline.
 const VERIFY_SCHEMA = {
   type: 'object',
-  required: ['reproduced', 'actualResults', 'discrepancies'],
+  required: ['reproduced', 'actualResults', 'discrepancies', 'contradictsClaim'],
   properties: {
     reproduced: { type: 'boolean', description: 'true only if YOU ran the commands and saw the claimed results' },
     actualResults: { type: 'string', description: 'the exact output you observed, not what was claimed' },
     discrepancies: { type: 'string', description: 'any difference between claimed and observed, or "none"' },
+    // The VERIFIER decides whether its findings matter -- not a regex over its prose. A previous
+    // version required discrepancies to be the literal string "none", so a conscientious verifier
+    // writing "four, all minor; none contradicts the verdict" failed the check and the lane was
+    // sent back for another build round. Convergence was effectively unreachable whenever the
+    // verifier ran: every lane with one reported converged=false while every review-only lane
+    // reported true. That defect manufactured rebuild rounds, which are the dominant cost here.
+    contradictsClaim: { type: 'boolean', description: 'TRUE only if what you observed CONTRADICTS the claimed result - a count that differs, a command that failed, a false green. Cosmetic differences (line numbers, timings, wording) are FALSE.' },
     falseGreenRisk: { type: 'string', description: 'did any command select ZERO tests and still exit 0?' },
   },
 }
@@ -408,8 +415,10 @@ async function runLane(l) {
     recordDefects(l.key, blockers, weakened)
 
     // A lane is not green because it says so. The verifier must have reproduced it.
-    const verifierOk = !verify || (verify.reproduced === true && (!verify.discrepancies || /^none$/i.test(String(verify.discrepancies).trim())))
-    const verifierSaid = verifierOk ? null : `reproduced=${verify && verify.reproduced}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`
+    // The verifier judges whether its own findings contradict the claim; contradictsClaim is a
+    // required field, so there is no prose to parse and nothing to fall back to.
+    const verifierOk = !verify || (verify.reproduced === true && verify.contradictsClaim === false)
+    const verifierSaid = verifierOk ? null : `reproduced=${verify && verify.reproduced}; contradictsClaim=${verify && verify.contradictsClaim}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`
 
     last = { lane: l, fix, reviews, verify, blockers, rounds: round, converged: false }
 
