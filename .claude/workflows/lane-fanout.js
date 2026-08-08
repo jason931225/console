@@ -137,6 +137,34 @@ const LENSES = ARGS.lenses || [
   'BLAST RADIUS — does any public wire contract, stored format, or authorization outcome change shape? Who can now do what they could not before, or vice versa? Consider generated clients, rows already written under the old format, and callers in other crates.',
 ]
 
+// --- telemetry -------------------------------------------------------------
+// Measured across six runs of this harness: ~130 agents, ~12M tokens, ~5.7h wall-clock, at a ratio
+// of 3.67 checkers per build. Wall-clock divided by builds is 7-13 min per ROUND, and reviews run
+// in parallel, so a round costs roughly one build plus one review wave.
+//
+// That makes ROUNDS the scarce resource, not tokens. And an audit of why rounds were spent found
+// most early ones went to defects in the HARNESS and the BRIEF, not in the lane's code: reviewers
+// diffing HEAD~1, findings discarded with no feedback edge, empty-diff auto-reject, reviewers not
+// told which paths were owner-leased, a lane authorised to create a crate but forbidden the
+// workspace manifest. Each of those cost a full build cycle per affected lane.
+//
+// The lever follows directly: another reviewer is cheap, another BUILD ROUND is expensive. So
+// classify what each round was actually spent on, and let the numbers say whether the next
+// improvement belongs in the brief or in the code.
+const TELEMETRY = { rounds: [], startedAt: null }
+
+function classifyRejection(blockers, weakened, verifierOk, status) {
+  // Coarse, deliberately: the point is to see the SHAPE of wasted rounds, not to be precise.
+  const text = blockers.map((b) => `${b.claim} ${b.location}`).join(' ').toLowerCase()
+  if (!verifierOk) return 'unreproducible-claim'
+  if (weakened) return 'oracle-weakened'
+  if (/outside the authorised|in-scope path|scope list|not in scope/.test(text)) return 'scope-brief-defect'
+  if (/executes nowhere|ratchet|baseline|ci\.yml|workflow step|lease/.test(text)) return 'owner-lease'
+  if (status && status !== 'done') return 'incomplete'
+  if (blockers.length) return 'code-defect'
+  return 'unclassified'
+}
+
 // --- cross-lane defect ledger: Bun's "fix the generator" -------------------
 const DEFECT_LEDGER = []
 
@@ -373,7 +401,9 @@ async function runLane(l) {
       break
     }
 
-    log(`${l.key}: round ${round} -> status=${fix.status}, ${blockers.length} blocker(s)${weakened ? ', ORACLE WEAKENED' : ''}${verifierOk ? '' : ', VERIFIER DISAGREED'}`)
+    const cause = classifyRejection(blockers, weakened, verifierOk, fix.status)
+    TELEMETRY.rounds.push({ lane: l.key, round, cause, blockers: blockers.length, weakened, verifierOk })
+    log(`${l.key}: round ${round} -> status=${fix.status}, ${blockers.length} blocker(s)${weakened ? ', ORACLE WEAKENED' : ''}${verifierOk ? '' : ', VERIFIER DISAGREED'} [cause: ${cause}]`)
     if (round === MAX_ROUNDS) {
       log(`${l.key}: ESCALATION — hit MAX_ROUNDS=${MAX_ROUNDS} unconverged; ${blockers.length} blocker(s) survive`)
       break
@@ -422,4 +452,25 @@ const conv = out.filter((o) => o.converged).map((o) => o.lane)
 const stuck = out.filter((o) => !o.converged).map((o) => `${o.lane}(${o.rounds}r,${o.remainingBlockers.length}b)`)
 log(`CONVERGED: ${conv.join(', ') || 'none'} | UNCONVERGED: ${stuck.join(', ') || 'none'}`)
 if (DEFECT_LEDGER.length) log(`defect classes seen this run: ${DEFECT_LEDGER.length}`)
-return { lanes: out, defectClasses: DEFECT_LEDGER.map((d) => ({ lane: d.laneKey, claim: d.claim })) }
+
+// Where did the rounds go? Rounds are the scarce resource, so this is the number that should drive
+// the next improvement. A run dominated by scope-brief-defect means fix the BRIEF; by code-defect
+// means the lanes are genuinely hard; by owner-lease means the lease boundary is drawn wrong.
+const byCause = {}
+for (const r of TELEMETRY.rounds) byCause[r.cause] = (byCause[r.cause] || 0) + 1
+const wasted = (byCause['scope-brief-defect'] || 0) + (byCause['owner-lease'] || 0)
+const buildRounds = out.reduce((n, o) => n + (o.rounds || 0), 0)
+log(`telemetry: ${buildRounds} build round(s); rejection causes ${JSON.stringify(byCause)}`)
+if (wasted) log(`telemetry: ${wasted}/${TELEMETRY.rounds.length} rejected round(s) were BRIEF or LEASE defects, not code — fix those in the brief, not the lane`)
+
+return {
+  lanes: out,
+  defectClasses: DEFECT_LEDGER.map((d) => ({ lane: d.laneKey, claim: d.claim })),
+  telemetry: {
+    buildRounds,
+    checkersPerBuild: buildRounds ? +(((LENSES.length + 1) * buildRounds) / buildRounds).toFixed(2) : 0,
+    rejectionCauses: byCause,
+    briefOrLeaseRounds: wasted,
+    rounds: TELEMETRY.rounds,
+  },
+}
