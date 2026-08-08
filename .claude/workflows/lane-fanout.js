@@ -76,6 +76,15 @@ NEVER WEAKEN THE ORACLE:
 ROOT CAUSE, NOT SYMPTOM:
   Before editing, grep every caller of the function you are about to touch. One guard in the shared
   function beats a guard in each caller, and patching only the reported path leaves siblings broken.
+CONTRACT TESTS ARE PART OF THE CHANGE:
+  Before you edit behaviour, find every test that ENCODES the behaviour you are changing —
+  including integration suites in other crates (backend/app/tests/** is the usual one). Changing a
+  contract necessarily breaks the tests asserting the old contract; that is the change, not a
+  regression. If such a test is OUTSIDE your owned root, STOP and report it in followUps with the
+  exact file and assertions BEFORE you build. Do not silently break it, and do not abandon the
+  work. This has been mis-scoped four times in this program: a lane authorised to fix a defect but
+  forbidden the crate holding it, authorised to create a crate but forbidden the workspace
+  manifest, and twice authorised to change a contract but forbidden the test that encodes it.
 `
 
 const LOCK = BASE_LOCK + (ARGS.lockExtra || '')
@@ -463,7 +472,15 @@ const buildRounds = out.reduce((n, o) => n + (o.rounds || 0), 0)
 log(`telemetry: ${buildRounds} build round(s); rejection causes ${JSON.stringify(byCause)}`)
 if (wasted) log(`telemetry: ${wasted}/${TELEMETRY.rounds.length} rejected round(s) were BRIEF or LEASE defects, not code — fix those in the brief, not the lane`)
 
+// Headline FIRST and compact, because the result file gets truncated on long runs and the journal
+// stores content-hash labels rather than the lane keys passed in — so a truncated tail leaves
+// verdicts unattributable to lanes. One line per lane, before anything verbose.
+const headline = out.map((o) =>
+  `${o.lane}: ${o.converged ? 'CONVERGED' : 'UNCONVERGED'} r${o.rounds} ${o.status} blockers=${(o.remainingBlockers || []).length} weakened=${o.oracleWeakened} verified=${o.independentlyReproduced}`)
+log(`HEADLINE | ${headline.join(' | ')}`)
+
 return {
+  headline,
   lanes: out,
   defectClasses: DEFECT_LEDGER.map((d) => ({ lane: d.laneKey, claim: d.claim })),
   telemetry: {
