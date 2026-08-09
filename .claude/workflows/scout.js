@@ -328,20 +328,81 @@ function overlaps(a, b) {
 }
 
 const ordered = [...withDepth].sort((a, b) => b.depth - a.depth || a.priority - b.priority)
-const lanes = []
 const deferred = []
+// PATHS ARE AN AGENT'S PROSE UNTIL THIS FUNCTION SAYS OTHERWISE.
+// The header of this file says agents report observations and the script computes conclusions. That
+// was applied to the ORDERING and not to the PATHS, and a measured run showed all three ways it fails:
+//   - absolute paths: 64 of one lane's 64 roots came back as /Users/<name>/<worktree>/backend/...
+//   - prose in the array: one entry was "<the remaining files from `git grep -lE ...`", which split
+//     on whitespace into fake roots like "<the", "remaining", "files"
+//   - over-broad roots: "backend/" and "docs/" are not owned roots, they are the repository, and with
+//     union-find ONE of them transitively swallows every bead into a single lane. 35 startable beads
+//     collapsed into 2 lanes, one owning the whole tree. The partition was correct; the input was not.
+// A root that does not survive normalisation is not silently dropped -- the bead is DEFERRED and says
+// why, because a lane dispatched with a root it cannot use fails after the work is done, not before.
+const MIN_ROOT_SEGMENTS = 2
+function normaliseRoot(raw) {
+  if (typeof raw !== 'string') return null
+  let r = raw.trim()
+  if (!r || /\s/.test(r) || /[<>`*?]/.test(r)) return null       // prose, globs, placeholders
+  if (r.startsWith(REPO)) r = r.slice(REPO.length)                 // absolute -> repo-relative
+  r = r.replace(/^\/+/, '').replace(/\/[^/]*\.[A-Za-z0-9]+$/, '/') // file -> its directory
+  if (!r.endsWith('/')) r += '/'
+  if (r === '/' || r === './') return null
+  if (r.split('/').filter(Boolean).length < MIN_ROOT_SEGMENTS) return null  // "backend/" is the repo
+  return r
+}
+
+const placeable = []
 for (const item of ordered) {
-  if (!item.paths.length) { deferred.push({ ...item, why: 'no paths reported — an owned root cannot be derived' }); continue }
-  const roots = item.paths.map((p) => p.replace(/\/[^/]*$/, '/')).filter(Boolean)
-  const clash = lanes.find((l) => overlaps(l.roots, roots))
-  if (clash) {
-    // Same territory: same lane, sequentially. NOT a second lane, which would collide at land.
-    if (clash.beads.length < 6) { clash.beads.push(item.id); clash.roots = [...new Set([...clash.roots, ...roots])] }
-    else deferred.push({ ...item, why: `territory already held by lane ${clash.key}, which is full` })
+  const roots = [...new Set((item.paths || []).map(normaliseRoot).filter(Boolean))]
+  const rejected = (item.paths || []).length - roots.length
+  if (!roots.length) {
+    deferred.push({ ...item, why: (item.paths || []).length
+      ? `every reported path was unusable as an owned root (${(item.paths || []).length} rejected: absolute, prose, or repo-wide)`
+      : 'no paths reported — an owned root cannot be derived' })
     continue
   }
-  if (lanes.length >= MAX_LANES) { deferred.push({ ...item, why: 'maxLanes reached' }); continue }
-  lanes.push({ key: item.id.replace(/[^a-z0-9]/gi, '').slice(-6) || `l${lanes.length}`, beads: [item.id], roots, depth: item.depth })
+  if (rejected) log(`${item.id}: dropped ${rejected} unusable path(s), kept ${roots.length}`)
+  placeable.push({ ...item, roots })
+}
+
+// GROUP BY TERRITORY BEFORE CREATING LANES, transitively.
+// The first version grew a lane's roots as it absorbed a bead, and a grown lane can overlap a lane
+// created EARLIER -- so a run that had already done all its verification threw at the final guard and
+// discarded 15 agents of work. It also merged a bead into only the FIRST lane it clashed with, while
+// leaving the second clash unaddressed. Both are the same mistake: deciding membership one item at a
+// time against a set that is still moving.
+// Union-find settles the whole partition first, so two lanes CANNOT share territory by construction
+// and the guard below becomes an assertion that can never fire rather than a way to lose a run.
+const parent = placeable.map((_, i) => i)
+const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+for (let i = 0; i < placeable.length; i++) {
+  for (let j = i + 1; j < placeable.length; j++) {
+    if (overlaps(placeable[i].roots, placeable[j].roots)) parent[find(i)] = find(j)
+  }
+}
+const groups = new Map()
+placeable.forEach((item, i) => {
+  const root = find(i)
+  if (!groups.has(root)) groups.set(root, [])
+  groups.get(root).push(item)
+})
+
+// Deepest group first: depth is what costs wall-clock, so the longest chain must start earliest.
+const sorted = [...groups.values()].sort((a, b) =>
+  Math.max(...b.map((x) => x.depth)) - Math.max(...a.map((x) => x.depth)) ||
+  Math.min(...a.map((x) => x.priority)) - Math.min(...b.map((x) => x.priority)))
+
+const lanes = []
+for (const group of sorted) {
+  if (lanes.length >= MAX_LANES) {
+    for (const item of group) deferred.push({ ...item, why: 'maxLanes reached' })
+    continue
+  }
+  const beads = group.map((x) => x.id)
+  const roots = [...new Set(group.flatMap((x) => x.roots))]
+  lanes.push({ key: beads[0].replace(/[^a-z0-9]/gi, '').slice(-6) || `l${lanes.length}`, beads, roots, depth: Math.max(...group.map((x) => x.depth)) })
 }
 
 // The guard that makes the output trustworthy: never emit a plan whose lanes would be refused.
