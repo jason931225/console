@@ -42,7 +42,7 @@ const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 // The unknown-option guard runs BEFORE the required-field check on purpose: with the order
 // reversed, a caller who typos an option gets "`task` is required" and goes looking for the wrong
 // thing. Report the typo you can see, not the consequence of it.
-const KNOWN_ARGS = ['task', 'repo', 'wt', 'base', 'tip', 'lanes', 'maxRounds', 'accept', 'brief', 'owned']
+const KNOWN_ARGS = ['base', 'context', 'crate', 'designs', 'explore', 'lane', 'owns', 'repo', 'task']
 {
   const unknown = Object.keys(A).filter((k) => !KNOWN_ARGS.includes(k))
   if (unknown.length) {

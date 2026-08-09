@@ -19,7 +19,7 @@ const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 // An option this harness does not read must abort rather than be silently dropped. Absent here
 // while three sibling harnesses had it; the preflight now enumerates the directory rather than a
 // list, which is what surfaced it.
-const KNOWN_ARGS = ['commit', 'head', 'base', 'kind', 'context', 'repo', 'lenses', 'reviewers']
+const KNOWN_ARGS = ['base', 'commit', 'context', 'head', 'kind', 'repo']
 {
   const unknown = Object.keys(A).filter((k) => !KNOWN_ARGS.includes(k))
   if (unknown.length) {

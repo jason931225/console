@@ -899,5 +899,36 @@ const threw = async (args) => {
     judgePhases.every((frag) => !/model:/.test(frag)), judgePhases.length)
 }
 
+// KNOWN_ARGS IS A CLAIM ABOUT THE SOURCE, SO CHECK IT AGAINST THE SOURCE.
+// The guard's whole purpose is "an option this harness does not read must abort". Two of these
+// lists were hand-written and both were wrong in BOTH directions at once: slice.js omitted five
+// options it genuinely reads (so the guard rejected every real invocation) while review-gate.js
+// listed two it never reads (so the guard fell open on exactly what it exists to catch). A
+// hand-maintained list of what the code reads is a second copy of the code.
+{
+  for (const name of fs.readdirSync(HERE).filter((f) => f.endsWith('.js')).map((f) => f.replace(/\.js$/, ''))) {
+    const src = fs.readFileSync(path.join(HERE, `${name}.js`), 'utf8')
+    const declared = src.match(/const KNOWN_ARGS = \[([^\]]*)\]/)
+    if (!declared) { check(`${name} declares KNOWN_ARGS`, false); continue }
+    const listed = new Set([...declared[1].matchAll(/'([^']+)'/g)].map((m) => m[1]))
+
+    // Whichever accessor this harness uses for its parsed args.
+    const holder = /const KNOWN_ARGS[\s\S]{0,400}?\b(ARGS|A)\b\s*\)/.exec(src)?.[1]
+      || (src.includes('const ARGS') || src.includes('let ARGS') ? 'ARGS' : 'A')
+    const read = new Set(
+      [...src.matchAll(new RegExp(`\\b${holder}\\.([a-zA-Z_][a-zA-Z0-9_]*)`, 'g'))]
+        .map((m) => m[1])
+        .filter((k) => !['length', 'lanes'].includes(k) || k === 'lanes'),
+    )
+    // Object.keys(ARGS) inside the guard itself is not an option read.
+    read.delete('keys')
+
+    const unread = [...listed].filter((k) => !read.has(k))
+    const undeclared = [...read].filter((k) => !listed.has(k))
+    check(`${name}: KNOWN_ARGS lists nothing the harness never reads`, unread.length === 0, unread)
+    check(`${name}: every option the harness reads is declared`, undeclared.length === 0, undeclared)
+  }
+}
+
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')
 process.exit(failures ? 1 : 0)

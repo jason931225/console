@@ -439,7 +439,18 @@ const VERIFY_SCHEMA = {
 // is terminal -- the adversarial reviewers, the independent verifier, the single writer, and any
 // re-derivation of a dependency edge, where a reversed answer silently reschedules everything --
 // stays on the inherited model.
-const WORKER = 'sonnet'   // audited downstream by a stronger pass
+// NOT APPLIED TO THIS HARNESS'S OWN AGENTS, deliberately, and recorded because the first version of
+// this block defined a WORKER constant and used it NOWHERE -- a rule written, documented, believed,
+// and reachable by nothing, committed in the very change that added the rule. That is the defect the
+// preflight beside this file exists to catch, and it caught it.
+//
+// A build agent's output DOES qualify under the rule above: adversarial reviewers and an independent
+// verifier audit it. What stops it is arithmetic, not principle. This harness converges by ROUNDS,
+// and a round costs a full build plus every reviewer plus the verifier, so a tier that needs even one
+// extra round costs more than it saves. Unlike Cursor's workers, which execute a planner's explicit
+// instructions, a lane here is handed an open-ended brief. Applying it needs a measurement nobody has
+// made: rounds-to-converge per tier on the same briefs. Until then, the harnesses tiered are the ones
+// whose fan-out is a mechanical read feeding a stronger pass, where a wrong answer costs one re-read.
 
 // TRIAL ONE LANE BEFORE COMMITTING THE FLEET.
 //
