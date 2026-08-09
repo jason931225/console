@@ -240,7 +240,14 @@ const claimedCount = (collected && collected.openIssueCount) || 0
 // — "examined zero subjects MUST be a FAILURE" — applied to the harness itself, because the first run
 // of this file broke exactly that way: 22 audit lanes did real work while the triage half quietly ran
 // on an empty list and the headline read "0 issues triaged" as if it were a result.
-if (!issueNumbers.length) {
+// A VERIFIED empty tracker is a legitimate state, and the first version of this guard refused it.
+// The false green was a census that returned NOTHING while the tracker held 78 issues; a census that
+// returns nothing AND reports a count of zero is agreeing with itself, and blocking there would make
+// the workflow unable to audit standing code precisely when the backlog is clean. The guard exists to
+// catch a census that CONTRADICTS itself, not one that is merely empty.
+if (!issueNumbers.length && claimedCount === 0) {
+  log('census reports zero open issues and lists none — consistent, so triage schedules no batches')
+} else if (!issueNumbers.length) {
   throw new Error(
     'backlog-audit: the census returned NO open issue numbers, so triage would examine nothing and ' +
     'report success. That is a false green, not an empty backlog. Either the repository genuinely ' +
@@ -471,7 +478,11 @@ return {
     `${auditOk.length}/${DOMAINS.length} domains + ${crossOk.length}/${CROSS.length} cross-cutting audited`,
     `${totalFindings} findings (${provenFindings} proven)`,
     `${verdicts.length} issues triaged, ${closing.length - unevidenced.length} closable, ${unevidenced.length} withheld`,
-    APPLY ? 'APPLIED' : 'REPORT ONLY (apply=false)',
+    // Never claim APPLIED on the strength of the caller's flag alone. When the Reconcile agent dies,
+    // agent() returns null and the mutations are absent — or worse, a partial prefix of them landed
+    // and nothing records which. An operator reading APPLIED would take a success claim over an
+    // unknown state, which is the same false-green class this workflow exists to find.
+    APPLY ? (reconciled ? 'APPLIED' : 'RECONCILE DIED — mutations UNKNOWN, possibly partial; verify by hand') : 'REPORT ONLY (apply=false)',
   ],
   dead,
   audits: auditOk,
