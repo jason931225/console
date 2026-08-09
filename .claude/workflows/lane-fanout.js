@@ -232,8 +232,13 @@ const REVIEW_SCHEMA = {
 // check part of the pipeline.
 const VERIFY_SCHEMA = {
   type: 'object',
-  required: ['reproduced', 'actualResults', 'discrepancies', 'contradictsClaim'],
+  required: ['reproduced', 'actualResults', 'discrepancies', 'contradictsClaim', 'headSha'],
   properties: {
+    // WHAT was verified, not just whether. Landing cherry-picks a worktree AFTER review finishes,
+    // and "clean working tree" is not a binding: a commit added after the reviewers finished is
+    // clean too, and would land as if reviewed. This is the immutable head the review round
+    // actually applies to, captured by the one agent that is read-and-run only.
+    headSha: { type: 'string', description: 'output of `git rev-parse HEAD` in the worktree, verbatim. This is the head the review round binds to; landing refuses anything else.' },
     reproduced: { type: 'boolean', description: 'true only if YOU ran the commands and saw the claimed results' },
     actualResults: { type: 'string', description: 'the exact output you observed, not what was claimed' },
     discrepancies: { type: 'string', description: 'any difference between claimed and observed, or "none"' },
@@ -294,9 +299,12 @@ function isBlocking(f) {
   return f.severity === 'major' && f.provenByExecution === true
 }
 
-function classifyRejection(blockers, weakened, verifierOk, status) {
+function classifyRejection(blockers, weakened, verifierOk, status, checkerDied) {
   // Coarse, deliberately: the point is to see the SHAPE of wasted rounds, not to be precise.
   const text = blockers.map((b) => `${b.claim} ${b.location}`).join(' ').toLowerCase()
+  // A round lost to a dead checker is an INFRASTRUCTURE cost, not a defect in the lane's claim.
+  // Filing it as unreproducible-claim would tell the human to fix a brief that was never wrong.
+  if (checkerDied) return 'checker-died'
   if (!verifierOk) return 'unreproducible-claim'
   if (weakened) return 'oracle-weakened'
   if (/outside the authorised|in-scope path|scope list|not in scope/.test(text)) return 'scope-brief-defect'
@@ -407,6 +415,10 @@ function verifyPrompt(l, fix) {
 reasoning. Your single job is to RE-RUN what was claimed and report what ACTUALLY happens.
 
   cd ${l.wt}
+  git rev-parse HEAD          <- report this verbatim as headSha, FIRST, before anything else
+
+That SHA is what this whole review round binds to: the landing step will refuse to cherry-pick this
+worktree if its head has moved since you read it. Report what you actually saw, never a guess.
 
 CLAIMED VERIFICATION:
 ${fix.verification}
@@ -587,8 +599,24 @@ async function runLane(l) {
     // A lane is not green because it says so. The verifier must have reproduced it.
     // The verifier judges whether its own findings contradict the claim; contradictsClaim is a
     // required field, so there is no prose to parse and nothing to fall back to.
-    const verifierOk = !verify || (verify.reproduced === true && verify.contradictsClaim === false)
-    const verifierSaid = verifierOk ? null : `reproduced=${verify && verify.reproduced}; contradictsClaim=${verify && verify.contradictsClaim}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`
+    //
+    // A DEAD VERIFIER IS NOT A PASSED VERIFICATION. This used to read `!verify || (...)`, so a
+    // verifier killed by a session limit made verifierOk TRUE and the lane converged while the log
+    // said "independently re-verified" -- the exact false-green class this harness exists to
+    // remove, and worse than the rest because the log asserts the opposite of what happened.
+    // A dead CUSTOM lens is tolerated because four other eyes still read the diff; the verifier has
+    // no such substitute. It is the ONLY thing that re-runs a claimed green, so its death leaves
+    // the claim untested and the lane must rebuild.
+    // The deliberate exception stands: when the build claims nothing (`claimsGreen` false) no
+    // verifier is dispatched, there is nothing to falsify, and its absence is not a death.
+    const verifierDied = claimsGreen && !verify
+    const verifierOk = !claimsGreen || (!!verify && verify.reproduced === true && verify.contradictsClaim === false)
+    const verifierSaid = verifierOk
+      ? null
+      : (verifierDied
+        ? 'the INDEPENDENT VERIFIER died before reporting, so nothing re-ran your claimed green. Re-run your own commands and report the exact output.'
+        : `reproduced=${verify && verify.reproduced}; contradictsClaim=${verify && verify.contradictsClaim}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`)
+    if (verifierDied) log(`${l.key}: round ${round} CANNOT CONVERGE — VERIFIER DIED; the claimed green was never re-run`)
 
     last = { lane: l, fix, reviews, verify, blockers, rounds: round, converged: false }
 
@@ -598,7 +626,7 @@ async function runLane(l) {
       break
     }
 
-    const cause = classifyRejection(blockers, weakened, verifierOk, fix.status)
+    const cause = classifyRejection(blockers, weakened, verifierOk, fix.status, verifierDied || deadStanding.length > 0)
     TELEMETRY.rounds.push({ lane: l.key, round, cause, blockers: blockers.length, weakened, verifierOk })
     log(`${l.key}: round ${round} -> status=${fix.status}, ${blockers.length} blocker(s)${weakened ? ', ORACLE WEAKENED' : ''}${verifierOk ? '' : ', VERIFIER DISAGREED'} [cause: ${cause}]`)
     if (round === MAX_ROUNDS) {
@@ -674,22 +702,36 @@ const INTEGRATION_BRANCH = ARGS.integrationBranch || 'integration/lane-fanout'
 let landed = null
 if (LAND) {
   phase('Land')
-  const landable = out.filter((o) => o.converged)
+  // Built from the ORIGINAL result objects, never from `out`. `out` flattens `lane` to a STRING
+  // (`lane: r.lane.key`), so the prompt's `o.lane.key` / `o.lane.wt` / `o.fix` were all undefined
+  // and the integration owner was handed "undefined — worktree undefined", no files, no follow-ups.
+  // The landing phase ran and told the owner nothing; a phase that runs on garbage has not run.
+  const landable = results.filter(Boolean).filter((r) => r.converged)
   landed = await agent(
     `You are the integration owner. ${landable.length} lane(s) converged and must be LANDED NOW, in one sequence, by you alone.
 
 INTEGRATION BRANCH: ${INTEGRATION_BRANCH}   BASE: ${TIP}
 
 LANES TO LAND, in this order:
-${landable.map((o, i) => `${i + 1}. ${o.lane.key} — worktree ${o.lane.wt}\n   files: ${(o.fix && o.fix.filesChanged ? o.fix.filesChanged : []).join(', ') || '(see the worktree)'}\n   leased edits it reported instead of making: ${(o.fix && o.fix.followUps) || 'none'}`).join('\n')}
+${landable.map((r, i) => `${i + 1}. ${r.lane.key} — worktree ${r.lane.wt}
+   REVIEWED HEAD: ${(r.verify && r.verify.headSha) || 'NOT CAPTURED — refuse this lane and report it'}
+   files: ${(r.fix && r.fix.filesChanged ? r.fix.filesChanged : []).join(', ') || '(see the worktree)'}
+   leased edits it reported instead of making: ${(r.fix && r.fix.followUps) || 'none'}`).join('\n')}
 
 WHY THIS RUNS AT ALL: work that converges but does not land accumulates, and the cost of landing it
 grows faster than linearly. Landing one lane now is cheap; landing twelve later is not.
 
 BEFORE YOU TOUCH ANYTHING:
-  For each lane's worktree run 'git status --porcelain' and 'git log --oneline -3'. A worktree with
-  uncommitted changes has a LIVE WRITER -- do not land it, report it as skipped and say so. A
-  finished workflow id is NOT evidence that nothing is writing; the working tree is.
+  For each lane's worktree run 'git status --porcelain', 'git rev-parse HEAD' and 'git log --oneline -3'.
+  A worktree with uncommitted changes has a LIVE WRITER -- do not land it, report it as skipped and
+  say so. A finished workflow id is NOT evidence that nothing is writing; the working tree is.
+
+  *** LAND ONLY THE REVIEWED HEAD. If 'git rev-parse HEAD' does not equal the REVIEWED HEAD listed
+      for that lane above, do NOT land it: skip it and report both SHAs. A clean worktree is NOT a
+      binding -- a commit added after the reviewers finished is clean too, and cherry-picking it
+      would land unreviewed code under a reviewed lane's name. The same applies to a lane whose
+      reviewed head was NOT CAPTURED: refuse it. Never resolve a mismatch by re-reviewing it
+      yourself; you are the lander, and a lane whose head moved goes back through the harness. ***
 
 HOW TO LAND:
   Create or fast-forward ${INTEGRATION_BRANCH} from ${TIP} in the PRIMARY repo. For each lane in

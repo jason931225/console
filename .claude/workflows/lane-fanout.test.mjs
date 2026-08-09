@@ -77,7 +77,7 @@ const FINDING = (over = {}) => ({
 const REVIEW = (over = {}) => ({ verdict: 'accept', findings: [], oracleWeakened: false, scopeCreep: false, ...over })
 const VERIFY = (over = {}) => ({
   reproduced: true, actualResults: 'a', discrepancies: 'none', contradictsClaim: false,
-  falseGreenRisk: 'none', ...over,
+  falseGreenRisk: 'none', headSha: 'cafe1234', ...over,
 })
 
 // Records every label the harness actually dispatched, which is how we prove a rule is REACHABLE
@@ -226,8 +226,28 @@ const threw = async (args) => {
 // --- 10. Landing is part of the pipeline. Its absence is what produced a +99 backlog. -------
 {
   const agent = mkAgent()
-  const r = await go(ARGS({ land: true }), agent)
+  // Distinctive key and worktree: 'a' and '/w' occur in English prose, so they cannot tell a
+  // populated prompt from a broken one.
+  const r = await go(ARGS({ land: true, lanes: [LANE({ key: 'LANE-KEY-Z', wt: '/wt/lane-z' })] }), agent)
   check('a converged lane LANDS by default', agent.seen.some((s) => s.label === 'land') && !!r.landed, r.headline)
+
+  // THE PROMPT MUST CONTAIN THE LANE, NOT undefined. Asserting only that landing was INVOKED is
+  // what let this ship: the prompt read o.lane.key / o.lane.wt / o.fix off the flattened summary,
+  // whose `lane` is a STRING, so the integration owner was told "undefined — worktree undefined"
+  // with no files and no follow-ups. A phase that runs on garbage is not a phase that runs.
+  const landPrompt = (agent.seen.find((s) => s.label === 'land') || {}).prompt || ''
+  check('the landing prompt names the real lane key and its worktree',
+    landPrompt.includes('LANE-KEY-Z') && landPrompt.includes('/wt/lane-z'), landPrompt.slice(0, 400))
+  check('the landing prompt carries the lane\'s changed files', landPrompt.includes('x.rs'), landPrompt.slice(0, 400))
+  check('the landing prompt interpolates no undefined field', !/undefined/.test(landPrompt),
+    (landPrompt.split('\n').filter((x) => /undefined/.test(x)) || []).slice(0, 4))
+
+  // LANDING MUST BE BOUND TO THE REVIEWED HEAD. Clean-worktree + recent-log is not a binding: a
+  // commit added after the reviewers finished is clean and would be cherry-picked as reviewed.
+  check('the landing prompt carries the head SHA captured at review time',
+    landPrompt.includes('cafe1234'), landPrompt.slice(0, 400))
+  check('and orders a refusal when the worktree no longer matches it',
+    /rev-parse HEAD/.test(landPrompt) && /do NOT land|REFUSE/.test(landPrompt), landPrompt.slice(0, 400))
 
   const noConverge = mkAgent({ review: () => REVIEW({ verdict: 'reject', findings: [FINDING({ severity: 'blocker' })] }) })
   await go(ARGS({ land: true }), noConverge)
@@ -257,6 +277,30 @@ const threw = async (args) => {
     r2.lanes[0].converged === true, r2.headline)
   check('but the death is still logged', logs2.some((m) => /DIED/.test(m)),
     logs2.filter((m) => /DIED|reviewers returned/.test(m)))
+}
+
+// --- 10d. A DEAD VERIFIER IS NOT A PASSED VERIFICATION. -------------------------------------
+// The sibling of 10b, and worse: `!verify` read a died verifier as "no verifier was needed", so the
+// lane converged and the log asserted "independently re-verified" having verified NOTHING. A
+// standing lens is one voice among several; the verifier is the ONLY thing that reproduces a
+// claimed green, so a dead one has no substitute and cannot be tolerated the way a custom lens is.
+{
+  const verifierDied = mkAgent({ verify: () => null })
+  const logs = []
+  const r = await go(ARGS(), verifierDied, logs)
+  check('a dead VERIFIER blocks convergence', r.lanes[0].converged === false, r.headline)
+  check('and never claims the lane was independently re-verified',
+    !logs.some((m) => /independently re-verified/.test(m)), logs.filter((m) => /re-verified|VERIFIER/.test(m)))
+  check('and says the verification never happened',
+    logs.some((m) => /VERIFIER DIED/.test(m)), logs.filter((m) => /VERIFIER/.test(m)))
+
+  // The deliberate exception must survive: a lane claiming nothing has nothing to falsify, so the
+  // verifier is SKIPPED, and a skip is not a death.
+  const partial = mkAgent({ build: () => BUILD({ status: 'partial' }) })
+  const logs2 = []
+  await go(ARGS(), partial, logs2)
+  check('a build claiming nothing is skipped, not accused of a dead verifier',
+    logs2.some((m) => /verifier skipped/.test(m)) && !logs2.some((m) => /VERIFIER DIED/.test(m)), logs2)
 }
 
 // --- 10c. Telemetry must be able to be WRONG, i.e. must observe reality. --------------------
@@ -297,6 +341,25 @@ const threw = async (args) => {
     'THE THIRD SPELLING MEANS THE MECHANISM IS WRONG', 'NEVER pass --workflow-only']) {
     check(`lock clause survives: ${clause}`, lock.includes(clause))
   }
+}
+
+// --- 13. The caller that dispatches this harness must not bake in one machine's paths. ------
+// program-tick.js chains into lane-fanout and used to send every selected lane to a hard-coded
+// /Users/<name>/... worktree, ignoring both the workspace it was given and the worktree inventory
+// it had just collected. On CI, on Linux, on any other machine, every implementer was pointed at a
+// path that does not exist — and nothing here could see it, because the preflight only ever
+// compiled lane-fanout.js. A dispatcher is part of the harness.
+{
+  const TICK = fs.readFileSync(path.join(HERE, 'program-tick.js'), 'utf8')
+  try {
+    new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow',
+      TICK.replace(/^export const meta = /m, 'const meta = '))
+    check('program-tick compiles as the harness evaluates it', true)
+  } catch (e) {
+    check('program-tick compiles as the harness evaluates it', false, e.message)
+  }
+  const homePaths = TICK.split('\n').filter((l) => /(\/Users\/|\/home\/)[A-Za-z0-9_.-]+\//.test(l))
+  check('program-tick hard-codes no machine-specific worktree path', homePaths.length === 0, homePaths)
 }
 
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')

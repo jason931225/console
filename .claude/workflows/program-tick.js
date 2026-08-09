@@ -22,7 +22,11 @@ export const meta = {
 //   script -> every classification that is a function of the collected facts
 //
 // args = {
-//   candidateWt, candidateTip, base, authority?, maxLanes?=4, fanout?=false
+//   candidateWt, candidateTip, base, authority?, maxLanes?=4, fanout?=false, workspace?
+//
+// workspace defaults to the directory candidateWt itself lives in. Lane worktrees are RESOLVED
+// against the worktree inventory collected below, never constructed from a literal — see the
+// fanout chain at the bottom of this file.
 // }
 // ---------------------------------------------------------------------------
 
@@ -336,16 +340,41 @@ const plan = {
   prResults,
 }
 
+// A lane worktree must be one this tick OBSERVED, never one it composed. This used to send every
+// selected lane to a literal absolute path under one developer's home directory: a path that exists
+// on exactly one machine, that nothing in this workflow creates, and that on CI, on Linux, or in any
+// other checkout pointed every implementer at nothing at all. (The preflight now forbids the
+// spelling as well as the instance.) Workflow scripts have no filesystem, so the
+// only evidence a path exists is the inventory the collector just read — resolve against that, and
+// refuse to spawn anything if a lane has no single unambiguous worktree.
+const WORKSPACE = (ARGS.workspace || CAND_WT.replace(/\/+$/, '').replace(/\/[^/]*$/, '')).replace(/\/+$/, '')
+const resolveLaneWt = (key) => {
+  const hits = wts.filter((w) => !w.prunable && (w.path === `${WORKSPACE}/${key}` || w.path.endsWith(`-${key}`)))
+  return { hits: hits.map((w) => w.path) }
+}
+
 // Chaining is opt-in and refuses to spawn implementers off a brief nobody has read.
 if (ARGS.fanout && (judged.startNow || []).length && !thin.length) {
-  log(`chaining into lane-fanout with ${judged.startNow.length} lane(s)`)
-  plan.fanoutResult = await workflow('lane-fanout', {
-    tip: CAND_TIP,
-    lanes: judged.startNow.map((l) => ({
-      key: l.key, bead: l.bead, owned: l.owned, brief: l.brief, accept: l.accept,
-      wt: `/Users/jasonlee/Developer/console-${l.key}`,
-    })),
-  })
+  const resolved = judged.startNow.map((l) => ({ lane: l, ...resolveLaneWt(l.key) }))
+  const unusable = resolved.filter((r) => r.hits.length !== 1)
+  if (unusable.length) {
+    // Refuse the WHOLE fanout, not the unresolvable lanes only: chaining the resolvable subset
+    // would silently drop selected work, which is the same defect in a different spelling.
+    plan.fanoutBlocked = unusable.map((r) => ({
+      key: r.lane.key,
+      why: r.hits.length ? `ambiguous: ${r.hits.join(', ')}` : `no worktree under ${WORKSPACE} matches lane "${r.lane.key}"`,
+    }))
+    log(`FANOUT REFUSED — no implementer dispatched. ${plan.fanoutBlocked.map((b) => `${b.key}: ${b.why}`).join(' | ')}`)
+    log(`create the missing worktree(s) from ${CAND_TIP} under ${WORKSPACE}, or pass args.workspace, then re-run with fanout`)
+  } else {
+    log(`chaining into lane-fanout with ${resolved.length} lane(s): ${resolved.map((r) => r.hits[0]).join(', ')}`)
+    plan.fanoutResult = await workflow('lane-fanout', {
+      tip: CAND_TIP,
+      lanes: resolved.map(({ lane: l, hits }) => ({
+        key: l.key, bead: l.bead, owned: l.owned, brief: l.brief, accept: l.accept, wt: hits[0],
+      })),
+    })
+  }
 } else if (ARGS.fanout && thin.length) {
   log('fanout requested but some briefs are thin — returning the plan for enrichment rather than spawning implementers')
 }
