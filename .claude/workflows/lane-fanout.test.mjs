@@ -930,5 +930,53 @@ const threw = async (args) => {
   }
 }
 
+// stale-take-audit.js had NO logic coverage here — only the generic KNOWN_ARGS sweep — and its
+// Confirm phase failed open exactly the way the Audit phase does not. A dead agent yielded
+// `refuted: null`, which is neither `=== false` nor truthy, so the suspicion fell out of BOTH result
+// lists and the headline still printed "full coverage". This is the step that decides whether a
+// reported reversion is REAL, and the reversion it exists to catch is a file whose un-wiring means
+// the check that would have caught it does not run.
+{
+  const STA = fs.readFileSync(path.join(HERE, 'stale-take-audit.js'), 'utf8')
+    .replace(/^export const meta = /m, 'const meta = ')
+  const fn = new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow', STA)
+
+  const drive = async (confirmReturns) => {
+    const agent = async (prompt, o = {}) => {
+      if ((o.label || '').startsWith('audit:')) {
+        return { results: [{ file: '.github/workflows/ci.yml', verdict: 'STALE', evidence: 'main has a step HEAD lacks', missingFromHead: 'the step', wouldBreak: 'the suite un-wires' }] }
+      }
+      return confirmReturns()
+    }
+    return fn({ repo: '/r', main: 'origin/main', files: ['.github/workflows/ci.yml'] },
+      agent, async (t) => Promise.all(t.map((f) => f().catch(() => null))), async (i) => i,
+      () => {}, () => {}, { total: null, spent: () => 0, remaining: () => Infinity }, async () => ({}))
+  }
+
+  const dead = await drive(() => null)
+  check('a dead confirmation does not erase the suspicion',
+    !!dead && Array.isArray(dead.unconfirmed) && dead.unconfirmed.length === 1,
+    dead && { stale: dead.stale, refuted: dead.refuted, unconfirmed: dead.unconfirmed })
+  check('a dead confirmation stops the report claiming full coverage',
+    !!dead && !dead.headline.some((h) => /full coverage/.test(h)), dead && dead.headline)
+
+  // A live agent that omits the field despite the schema must land in the same bucket: the schema is
+  // a request to the model, not an enforcement.
+  const fieldless = await drive(() => ({ file: '.github/workflows/ci.yml', reasoning: 'no verdict' }))
+  check('a confirmation without a verdict is unresolved, not clean',
+    !!fieldless && fieldless.unconfirmed.length === 1, fieldless && fieldless.unconfirmed)
+
+  // Controls: the live paths must still work, or the fix is an over-block.
+  const kept = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: false, reasoning: 'real' }))
+  check('a live confirmation that fails to refute still reports STALE',
+    !!kept && kept.stale.length === 1 && kept.unconfirmed.length === 0, kept && { s: kept.stale, u: kept.unconfirmed })
+  const dropped = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: true, reasoning: 'deliberate' }))
+  check('a live refutation still drops the suspicion',
+    !!dropped && dropped.stale.length === 0 && dropped.refuted.length === 1 && dropped.unconfirmed.length === 0,
+    dropped && { s: dropped.stale, r: dropped.refuted, u: dropped.unconfirmed })
+  check('a fully-answered run still claims full coverage',
+    !!dropped && dropped.headline.some((h) => /full coverage/.test(h)), dropped && dropped.headline)
+}
+
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')
 process.exit(failures ? 1 : 0)
