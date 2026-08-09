@@ -188,16 +188,23 @@ PERIPHERALS ARE PART OF THE CHANGE, NOT A FOLLOW-UP:
   exact edit in followUps. Never leave a doc contradicting the code you just shipped, and never
   silently widen scope to fix a doc you were not given.
 
-  MECHANICAL, AND NOT OPTIONAL — some peripherals are GENERATED, and prose about keeping docs
-  current does not update a checksum. If your diff touches ANY markdown under docs/, the
-  documentation manifest pins that file's exact Git blob OID and is now stale, so CI fails on a
-  change that is otherwise entirely correct. Regenerate it and include the result in the same commit
-  range:
-      node scripts/console/generate-documentation-manifest.mjs --write
-      npm run check:doc-links && npm run check:doc-manifest && npm run check:doc-citations
-  This is a POSTFLIGHT check: run it after your last edit, not before. It is listed here rather than
-  left to the reviewer because it is decidable by a command, and a lane that can run the command has
-  no business spending a review round on it.
+  MECHANICAL, AND NOT OPTIONAL — some peripherals are GENERATED, and prose about keeping things
+  current does not update a checksum. A change that is otherwise entirely correct fails CI because a
+  file some script writes is now stale.
+  DO NOT work from a list of generators. The first version of this clause named exactly one (the
+  documentation manifest) and the very next lane was failed by a different one (the first-party BUCK
+  faces). A list of the faces you have been burned by is not a rule, it is a record of your own
+  history -- and this lock says two paragraphs down that the third spelling means the mechanism is
+  wrong. The mechanism is: REGENERATE, THEN ASK GIT.
+      run every generator the repo exposes for the areas your diff touches, then:
+      git status --porcelain          # ANY output = your commit is incomplete
+  git is the oracle because it cannot be fooled by a face you did not think of. Two entry points
+  worth knowing, neither of which is the whole set: tools/buck/preflight.sh (what CI's preflight job
+  actually runs, covering every generated Buck face) and
+  node scripts/console/generate-documentation-manifest.mjs --write.
+  This is a POSTFLIGHT check: run it after your last edit, not before. It is here rather than left to
+  the reviewer because it is decidable by a command, and a lane that can run the command has no
+  business spending a review round on it.
 THE THIRD SPELLING MEANS THE MECHANISM IS WRONG, NOT THE LIST:
   If you are fixing the SAME class of bug for the third time in a different spelling, stop patching
   and replace the mechanism. Measured: a gate hand-lexed Rust and was defeated by '} // end tests',

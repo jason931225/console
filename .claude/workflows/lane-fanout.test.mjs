@@ -485,9 +485,9 @@ const threw = async (args) => {
 // fix is one command, and the lane that made the edit could have run it. This assertion exists
 // because a correct change was turned red by exactly that, twice.
 {
-  const need = ['generate-documentation-manifest.mjs --write', 'check:doc-manifest', 'POSTFLIGHT']
+  const need = ['REGENERATE, THEN ASK GIT', 'git status --porcelain', 'POSTFLIGHT', 'tools/buck/preflight.sh']
   for (const fragment of need) {
-    check(`the lock tells lanes to refresh generated doc peripherals: ${fragment}`, SRC.includes(fragment))
+    check(`the lock names a TOTAL generated-face check, not a list: ${fragment}`, SRC.includes(fragment))
   }
 }
 
