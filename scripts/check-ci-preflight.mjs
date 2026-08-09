@@ -562,6 +562,7 @@ const requiredJobRunContracts = Object.freeze({
     proofRun("Executed-tests ratchet — a test binary must have a path from a workflow step", "npm run check:executed-tests"),
     proofRun("JavaScript test reachability ratchet", "npm run check:js-test-reachability"),
     proofRun("JavaScript test reachability unit tests", "npm run test:js-test-reachability"),
+    proofRun("Lane fan-out harness preflight", "node .claude/workflows/lane-fanout.test.mjs"),
     proofRun("Workflow test-runner credential literals", "npm run check:test-credentials"),
   ],
   "domain-unit": [
