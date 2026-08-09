@@ -472,5 +472,15 @@ const threw = async (args) => {
     crashed === null && lines.length === 1 && lines[0].startsWith('FAIL'), crashed || lines)
 }
 
+// A doc edit that fails CI on a stale generated checksum is the cheapest possible review round: the
+// fix is one command, and the lane that made the edit could have run it. This assertion exists
+// because a correct change was turned red by exactly that, twice.
+{
+  const need = ['generate-documentation-manifest.mjs --write', 'check:doc-manifest', 'POSTFLIGHT']
+  for (const fragment of need) {
+    check(`the lock tells lanes to refresh generated doc peripherals: ${fragment}`, SRC.includes(fragment))
+  }
+}
+
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')
 process.exit(failures ? 1 : 0)
