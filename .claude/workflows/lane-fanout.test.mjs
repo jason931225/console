@@ -321,6 +321,32 @@ const threw = async (args) => {
     { d: r2.telemetry.checkersDispatched, r: r2.telemetry.checkersReturned })
 }
 
+// --- 10d. Review-round findings: three defects the reviewer caught that the preflight did not. ---
+{
+  // Two lanes in ONE worktree passed validation and were dispatched concurrently, each told by the
+  // lock to build on whatever it found — so the second treats the first's half-finished edits as
+  // its baseline. Silent by design.
+  const m = await threw(ARGS({ lanes: [LANE({ key: 'a', wt: '/same' }), LANE({ key: 'b', wt: '/same' })] }))
+  check('two lanes sharing a worktree abort', !!m && /both declare worktree/.test(m), m)
+
+  const m2 = await threw(ARGS({ lanes: [LANE({ key: 'dup' }), LANE({ key: 'dup', wt: '/other' })] }))
+  check('duplicate lane keys abort', !!m2 && /duplicate lane key/.test(m2), m2)
+
+  // Documented and accepted must be the same set: the args comment advertised blockedTargets while
+  // the allowlist rejected it, so a caller following the docs aborted.
+  const ok = await go(ARGS({ lanes: [LANE({ blockedTargets: ['x'] })] }))
+  check('a documented per-lane key is accepted', !!ok && Array.isArray(ok.headline), ok && Object.keys(ok || {}))
+
+  // scopeCreep is a first-class verdict, not a hint. A reviewer setting it without ALSO restating it
+  // as a blocking finding was ignored, so a lane could edit an unowned root and still converge.
+  const creeper = mkAgent({ review: () => REVIEW({ verdict: 'accept', scopeCreep: true }) })
+  const r = await go(ARGS(), creeper)
+  check('scopeCreep alone blocks convergence', r.lanes[0].converged === false, r.headline)
+
+  const clean = await go(ARGS(), mkAgent())
+  check('and does not block when unset', clean.lanes[0].converged === true, clean.headline)
+}
+
 // --- 11. The required-field trio must stay required, or the clause is skimmable again. ------
 {
   const req = (SRC.match(/required: \[[^\]]*'enforcementPlacement'[^\]]*\]/) || [''])[0]

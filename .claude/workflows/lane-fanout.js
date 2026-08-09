@@ -43,7 +43,11 @@ ARGS = ARGS || {}
 // `maxRounds` -- silently changes what runs while every log line still looks right. Fail loudly at
 // dispatch instead, where it costs seconds.
 const KNOWN_ARGS = ['tip', 'lanes', 'maxRounds', 'lockExtra', 'lenses', 'land', 'integrationBranch']
-const KNOWN_LANE_KEYS = ['key', 'bead', 'wt', 'owned', 'brief', 'accept', 'reviewOnly', 'priorResult']
+// `blockedTargets` was documented in the args comment above but omitted here, so a caller
+// following the documented interface aborted with "unknown option(s)". Documented and accepted
+// must be the same set — a doc that describes an input the code rejects is the same defect class
+// as a doc that claims a property the code lost.
+const KNOWN_LANE_KEYS = ['key', 'bead', 'wt', 'owned', 'brief', 'accept', 'reviewOnly', 'priorResult', 'blockedTargets']
 {
   const unknown = Object.keys(ARGS).filter((k) => !KNOWN_ARGS.includes(k))
   for (const l of ARGS.lanes || []) {
@@ -68,6 +72,36 @@ if (!Array.isArray(LANES) || !LANES.length) throw new Error('lane-fanout: args.l
 for (const l of LANES) {
   for (const f of ['key', 'wt', 'owned', 'brief', 'accept']) {
     if (!l || !l[f]) throw new Error(`lane-fanout: lane ${l && l.key ? l.key : '<unnamed>'} is missing required field "${f}"`)
+  }
+}
+
+// TWO LANES MAY NEVER SHARE A WORKTREE. Presence checks alone let two lanes carry the same `wt`
+// through validation, and `parallel(LANES.map(...))` then dispatches both concurrently into one root
+// — each told to edit and commit there. That is the two-writers-one-worktree failure this programme
+// has already paid for twice: once as symptoms that looked like filesystem corruption (files edited
+// at unclaimed timestamps, a deleted file reappearing, a bound silently changing), and once as 28
+// duplicate beads when a second writer was resurrected into live shared state. The lock contract
+// tells each implementer to build on whatever the worktree contains, which makes the collision
+// silent by design — the second lane treats the first lane's half-finished edits as its own baseline.
+// Refuse at dispatch, where it costs nothing.
+{
+  const seen = new Map()
+  for (const l of LANES) {
+    const prior = seen.get(l.wt)
+    if (prior) {
+      throw new Error(
+        `lane-fanout: lanes "${prior}" and "${l.key}" both declare worktree ${l.wt}. Concurrent lanes ` +
+        'must have disjoint worktrees — two implementers in one root overwrite each other silently, ' +
+        'because the lock tells each to build on what it finds. Give them separate worktrees, or run ' +
+        'them in separate invocations.',
+      )
+    }
+    seen.set(l.wt, l.key)
+  }
+  const keys = new Set()
+  for (const l of LANES) {
+    if (keys.has(l.key)) throw new Error(`lane-fanout: duplicate lane key "${l.key}" — labels and telemetry would merge two lanes into one.`)
+    keys.add(l.key)
   }
 }
 
@@ -526,9 +560,15 @@ async function runLane(l) {
     const reviews = checks.filter(Boolean)
     const blockers = reviews.flatMap((v) => (v.findings || []).filter(isBlocking))
     const weakened = reviews.some((v) => v.oracleWeakened)
+    // scopeCreep blocks for the same reason oracleWeakened does: the review schema carries a
+    // dedicated flag, and the reviewer prompt defines an edit outside `l.owned` as a contract
+    // breach. A reviewer that sets the flag without ALSO restating it as a blocking finding was
+    // being ignored, so a lane could edit an unowned root, converge, and be handed to the lander.
+    // The flag is the reviewer's verdict; requiring them to say it twice is how it gets lost.
+    const creep = reviews.some((v) => v.scopeCreep)
     recordDefects(l.key, blockers, weakened)
     TELEMETRY.checkers.push({ dispatched: LENSES.length, returned: reviews.length, deadLenses: deadStanding })
-    const converged = blockers.length === 0 && !weakened && deadStanding.length === 0
+    const converged = blockers.length === 0 && !weakened && !creep && deadStanding.length === 0
     log(`${l.key}: review-only -> ${reviews.length}/${LENSES.length} reviewers, ${blockers.length} blocker(s)${weakened ? ', ORACLE WEAKENED' : ''}${deadStanding.length ? `, STANDING LENS DIED: ${deadStanding.join(', ')}` : ''}`)
     return { lane: l, fix: l.priorResult || null, reviews, verify: null, blockers, rounds: 0, converged }
   }
@@ -593,6 +633,12 @@ async function runLane(l) {
 
     const blockers = reviews.flatMap((v) => (v.findings || []).filter(isBlocking))
     const weakened = reviews.some((v) => v.oracleWeakened)
+    // scopeCreep blocks for the same reason oracleWeakened does: the review schema carries a
+    // dedicated flag, and the reviewer prompt defines an edit outside `l.owned` as a contract
+    // breach. A reviewer that sets the flag without ALSO restating it as a blocking finding was
+    // being ignored, so a lane could edit an unowned root, converge, and be handed to the lander.
+    // The flag is the reviewer's verdict; requiring them to say it twice is how it gets lost.
+    const creep = reviews.some((v) => v.scopeCreep)
     recordDefects(l.key, blockers, weakened)
     TELEMETRY.checkers.push({ dispatched: LENSES.length + (claimsGreen ? 1 : 0), returned: reviews.length + (verify ? 1 : 0), deadLenses })
 
@@ -620,7 +666,7 @@ async function runLane(l) {
 
     last = { lane: l, fix, reviews, verify, blockers, rounds: round, converged: false }
 
-    if (fix.status === 'done' && blockers.length === 0 && !weakened && verifierOk && deadStanding.length === 0) {
+    if (fix.status === 'done' && blockers.length === 0 && !weakened && !creep && verifierOk && deadStanding.length === 0) {
       last.converged = true
       log(`${l.key}: CONVERGED round ${round} (independently re-verified by ${reviews.length}/${LENSES.length} reviewers)`)
       break
