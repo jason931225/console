@@ -766,5 +766,76 @@ const threw = async (args) => {
     !!standing && standing[1].includes('MAINTAINABILITY'))
 }
 
+// scout.js was added to the unknown-option sweep and NOTHING ELSE, so the harness that decides what
+// every other lane works on was the least tested one in the directory. Both of its judgement calls
+// shipped defective and both were caught by a real run rather than here: the packing produced two
+// lanes owning the same territory, and agent-authored paths reached the emitted plan unvalidated.
+// These assertions extract the two pure functions and drive them with the EXACT strings that run
+// produced, so neither can regress silently.
+{
+  const SCOUT = fs.readFileSync(path.join(HERE, 'scout.js'), 'utf8')
+
+  const normSrc = SCOUT.match(/function normaliseRoot\(raw\) \{[\s\S]*?\n\}/)
+  check('scout exposes normaliseRoot to the preflight', !!normSrc)
+  if (normSrc) {
+    const REPO = '/Users/x/wt'
+    const normaliseRoot = new Function('REPO', 'MIN_ROOT_SEGMENTS', `${normSrc[0]}; return normaliseRoot`)(REPO, 2)
+    const cases = [
+      [`${REPO}/backend/crates/platform/audit-chain/src/`, 'backend/crates/platform/audit-chain/src/', 'absolute path made repo-relative'],
+      ['<the', null, 'prose fragment rejected'],
+      ['`git', null, 'shell fragment rejected'],
+      ['backend/', null, 'the repository is not an owned root'],
+      ['docs/', null, 'nor is a top-level directory'],
+      ['backend/app/src/hr.rs', 'backend/app/src/', 'a file becomes its directory'],
+      ['backend/app/src/', 'backend/app/src/', 'a real root survives unchanged'],
+      ['/', null, 'root rejected'],
+      ['', null, 'empty rejected'],
+      ['backend/**/*.rs', null, 'glob rejected'],
+    ]
+    for (const [input, want, why] of cases) {
+      check(`scout root: ${why}`, normaliseRoot(input) === want, { input, got: normaliseRoot(input), want })
+    }
+  }
+
+  // The packing must not be able to emit two lanes sharing territory. The first version decided
+  // membership one bead at a time against a set that was still moving, so absorbing a bead grew a
+  // lane's roots until it overlapped a lane created earlier -- and a run that had completed all
+  // fifteen of its agents threw at the final guard and discarded the lot.
+  const ovSrc = SCOUT.match(/function overlaps\(a, b\) \{[\s\S]*?\n\}/)
+  check('scout exposes overlaps to the preflight', !!ovSrc)
+  if (ovSrc) {
+    const overlaps = new Function(`${ovSrc[0]}; return overlaps`)()
+    check('scout overlap: a prefix counts as shared territory',
+      overlaps(['backend/app/'], ['backend/app/src/']))
+    check('scout overlap: siblings do not',
+      !overlaps(['backend/app/'], ['backend/crates/']))
+
+    // The transitive case the incremental packer got wrong: A and C do not overlap, but B bridges
+    // them, so all three belong in ONE lane. A packer that pairs A-B then creates C separately emits
+    // two lanes that collide at land.
+    const items = [
+      { id: 'a', roots: ['backend/app/src/'] },
+      { id: 'b', roots: ['backend/app/', 'backend/crates/x/'] },
+      { id: 'c', roots: ['backend/crates/x/y/'] },
+    ]
+    const parent = items.map((_, i) => i)
+    const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        if (overlaps(items[i].roots, items[j].roots)) parent[find(i)] = find(j)
+      }
+    }
+    check('scout packing: transitively-linked territory collapses to ONE group',
+      new Set(items.map((_, i) => find(i))).size === 1,
+      items.map((_, i) => find(i)))
+  }
+
+  // A guard that only exists in scout.js text is a guard nobody proved runs.
+  check('scout still refuses to emit a plan whose lanes overlap',
+    /own overlapping roots/.test(SCOUT))
+  check('scout defers a bead whose paths are all unusable rather than inventing a root',
+    /every reported path was unusable as an owned root/.test(SCOUT))
+}
+
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')
 process.exit(failures ? 1 : 0)
