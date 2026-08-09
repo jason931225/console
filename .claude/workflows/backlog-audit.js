@@ -163,7 +163,27 @@ Emit, in ONE batched pass each (not a loop of small commands):
 
 Return raw structured data. No verdicts, no recommendations — later phases do that, and a census that
 editorialises makes its own errors invisible.`,
-  { label: 'collect', phase: 'Collect' },
+  // A SCHEMA, not free text. The first version of this file had none, so `collected` came back as a
+  // plain string and the regex below that scraped issue numbers out of it matched NOTHING. Ten
+  // triage lanes were therefore never dispatched, and the run reported "0 issues triaged" as though
+  // that were an answer. The census must hand the script DATA, not prose it has to parse.
+  {
+    label: 'collect',
+    phase: 'Collect',
+    schema: {
+      type: 'object',
+      required: ['openIssueNumbers', 'openIssueCount', 'issues', 'beads'],
+      properties: {
+        openIssueNumbers: { type: 'array', items: { type: 'number' }, description: 'EVERY open issue number. This drives the triage fan-out, so an omission here silently un-audits that issue.' },
+        openIssueCount: { type: 'number', description: 'what gh reported, so the script can catch a truncated list' },
+        issues: { type: 'array', items: { type: 'object' }, description: 'number, title, labels, author, createdAt, updatedAt, comments, body excerpt' },
+        beads: { type: 'array', items: { type: 'object' } },
+        crates: { type: 'array', items: { type: 'object' } },
+        mergedPrs: { type: 'array', items: { type: 'object' } },
+        excludedRoots: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  },
 )
 
 // --- The read fan-out ------------------------------------------------------
@@ -209,11 +229,35 @@ const CROSS = [
 ]
 
 // Issue batches are computed BEFORE the read block so triage can join the same parallel wave.
-const issueNumbers = (() => {
-  const m = JSON.stringify(collected).match(/"number"\s*:\s*(\d+)/g) || []
-  const nums = [...new Set(m.map((s) => Number(s.replace(/\D/g, ''))))].filter((n) => n > 0)
-  return nums.sort((a, b) => a - b)
-})()
+// Read the field the schema guarantees. The previous version scraped `"number": N` out of the
+// stringified census with a regex; the census was prose, so it matched nothing and ten triage lanes
+// were silently never dispatched.
+const issueNumbers = [...new Set((collected && collected.openIssueNumbers) || [])]
+  .map(Number).filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b)
+const claimedCount = (collected && collected.openIssueCount) || 0
+
+// A PHASE THAT EXAMINES ZERO SUBJECTS MUST FAIL, NEVER PASS. This is the harness's own standing rule
+// — "examined zero subjects MUST be a FAILURE" — applied to the harness itself, because the first run
+// of this file broke exactly that way: 22 audit lanes did real work while the triage half quietly ran
+// on an empty list and the headline read "0 issues triaged" as if it were a result.
+if (!issueNumbers.length) {
+  throw new Error(
+    'backlog-audit: the census returned NO open issue numbers, so triage would examine nothing and ' +
+    'report success. That is a false green, not an empty backlog. Either the repository genuinely ' +
+    'has zero open issues (verify with `gh issue list --state open`), or the Collect agent did not ' +
+    'populate openIssueNumbers. Fix the census rather than running a triage over nothing.',
+  )
+}
+// A truncated list is the quieter version of the same failure: some issues get audited, the rest are
+// silently dropped, and nothing in the output distinguishes that from a clean sweep.
+if (claimedCount && issueNumbers.length < claimedCount) {
+  throw new Error(
+    `backlog-audit: census reported ${claimedCount} open issues but listed only ${issueNumbers.length} ` +
+    'numbers. Triage would silently skip the remainder. Re-run Collect with a --limit high enough to ' +
+    'return them all.',
+  )
+}
+
 const batches = []
 for (let i = 0; i < issueNumbers.length; i += BATCH) batches.push(issueNumbers.slice(i, i + BATCH))
 
