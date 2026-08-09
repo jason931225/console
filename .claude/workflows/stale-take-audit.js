@@ -103,7 +103,9 @@ FILES:
 ${batch.map((f) => `  ${f}`).join('\n')}
 
 Return one result per file, in order. Do not skip any.`,
-    { schema: SCHEMA, label: `audit:${i}`, phase: 'Audit' },
+    // Cheap tier: every STALE claim from this pass is adversarially re-checked below, and a
+    // CLEAN verdict that is wrong shows up as the next CI failure rather than as a bad merge.
+    { schema: SCHEMA, label: `audit:${i}`, phase: 'Audit', model: 'sonnet' },
   )))
 
 const all = (audited || []).filter(Boolean).flatMap((r) => r.results || [])

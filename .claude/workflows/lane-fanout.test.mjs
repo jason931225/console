@@ -846,5 +846,58 @@ const threw = async (args) => {
     /every reported path was unusable as an owned root/.test(SCOUT))
 }
 
+// TRIAL GATE. Bun proved its port method on three files before scaling to 64 agents; this harness
+// always dispatched every lane cold, so a brief that is wrong the same way for every lane wastes
+// the whole wave instead of one lane.
+{
+  const TWO = (over = {}) => ARGS({
+    // Distinct worktrees AND distinct owned roots: the overlap guard is a sibling rule and this
+    // fixture must not trip it while testing something else.
+    lanes: [LANE({ key: 'a', wt: '/w1', owned: 'aa/**' }), LANE({ key: 'b', wt: '/w2', owned: 'bb/**' })],
+    ...over,
+  })
+
+  // A failing trial must hold the fleet back, and must NOT dispatch lane b at all.
+  {
+    const agent = mkAgent({ review: () => REVIEW({ verdict: 'reject', findings: [FINDING({ severity: 'blocker' })] }) })
+    const out = await go(TWO({ trial: 'a', maxRounds: 1 }), agent)
+    const bDispatched = agent.seen.some((x) => /:b\b/.test(x.label))
+    check('a failed trial holds the fleet back', !!out && /DID NOT CONVERGE/.test(out.headline[0]), out && out.headline)
+    check('a failed trial dispatches NO other lane', !bDispatched,
+      agent.seen.map((x) => x.label))
+    check('the held-back lanes are named, not silently dropped',
+      !!out && Array.isArray(out.heldBack) && out.heldBack.includes('b'), out && out.heldBack)
+  }
+
+  // A converged trial must go on to dispatch the rest.
+  {
+    const agent = mkAgent()
+    const out = await go(TWO({ trial: 'a', maxRounds: 1 }), agent)
+    const bDispatched = agent.seen.some((x) => /:b\b/.test(x.label))
+    check('a converged trial dispatches the remaining lanes', bDispatched,
+      agent.seen.map((x) => x.label))
+  }
+
+  // Naming a lane that does not exist is a typo, not a silent no-trial run.
+  {
+    const m = await threw(TWO({ trial: 'nope' }))
+    check('trial naming an unknown lane aborts', !!m && /nope/.test(m), m)
+  }
+  {
+    const m = await threw(ARGS({ trial: 'a' }))
+    check('trial with a single lane aborts rather than serialising for nothing',
+      !!m && /serialises for nothing/.test(m), m)
+  }
+}
+
+// The tier rule must stay a RULE, not a preference someone reverses on a slow day.
+{
+  check('the lock states when a cheaper tier is allowed',
+    SRC.includes('A CHEAPER TIER IS ALLOWED ONLY WHERE AN INDEPENDENT STRONGER PASS AUDITS THE RESULT'))
+  const judgePhases = SRC.match(/label: `verify:[\s\S]{0,160}/g) || []
+  check('the independent verifier does NOT run on a cheaper tier',
+    judgePhases.every((frag) => !/model:/.test(frag)), judgePhases.length)
+}
+
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')
 process.exit(failures ? 1 : 0)

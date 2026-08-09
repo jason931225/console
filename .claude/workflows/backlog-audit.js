@@ -457,7 +457,10 @@ expensive to pick up, and writing it down is most of the value of this pass.
 
 Mark beadCandidate=true for KEEP items that are real work someone should schedule, so the reconcile
 phase can mirror them into the working tracker.`,
-    { label: `triage:${i + 1}`, phase: 'Read', schema: TRIAGE_SCHEMA },
+    // Cheap tier: every verdict here passes through the single-writer Reconcile, which refuses to
+    // close anything whose evidence is not reachable from the default branch. A wrong KEEP costs a
+    // stale issue; a wrong CLOSE cannot get past that guard.
+    { label: `triage:${i + 1}`, phase: 'Read', schema: TRIAGE_SCHEMA, model: 'sonnet' },
   ))
 
 // ONE parallel wave. Audit, cross-cutting and triage are mutually independent reads, so stacking

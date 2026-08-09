@@ -45,7 +45,7 @@ ARGS = ARGS || {}
 // kilobytes of hand-written JSON, so a single typo -- `lens` for `lenses`, `maxRound` for
 // `maxRounds` -- silently changes what runs while every log line still looks right. Fail loudly at
 // dispatch instead, where it costs seconds.
-const KNOWN_ARGS = ['tip', 'lanes', 'maxRounds', 'lockExtra', 'lenses', 'land', 'integrationBranch']
+const KNOWN_ARGS = ['tip', 'lanes', 'maxRounds', 'lockExtra', 'lenses', 'land', 'integrationBranch', 'trial']
 // `blockedTargets` was documented in the args comment above but omitted here, so a caller
 // following the documented interface aborted with "unknown option(s)". Documented and accepted
 // must be the same set — a doc that describes an input the code rejects is the same defect class
@@ -420,6 +420,44 @@ const VERIFY_SCHEMA = {
 // rejection cause in this program and it had never been reviewed for; it was only ever caught
 // incidentally by a custom lens that happened to look. A default that is always overridden is not a
 // default, it is dead code that reads as coverage.
+// MODEL TIER: FRONTIER WHERE THE DECISION IS, CHEAP WHERE THE WORK IS.
+//
+// Every agent in this directory ran at the session model, which is the expensive one. Cursor's
+// swarm measured the same worker fleet at $9,373 with a frontier model and $411 with a cheap one
+// behind a frontier planner -- 23x -- on the argument that "few moments in a large task genuinely
+// require frontier intelligence, such as the original decomposition, the design decisions, and
+// certain trade-offs." This programme has now lost two runs to account limits, one of them 117
+// agents deep, so this is not a theoretical saving.
+//
+// The line we draw is NOT "cheap for reads, expensive for writes". It is:
+//
+//   A CHEAPER TIER IS ALLOWED ONLY WHERE AN INDEPENDENT STRONGER PASS AUDITS THE RESULT.
+//
+// That is the same defence-in-depth argument as decorrelated review lenses: a weaker first pass is
+// fine when a stronger one adjudicates it, and is NOT fine when its output is the final word.
+// So: batched fan-out that feeds a challenge/reconcile phase may run cheap; anything whose verdict
+// is terminal -- the adversarial reviewers, the independent verifier, the single writer, and any
+// re-derivation of a dependency edge, where a reversed answer silently reschedules everything --
+// stays on the inherited model.
+const WORKER = 'sonnet'   // audited downstream by a stronger pass
+
+// TRIAL ONE LANE BEFORE COMMITTING THE FLEET.
+//
+// Bun's Zig-to-Rust port ran ONE implementer plus TWO adversarial reviewers over THREE files, and
+// only then scaled to 64 agents across 4 worktrees. This harness has always dispatched every lane
+// cold, and it has cost real runs: a wave where the brief was wrong in the same way for all four
+// lanes is four wasted lanes, not one.
+//
+// `trial` names a lane key that must CONVERGE before the rest are dispatched. It is not a
+// smoke test -- it is the same full build/review/verify cycle, so what it proves is that the LOCK,
+// the accept criteria and the review lenses actually work against this tree, which is the part a
+// wave gets wrong identically across every lane.
+//
+// Deliberately opt-in. For two independent lanes the serialisation costs more than it saves; the
+// value appears when the lanes share a brief shape, which is exactly when they fail together.
+
+// Judges, verifiers and writers deliberately omit `model` so they inherit the session's.
+
 const STANDING_LENSES = [
   'MAINTAINABILITY / COST OF CARRY — every other lens asks whether the change is CORRECT. This one asks what it costs to keep, and its default verdict is DELETE. (a) SPRAWL: does this add a doc, a crate, a script, a config, a workflow step or a process that duplicates one that exists? A second file describing the same fact is a future contradiction, not documentation. Name the existing thing it should have extended. (b) COMMENT BLOBBING: is there a paragraph of prose where a name would do? A comment that restates the code is noise that goes stale independently; a comment earning its place explains WHY, names a measurement, or records a rejected alternative. Twenty lines of comment over five lines of code is a defect in this repository, not thoroughness. (c) IDIOM: would a competent Rust/JS reader of this repo write it this way, or is it this author\'s private dialect? Hand-rolled parsing where a library exists, and enumerations where the language has a total construct, are the two that recur here. (d) AUTOMATION: is a human being asked to remember something a command could decide? If the accept criteria contain a step a script could run, that step WILL be skipped eventually. (e) UNDOCUMENTED-BUT-SHOULD-BE: the inverse of sprawl. A non-obvious constraint, a measured number, or a deliberate asymmetry that exists only in the author\'s head is undocumented, and the next lane will \'simplify\' it away. Report the NET line count of prose and config this change adds. A change that adds more explanation than behaviour needs a reason.',
   'CORRECTNESS + ORACLE INTEGRITY — does the change address the root cause, and does the suite still prove as much as before? Hunt for tests conformed to defects and assertions that would pass even if the behaviour were broken. Pick the load-bearing assertion, break the code it guards, and say whether it actually goes RED.',
@@ -847,7 +885,37 @@ async function runLane(l) {
 
 phase('Build')
 
-const results = await parallel(LANES.map((l) => () => runLane(l)))
+let results
+if (ARGS.trial) {
+  const first = LANES.find((l) => l.key === ARGS.trial)
+  if (!first) {
+    throw new Error(`lane-fanout: trial names lane "${ARGS.trial}", which is not in lanes: ${LANES.map((l) => l.key).join(', ')}`)
+  }
+  if (LANES.length < 2) throw new Error('lane-fanout: trial with fewer than two lanes serialises for nothing')
+  log(`TRIAL: running lane "${first.key}" alone before committing the other ${LANES.length - 1}`)
+  const trial = await runLane(first)
+  const converged = trial && trial.converged
+  if (!converged) {
+    // The whole point: a brief that is wrong is usually wrong the SAME way for every lane, so
+    // dispatching the rest would multiply one defect by N rather than discover N defects.
+    log(`TRIAL FAILED — not dispatching the remaining ${LANES.length - 1} lane(s).`)
+    log('The lock, the accept criteria or the review lenses did not hold against this tree. Fix the')
+    log('brief, not the lane, then re-run: the other lanes would have failed the same way.')
+    return {
+      headline: [
+        `TRIAL LANE "${first.key}" DID NOT CONVERGE — fleet not dispatched`,
+        `${LANES.length - 1} lane(s) held back deliberately, not dropped`,
+      ],
+      trial,
+      heldBack: LANES.filter((l) => l.key !== first.key).map((l) => l.key),
+    }
+  }
+  log(`TRIAL CONVERGED — dispatching the remaining ${LANES.length - 1} lane(s)`)
+  const rest = await parallel(LANES.filter((l) => l.key !== first.key).map((l) => () => runLane(l)))
+  results = [trial, ...rest]
+} else {
+  results = await parallel(LANES.map((l) => () => runLane(l)))
+}
 
 const out = results.filter(Boolean).map((r) => ({
   lane: r.lane.key,
