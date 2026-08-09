@@ -12,6 +12,9 @@ export const meta = {
 // args = {
 //   tip:        "<sha>"            // what each lane started from; ALL diffs are taken against this
 //   lanes:      [{ key, bead, wt, owned, brief, accept, blockedTargets? }]
+//               Lanes must be pairwise disjoint in BOTH `wt` and `owned`, and both are refused at
+//               dispatch: a shared worktree collides while they build, a shared owned root collides
+//               at LAND. `owned` must name paths, not describe them.
 //   lockExtra?: "<string>"         // phase-specific additions to the lock contract
 //   maxRounds?: 3
 //   lenses?:    ["...", "..."]     // review lenses; defaults below
@@ -102,6 +105,60 @@ for (const l of LANES) {
   for (const l of LANES) {
     if (keys.has(l.key)) throw new Error(`lane-fanout: duplicate lane key "${l.key}" — labels and telemetry would merge two lanes into one.`)
     keys.add(l.key)
+  }
+
+  // OVERLAPPING OWNED ROOTS ARE THE SAME COLLISION, DEFERRED TO LAND. Separate worktrees mean two
+  // lanes cannot corrupt each other's files while they build, so this one survives every reviewer
+  // and every verifier: each diff is correct in isolation. It fires at LAND time, on the
+  // integration branch, after the whole run has been paid for — two independent rewrites of the
+  // same files from the same base, handed to a lander with no authority to judge either. Refuse it
+  // where the duplicate worktree is refused, for the cost of a string compare.
+  //
+  // An owned root is a list of path patterns, sometimes with prose around it. Reduce each entry to
+  // the fixed path prefix before its first wildcard segment; two lanes collide when one prefix is
+  // the other, or is a PATH prefix of it (segment-aligned, so crates/ab does not collide with
+  // crates/a).
+  const ownedPrefixes = (owned) => String(owned)
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    // Path-shaped tokens only. Comparing every word would refuse two lanes for sharing "the".
+    .filter((t) => t.includes('/') || t.includes('*') || /\.\w+$/.test(t))
+    .map((t) => {
+      const segs = []
+      for (const seg of t.split('/')) {
+        if (seg.includes('*')) break
+        segs.push(seg)
+      }
+      return segs.join('/').replace(/\/+$/, '')
+    })
+  const pathOverlap = (a, b) => a === b || a === '' || b === '' || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
+  const roots = LANES.map((l) => ({ key: l.key, owned: l.owned, prefixes: ownedPrefixes(l.owned) }))
+  for (const r of roots) {
+    // A guard that examines zero subjects must FAIL. An owned root naming no path cannot be
+    // compared with anything, and it is also useless as the reviewer's IN-SCOPE PATHS list.
+    if (!r.prefixes.length) {
+      throw new Error(
+        `lane-fanout: lane "${r.key}" declares an owned root with no path in it (${JSON.stringify(r.owned)}). ` +
+        'The overlap check would examine nothing and pass, and the reviewer would be handed prose as ' +
+        'its scope list. Name the paths.',
+      )
+    }
+  }
+  for (let i = 0; i < roots.length; i++) {
+    for (let j = i + 1; j < roots.length; j++) {
+      const hit = roots[i].prefixes
+        .flatMap((a) => roots[j].prefixes.map((b) => [a, b]))
+        .find(([a, b]) => pathOverlap(a, b))
+      if (hit) {
+        throw new Error(
+          `lane-fanout: lanes "${roots[i].key}" and "${roots[j].key}" declare OVERLAPPING owned roots ` +
+          `(${hit[0] || '<repo root>'} vs ${hit[1] || '<repo root>'}). Separate worktrees keep them from ` +
+          'corrupting each other while they build, so nothing before LAND can see this — the collision ' +
+          'arrives on the integration branch after every reviewer has passed, as two independent ' +
+          'rewrites of the same files from the same base. Narrow one lane, or run them in sequence.',
+        )
+      }
+    }
   }
 }
 
@@ -311,7 +368,14 @@ const REVIEW_SCHEMA = {
 // check part of the pipeline.
 const VERIFY_SCHEMA = {
   type: 'object',
-  required: ['reproduced', 'actualResults', 'discrepancies', 'contradictsClaim', 'headSha'],
+  // A GREEN MUST BE ANSWERED FOR, NOT MERELY ASSERTED. reproduced + contradictsClaim say the
+  // verifier ran something and agreed with it. They do not say WHAT it ran, whether any command
+  // selected zero tests and still exited 0, or whether the suite still proves as much as it did.
+  // Oracle integrity is the most common rejection cause in this programme and a STANDING review
+  // lens, yet this schema let a verifier certify a green without ever answering it — and a field
+  // that is optional is a field that gets skipped. Requiring the command list is the same
+  // discipline as `commands` on the build side: a claim nobody can re-run is a claim.
+  required: ['reproduced', 'actualResults', 'discrepancies', 'contradictsClaim', 'headSha', 'falseGreenRisk', 'commandsRun', 'oracleIntact'],
   properties: {
     // WHAT was verified, not just whether. Landing cherry-picks a worktree AFTER review finishes,
     // and "clean working tree" is not a binding: a commit added after the reviewers finished is
@@ -328,7 +392,16 @@ const VERIFY_SCHEMA = {
     // verifier ran: every lane with one reported converged=false while every review-only lane
     // reported true. That defect manufactured rebuild rounds, which are the dominant cost here.
     contradictsClaim: { type: 'boolean', description: 'TRUE only if what you observed CONTRADICTS the claimed result - a count that differs, a command that failed, a false green. Cosmetic differences (line numbers, timings, wording) are FALSE.' },
-    falseGreenRisk: { type: 'string', description: 'did any command select ZERO tests and still exit 0?' },
+    falseGreenRisk: { type: 'string', description: 'did any command select ZERO tests and still exit 0? Answer for every command you ran; "none" is a valid answer, silence is not.' },
+    commandsRun: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'the commands you ACTUALLY ran, verbatim, in the order you ran them. Not the commands you were given — the ones you executed. An empty list means you verified nothing.',
+    },
+    oracleIntact: {
+      type: 'boolean',
+      description: 'TRUE only if the suite still proves as much as it did: no test deleted, no #[ignore] added, no assertion loosened, and no test made to pass by conforming it to the defect. FALSE if you observed any of those OR could not tell.',
+    },
   },
 }
 
@@ -516,6 +589,17 @@ RULES:
    Docker down), say so explicitly rather than reporting the change as broken.
  - Do NOT edit any file. You are read-and-run only.
 
+*** THREE FIELDS DECIDE WHETHER THIS GREEN COUNTS. A green you cannot answer for is not a green. ***
+ commandsRun:     every command you ACTUALLY executed, verbatim and in order. Not the list you were
+                  handed — the one you ran. An empty list means nothing was verified, and the lane
+                  rebuilds.
+ falseGreenRisk:  answer it for every command, not just the suspicious one. "none" is an answer.
+ oracleIntact:    read the diff for deleted tests, added #[ignore], loosened assertions, and any
+                  expectation rewritten to match observed output instead of the intended contract.
+                  TRUE only if the suite still proves as much as before. If you could not tell,
+                  that is FALSE — this is the most common rejection cause in this programme and
+                  silence on it used to be free.
+
 Report any difference between what was claimed and what you observed, however small.`
 }
 
@@ -701,13 +785,26 @@ async function runLane(l) {
     // the claim untested and the lane must rebuild.
     // The deliberate exception stands: when the build claims nothing (`claimsGreen` false) no
     // verifier is dispatched, there is nothing to falsify, and its absence is not a death.
+    //
+    // AND A GREEN NOBODY ANSWERED FOR IS NOT A GREEN. The schema now REQUIRES the command list, the
+    // false-green answer and an oracle-integrity verdict, but a schema is a request to an agent and
+    // this is the enforcement: a verifier that reproduced the result while leaving any of the three
+    // unanswered has told us it agreed without saying what it ran or whether the suite still proves
+    // anything. Absence is a NO here, never a yes.
     const verifierDied = claimsGreen && !verify
-    const verifierOk = !claimsGreen || (!!verify && verify.reproduced === true && verify.contradictsClaim === false)
+    const verifierAnswered = !!verify
+      && Array.isArray(verify.commandsRun) && verify.commandsRun.length > 0
+      && typeof verify.falseGreenRisk === 'string' && verify.falseGreenRisk.trim() !== ''
+      && verify.oracleIntact === true
+    const verifierOk = !claimsGreen
+      || (!!verify && verify.reproduced === true && verify.contradictsClaim === false && verifierAnswered)
     const verifierSaid = verifierOk
       ? null
       : (verifierDied
         ? 'the INDEPENDENT VERIFIER died before reporting, so nothing re-ran your claimed green. Re-run your own commands and report the exact output.'
-        : `reproduced=${verify && verify.reproduced}; contradictsClaim=${verify && verify.contradictsClaim}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`)
+        : (verify && verify.reproduced === true && verify.contradictsClaim === false
+          ? `the INDEPENDENT VERIFIER reproduced your result but could not answer for it: commandsRun=${JSON.stringify(verify.commandsRun)}, falseGreenRisk=${JSON.stringify(verify.falseGreenRisk)}, oracleIntact=${verify.oracleIntact}. Either it ran nothing it could name, or it judged the oracle no longer intact. Make the commands reproducible and show that the suite still proves what it did before.`
+          : `reproduced=${verify && verify.reproduced}; contradictsClaim=${verify && verify.contradictsClaim}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`))
     if (verifierDied) log(`${l.key}: round ${round} CANNOT CONVERGE — VERIFIER DIED; the claimed green was never re-run`)
 
     last = { lane: l, fix, reviews, verify, blockers, rounds: round, converged: false }

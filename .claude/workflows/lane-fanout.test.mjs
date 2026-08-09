@@ -25,7 +25,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const SRC = fs.readFileSync(path.join(HERE, 'lane-fanout.js'), 'utf8')
+// The RED baseline for any change to these dispatchers is THIS file run against the PRE-FIX
+// sources (`git show <tip>:.claude/workflows/<f>.js` into a scratch dir, then point this at it).
+// Without the override the preflight can only ever measure the tree it ships with, so "it would
+// have gone red on the old code" is a claim nobody can re-run. CI passes nothing and gets HERE.
+const SRCDIR = process.env.LANE_FANOUT_SRCDIR || HERE
+const SRC = fs.readFileSync(path.join(SRCDIR, 'lane-fanout.js'), 'utf8')
 
 // Compile exactly as the harness evaluates it: an async function body with these globals, so
 // top-level await and return are legal. This is the only honest syntax check.
@@ -82,7 +87,7 @@ const FINDING = (over = {}) => ({
 const REVIEW = (over = {}) => ({ verdict: 'accept', findings: [], oracleWeakened: false, scopeCreep: false, ...over })
 const VERIFY = (over = {}) => ({
   reproduced: true, actualResults: 'a', discrepancies: 'none', contradictsClaim: false,
-  falseGreenRisk: 'none', headSha: 'cafe1234', ...over,
+  falseGreenRisk: 'none', commandsRun: ['cargo test -p x'], oracleIntact: true, headSha: 'cafe1234', ...over,
 })
 
 // Records every label the harness actually dispatched, which is how we prove a rule is REACHABLE
@@ -390,7 +395,7 @@ const threw = async (args) => {
 // path that does not exist — and nothing here could see it, because the preflight only ever
 // compiled lane-fanout.js. A dispatcher is part of the harness.
 {
-  const TICK = fs.readFileSync(path.join(HERE, 'program-tick.js'), 'utf8')
+  const TICK = fs.readFileSync(path.join(SRCDIR, 'program-tick.js'), 'utf8')
   try {
     new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow',
       TICK.replace(/^export const meta = /m, 'const meta = '))
@@ -408,7 +413,7 @@ const threw = async (args) => {
 {
   const dispatchers = ['program-tick', 'backlog-audit', 'lane-fanout', 'scout']
   for (const name of dispatchers) {
-    const src = fs.readFileSync(path.join(HERE, `${name}.js`), 'utf8')
+    const src = fs.readFileSync(path.join(SRCDIR, `${name}.js`), 'utf8')
       .replace(/^export const meta = /m, 'const meta = ')
     const fn = new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow', src)
     const stub = async () => ({})
@@ -427,7 +432,7 @@ const threw = async (args) => {
 
 // A batch size of -1 produces no batches and 1.5 produces overlapping slices; both exit cleanly.
 {
-  const src = fs.readFileSync(path.join(HERE, 'backlog-audit.js'), 'utf8')
+  const src = fs.readFileSync(path.join(SRCDIR, 'backlog-audit.js'), 'utf8')
     .replace(/^export const meta = /m, 'const meta = ')
   const fn = new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow', src)
   for (const bad of [-1, 0, 1.5, 'eight']) {
@@ -445,7 +450,7 @@ const threw = async (args) => {
 // The reconciler was handed `JSON.stringify(findings).slice(0, 24000)`. With ~32 read lanes the cap
 // binds routinely, so the single writer filed beads for a prefix of the audit and reported success.
 {
-  const src = fs.readFileSync(path.join(HERE, 'backlog-audit.js'), 'utf8')
+  const src = fs.readFileSync(path.join(SRCDIR, 'backlog-audit.js'), 'utf8')
   check('backlog-audit no longer truncates the findings payload blindly',
     !/JSON\.stringify\(findingsAll\)\.slice\(/.test(src))
   const body = src.match(/function renderFindings\(all\) \{[\s\S]*?\n\}/)
@@ -489,6 +494,257 @@ const threw = async (args) => {
   for (const fragment of need) {
     check(`the lock names a TOTAL generated-face check, not a list: ${fragment}`, SRC.includes(fragment))
   }
+}
+
+// --- 14. OVERLAPPING OWNED ROOTS: the duplicate-worktree collision, deferred to LAND. --------
+// Separate worktrees mean two lanes cannot corrupt each other's files, so every reviewer and every
+// verifier passes. The collision arrives on the integration branch afterwards, as two independent
+// rewrites of the same files from the same base — the most expensive possible moment. Refuse it
+// where the duplicate `wt` is refused: at dispatch.
+{
+  const nested = await threw(ARGS({ lanes: [
+    LANE({ key: 'outer', wt: '/w1', owned: 'backend/crates/x/**' }),
+    LANE({ key: 'inner', wt: '/w2', owned: 'backend/crates/x/sub/**' }),
+  ] }))
+  check('a lane owning a subtree of another lane aborts',
+    !!nested && /overlapping owned root/i.test(nested) && /outer/.test(nested) && /inner/.test(nested), nested)
+
+  const same = await threw(ARGS({ lanes: [
+    LANE({ key: 'a1', wt: '/w1', owned: 'docs/x/**' }),
+    LANE({ key: 'a2', wt: '/w2', owned: 'docs/x/**' }),
+  ] }))
+  check('two lanes owning the SAME root abort', !!same && /overlapping owned root/i.test(same), same)
+
+  // An owned root is routinely a LIST. One colliding member is enough, and checking only the first
+  // would be the same defect with a smaller blast radius.
+  const multi = await threw(ARGS({ lanes: [
+    LANE({ key: 'm1', wt: '/w1', owned: 'a/**, b/**' }),
+    LANE({ key: 'm2', wt: '/w2', owned: 'c/**\nb/deep/**' }),
+  ] }))
+  check('one colliding path inside a multi-path owned root is enough', !!multi && /overlapping owned root/i.test(multi), multi)
+
+  // A guard that examines nothing must FAIL, not pass: an owned root naming no path cannot be
+  // compared, and it is also unusable as the reviewer's IN-SCOPE PATHS list.
+  const prose = await threw(ARGS({ lanes: [LANE({ key: 'p1', owned: 'everything in the crate' })] }))
+  check('an owned root with no path in it aborts rather than being silently unguarded',
+    !!prose && /no path/i.test(prose), prose)
+
+  // ...and it must not OVER-refuse, or it becomes a thing people work around.
+  const sibling = await go(ARGS({ lanes: [
+    LANE({ key: 'd1', wt: '/w1', owned: 'backend/crates/ab/**' }),
+    LANE({ key: 'd2', wt: '/w2', owned: 'backend/crates/a/**' }),
+  ] }))
+  check('a shared string prefix that is not a PATH prefix is not an overlap',
+    !!sibling && Array.isArray(sibling.headline), sibling && sibling.headline)
+
+  const disjoint = await go(ARGS({ lanes: [
+    LANE({ key: 'e1', wt: '/w1', owned: 'backend/crates/a/**' }),
+    LANE({ key: 'e2', wt: '/w2', owned: 'docs/**' }),
+  ] }))
+  check('disjoint owned roots dispatch normally', !!disjoint && Array.isArray(disjoint.headline), disjoint && disjoint.headline)
+}
+
+// --- 15. A GREEN THE VERIFIER DID NOT ANSWER FOR IS NOT A GREEN. -----------------------------
+// reproduced+contradictsClaim say the verifier ran something and agreed. They do not say WHAT it
+// ran, whether any command selected zero tests and exited 0, or whether the suite still proves as
+// much as it did. Oracle integrity is the most common rejection cause in this programme and a
+// standing review lens, yet the schema let a verifier certify a green without ever answering it.
+{
+  const req = (SRC.match(/const VERIFY_SCHEMA = \{[\s\S]*?required: \[([^\]]*)\]/) || ['', ''])[1]
+  for (const f of ['falseGreenRisk', 'commandsRun', 'oracleIntact']) {
+    check(`${f} is a REQUIRED verifier field`, req.includes(f), req.slice(0, 300))
+  }
+
+  // The schema is a request, not an enforcement — the harness must refuse the green itself.
+  const noCommands = mkAgent({ verify: () => VERIFY({ commandsRun: [] }) })
+  check('a verifier that lists no command it RAN cannot certify a green',
+    (await go(ARGS(), noCommands)).lanes[0].converged === false)
+
+  const noRisk = mkAgent({ verify: () => VERIFY({ falseGreenRisk: '' }) })
+  check('a verifier that leaves the false-green risk blank cannot certify a green',
+    (await go(ARGS(), noRisk)).lanes[0].converged === false)
+
+  const silent = mkAgent({ verify: () => VERIFY({ oracleIntact: undefined }) })
+  check('a verifier that never answers oracle integrity cannot certify a green',
+    (await go(ARGS(), silent)).lanes[0].converged === false)
+
+  const weakened = mkAgent({ verify: () => VERIFY({ oracleIntact: false }) })
+  check('a verifier that OBSERVED a weakened oracle blocks convergence',
+    (await go(ARGS(), weakened)).lanes[0].converged === false)
+
+  // A rejection with no actionable text manufactures a wasted round, so the next build must be told.
+  const seenPrompts = []
+  const partialAnswer = mkAgent({
+    build: (seen) => { seenPrompts.push(seen[seen.length - 1].prompt); return BUILD() },
+    verify: () => VERIFY({ commandsRun: [] }),
+  })
+  await go(ARGS({ maxRounds: 2 }), partialAnswer)
+  check('and the next round is told the verification was unanswered, not merely "disagreed"',
+    seenPrompts.length === 2 && /commandsRun/.test(seenPrompts[1]), seenPrompts.length)
+
+  // A field nobody is asked for is a field nobody fills in.
+  const asked = mkAgent()
+  await go(ARGS(), asked)
+  const vp = (asked.seen.find((s) => s.label.startsWith('verify:')) || {}).prompt || ''
+  check('the verifier is ASKED for the commands it ran and for an oracle verdict',
+    /commandsRun/.test(vp) && /oracleIntact/.test(vp), vp.slice(0, 300))
+
+  const full = await go(ARGS(), mkAgent())
+  check('a fully answered verification still converges', full.lanes[0].converged === true, full.headline)
+}
+
+// --- 16. program-tick is the CALLER, so a collision must be refused where the set is BUILT. ---
+// Refusing downstream in lane-fanout is necessary and late: by then the agents are already chosen.
+// These assertions drive the REAL program-tick body, with a genuinely concurrent parallel(), and
+// observe what it dispatches.
+{
+  const compileWorkflow = (name) => new AsyncFunction(
+    'args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow',
+    fs.readFileSync(path.join(SRCDIR, `${name}.js`), 'utf8').replace(/^export const meta = /m, 'const meta = '))
+  const tick = compileWorkflow('program-tick')
+
+  const WT = (over = {}) => ({ path: '/ws/x', head: 'abc', dirtyCount: 0, prunable: false, filesVsBase: [], commitsAheadOfCandidate: 0, ...over })
+  const RAW = (over = {}) => ({ candidateFiles: ['f.rs'], worktrees: [], prs: [], beads: [], ...over })
+  const JUDGED = (over = {}) => ({ startNow: [], holdBack: [], alreadyDone: [], coverageRisks: [], ...over })
+  const PR = (n, over = {}) => ({ number: n, title: `pr${n}`, checkConclusion: 'FAILURE', reviewDecision: '', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN', headSha: `sha${n}`, failingChecks: ['t'], isDraft: false, ...over })
+  const SEL = (n) => Array.from({ length: n }, (_, i) => ({ key: `l${i + 1}`, bead: `b${i + 1}`, owned: `p${i + 1}/**`, brief: 'concrete', accept: 'a', briefConfidence: 'grounded' }))
+
+  const runTick = async (over = {}, raw = RAW(), judged = JUDGED()) => {
+    const inflight = new Set()
+    const overlaps = []
+    const dispatched = []
+    const logs = []
+    const workflows = []
+    const agentFn = async (prompt, o = {}) => {
+      const label = o.label || ''
+      dispatched.push(label)
+      if (label === 'collect') return raw
+      if (label === 'judge') return judged
+      // A PR disposition agent. `fix-then-merge` is WORK: it edits files in the candidate worktree.
+      inflight.add(label)
+      if (inflight.size > 1) overlaps.push([...inflight])
+      await new Promise((r) => setTimeout(r, 5))
+      inflight.delete(label)
+      return { pr: 1, done: true, outcome: 'x' }
+    }
+    // REAL concurrency. A sequential stub would make serialisation indistinguishable from its
+    // absence, which is how a test measures the fixture instead of the code.
+    const par = async (thunks) => Promise.all(thunks.map((t) => t()))
+    const plan = await tick(
+      { candidateWt: '/ws/cand', candidateTip: 'c'.repeat(40), base: 'main', ...over },
+      agentFn, par, async (i) => i, (m) => logs.push(m), () => {},
+      { total: null, spent: () => 0, remaining: () => Infinity },
+      async (name, a) => { workflows.push({ name, args: a }); return { headline: [] } },
+    )
+    return { plan, overlaps, dispatched, logs, workflows }
+  }
+
+  const twoFixes = await runTick({}, RAW({ prs: [PR(1), PR(2)] }))
+  // Both halves matter: a guard that dispatched ZERO PR lanes would also report zero overlaps.
+  check('two PR-fix lanes are both dispatched',
+    twoFixes.dispatched.filter((l) => l.startsWith('pr:')).length === 2, twoFixes.dispatched)
+  check('...and never run concurrently in the one candidate worktree they both edit',
+    twoFixes.overlaps.length === 0, twoFixes.overlaps)
+
+  const overCap = await runTick({ fanout: true, maxLanes: 4 },
+    RAW({ worktrees: [1, 2, 3, 4, 5].map((i) => WT({ path: `/ws/l${i}` })) }), JUDGED({ startNow: SEL(5) }))
+  check('more selected lanes than maxLanes refuses the fanout instead of ignoring the cap',
+    overCap.workflows.length === 0 && !!overCap.plan.fanoutBlocked,
+    { workflows: overCap.workflows.length, blocked: overCap.plan.fanoutBlocked })
+  check('and says the cap is why', /maxLanes/.test(JSON.stringify(overCap.plan.fanoutBlocked || '')), overCap.plan.fanoutBlocked)
+
+  const withinCap = await runTick({ fanout: true, maxLanes: 4 },
+    RAW({ worktrees: [1, 2, 3, 4].map((i) => WT({ path: `/ws/l${i}` })) }), JUDGED({ startNow: SEL(4) }))
+  check('a lane set within the cap still fans out',
+    withinCap.workflows.length === 1 && (withinCap.workflows[0].args.lanes || []).length === 4,
+    withinCap.workflows.map((w) => w.name))
+
+  const wts = await runTick({}, RAW({ worktrees: [
+    WT({ path: '/ws/cand' }),
+    WT({ path: '/ws/idle' }),
+    WT({ path: '/ws/unreadable', commitsAheadOfCandidate: -1 }),
+    WT({ path: '/ws/capped', filesVsBase: [], filesVsBaseCount: 900 }),
+  ] }))
+  const safe = wts.plan.worktrees.safeToRemove
+  check('the ACTIVE candidate worktree is never offered as safe to remove', !safe.includes('/ws/cand'), safe)
+  check('an unreadable worktree is not "unused"', !safe.includes('/ws/unreadable'), safe)
+  check('a worktree whose file list was capped is not "empty"', !safe.includes('/ws/capped'), safe)
+  // ...and the list is not simply emptied, which would pass all three above and help nobody.
+  check('a genuinely empty worktree is still removable', safe.includes('/ws/idle'), safe)
+}
+
+// --- 17. backlog-audit: evidence nobody landed is not evidence, and coverage must be real. ----
+{
+  const audit = new AsyncFunction(
+    'args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow',
+    fs.readFileSync(path.join(SRCDIR, 'backlog-audit.js'), 'utf8').replace(/^export const meta = /m, 'const meta = '))
+
+  const CENSUS = (over = {}) => ({
+    openIssueNumbers: [1], openIssueCount: 1, issues: [], beads: [],
+    crates: [{ name: 'identity' }, { name: 'policy' }], mergedPrs: [], excludedRoots: [], ...over,
+  })
+  const VERDICT = (over = {}) => ({
+    number: 1, title: 't', verdict: 'CLOSE-FIXED',
+    evidence: 'implemented in backend/crates/identity/src/lib.rs:12 by commit deadbeefcafe1234 — verified by reading it',
+    ...over,
+  })
+
+  const runAudit = async (census, verdicts, over = {}) => {
+    const dispatched = []
+    const logs = []
+    const agentFn = async (prompt, o = {}) => {
+      const label = o.label || ''
+      dispatched.push({ label, prompt })
+      if (label === 'collect') return census
+      if (label.startsWith('triage:')) return { verdicts }
+      if (label === 'reconcile') return { ok: true }
+      return { domain: label, findings: [], coverage: 'read it all' }
+    }
+    let res = null
+    let err = null
+    try {
+      res = await audit({ repo: '/r', ghRepo: 'o/n', ...over }, agentFn,
+        async (t) => Promise.all(t.map((f) => f())), async (i) => i, (m) => logs.push(m), () => {},
+        { total: null, spent: () => 0, remaining: () => Infinity }, async () => ({}))
+    } catch (e) { err = e.message }
+    return { res, err, dispatched, logs }
+  }
+
+  const unmerged = await runAudit(CENSUS(), [VERDICT({ reachableFromDefault: false })])
+  check('a CLOSE-FIXED whose evidence is not on the default branch is WITHHELD',
+    !!unmerged.res && (unmerged.res.withheld || []).includes(1), unmerged.res && unmerged.res.withheld)
+
+  const unanswered = await runAudit(CENSUS(), [VERDICT()])
+  check('a CLOSE-FIXED that never answered reachability is WITHHELD too — absence is a NO',
+    !!unanswered.res && (unanswered.res.withheld || []).includes(1), unanswered.res && unanswered.res.withheld)
+
+  const landedEv = await runAudit(CENSUS(), [VERDICT({ reachableFromDefault: true })])
+  check('a CLOSE-FIXED reachable from the default branch is still closable',
+    !!landedEv.res && !(landedEv.res.withheld || []).includes(1), landedEv.res && landedEv.res.withheld)
+
+  const keep = await runAudit(CENSUS(), [VERDICT({ verdict: 'KEEP', evidence: 'this is still broken, here is the file and line that shows it' })])
+  check('a KEEP verdict is not withheld — the rule is about CLOSING',
+    !!keep.res && (keep.res.withheld || []).length === 0, keep.res && keep.res.withheld)
+
+  check('triage is told to PROVE reachability by running merge-base --is-ancestor',
+    landedEv.dispatched.some((d) => d.label.startsWith('triage:') && /merge-base --is-ancestor/.test(d.prompt)),
+    landedEv.dispatched.map((d) => d.label))
+
+  const extraCrate = await runAudit(CENSUS({ crates: [{ name: 'identity' }, { name: 'brand-new-crate' }] }),
+    [VERDICT({ reachableFromDefault: true })])
+  // Match the lane's OWN crate list, not the census echoed into every audit prompt — the echo made
+  // this assertion pass against the unfixed source, which is a test measuring its own fixture.
+  check('a discovered crate that no named domain claims is still audited',
+    extraCrate.dispatched.some((d) => /^audit:/.test(d.label) && /CRATES:[^\n]*brand-new-crate/.test(d.prompt)),
+    extraCrate.dispatched.map((d) => d.label))
+
+  const allCovered = await runAudit(CENSUS({ crates: [{ name: 'identity' }] }), [VERDICT({ reachableFromDefault: true })])
+  check('and no lane is invented when every discovered crate is claimed',
+    !allCovered.dispatched.some((d) => d.label === 'audit:uncovered'), allCovered.dispatched.map((d) => d.label))
+
+  const blind = await runAudit(CENSUS({ crates: [] }), [VERDICT({ reachableFromDefault: true })])
+  check('a census with no crate inventory cannot claim coverage and must abort',
+    !!blind.err && /crate inventory/i.test(blind.err), blind.err)
 }
 
 // Six green tests over a self-built registry coexisted with a production root that wired none of it.
