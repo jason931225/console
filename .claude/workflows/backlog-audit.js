@@ -56,7 +56,13 @@ const KNOWN_ARGS = ['repo', 'ghRepo', 'ref', 'domains', 'issueBatch', 'apply']
 const REPO = ARGS.repo
 const GH = ARGS.ghRepo
 const REF = ARGS.ref || 'HEAD'
-const BATCH = ARGS.issueBatch || 8
+// `|| 8` rescues 0 and undefined and NOTHING else: -1 yields negative-stride batching that produces
+// no batches at all, and 1.5 yields overlapping slices that triage the same issue twice under two
+// agents. Both exit cleanly, which is what makes them worth refusing here.
+const BATCH = ARGS.issueBatch === undefined ? 8 : ARGS.issueBatch
+if (!Number.isInteger(BATCH) || BATCH < 1) {
+  throw new Error(`backlog-audit: issueBatch must be a positive integer; got ${JSON.stringify(ARGS.issueBatch)}`)
+}
 const APPLY = ARGS.apply === true
 
 if (!REPO) throw new Error('backlog-audit: args.repo is required')
@@ -422,6 +428,32 @@ log(`triage: ${verdicts.length} verdict(s); ${closing.length} propose closing; $
 if (unevidenced.length) log(`triage: WITHHELD from closing for want of evidence: ${unevidenced.map((v) => '#' + v.number).join(', ')}`)
 
 // --- Reconcile -------------------------------------------------------------
+// A blind `.slice(0, 24000)` over the serialised findings dropped everything past the cap without a
+// word, and with ~32 read lanes the cap is reached routinely — so the single writer filed beads for a
+// prefix of the audit and reported success. Silent truncation reads as "covered everything". Order by
+// what a reconciler must not miss (proven, then severity), and when the budget still binds, SAY what
+// was cut so the omission is visible in the run rather than discovered six weeks later.
+function renderFindings(all) {
+  const rank = { blocker: 0, major: 1, minor: 2, nit: 3 }
+  const ordered = [...all].sort((a, b) =>
+    (b.provenByExecution === true) - (a.provenByExecution === true) ||
+    (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9))
+  const kept = []
+  let budget = 24000
+  for (const f of ordered) {
+    const line = JSON.stringify(f)
+    if (line.length > budget) break
+    budget -= line.length
+    kept.push(f)
+  }
+  const dropped = ordered.length - kept.length
+  return JSON.stringify(kept) + (dropped
+    ? `\n\n!! ${dropped} of ${ordered.length} findings DID NOT FIT this prompt and are NOT above. They are` +
+      ' the lowest-ranked ones, but they are unfiled. Your report MUST state that this run reconciled' +
+      ` ${kept.length} of ${ordered.length} findings, so the omission is visible.`
+    : '')
+}
+
 phase('Reconcile')
 const reconciled = await agent(
   `You are the SINGLE WRITER for the backlog. Turn this audit into tracked work, and close what is dead.
@@ -431,7 +463,7 @@ REPO: ${REPO}   GH: ${GH}   APPLY: ${APPLY}
 ${SAFETY}
 
 AUDIT + CROSS-CUTTING FINDINGS (${totalFindings} total, ${provenFindings} proven by execution):
-${JSON.stringify(findingsAll).slice(0, 24000)}
+${renderFindings(findingsAll)}
 
 ISSUE VERDICTS (${verdicts.length}):
 ${JSON.stringify(verdicts).slice(0, 16000)}

@@ -36,6 +36,19 @@ if (typeof ARGS === 'string') {
 }
 ARGS = ARGS || {}
 
+// An option this workflow does not read must abort rather than be silently dropped. This guard was
+// written for lane-fanout, repeated in backlog-audit, and never applied here — and a rule living in
+// two of three sibling files is the signal that it belongs to the shape, not to the file. In a
+// sibling runner the same defect (an option accepted, ignored, and the run looking entirely normal)
+// cost six lanes. `fanout` and `workspace` are read at the bottom of this file; both are listed.
+const KNOWN_ARGS = ['candidateWt', 'candidateTip', 'base', 'authority', 'maxLanes', 'fanout', 'workspace']
+{
+  const unknown = Object.keys(ARGS).filter((k) => !KNOWN_ARGS.includes(k))
+  if (unknown.length) {
+    throw new Error(`program-tick: unknown option(s) ${unknown.join(', ')}. Known: ${KNOWN_ARGS.join(', ')}.`)
+  }
+}
+
 const CAND_WT = ARGS.candidateWt
 const CAND_TIP = ARGS.candidateTip
 const BASE = ARGS.base

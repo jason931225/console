@@ -43,9 +43,14 @@ try {
 }
 console.log('PASS compile — body parses as the harness evaluates it')
 
-let failures = 0
+let failures = 0 // eslint-disable-line prefer-const
 const check = (name, ok, detail) => {
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ' :: ' + JSON.stringify(detail).slice(0, 500)}`)
+  // JSON.stringify(undefined) is undefined, not "undefined", so a FAILING assertion called without a
+  // detail threw TypeError here and killed the whole preflight mid-run — losing every assertion after
+  // it AND the failure count, so the harness reported nothing rather than a red. The reporter's own
+  // failure path was the one path no assertion exercised. It is exercised at the bottom of this file.
+  const shown = detail === undefined ? '(no detail)' : String(JSON.stringify(detail)).slice(0, 500)
+  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ' :: ' + shown}`)
   if (!ok) failures++
 }
 
@@ -386,6 +391,85 @@ const threw = async (args) => {
   }
   const homePaths = TICK.split('\n').filter((l) => /(\/Users\/|\/home\/)[A-Za-z0-9_.-]+\//.test(l))
   check('program-tick hard-codes no machine-specific worktree path', homePaths.length === 0, homePaths)
+}
+
+// The unknown-option guard was written for lane-fanout, repeated in backlog-audit, and skipped in
+// program-tick. A rule present in two of three sibling harnesses is not a rule, it is a coincidence,
+// so the preflight now asserts it across ALL of them rather than for each file someone remembers.
+{
+  const dispatchers = ['program-tick', 'backlog-audit', 'lane-fanout']
+  for (const name of dispatchers) {
+    const src = fs.readFileSync(path.join(HERE, `${name}.js`), 'utf8')
+      .replace(/^export const meta = /m, 'const meta = ')
+    const fn = new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow', src)
+    const stub = async () => ({})
+    // Every required field is supplied; ONLY the bogus key should be able to fail this.
+    const base = { tip: 'a'.repeat(40), lanes: [LANE()], candidateWt: '/w', candidateTip: 'b'.repeat(40),
+      base: 'main', repo: '/r', ghRepo: 'o/n' }
+    let threw = null
+    try {
+      await fn({ ...base, thisOptionDoesNotExist: true }, stub, async (t) => Promise.all(t.map((f) => f())),
+        async (i) => i, () => {}, () => {}, { total: null, spent: () => 0, remaining: () => Infinity }, stub)
+    } catch (e) { threw = e.message }
+    check(`${name} refuses an option it does not read`,
+      !!threw && /unknown option/i.test(threw), threw)
+  }
+}
+
+// A batch size of -1 produces no batches and 1.5 produces overlapping slices; both exit cleanly.
+{
+  const src = fs.readFileSync(path.join(HERE, 'backlog-audit.js'), 'utf8')
+    .replace(/^export const meta = /m, 'const meta = ')
+  const fn = new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow', src)
+  for (const bad of [-1, 0, 1.5, 'eight']) {
+    let threw = null
+    try {
+      await fn({ repo: '/r', ghRepo: 'o/n', issueBatch: bad }, async () => ({}),
+        async (t) => Promise.all(t.map((f) => f())), async (i) => i, () => {}, () => {},
+        { total: null, spent: () => 0, remaining: () => Infinity }, async () => ({}))
+    } catch (e) { threw = e.message }
+    check(`backlog-audit refuses issueBatch=${JSON.stringify(bad)}`,
+      !!threw && /issueBatch must be a positive integer/.test(threw), threw)
+  }
+}
+
+// The reconciler was handed `JSON.stringify(findings).slice(0, 24000)`. With ~32 read lanes the cap
+// binds routinely, so the single writer filed beads for a prefix of the audit and reported success.
+{
+  const src = fs.readFileSync(path.join(HERE, 'backlog-audit.js'), 'utf8')
+  check('backlog-audit no longer truncates the findings payload blindly',
+    !/JSON\.stringify\(findingsAll\)\.slice\(/.test(src))
+  const body = src.match(/function renderFindings\(all\) \{[\s\S]*?\n\}/)
+  check('backlog-audit exposes renderFindings to the preflight', !!body)
+  if (body) {
+    const renderFindings = new Function(`${body[0]}; return renderFindings`)()
+    const many = Array.from({ length: 400 }, (_, i) => ({
+      title: `finding ${i} ${'x'.repeat(200)}`, severity: i ? 'minor' : 'blocker',
+      provenByExecution: i === 399, evidence: 'f.rs:1',
+    }))
+    const out = renderFindings(many)
+    check('an over-budget findings set says how many it dropped', /DID NOT FIT/.test(out), out.slice(-200))
+    check('the proven finding survives truncation regardless of its position',
+      out.includes('finding 399'), 'the last-listed proven finding was cut')
+    const few = [{ title: 'only one', severity: 'blocker', provenByExecution: true }]
+    check('a set that fits carries no truncation notice', !/DID NOT FIT/.test(renderFindings(few)))
+  }
+}
+
+// The reporter must survive its own failure path. Proven by capturing stdout rather than by reading
+// it: a detail-less FAIL used to throw TypeError and abort the run, which is worse than a red because
+// it looks like a crash in the harness instead of a defect in the code under test.
+{
+  const realLog = console.log
+  const lines = []
+  console.log = (l) => lines.push(l)
+  let crashed = null
+  const before = failures
+  try { check('self-test: a failing assertion carries no detail', false) } catch (e) { crashed = e.message }
+  console.log = realLog
+  failures = before // this deliberate FAIL must not colour the real result
+  check('a detail-less failure reports instead of crashing the preflight',
+    crashed === null && lines.length === 1 && lines[0].startsWith('FAIL'), crashed || lines)
 }
 
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')
