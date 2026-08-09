@@ -411,7 +411,16 @@ const threw = async (args) => {
 // program-tick. A rule present in two of three sibling harnesses is not a rule, it is a coincidence,
 // so the preflight now asserts it across ALL of them rather than for each file someone remembers.
 {
-  const dispatchers = ['program-tick', 'backlog-audit', 'lane-fanout', 'scout']
+  // ENUMERATE THE DIRECTORY, DO NOT LIST IT. This was a hardcoded array of the harnesses someone
+  // remembered, which is how program-tick went without the guard while its two siblings had it, and
+  // how review-gate.js and slice.js sat in this directory referenced-but-never-compiled. A new
+  // harness must be covered by existing here, not by being added to a list a future author edits.
+  const dispatchers = fs.readdirSync(HERE)
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => f.replace(/\.js$/, ''))
+    .sort()
+  check('every harness in the directory is swept, not a hardcoded subset',
+    dispatchers.length >= 4 && dispatchers.includes('scout'), dispatchers)
   for (const name of dispatchers) {
     const src = fs.readFileSync(path.join(SRCDIR, `${name}.js`), 'utf8')
       .replace(/^export const meta = /m, 'const meta = ')

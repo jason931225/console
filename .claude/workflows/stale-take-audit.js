@@ -1,0 +1,149 @@
+export const meta = {
+  name: 'stale-take-audit',
+  description: 'Find every file where a hand-rebuilt branch silently took the OLD side of a file the base branch had advanced — before CI finds them one push at a time',
+  whenToUse: 'After reconstructing a branch by copying a tree rather than merging, or after any hand-written exclusion list decided which side of a file to keep. Run it BEFORE the first push: it found in one pass what cost five CI round-trips to discover one file at a time.',
+  phases: [
+    { title: 'Audit', detail: 'batched: does main have content this branch dropped?' },
+    { title: 'Confirm', detail: 'adversarially re-check only the files claimed stale' },
+  ],
+}
+
+// The defect class, stated once so every agent judges the same thing:
+//
+// PR #618 was rebuilt by taking a superseded branch's TREE for the files it owned, with a
+// hand-written exclusion list for files main owned. That list was a LIST -- each entry reasoned
+// about individually -- so it was complete only for the cases already thought of. Five CI pushes
+// have each surfaced one more file where main had advanced and the copy silently reverted it:
+// ci.yml (un-wired a test suite main runs), and the ci-preflight lock and its counters.
+//
+// A revert that reintroduces old content is INVISIBLE in the diff-to-main -- it looks like an
+// ordinary change. Only comparing against what main HAS reveals it.
+
+// args can arrive as a JSON STRING. Every other harness here guards for it and this one did not,
+// so the first run died at line 16 having spawned zero agents.
+let ARGS = args
+if (typeof ARGS === 'string') {
+  try { ARGS = JSON.parse(ARGS) } catch (e) {
+    throw new Error(`stale-take-audit: args arrived as a string that is not valid JSON: ${e.message}`)
+  }
+}
+ARGS = ARGS || {}
+
+// Unknown options are rejected BEFORE required fields, so a typo is reported as the typo rather
+// than as the missing field it happens to look like.
+const KNOWN_ARGS = ['repo', 'main', 'files', 'batch']
+{
+  const unknown = Object.keys(ARGS).filter((k) => !KNOWN_ARGS.includes(k))
+  if (unknown.length) {
+    throw new Error(`stale-take-audit: unknown option(s) ${unknown.join(', ')}. Known: ${KNOWN_ARGS.join(', ')}.`)
+  }
+}
+
+const FILES = ARGS.files
+const REPO = ARGS.repo
+const MAIN = ARGS.main
+if (!Array.isArray(FILES) || !FILES.length) throw new Error('stale-take-audit: args.files must be a non-empty array')
+if (!REPO || !MAIN) throw new Error('stale-take-audit: args.repo and args.main are required')
+
+const BATCH = ARGS.batch || 6
+const chunk = (xs, n) => xs.reduce((a, x, i) => (i % n ? a[a.length - 1].push(x) : a.push([x]), a), [])
+
+const RULES = `
+REPO: ${REPO}   BASE BRANCH: ${MAIN}   (read-only: do not edit, commit, or push anything)
+
+For each file, run BOTH directions and read them:
+    git diff HEAD ${MAIN} -- <file>     # '+' lines = what MAIN has that HEAD LACKS  <-- the danger
+    git diff ${MAIN} HEAD -- <file>     # '+' lines = what HEAD adds
+
+You are looking for ONE thing: content present in ${MAIN} and ABSENT from HEAD, where the absence is
+a REVERSION rather than a deliberate removal. Signals that it is a reversion:
+  - main's version is strictly larger and HEAD's matches an older shape
+  - a locked list, ratchet, counter, registry or wiring entry that main added and HEAD does not have
+  - a CI step, npm script, or test-suite registration that exists in main and not in HEAD
+  - a comment in main referencing a commit or PR that HEAD's version predates
+
+NOT a reversion, and must NOT be reported:
+  - content HEAD deliberately removes as its stated deliverable (this branch removes employees DML
+    from backend/app/src/hr.rs on purpose -- that is the whole point of the change)
+  - main's prose being merely reworded
+  - generated files whose content is derived (they are regenerated separately)
+
+For every file you judge STALE you must quote the exact missing lines. A file you cannot decide is
+UNCERTAIN, not stale -- a false 'stale' costs a wrong revert, which is worse than another CI round.
+`
+
+const SCHEMA = {
+  type: 'object',
+  required: ['results'],
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['file', 'verdict', 'evidence'],
+        properties: {
+          file: { type: 'string' },
+          verdict: { type: 'string', enum: ['STALE', 'CLEAN', 'UNCERTAIN'] },
+          evidence: { type: 'string', description: 'the exact lines main has and HEAD lacks, or why it is clean' },
+          missingFromHead: { type: 'string', description: 'verbatim content to graft back, if STALE' },
+          wouldBreak: { type: 'string', description: 'which gate or behaviour breaks if this stays reverted' },
+        },
+      },
+    },
+  },
+}
+
+phase('Audit')
+const audited = await parallel(chunk(FILES, BATCH).map((batch, i) => () =>
+  agent(
+    `Audit ${batch.length} file(s) for silently-reverted content.
+${RULES}
+
+FILES:
+${batch.map((f) => `  ${f}`).join('\n')}
+
+Return one result per file, in order. Do not skip any.`,
+    { schema: SCHEMA, label: `audit:${i}`, phase: 'Audit' },
+  )))
+
+const all = (audited || []).filter(Boolean).flatMap((r) => r.results || [])
+const dead = chunk(FILES, BATCH).length - (audited || []).filter(Boolean).length
+if (dead) log(`!! ${dead} audit batch(es) died — those files are UNAUDITED, not clean`)
+
+const suspect = all.filter((r) => r.verdict === 'STALE')
+log(`audit: ${all.length} file(s) read, ${suspect.length} claimed STALE, ${all.filter((r) => r.verdict === 'UNCERTAIN').length} uncertain`)
+
+if (!suspect.length) {
+  return { headline: [`No stale takes found across ${all.length} files.`, dead ? `${dead} batch(es) died — coverage incomplete` : 'full coverage'], stale: [], uncertain: all.filter((r) => r.verdict === 'UNCERTAIN') }
+}
+
+// Only the accusations get a second opinion; confirming a CLEAN verdict costs more than it is worth.
+phase('Confirm')
+const confirmed = await parallel(suspect.map((s) => () =>
+  agent(
+    `Try to REFUTE this claim. Default to refuted=true when uncertain.
+
+CLAIM: ${MAIN} contains content that HEAD dropped by reversion, in ${s.file}.
+EVIDENCE OFFERED: ${s.evidence}
+
+${RULES}
+
+Refute it if: the content is absent from HEAD deliberately (it is the branch's stated deliverable),
+or main's version is not actually newer, or the lines quoted do not exist as claimed. Run the diffs
+yourself rather than trusting the quote.`,
+    {
+      schema: { type: 'object', required: ['file', 'refuted', 'reasoning'], properties: { file: { type: 'string' }, refuted: { type: 'boolean' }, reasoning: { type: 'string' } } },
+      label: `confirm:${s.file.split('/').pop()}`, phase: 'Confirm',
+    },
+  ).then((v) => ({ ...s, refuted: v && v.refuted, refutation: v && v.reasoning }))))
+
+const real = (confirmed || []).filter(Boolean).filter((c) => c.refuted === false)
+return {
+  headline: [
+    `${all.length} files audited, ${suspect.length} suspected, ${real.length} CONFIRMED stale after adversarial re-check`,
+    dead ? `${dead} batch(es) died — those files are UNAUDITED` : 'full coverage',
+  ],
+  stale: real.map((r) => ({ file: r.file, missingFromHead: r.missingFromHead, wouldBreak: r.wouldBreak, evidence: r.evidence })),
+  refuted: (confirmed || []).filter(Boolean).filter((c) => c.refuted).map((c) => ({ file: c.file, why: c.refutation })),
+  uncertain: all.filter((r) => r.verdict === 'UNCERTAIN').map((r) => ({ file: r.file, evidence: r.evidence })),
+}
