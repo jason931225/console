@@ -363,7 +363,19 @@ for (const item of ordered) {
       : 'no paths reported — an owned root cannot be derived' })
     continue
   }
-  if (rejected) log(`${item.id}: dropped ${rejected} unusable path(s), kept ${roots.length}`)
+  // A PARTIAL OWNED ROOT IS WORSE THAN NO LANE. The guard above defers a bead whose paths are ALL
+  // unusable; this one was merely logging the partial case and emitting the lane anyway, so a lane
+  // could be authorised for work while forbidden from touching a file that work structurally needs.
+  // That failure arrives AFTER dispatch -- the lane builds, then blocks or fails review -- and it has
+  // cost this programme four rounds in exactly that shape. Same defect as the all-unusable case, one
+  // spelling over: rejecting SOME is not a smaller version of rejecting ALL, it is the same problem
+  // with the evidence hidden in a log line.
+  if (rejected) {
+    const bad = (item.paths || []).filter((raw) => !normaliseRoot(raw))
+    deferred.push({ ...item, why: `${rejected} of ${(item.paths || []).length} reported path(s) are unusable as owned roots, so any lane would be authorised for the work while forbidden from part of it: ${bad.join(', ')}` })
+    log(`${item.id}: DEFERRED — ${rejected} unusable path(s): ${bad.join(', ')}`)
+    continue
+  }
   placeable.push({ ...item, roots })
 }
 

@@ -978,5 +978,45 @@ const threw = async (args) => {
     !!dropped && dropped.headline.some((h) => /full coverage/.test(h)), dropped && dropped.headline)
 }
 
+// A verifier that re-ran ONE of five claimed commands satisfied `commandsRun.length > 0`, and with
+// reproduced=true the lane converged while four suites were never independently run. Some of the
+// evidence re-run is a sample, not a verification.
+{
+  const build = (cmds) => () => BUILD({ commands: cmds })
+  const CMDS = ['cargo test -p a', 'cargo test -p b', 'npm run check:x']
+
+  const partial = mkAgent({ build: build(CMDS), verify: () => VERIFY({ commandsRun: [CMDS[0]], falseGreenRisk: 'none', oracleIntact: true }) })
+  const r1 = await go(ARGS({ maxRounds: 1 }), partial)
+  check('a verifier that re-ran only some claimed commands does not converge',
+    !!r1 && r1.lanes[0].converged === false, r1 && r1.lanes[0].converged)
+
+  const full = mkAgent({ build: build(CMDS), verify: () => VERIFY({ commandsRun: [...CMDS], falseGreenRisk: 'none', oracleIntact: true }) })
+  const r2 = await go(ARGS({ maxRounds: 1 }), full)
+  check('a verifier that re-ran every claimed command still converges',
+    !!r2 && r2.lanes[0].converged === true, r2 && r2.lanes[0].converged)
+
+  // Whitespace must not decide it, and repetition must not substitute for coverage.
+  const spaced = mkAgent({ build: build(CMDS), verify: () => VERIFY({ commandsRun: CMDS.map((c) => `  ${c.replace(/ /g, '  ')} `), falseGreenRisk: 'none', oracleIntact: true }) })
+  const r3 = await go(ARGS({ maxRounds: 1 }), spaced)
+  check('command matching is not defeated by whitespace', !!r3 && r3.lanes[0].converged === true, r3 && r3.lanes[0].converged)
+
+  const repeated = mkAgent({ build: build(CMDS), verify: () => VERIFY({ commandsRun: [CMDS[0], CMDS[0], CMDS[0]], falseGreenRisk: 'none', oracleIntact: true }) })
+  const r4 = await go(ARGS({ maxRounds: 1 }), repeated)
+  check('re-running one command three times is not three commands',
+    !!r4 && r4.lanes[0].converged === false, r4 && r4.lanes[0].converged)
+}
+
+// scout deferred a bead whose paths were ALL unusable and merely LOGGED the partial case, emitting a
+// lane authorised for the work but forbidden from part of it — a failure that arrives after dispatch.
+{
+  const SCOUT = fs.readFileSync(path.join(HERE, 'scout.js'), 'utf8')
+  check('scout defers a bead when only SOME of its paths are unusable',
+    /are unusable as owned roots, so any lane would be authorised/.test(SCOUT))
+  // The partial branch must CONTINUE, not fall through to placeable.push.
+  const partial = SCOUT.match(/if \(rejected\) \{[\s\S]*?\n  \}/)
+  check('the partial-rejection branch stops the bead being placed',
+    !!partial && /continue/.test(partial[0]), partial && partial[0].slice(0, 120))
+}
+
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')
 process.exit(failures ? 1 : 0)
