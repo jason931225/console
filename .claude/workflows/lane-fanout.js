@@ -198,6 +198,14 @@ RUN WHAT CI RUNS, BEFORE YOU REPORT DONE:
   matches your area. Put the exact command lines and their exit codes in verification.commands.
   If a gate cannot run locally, say WHICH and WHY there, rather than omitting it and reporting green.
   A lane that reports done without having run the gates has reported an intention, not a result.
+  TESTS NAMED *_as_runtime_role.rs NEED A DATABASE, and a plain cargo test does NOT give them one --
+  it fails ALL of them in about 0.01s, including tests that were passing, which reads like your
+  change broke everything when nothing ran at all. The invocation takes the repo root as its FIRST
+  argument and is easy to get wrong three times in a row:
+      tools/lanes/pgtest.sh "$PWD" cargo test -p <crate> --test <name>
+  Without the leading repo root it tries to lstat a file named cargo and exits having run nothing.
+  A rule that cannot be followed without tribal knowledge is a rule that gets skipped, so the exact
+  line is written here rather than left in an ADR.
 
 A TEST THAT BUILDS ITS OWN SUBJECT MEASURES THE STUB, NOT THE DEPLOYMENT:
   The sharper form of the rule above, and the one that actually shipped. A suite proved a dispatch

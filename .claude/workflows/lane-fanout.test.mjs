@@ -499,7 +499,7 @@ const threw = async (args) => {
 // fix is one command, and the lane that made the edit could have run it. This assertion exists
 // because a correct change was turned red by exactly that, twice.
 {
-  const need = ['REGENERATE, THEN ASK GIT', 'git status --porcelain', 'POSTFLIGHT', 'tools/buck/preflight.sh']
+  const need = ['REGENERATE, THEN ASK GIT', 'git status --porcelain', 'POSTFLIGHT', 'tools/buck/preflight.sh', 'tools/lanes/pgtest.sh']
   for (const fragment of need) {
     check(`the lock names a TOTAL generated-face check, not a list: ${fragment}`, SRC.includes(fragment))
   }
