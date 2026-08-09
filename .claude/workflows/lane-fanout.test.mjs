@@ -136,9 +136,18 @@ const threw = async (args) => {
   const hasPlacement = reviews.some((r) => /ENFORCEMENT PLACEMENT/.test(r.prompt))
   const hasDrift = reviews.some((r) => /PERIPHERAL DRIFT/.test(r.prompt))
   const hasCustom = reviews.some((r) => /CUSTOM ONE/.test(r.prompt))
+  const hasMaintainability = reviews.some((r) => /COST OF CARRY/.test(r.prompt))
+  // Sized against the standing set rather than pinned to a literal. The count was hard-coded to 5,
+  // so ADDING a standing lens -- the intended way to strengthen review -- read as a regression and
+  // blocked dispatch. An assertion that a legitimate improvement breaks is an assertion that will
+  // eventually be "fixed" by deleting the improvement. Two lanes have already learned this shape:
+  // a rule stated as a list of members instead of a relationship over the set.
+  const standing = SRC.match(/const STANDING_LENSES = \[([\s\S]*?)\n\]/)
+  const standingCount = standing ? (standing[1].match(/^\s{2}'/gm) || []).length : -1
   check('custom lenses ADD to standing lenses, never replace them',
-    reviews.length === 5 && hasOracle && hasPlacement && hasDrift && hasCustom,
-    { count: reviews.length, hasOracle, hasPlacement, hasDrift, hasCustom })
+    standingCount > 0 && reviews.length === standingCount + 2 &&
+      hasOracle && hasPlacement && hasDrift && hasMaintainability && hasCustom,
+    { count: reviews.length, standingCount, hasOracle, hasPlacement, hasDrift, hasMaintainability, hasCustom })
 }
 
 // --- 3. Convergence keys on PROOF, not on the severity label. -------------------------------
@@ -397,7 +406,7 @@ const threw = async (args) => {
 // program-tick. A rule present in two of three sibling harnesses is not a rule, it is a coincidence,
 // so the preflight now asserts it across ALL of them rather than for each file someone remembers.
 {
-  const dispatchers = ['program-tick', 'backlog-audit', 'lane-fanout']
+  const dispatchers = ['program-tick', 'backlog-audit', 'lane-fanout', 'scout']
   for (const name of dispatchers) {
     const src = fs.readFileSync(path.join(HERE, `${name}.js`), 'utf8')
       .replace(/^export const meta = /m, 'const meta = ')
@@ -405,7 +414,7 @@ const threw = async (args) => {
     const stub = async () => ({})
     // Every required field is supplied; ONLY the bogus key should be able to fail this.
     const base = { tip: 'a'.repeat(40), lanes: [LANE()], candidateWt: '/w', candidateTip: 'b'.repeat(40),
-      base: 'main', repo: '/r', ghRepo: 'o/n' }
+      base: 'main', repo: '/r', ghRepo: 'o/n', maxLanes: 2 }
     let threw = null
     try {
       await fn({ ...base, thisOptionDoesNotExist: true }, stub, async (t) => Promise.all(t.map((f) => f())),
@@ -480,6 +489,25 @@ const threw = async (args) => {
   for (const fragment of need) {
     check(`the lock tells lanes to refresh generated doc peripherals: ${fragment}`, SRC.includes(fragment))
   }
+}
+
+// Six green tests over a self-built registry coexisted with a production root that wired none of it.
+// The lock must name the distinction, because "all the tests pass" is exactly how it presented.
+{
+  for (const fragment of ['BUILDS ITS OWN SUBJECT', 'MECHANISM:', 'WIRING:', 'composition root']) {
+    check(`the lock separates mechanism evidence from wiring evidence: ${fragment}`, SRC.includes(fragment))
+  }
+}
+
+// Sprawl and CI-caught-it-first are the two costs the harness never charged for.
+{
+  for (const fragment of ['MAINTAINABILITY / COST OF CARRY', 'COMMENT BLOBBING', 'RUN WHAT CI RUNS']) {
+    check(`the lock charges for cost of carry: ${fragment}`, SRC.includes(fragment))
+  }
+  // A lens that is defined but unreachable is the defect this file exists to catch.
+  const standing = SRC.match(/const STANDING_LENSES = \[([\s\S]*?)\n\]/)
+  check('the maintainability lens is a STANDING lens, not an opt-in',
+    !!standing && standing[1].includes('MAINTAINABILITY'))
 }
 
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')

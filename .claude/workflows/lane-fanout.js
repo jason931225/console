@@ -130,7 +130,34 @@ NEVER WEAKEN THE ORACLE:
   No deleted tests, no #[ignore], no relaxed or loosened assertions, and above all NEVER make a
   test pass by conforming it to the defect. Multiple lanes in this program were rejected for
   exactly that, and in each case the "green" test was hiding a live production outage.
-AN ENFORCEMENT MUST BE ABLE TO SEE ITS SUBJECT:
+AN ENFORCEMENT MUST BE ABLE TO SEE ITS SUBJECT
+RUN WHAT CI RUNS, BEFORE YOU REPORT DONE:
+  A defect that CI catches and the lane did not is a HARNESS failure, not a CI success. The lane had the
+  same tree, the same commands and more context; CI just had a checklist. The asymmetry is that accept
+  criteria are prose and CI is commands, so the lane satisfies a sentence while CI executes a gate.
+  Before status=done, find the commands CI will actually run over the files you touched -- read
+  .github/workflows/ci.yml rather than guessing -- and RUN THEM. At minimum, for the paths in your diff:
+  the formatter, the linter with the repo's own flags, the unit target, and any repo gate whose name
+  matches your area. Put the exact command lines and their exit codes in verification.commands.
+  If a gate cannot run locally, say WHICH and WHY there, rather than omitting it and reporting green.
+  A lane that reports done without having run the gates has reported an intention, not a result.
+
+A TEST THAT BUILDS ITS OWN SUBJECT MEASURES THE STUB, NOT THE DEPLOYMENT:
+  The sharper form of the rule above, and the one that actually shipped. A suite proved a dispatch
+  derivation TOTAL over every target in the contract -- six tests, all green, none of them naming a
+  target so none of them able to go stale. At the same moment the production composition root
+  registered ZERO of those thirteen targets. Both facts were true, because the tests constructed
+  their own registry from stub ports and then measured the thing they had just built.
+  The claim was about the DEPLOYED registry. The control could see a subject; it could not see THAT
+  subject. So when your evidence is a test, say plainly which of these it is:
+    - MECHANISM: the thing derives / fails closed / refuses the wrong payload. Stubs are correct
+      here, and a stub is the only way to test a fourteenth target that does not exist yet.
+    - WIRING: the composition root actually installs it. This one must drive the REAL constructor
+      -- "super::the_production_fn(...)" -- and must fail when a registration line is deleted.
+  A condition phrased as "X does not require hand-written Y per action" is a WIRING claim. Mechanism
+  evidence does not close it, however total the mechanism test is. If your redBaseline was produced
+  by deleting a line from a test fixture rather than from the composition root, you have proved the
+  fixture.:
   If your change adds or modifies a gate, check, census, guard or invariant, answer TWO questions
   in writing BEFORE you build it, and put the answers in enforcementPlacement:
     (1) WHERE does it run in the sequence, and does its subject EXIST yet at that point?
@@ -306,6 +333,7 @@ const VERIFY_SCHEMA = {
 // incidentally by a custom lens that happened to look. A default that is always overridden is not a
 // default, it is dead code that reads as coverage.
 const STANDING_LENSES = [
+  'MAINTAINABILITY / COST OF CARRY — every other lens asks whether the change is CORRECT. This one asks what it costs to keep, and its default verdict is DELETE. (a) SPRAWL: does this add a doc, a crate, a script, a config, a workflow step or a process that duplicates one that exists? A second file describing the same fact is a future contradiction, not documentation. Name the existing thing it should have extended. (b) COMMENT BLOBBING: is there a paragraph of prose where a name would do? A comment that restates the code is noise that goes stale independently; a comment earning its place explains WHY, names a measurement, or records a rejected alternative. Twenty lines of comment over five lines of code is a defect in this repository, not thoroughness. (c) IDIOM: would a competent Rust/JS reader of this repo write it this way, or is it this author\'s private dialect? Hand-rolled parsing where a library exists, and enumerations where the language has a total construct, are the two that recur here. (d) AUTOMATION: is a human being asked to remember something a command could decide? If the accept criteria contain a step a script could run, that step WILL be skipped eventually. (e) UNDOCUMENTED-BUT-SHOULD-BE: the inverse of sprawl. A non-obvious constraint, a measured number, or a deliberate asymmetry that exists only in the author\'s head is undocumented, and the next lane will \'simplify\' it away. Report the NET line count of prose and config this change adds. A change that adds more explanation than behaviour needs a reason.',
   'CORRECTNESS + ORACLE INTEGRITY — does the change address the root cause, and does the suite still prove as much as before? Hunt for tests conformed to defects and assertions that would pass even if the behaviour were broken. Pick the load-bearing assertion, break the code it guards, and say whether it actually goes RED.',
   'PERIPHERAL DRIFT — read the diff, then go looking for what it made WRONG somewhere else. Does any module doc, /// comment, registry, roster, baseline, docs/** page or bead text still describe the behaviour as it was before this change? Pay closest attention to comments that ENUMERATE ("the three ways X can happen", "these are the cases") next to code this change made total or extended — those are false claims about a control, not stale prose. Verify the build agent\'s peripheralsUpdated field against the actual tree rather than trusting it, and check the reverse direction too: a doc updated to describe something the code does NOT do is worse than a stale one. Leased peripherals correctly reported in followUps are ownerLease=true, not defects.',
   'ENFORCEMENT PLACEMENT — for every gate/check/census/guard this change touches, ignore whether its LOGIC is right and ask only whether it can SEE its subject. (a) Where does it run in the sequence, and does its subject exist yet at that point? (b) What is the finest distinction its data source can express, and does the change claim a finer one? (c) Is the rule TOTAL over its domain, or is it an enumeration of spellings that a reviewer can always add one more to? If the change closes named cases rather than making the class unrepresentable, name the total primitive it should have used instead. (d) Does "examined zero subjects" fail, or pass? (d) Is it tested by EXECUTING it, or by a contains() over its own source text — mutate the control and check the tests go RED. Both failure modes have shipped here: a census that ran before migrations existed, and a per-crate rule enforced by a data source that only distinguishes roles. Verify the answers in enforcementPlacement rather than trusting them.',
