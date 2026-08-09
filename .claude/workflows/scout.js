@@ -34,7 +34,7 @@ if (typeof ARGS === 'string') {
 }
 ARGS = ARGS || {}
 
-const KNOWN_ARGS = ['repo', 'maxLanes', 'integrationBranch', 'focus']
+const KNOWN_ARGS = ['repo', 'maxLanes', 'integrationBranch', 'focus', 'batch']
 {
   const unknown = Object.keys(ARGS).filter((k) => !KNOWN_ARGS.includes(k))
   if (unknown.length) {
@@ -45,6 +45,17 @@ const KNOWN_ARGS = ['repo', 'maxLanes', 'integrationBranch', 'focus']
 const REPO = ARGS.repo
 const MAX_LANES = ARGS.maxLanes || 4
 const FOCUS = ARGS.focus || ''
+// FAN-OUT MUST NOT SCALE WITH BACKLOG SIZE. The first run dispatched one agent per edge and one per
+// ready bead: 57 + 74 = 131 agents against a 92-bead tracker, and 117 of them died when the account
+// limit was reached mid-run -- so the run cost a full quota and returned a plan with zero lanes.
+// Width is also nearly free in wall-clock terms while DEPTH is what costs (12 agents at depth 6 took
+// 74 minutes here; 36 at the same depth took 63), so a swarm buys nothing and risks everything.
+// Work is batched instead: agent count is bounded by ceil(n / BATCH) and the depth is unchanged.
+const BATCH = ARGS.batch === undefined ? 8 : ARGS.batch
+if (!Number.isInteger(BATCH) || BATCH < 1) {
+  throw new Error(`scout: batch must be a positive integer; got ${JSON.stringify(ARGS.batch)}`)
+}
+const chunk = (xs, n) => xs.reduce((a, x, i) => (i % n ? a[a.length - 1].push(x) : a.push([x]), a), [])
 if (!REPO) throw new Error('scout: args.repo is required')
 if (!Number.isInteger(MAX_LANES) || MAX_LANES < 1) {
   throw new Error(`scout: maxLanes must be a positive integer; got ${JSON.stringify(ARGS.maxLanes)}`)
@@ -177,35 +188,42 @@ phase('Verify')
 
 const EDGE_VERDICT = {
   type: 'object',
-  required: ['from', 'to', 'storedDirectionIsCorrect', 'reasoning'],
-  properties: {
+  required: ['verdicts'],
+  properties: { verdicts: { type: 'array', items: { type: 'object',
+    required: ['from', 'to', 'storedDirectionIsCorrect', 'reasoning'],
+    properties: {
     from: { type: 'string' },
     to: { type: 'string' },
     storedDirectionIsCorrect: { type: 'boolean' },
     reasoning: { type: 'string', description: 'which work cannot start until which other work is done, in plain language, derived from reading BOTH beads' },
     isRealDependency: { type: 'boolean', description: 'FALSE if they merely touch nearby code — that is a scheduling hint, not a dependency' },
-  },
+  } } } },
 }
 
 const READY_VERDICT = {
   type: 'object',
-  required: ['id', 'isReady', 'paths', 'reasoning'],
-  properties: {
+  required: ['verdicts'],
+  properties: { verdicts: { type: 'array', items: { type: 'object',
+    required: ['id', 'isReady', 'paths', 'reasoning'],
+    properties: {
     id: { type: 'string' },
     isReady: { type: 'boolean' },
     alreadyDone: { type: 'boolean' },
     paths: { type: 'array', items: { type: 'string' } },
     sizeHint: { type: 'string', enum: ['small', 'medium', 'large', 'unknown'] },
     reasoning: { type: 'string' },
-  },
+  } } } },
 }
 
 const [edgeVerdicts, readyVerdicts] = await Promise.all([
-  parallel(edges.map((e) => () =>
+  parallel(chunk(edges, BATCH).map((batch) => () =>
     agent(
-      `Verify ONE dependency edge by re-deriving it from the work itself. REPO: ${REPO}
+      `Verify ${batch.length} dependency edge(s) by re-deriving each from the work itself. REPO: ${REPO}
 
-STORED EDGE: ${e.from} depends on ${e.to}   (kind: ${e.kind})
+STORED EDGES:
+${batch.map((e) => `  ${e.from} depends on ${e.to}   (kind: ${e.kind})`).join('\n')}
+
+Return one verdict per edge, in the same order. Do not merge or skip any.
 
 ${RULES}
 
@@ -218,14 +236,17 @@ This exists because the two \`bd dep\` forms are inverses, the wrong one reverse
 
 Also decide whether this is a real dependency at all. Two beads touching nearby code is a
 scheduling hint — it belongs in the same lane — not a dependency.`,
-      { schema: EDGE_VERDICT, label: `edge:${e.from}->${e.to}`, phase: 'Verify' },
+      { schema: EDGE_VERDICT, label: `edges:${batch[0].from}+${batch.length - 1}`, phase: 'Verify' },
     ))),
-  parallel(ready.map((b) => () =>
+  parallel(chunk(ready, BATCH).map((batch) => () =>
     agent(
-      `Verify ONE backlog item is genuinely ready, and enumerate everything it must touch.
+      `Verify ${batch.length} backlog item(s) are genuinely ready, and enumerate everything each must touch.
 REPO: ${REPO}
-BEAD: ${b.id} — ${b.title}
-CENSUS SAID IT TOUCHES: ${(b.paths || []).join(', ') || '(nothing listed — that is itself suspicious)'}
+
+BEADS:
+${batch.map((b) => `  ${b.id} — ${b.title}\n    census said it touches: ${(b.paths || []).join(', ') || '(nothing listed — itself suspicious)'}`).join('\n')}
+
+Return one verdict per bead, in the same order. Do not merge or skip any.
 
 ${RULES}
 
@@ -239,12 +260,14 @@ ${RULES}
    An owned root that omits a file the work structurally needs cannot be finished by the lane that
    gets it, and that failure costs a full round.
 4. Size it: small / medium / large.`,
-      { schema: READY_VERDICT, label: `ready:${b.id}`, phase: 'Verify' },
+      { schema: READY_VERDICT, label: `ready:${batch[0].id}+${batch.length - 1}`, phase: 'Verify' },
     ))),
 ])
 
-const liveEdges = (edgeVerdicts || []).filter(Boolean)
-const liveReady = (readyVerdicts || []).filter(Boolean)
+// Each agent now returns { verdicts: [...] } for a batch, so flatten. A batch that DIED contributes
+// nothing rather than a null that later code would read as a verdict.
+const liveEdges = (edgeVerdicts || []).filter(Boolean).flatMap((r) => r.verdicts || [])
+const liveReady = (readyVerdicts || []).filter(Boolean).flatMap((r) => r.verdicts || [])
 
 const deadEdges = edges.length - liveEdges.length
 const deadReady = ready.length - liveReady.length
