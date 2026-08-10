@@ -78,7 +78,10 @@ const pipeline = async (items, ...stages) => {
 const BUILD = (over = {}) => ({
   status: 'done', summary: 's', filesChanged: ['x.rs'], redBaseline: 'RED', verification: 'ok',
   contractBreaches: 'none', enforcementPlacement: 'n/a - adds no enforcement',
-  peripheralsUpdated: 'n/a - nothing described this behaviour', followUps: '', commands: [], ...over,
+  // Default must name a real command that VERIFY re-runs. `commands: []` used to converge
+  // vacuously against any verifier command — that is the fail-open under test below.
+  peripheralsUpdated: 'n/a - nothing described this behaviour', followUps: '',
+  commands: ['cargo test -p x'], ...over,
 })
 const FINDING = (over = {}) => ({
   severity: 'major', claim: 'c', failureScenario: 'f', location: 'l',
@@ -604,7 +607,11 @@ const threw = async (args) => {
   })
   await go(ARGS({ maxRounds: 2 }), partialAnswer)
   check('and the next round is told the verification was unanswered, not merely "disagreed"',
-    seenPrompts.length === 2 && /commandsRun/.test(seenPrompts[1]), seenPrompts.length)
+    seenPrompts.length === 2
+      && (/commandsRun/.test(seenPrompts[1])
+        || /NEVER independently run/.test(seenPrompts[1])
+        || /named no well-formed commands/.test(seenPrompts[1])),
+    { n: seenPrompts.length, round2: (seenPrompts[1] || '').slice(0, 400) })
 
   // A field nobody is asked for is a field nobody fills in.
   const asked = mkAgent()
@@ -846,6 +853,9 @@ const threw = async (args) => {
       ['backend/crates/foo/../bar/', null, '.. segments rejected'],
       ['/Users/x/wt-other/backend/crates/foo/', null, 'sibling worktree absolute rejected'],
       ['/tmp/evil/backend/crates/foo/src/lib.rs', null, 'absolute outside REPO rejected'],
+      ['backend/Dockerfile', 'backend/Dockerfile', 'extensionless file preserved as exact path'],
+      ['backend/crates/foo/BUCK', 'backend/crates/foo/BUCK', 'BUCK file preserved as exact path'],
+      ['tools/ci/Makefile', 'tools/ci/Makefile', 'Makefile preserved as exact path'],
     ]
     for (const [input, want, why] of cases) {
       check(`scout root: ${why}`, normaliseRoot(input) === want, { input, got: normaliseRoot(input), want })
@@ -1037,6 +1047,36 @@ const threw = async (args) => {
     dropped && { s: dropped.stale, r: dropped.refuted, u: dropped.unconfirmed })
   check('a fully-answered run still claims full coverage',
     !!dropped && dropped.headline.some((h) => /full coverage/.test(h)), dropped && dropped.headline)
+
+  // Partial result lists must not report full coverage: five verdicts for six files is incomplete.
+  const partialAudit = async () => {
+    const agent = async (prompt, o = {}) => {
+      if ((o.label || '').startsWith('audit:')) {
+        return {
+          results: [
+            { file: 'a.yml', verdict: 'CLEAN', evidence: 'ok' },
+            { file: 'b.yml', verdict: 'CLEAN', evidence: 'ok' },
+            { file: 'c.yml', verdict: 'CLEAN', evidence: 'ok' },
+            { file: 'd.yml', verdict: 'CLEAN', evidence: 'ok' },
+            { file: 'e.yml', verdict: 'CLEAN', evidence: 'ok' },
+            // f.yml omitted
+          ],
+        }
+      }
+      return null
+    }
+    return fn({ repo: '/r', main: 'origin/main', files: ['a.yml', 'b.yml', 'c.yml', 'd.yml', 'e.yml', 'f.yml'] },
+      agent, async (t) => Promise.all(t.map((f) => f().catch(() => null))), async (i) => i,
+      () => {}, () => {}, { total: null, spent: () => 0, remaining: () => Infinity }, async () => ({}))
+  }
+  const partial = await partialAudit()
+  check('a live audit that omits a requested file does not claim full coverage',
+    !!partial && !partial.headline.some((h) => /full coverage/.test(h))
+      && Array.isArray(partial.missingAuditFiles) && partial.missingAuditFiles.includes('f.yml'),
+    partial && { headline: partial.headline, missing: partial.missingAuditFiles })
+
+  check('stale-take RULES pin diffs to args.repo via git -C',
+    /git -C \$\{REPO\} diff HEAD/.test(STA) && /git -C \$\{REPO\} diff \$\{MAIN\} HEAD/.test(STA))
 }
 
 // A verifier that re-ran ONE of five claimed commands satisfied `commandsRun.length > 0`, and with
@@ -1082,6 +1122,36 @@ const threw = async (args) => {
   const r6 = await go(ARGS({ maxRounds: 1 }), blankAmong)
   check('a blank entry among commandsRun fails closed even if a real command is present',
     !!r6 && r6.lanes[0].converged === false, r6 && r6.lanes[0].converged)
+
+  // Omit/invalid claimed commands must not converge: empty coverage against the verifier's own
+  // commands is a vacuous pass, not independent verification of a done build.
+  const omitted = mkAgent({
+    build: () => BUILD({ commands: [] }),
+    verify: () => VERIFY({ commandsRun: ['cargo test -p x'], falseGreenRisk: 'none', oracleIntact: true }),
+  })
+  const r7 = await go(ARGS({ maxRounds: 1 }), omitted)
+  check('a done build that omits commands does not converge',
+    !!r7 && r7.lanes[0].converged === false, r7 && r7.lanes[0].converged)
+
+  const blanksOnly = mkAgent({
+    build: () => BUILD({ commands: ['', '   '] }),
+    verify: () => VERIFY({ commandsRun: ['cargo test -p x'], falseGreenRisk: 'none', oracleIntact: true }),
+  })
+  const r8 = await go(ARGS({ maxRounds: 1 }), blanksOnly)
+  check('a done build whose commands are only blanks does not converge',
+    !!r8 && r8.lanes[0].converged === false, r8 && r8.lanes[0].converged)
+
+  const missingField = mkAgent({
+    build: () => {
+      const b = BUILD()
+      delete b.commands
+      return b
+    },
+    verify: () => VERIFY({ commandsRun: ['cargo test -p x'], falseGreenRisk: 'none', oracleIntact: true }),
+  })
+  const r9 = await go(ARGS({ maxRounds: 1 }), missingField)
+  check('a done build that omits the commands field does not converge',
+    !!r9 && r9.lanes[0].converged === false, r9 && r9.lanes[0].converged)
 }
 
 // scout deferred a bead whose paths were ALL unusable and merely LOGGED the partial case, emitting a
@@ -1146,8 +1216,22 @@ const threw = async (args) => {
       || /\\\/\.+\):\$/.test(driftSrc))
   check('contract-drift refuses nonlocal resolution of generic PATH names',
     /refusing nonlocal resolution for a generic name/.test(driftSrc))
+  check('contract-drift discovers route sources after stripping comments/literals',
+    /stripRustCommentsAndLiterals\(readFileSync\(file, "utf8"\)\)\.includes\(\s*"\.route\("\s*\)/.test(driftSrc)
+      || /stripRustCommentsAndLiterals\(readFileSync\(file, "utf8"\)\)\.includes\("\.route\("\)/.test(driftSrc))
 
   const maskSrc = driftSrc.match(/function maskStringLiterals\([\s\S]*?\n\}/)
+  const stripSrc = driftSrc.match(/function stripRustCommentsAndLiterals\([\s\S]*?\n\}/)
+  if (stripSrc) {
+    const stripRustCommentsAndLiterals = new Function(`${stripSrc[0]}; return stripRustCommentsAndLiterals`)()
+    const docOnly = '//! example\n/// `.route("/api/x", get(h))` in docs only\nfn unused() {}\n'
+    const after = stripRustCommentsAndLiterals(docOnly)
+    check('doc-comment .route( does not survive strip discovery',
+      !after.includes('.route('), after)
+    const real = 'fn router() { axum::Router::new().route("/api/x", get(h)) }\n'
+    check('real .route( survives strip discovery',
+      stripRustCommentsAndLiterals(real).includes('.route('))
+  }
   if (maskSrc) {
     const maskStringLiterals = new Function(`${maskSrc[0]}; return maskStringLiterals`)()
     const methodConstructor = /\b(get|put|post|delete|options|head|patch|trace)\s*\(/g

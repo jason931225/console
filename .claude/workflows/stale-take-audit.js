@@ -51,9 +51,9 @@ const chunk = (xs, n) => xs.reduce((a, x, i) => (i % n ? a[a.length - 1].push(x)
 const RULES = `
 REPO: ${REPO}   BASE BRANCH: ${MAIN}   (read-only: do not edit, commit, or push anything)
 
-For each file, run BOTH directions and read them:
-    git diff HEAD ${MAIN} -- <file>     # '+' lines = what MAIN has that HEAD LACKS  <-- the danger
-    git diff ${MAIN} HEAD -- <file>     # '+' lines = what HEAD adds
+For each file, run BOTH directions IN ${REPO} (never the inherited cwd) and read them:
+    git -C ${REPO} diff HEAD ${MAIN} -- <file>     # '+' lines = what MAIN has that HEAD LACKS  <-- the danger
+    git -C ${REPO} diff ${MAIN} HEAD -- <file>     # '+' lines = what HEAD adds
 
 You are looking for ONE thing: content present in ${MAIN} and ABSENT from HEAD, where the absence is
 a REVERSION rather than a deliberate removal. Signals that it is a reversion:
@@ -112,11 +112,40 @@ const all = (audited || []).filter(Boolean).flatMap((r) => r.results || [])
 const dead = chunk(FILES, BATCH).length - (audited || []).filter(Boolean).length
 if (dead) log(`!! ${dead} audit batch(es) died — those files are UNAUDITED, not clean`)
 
+// Batch objects returning is not coverage. A live batch that omits or duplicates a requested
+// path used to leave `dead === 0` and report "full coverage" while classifying the omitted file
+// as audited. Every requested path must appear exactly once before coverage is claimed.
+const resultCounts = new Map()
+for (const r of all) {
+  if (!r || typeof r.file !== 'string') continue
+  resultCounts.set(r.file, (resultCounts.get(r.file) || 0) + 1)
+}
+const missingAuditFiles = FILES.filter((f) => !resultCounts.has(f))
+const duplicatedAuditFiles = FILES.filter((f) => (resultCounts.get(f) || 0) > 1)
+const coverageIncomplete = dead > 0 || missingAuditFiles.length > 0 || duplicatedAuditFiles.length > 0
+if (missingAuditFiles.length) {
+  log(`!! ${missingAuditFiles.length} requested file(s) have no audit result — UNAUDITED, not clean`)
+  for (const f of missingAuditFiles) log(`   missing: ${f}`)
+}
+if (duplicatedAuditFiles.length) {
+  log(`!! ${duplicatedAuditFiles.length} requested file(s) have duplicate audit results — coverage ambiguous`)
+  for (const f of duplicatedAuditFiles) log(`   duplicated: ${f}`)
+}
+
 const suspect = all.filter((r) => r.verdict === 'STALE')
 log(`audit: ${all.length} file(s) read, ${suspect.length} claimed STALE, ${all.filter((r) => r.verdict === 'UNCERTAIN').length} uncertain`)
 
 if (!suspect.length) {
-  return { headline: [`No stale takes found across ${all.length} files.`, dead ? `${dead} batch(es) died — coverage incomplete` : 'full coverage'], stale: [], uncertain: all.filter((r) => r.verdict === 'UNCERTAIN') }
+  return {
+    headline: [
+      `No stale takes found across ${all.length} files.`,
+      coverageIncomplete ? `coverage INCOMPLETE — deadBatches=${dead}, missing=${missingAuditFiles.length}, duplicated=${duplicatedAuditFiles.length}` : 'full coverage',
+    ],
+    stale: [],
+    uncertain: all.filter((r) => r.verdict === 'UNCERTAIN'),
+    missingAuditFiles,
+    duplicatedAuditFiles,
+  }
 }
 
 // Only the accusations get a second opinion; confirming a CLEAN verdict costs more than it is worth.
@@ -192,7 +221,9 @@ return {
   headline: [
     `${all.length} files audited, ${suspect.length} suspected, ${real.length} CONFIRMED stale after adversarial re-check`,
     unconfirmed.length ? `${unconfirmed.length} suspected file(s) UNRESOLVED — their confirmation never returned` : null,
-    dead || unconfirmed.length ? `${dead} audit batch(es) died — coverage INCOMPLETE` : 'full coverage',
+    coverageIncomplete || unconfirmed.length
+      ? `coverage INCOMPLETE — deadBatches=${dead}, missing=${missingAuditFiles.length}, duplicated=${duplicatedAuditFiles.length}, unresolved=${unconfirmed.length}`
+      : 'full coverage',
   ].filter(Boolean),
   stale: real.map((r) => ({ file: r.file, missingFromHead: r.confirmedMissing, wouldBreak: r.wouldBreak, evidence: r.evidence })),
   // Carried at top level with their audit evidence, so an operator sees the accusation rather than
@@ -200,4 +231,6 @@ return {
   unconfirmed: unconfirmed.map((u) => ({ file: u.file, evidence: u.evidence, missingFromHead: u.missingFromHead, wouldBreak: u.wouldBreak })),
   refuted: answered.filter((c) => c.refuted).map((c) => ({ file: c.file, why: c.refutation })),
   uncertain: all.filter((r) => r.verdict === 'UNCERTAIN').map((r) => ({ file: r.file, evidence: r.evidence })),
+  missingAuditFiles,
+  duplicatedAuditFiles,
 }

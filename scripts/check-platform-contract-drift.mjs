@@ -128,7 +128,14 @@ function discoverRouteSourceFiles() {
     .split("\0")
     .filter((file) => file.endsWith(".rs") && file.includes("/src/"))
     .map((file) => resolve(root, file))
-    .filter((file) => readFileSync(file, "utf8").includes(".route("));
+    // Discover after stripping comments/raw/char literals. A raw `.includes(".route(")` on
+    // the file text admitted modules whose only hit lived in a doc comment; the later
+    // strip+parse then saw zero registrations and aborted the gate on an otherwise valid tree.
+    // Do not mask ordinary string literals here — route path arguments live in them, and a
+    // whole-file string mask over real routers can swallow `.route(` call sites.
+    .filter((file) =>
+      stripRustCommentsAndLiterals(readFileSync(file, "utf8")).includes(".route("),
+    );
 }
 
 function backendRouteOperations(routeSourceFiles) {

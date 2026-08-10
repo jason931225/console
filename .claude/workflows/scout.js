@@ -365,10 +365,14 @@ function normaliseRoot(raw) {
   }
   r = r.replace(/^\/+/, '')
   // A trailing file becomes its directory before segment collapse, so both spellings of a
-  // directory and a file inside it reduce to the same root.
+  // directory and a file inside it reduce to the same root. Extensionless files (Dockerfile,
+  // BUCK, Makefile, LICENSE, …) must NOT be mistaken for directories: inventing
+  // `backend/Dockerfile/` authorises a nonexistent subtree. Preserve the exact file path.
+  let fileRoot = false
   if (r && !r.endsWith('/')) {
     const base = r.split('/').pop() || ''
     if (/\.[A-Za-z0-9]+$/.test(base)) r = r.slice(0, -base.length)
+    else if (base) fileRoot = true
   }
   // Canonicalise `./backend/crates/foo/` and `backend/crates/foo/` to the same root. Without
   // this, overlaps treats them as disjoint and the packer can put one directory in two lanes.
@@ -376,7 +380,7 @@ function normaliseRoot(raw) {
   if (parts.includes('..')) return null
   r = parts.join('/')
   if (!r) return null
-  if (!r.endsWith('/')) r += '/'
+  if (!fileRoot && !r.endsWith('/')) r += '/'
   if (r === '/') return null
   if (r.split('/').filter(Boolean).length < MIN_ROOT_SEGMENTS) return null  // "backend/" is the repo
   return r

@@ -878,11 +878,14 @@ async function runLane(l) {
     const norm = (c) => c.replace(/\s+/g, ' ').trim()
     const ranSet = new Set(ranCommands.map(norm))
     const unrun = claimedCommands.filter((c) => !ranSet.has(norm(c)))
+    // A done implementer that omits `commands` or returns only blanks used to make
+    // `unrun.length === 0` vacuously true: the verifier could name any command of its own and the
+    // lane converged without independently re-running anything the build claimed. Status=done
+    // requires a nonempty claimed-command set before coverage can be judged.
     const verifierAnswered = !!verify
+      && claimedCommands.length > 0
       && commandsRunWellFormed
       && ranCommands.length > 0
-      // An implementer that claimed no commands cannot be audited by this rule; the standing lenses
-      // and the rebuild loop are what catch that, and `redBaseline` is required separately.
       && unrun.length === 0
       && typeof verify.falseGreenRisk === 'string' && verify.falseGreenRisk.trim() !== ''
       && verify.oracleIntact === true
@@ -892,11 +895,13 @@ async function runLane(l) {
       ? null
       : (verifierDied
         ? 'the INDEPENDENT VERIFIER died before reporting, so nothing re-ran your claimed green. Re-run your own commands and report the exact output.'
-        : (unrun.length
+        : (claimedCommands.length === 0
+          ? `the build claimed status=done but named no well-formed commands (${JSON.stringify(fix.commands)}); a green with nothing claimed cannot be independently verified. List the commands you ran.`
+          : (unrun.length
           ? `the verifier re-ran ${ranCommands.length} command(s) but the build claimed ${claimedCommands.length}; these were NEVER independently run: ${unrun.join(' | ')}. A green re-run of part of the evidence is a sample, not a verification.`
           : (verify && verify.reproduced === true && verify.contradictsClaim === false
           ? `the INDEPENDENT VERIFIER reproduced your result but could not answer for it: commandsRun=${JSON.stringify(verify.commandsRun)}, falseGreenRisk=${JSON.stringify(verify.falseGreenRisk)}, oracleIntact=${verify.oracleIntact}. Either it ran nothing it could name, or it judged the oracle no longer intact. Make the commands reproducible and show that the suite still proves what it did before.`
-          : `reproduced=${verify && verify.reproduced}; contradictsClaim=${verify && verify.contradictsClaim}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`)))
+          : `reproduced=${verify && verify.reproduced}; contradictsClaim=${verify && verify.contradictsClaim}; discrepancies=${verify && verify.discrepancies}; falseGreenRisk=${verify && verify.falseGreenRisk}`))))
     if (verifierDied) log(`${l.key}: round ${round} CANNOT CONVERGE — VERIFIER DIED; the claimed green was never re-run`)
 
     last = { lane: l, fix, reviews, verify, blockers, rounds: round, converged: false }

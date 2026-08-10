@@ -3491,7 +3491,7 @@
   },
   {
     "path": "docs/program/ledger/2026-08-09-harness-fail-closed-sol-critic.md",
-    "blob_sha": "65e58fc2deab2969727b30ac327fc0c916c846e2",
+    "blob_sha": "ce0d84c07c5d3db3ed4c1bec1f500a3fa4e63cf6",
     "class": "evidence",
     "owner": "repository maintainers",
     "status": "frozen",
