@@ -78,7 +78,7 @@
     "bqg tip is a real hardening delta (+103 lines) atop soe-equivalent parent — fold with soe, do not close as duplicate.",
     "Hub ann-critic.json STALE BLOCK ignored; lane ann-critic APPROVE @ 7e8bb2808 is canonical.",
     "937 forces doc-manifest regen onto C; T stays jurisdiction-only.",
-    "cm3 migration 0216 did not collide with #622 migrations 0213-0215."
+    "cm3 migration 0216 did not collide with #622 migrations 0213-0215.",
     "Admit-window fix: cargo fmt on leave/domain; zyw oracle retargeted to refusing repo-wide same-name fallback (proven red after wnv)."
   ],
   "decisions_changed_or_rejected": [
