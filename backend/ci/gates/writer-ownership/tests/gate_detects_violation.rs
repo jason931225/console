@@ -1721,23 +1721,6 @@ fn known_residual_a_dash_inside_quoted_sql_data_hides_a_later_statement()
     Ok(())
 }
 
-/// The other half of the `--` decision, measured rather than argued by
-/// symmetry: what `/*` in `UNREADABLE_TARGET` costs on ordinary Rust.
-///
-/// To reach the target position a `/*` must be spelled inside a string literal,
-/// straight after a DML verb word and its space, and must not close later in
-/// the same statement. Rust's own block comments never get there — `syn` drops
-/// them, tokens and all — so the last case here is a full `UPDATE` inside one
-/// and is charged nothing. The other three are the near misses: a glob that
-/// closes, a command word that is not a DML verb, and the switch convention
-/// Windows `copy` actually uses.
-///
-/// What DOES still charge is an unterminated absolute-root glob directly after
-/// the verb word — `"copy /* to the clipboard"`, `"truncate /*.log"` — and that
-/// is stated on `UNREADABLE_TARGET` as the standing cost of keeping `/*`. It is
-/// not pinned as expected behaviour here; only the four zeroes are, because
-/// those are the ones a change to the marker set must not break.
-
 /// Escaped-newline line comment must NOT erase a later write (sqlparser path).
 ///
 /// Source form `"UPDATE -- hint\\nemployees …"` is what `Literal::to_string()`
@@ -1802,6 +1785,22 @@ fn quoted_sql_data_is_not_a_write_target() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+/// The other half of the `--` decision, measured rather than argued by
+/// symmetry: what `/*` in `UNREADABLE_TARGET` costs on ordinary Rust.
+///
+/// To reach the target position a `/*` must be spelled inside a string literal,
+/// straight after a DML verb word and its space, and must not close later in
+/// the same statement. Rust's own block comments never get there — `syn` drops
+/// them, tokens and all — so the last case here is a full `UPDATE` inside one
+/// and is charged nothing. The other three are the near misses: a glob that
+/// closes, a command word that is not a DML verb, and the switch convention
+/// Windows `copy` actually uses.
+///
+/// What DOES still charge is an unterminated absolute-root glob directly after
+/// the verb word — `"copy /* to the clipboard"`, `"truncate /*.log"` — and that
+/// is stated on `UNREADABLE_TARGET` as the standing cost of keeping `/*`. It is
+/// not pinned as expected behaviour here; only the four zeroes are, because
+/// those are the ones a change to the marker set must not break.
 #[test]
 fn ordinary_rust_that_puts_a_block_comment_marker_near_a_verb_is_not_charged()
 -> Result<(), Box<dyn std::error::Error>> {
