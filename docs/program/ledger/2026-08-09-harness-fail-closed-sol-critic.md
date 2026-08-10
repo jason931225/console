@@ -31,9 +31,13 @@ Unchanged. No production promotion, no frontend, no payment execution, no invent
 ```json
 {
   "lens_contract": "v1",
+  "lens_contract_digest": "ac1e7d6b8150808ef73e5e3cd1a1e54d2f37eb43e84aaa1370dbbaaff3c44373",
   "task_class": "implementation",
   "risk_class": "high",
-  "risk_domains": ["release", "contracts"],
+  "risk_domains": [
+    "contracts",
+    "release"
+  ],
   "selected_lenses": [
     "Cartesian doubt",
     "Essentialism / YAGNI",
@@ -43,8 +47,8 @@ Unchanged. No production promotion, no frontend, no payment execution, no invent
     "Zero-trust / defense-in-depth"
   ],
   "task_fit": {
-    "Cartesian doubt": "Re-verified each Sol BLOCK against current tip before coding; only defects that still reproduced were fixed.",
-    "Essentialism / YAGNI": "Incomplete fanoutPlan instead of inventing tip/wt/brief/accept a scout must not decide.",
+    "Cartesian doubt": "Re-verified each Sol BLOCK against tip 7e891c306 before coding; only defects that still reproduced were fixed.",
+    "Essentialism / YAGNI": "Returned an explicitly incomplete fanoutPlan instead of inventing tip/wt/brief/accept a scout must not decide.",
     "Red Team": "Blank commandsRun, unverified edges, and string-literal HTTP verbs were treated as adversarial false-greens.",
     "Operability / Day-2": "Regression probes live in the offline preflight so the next tip cannot re-open these fail-opens silently.",
     "Blast-radius / cell-based": "Owned-root canonicalization keeps equivalent path spellings from landing in two concurrent lanes.",
@@ -61,7 +65,8 @@ Unchanged. No production promotion, no frontend, no payment execution, no invent
   "decisions_changed_or_rejected": [
     "Rejected inventing tip/wt/brief/accept in scout; returned an explicitly incomplete plan type instead.",
     "Rejected silently filtering blank commandsRun entries; any blank fails closed."
-  ]
+  ],
+  "lens_set_changes": []
 }
 ```
 <!-- REASONING-LENS-EVIDENCE:END -->
