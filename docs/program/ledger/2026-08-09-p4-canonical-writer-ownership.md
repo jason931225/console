@@ -1,7 +1,8 @@
 # Authority tip — one production writer per canonical table, proven by a gate
 
-**Date:** 2026-08-09
-**Kind:** authority tip (T) for the P4 canonical-ports and writer-ownership candidate
+**Date:** 2026-08-10
+**Kind:** authority tip (T) for candidate `74f1230ef05af81d12a16a636effbd8d3b001c9ef`
+**Candidate (authority train):** `74f1230ef05af81d12a16a636effbd8d3b001c9ef` (immutable absolute SHA; not a relative `HEAD^` expression)
 **Scope:** the six canonical ports and their PostgreSQL adapters, migrations 0212–0215, the
 `console-gate-writer-ownership` gate and its CI wiring, the projected-dispatch derivation, and the
 CI plumbing those require.
@@ -23,6 +24,10 @@ ADR-0030 §8 still forbids a frontend shell: closing §7 row 4 leaves rows 3 and
   than coverage of the ones that do not — two gates, two subjects. `--update` would also have turned
   the gate green, by writing the six into the baseline as permanently exempt; they were wired into
   the map instead so they actually run.
+- **Salvage on rebase (2026-08-10).** Migrations 0213–0215 now `REVOKE ALL … FROM console_rt`
+  before intentional `GRANT`, so omitted DML verbs are actually withheld. Workspace-inherited
+  dependency aliases remain unhandled and are tracked as bead `console-ugg` — `cargo metadata` is
+  the total primitive; another text-scan patch is the wrong shape (third spelling).
 
 ## Two corrections worth recording, because both nearly shipped
 
@@ -103,7 +108,9 @@ Unchanged. No production promotion, no frontend, no payment execution, no invent
     "Six test binaries carrying 52 real-PostgreSQL tests executed in no CI job, and the map gate passed throughout because coverage is not its subject.",
     "check-executed-tests.mjs --update would have turned the dark-test gate green by declaring the six permanently exempt.",
     "A rebase against superseded history produced conflicts that were intermediate states arguing with newer final ones.",
-    "An exclusion loop read 'absent from this branch' as 'deleted by this branch' and staged the removal of a file main had added."
+    "An exclusion loop read 'absent from this branch' as 'deleted by this branch' and staged the removal of a file main had added.",
+    "Default GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO console_rt left omitted verbs live until explicit REVOKE.",
+    "Workspace-inherited dependency aliases are not resolved by manifest text scan; tracked as console-ugg rather than a fourth enumeration patch."
   ],
   "decisions_changed_or_rejected": [
     "Rejected replaying the branch commit-by-commit, because main already carried its authz types under a different subject and its harness ten rounds newer.",

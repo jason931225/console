@@ -585,7 +585,7 @@ const requiredJobRunContracts = Object.freeze({
     proofRun("Workflow test-runner credential literals", "npm run check:test-credentials"),
   ],
   "domain-unit": [
-    proofDigest("Domain crate unit tests", "174542a3c1d35e1b3654fc5d44325a50a4315896c3b729a7007cf8c2f28f0082"),
+    proofDigest("Domain crate unit tests", "27e92fd9609075c9d15ed5bcac25f3a1ef4c54bcc254a5e68c1e78e1b1d9a947"),
   ],
   backend: [
     setupRun("Install pinned DotSlash runtime", "../tools/buck/install_dotslash.sh"),
