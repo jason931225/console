@@ -71,15 +71,23 @@ export function evaluateOpenapiRefs({ repoRoot }) {
   const document = yaml.load(
     readFileSync(join(repoRoot, "backend/openapi/openapi.yaml"), "utf8"),
   );
-  const components = isPlainObject(document) && isPlainObject(document.components)
-    ? document.components
-    : {};
+  // Every read from parsed YAML below is an OWN-property read (Object.hasOwn), never a plain
+  // index or `in`: js-yaml returns prototype-ful objects, so `components[section][key] !==
+  // undefined` answered `constructor`, `toString` and `__proto__` from Object.prototype and a
+  // dangling ref by any such name resolved against the language runtime instead of the
+  // document — proven fail-open on 9f5804a8d (critic receipt ann-critic.json). Resolution
+  // decided by anything other than document content is the class this gate exists to close.
+  const own = (node, key) =>
+    isPlainObject(node) && Object.hasOwn(node, key) ? node[key] : undefined;
+  const components = isPlainObject(document) ? own(document, "components") ?? {} : {};
   const findings = [];
   let refs = 0;
   let mappingEntries = 0;
 
-  const hasTarget = (section, key) =>
-    isPlainObject(components[section]) && components[section][key] !== undefined;
+  const hasTarget = (section, key) => {
+    const entries = own(components, section);
+    return isPlainObject(entries) && Object.hasOwn(entries, key);
+  };
 
   // Whole value in the message, never a resolved-looking tail: the prefix is the defect in
   // `common.yaml#/components/schemas/Uuid`, and reporting only the tail is the truncation
@@ -125,7 +133,7 @@ export function evaluateOpenapiRefs({ repoRoot }) {
     if (seen.has(node)) return;
     seen.add(node);
 
-    if ("$ref" in node) {
+    if (Object.hasOwn(node, "$ref")) {
       refs += 1;
       checkPointer(node.$ref, `${location}/$ref`);
     }
@@ -134,7 +142,7 @@ export function evaluateOpenapiRefs({ repoRoot }) {
     // schema NAME that implies #/components/schemas/<name>. The name form carries no pointer
     // for any scan to find; after parsing it is just a value in a known position. A component
     // key can never contain `/` or `#`, so the two forms cannot be confused.
-    const mapping = isPlainObject(node.discriminator) ? node.discriminator.mapping : undefined;
+    const mapping = own(own(node, "discriminator"), "mapping");
     if (isPlainObject(mapping)) {
       for (const [name, value] of Object.entries(mapping)) {
         mappingEntries += 1;

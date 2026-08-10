@@ -43,9 +43,12 @@ ${body}`;
 }
 
 describe("openapi ref totality gate", () => {
-  // Fail-open (1): a $ref written in YAML flow style, carrying the foreign-URL prefix this
-  // check exists to close. The block-entry scan requires `$ref` to open its line and never
-  // sees a flow mapping; the pointer scan reports the scalar it can delimit, not the ref.
+  // Whole-value reporting probe for the foreign-URL class. Correction on critic review
+  // (ann-critic.json, traced against the Rust scans): this exact spelling was NOT an old
+  // fail-open — pointer_scalars reconstructs back to the opening quote and reported the whole
+  // scalar as UnresolvableRef. The genuinely fail-open flow spelling is the one with no
+  // `#/components/` tail at all (next fixture). This fixture stays because the parser gate
+  // must report the WHOLE value, prefix included: the prefix is the defect.
   it("reports a flow-style foreign-URL $ref whole, prefix included", () => {
     const root = fixture(spec(`components:
   schemas:
@@ -104,9 +107,13 @@ describe("openapi ref totality gate", () => {
     assert.match(findings[0].message, /Todo Summary/);
   });
 
-  // Fail-open (4): a foreign prefix ending in `{`, which the backward scan treats as a scalar
-  // delimiter even though it is legal inside a quoted YAML scalar. Delimiter-truncated, the
-  // reported value loses the prefix that makes it foreign.
+  // Whole-value reporting probe for the delimiter-in-scalar class. Correction on critic
+  // review (ann-critic.json, traced against the Rust scans): this exact spelling was NOT an
+  // old fail-open — the backward scan truncated at `{` to `.yaml#/components/schemas/Uuid`,
+  // which still failed component_ref and was reported, with a mangled value. The genuinely
+  // fail-open spelling is a delimiter IMMEDIATELY before `#` (`common.yaml{#/...`), which
+  // truncates to exactly the resolvable pointer. This fixture stays because the parser gate
+  // must report the untruncated authored value.
   it("reports a foreign prefix ending in flow delimiters legal inside a quoted scalar", () => {
     const root = fixture(spec(`components:
   schemas:
@@ -174,6 +181,47 @@ describe("openapi ref totality gate", () => {
 
     assert.deepEqual(findings, []);
     assert.equal(refs, 5, "every spelling must be seen, and seen as the same pointer");
+  });
+
+  // The walk was total; the LOOKUP was not (critic receipt ann-critic.json, proven by
+  // execution on 9f5804a8d): `components[section][key] !== undefined` consults the JS
+  // prototype chain, so a dangling ref named after any Object.prototype property resolved
+  // against the language runtime instead of the document — in every component section and in
+  // both discriminator.mapping forms. Resolution decided by anything other than document
+  // content is the exact class this gate exists to close, recurring one layer down.
+  it("resolves nothing through the JS prototype chain", () => {
+    const root = fixture(spec(`components:
+  schemas:
+    Todo:
+      type: object
+    Wrapper:
+      properties:
+        a:
+          $ref: '#/components/schemas/constructor'
+        b:
+          $ref: '#/components/schemas/toString'
+        c:
+          $ref: '#/components/schemas/__proto__'
+    Union:
+      discriminator:
+        propertyName: kind
+        mapping:
+          ghost: constructor
+`));
+
+    const { refs, mappingEntries, findings } = evaluateOpenapiRefs({ repoRoot: root });
+
+    assert.equal(refs, 3);
+    assert.equal(mappingEntries, 1);
+    assert.equal(findings.length, 4, JSON.stringify(findings, null, 2));
+    const messages = findings.map((finding) => finding.message).join("\n");
+    assert.match(messages, /#\/components\/schemas\/constructor/);
+    assert.match(messages, /#\/components\/schemas\/toString/);
+    assert.match(messages, /#\/components\/schemas\/__proto__/);
+    assert.ok(
+      findings.some((finding) => finding.location.endsWith("mapping/ghost")),
+      "the ghost mapping name must be reported through the same own-property rule",
+    );
   });
 
   it("reports a well-formed local schema ref whose target no fragment defines", () => {
