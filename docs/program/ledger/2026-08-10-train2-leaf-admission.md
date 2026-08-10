@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10
 **Kind:** authority tip ledger bound on candidate C (product tip below); jurisdiction tip T is register-only (#618 grammar)
-**Candidate (authority train):** `9ca9087869aa41f0874309c7810677ad91b7deb2` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
+**Candidate (authority train):** `d66c0d9b0fe6d50e84a5f9b58490eb77bdf325fc` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
 **Scope:** twelve critic-APPROVED leaves after #622; bqg hardening needle folded with soe (not a separate ordered leaf); lx6/0lj PARKED.
 **Not product authority.** Clears no HOLD. Makes no production, frontend, or projection claim.
 
@@ -79,6 +79,7 @@
     "Hub ann-critic.json STALE BLOCK ignored; lane ann-critic APPROVE @ 7e8bb2808 is canonical.",
     "937 forces doc-manifest regen onto C; T stays jurisdiction-only.",
     "cm3 migration 0216 did not collide with #622 migrations 0213-0215."
+    "Admit-window fix: cargo fmt on leave/domain; zyw oracle retargeted to refusing repo-wide same-name fallback (proven red after wnv)."
   ],
   "decisions_changed_or_rejected": [
     "Rejected separate-leaf admit for bqg; fold needle only.",
