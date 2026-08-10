@@ -319,11 +319,13 @@ if (doneAlready.length) log(`already satisfied by the tree, do NOT dispatch: ${d
 // Longest-path depth over the corrected graph. Depth is what actually costs wall-clock: this
 // programme measured 12 agents at depth 6 taking 74 minutes and 36 agents at the same depth taking
 // 63 -- latency tracks DEPTH, and is nearly flat in WIDTH. So the critical path is the schedule.
+// Edges are dependent `from` → prerequisite `to`. A ready bead has no outgoing deps, so measuring
+// prerequisites always yields depth 0. Measure what starting the bead UNLOCKS: reverse edges.
 function depthOf(id, seen = new Set()) {
   if (seen.has(id)) return 0 // a cycle cannot lengthen the path; it is reported separately
   seen.add(id)
-  const deps = corrected.filter((e) => e.from === id).map((e) => e.to)
-  return deps.length ? 1 + Math.max(...deps.map((d) => depthOf(d, new Set(seen)))) : 0
+  const downstream = corrected.filter((e) => e.to === id).map((e) => e.from)
+  return downstream.length ? 1 + Math.max(...downstream.map((d) => depthOf(d, new Set(seen)))) : 0
 }
 
 const withDepth = startable.map((b) => ({ ...b, depth: depthOf(b.id) }))
@@ -354,7 +356,13 @@ function normaliseRoot(raw) {
   if (typeof raw !== 'string') return null
   let r = raw.trim()
   if (!r || /\s/.test(r) || /[<>`*?]/.test(r)) return null       // prose, globs, placeholders
-  if (r.startsWith(REPO)) r = r.slice(REPO.length)                 // absolute -> repo-relative
+  // Absolute paths must sit under REPO with a path-segment boundary. A prefix test alone accepts
+  // `/workspace/console-lane/...` when REPO is `/workspace/console` (sibling worktree leak).
+  if (r.startsWith('/')) {
+    const repo = String(REPO).replace(/\/+$/, '')
+    if (r === repo || r.startsWith(`${repo}/`)) r = r.slice(repo.length)
+    else return null
+  }
   r = r.replace(/^\/+/, '')
   // A trailing file becomes its directory before segment collapse, so both spellings of a
   // directory and a file inside it reduce to the same root.
@@ -376,8 +384,11 @@ function normaliseRoot(raw) {
 
 const placeable = []
 for (const item of ordered) {
-  const roots = [...new Set((item.paths || []).map(normaliseRoot).filter(Boolean))]
-  const rejected = (item.paths || []).length - roots.length
+  // Count failed normalisations BEFORE dedupe. Two valid files under one directory share a root;
+  // subtracting after Set would misclassify them as rejected and defer ordinary multi-file work.
+  const normalised = (item.paths || []).map(normaliseRoot)
+  const rejected = normalised.filter((r) => !r).length
+  const roots = [...new Set(normalised.filter(Boolean))]
   if (!roots.length) {
     deferred.push({ ...item, why: (item.paths || []).length
       ? `every reported path was unusable as an owned root (${(item.paths || []).length} rejected: absolute, prose, or repo-wide)`

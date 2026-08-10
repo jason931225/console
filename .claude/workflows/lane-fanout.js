@@ -118,19 +118,29 @@ for (const l of LANES) {
   // the fixed path prefix before its first wildcard segment; two lanes collide when one prefix is
   // the other, or is a PATH prefix of it (segment-aligned, so crates/ab does not collide with
   // crates/a).
+  // Canonicalise before compare: `./backend/crates/foo` and `backend/crates/foo` must collide.
+  // Collapse `.` segments; reject `..` rather than silently rewriting ownership.
+  const canonicalizeOwnedPrefix = (t) => {
+    const segs = []
+    for (const seg of String(t).split('/')) {
+      if (seg.includes('*')) break
+      if (!seg || seg === '.') continue
+      if (seg === '..') {
+        throw new Error(
+          `lane-fanout: owned path contains '..' (${JSON.stringify(t)}) — refuse rather than collapse ` +
+          'ownership across directories.',
+        )
+      }
+      segs.push(seg)
+    }
+    return segs.join('/').replace(/\/+$/, '')
+  }
   const ownedPrefixes = (owned) => String(owned)
     .split(/[\s,]+/)
     .filter(Boolean)
     // Path-shaped tokens only. Comparing every word would refuse two lanes for sharing "the".
     .filter((t) => t.includes('/') || t.includes('*') || /\.\w+$/.test(t))
-    .map((t) => {
-      const segs = []
-      for (const seg of t.split('/')) {
-        if (seg.includes('*')) break
-        segs.push(seg)
-      }
-      return segs.join('/').replace(/\/+$/, '')
-    })
+    .map(canonicalizeOwnedPrefix)
   const pathOverlap = (a, b) => a === b || a === '' || b === '' || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
   const roots = LANES.map((l) => ({ key: l.key, owned: l.owned, prefixes: ownedPrefixes(l.owned) }))
   for (const r of roots) {

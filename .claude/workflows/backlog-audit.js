@@ -177,6 +177,9 @@ Emit, in ONE batched pass each (not a loop of small commands):
     enough to get them all, and say how many you got.
  2. Every bead: id, title, status, priority, and its dependency edges. \`bd list\` and \`bd dep\`.
  3. The crate inventory under backend/crates, with each crate's line count, so domains can be sized.
+     ALSO run \`find backend/crates -name Cargo.toml -print\` (or equivalent) once and return EVERY path
+     in \`cargoTomlPaths\` — this is the independent on-disk census the script cross-checks against
+     \`crates\`; do not invent or truncate it.
  4. Recently merged PRs (last 40) with number, title and merge commit — a closed issue often has its
     fix sitting in one of these, and that is the cheapest evidence of CLOSE-FIXED there is.
  5. The abandoned-worktree roots that must be EXCLUDED from every later search, listed explicitly.
@@ -192,7 +195,7 @@ editorialises makes its own errors invisible.`,
     phase: 'Collect',
     schema: {
       type: 'object',
-      required: ['openIssueNumbers', 'openIssueCount', 'issues', 'beads', 'crates'],
+      required: ['openIssueNumbers', 'openIssueCount', 'issues', 'beads', 'crates', 'cargoTomlPaths'],
       properties: {
         openIssueNumbers: { type: 'array', items: { type: 'number' }, description: 'EVERY open issue number. This drives the triage fan-out, so an omission here silently un-audits that issue.' },
         openIssueCount: { type: 'number', description: 'what gh reported, so the script can catch a truncated list' },
@@ -210,6 +213,12 @@ editorialises makes its own errors invisible.`,
               lines: { type: 'number' },
             },
           },
+        },
+        // Independent on-disk oracle from Collect's find. Workflow sandbox cannot import Node fs.
+        cargoTomlPaths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'EVERY path from `find backend/crates -name Cargo.toml` (repo-relative), e.g. "backend/crates/identity/Cargo.toml"',
         },
         mergedPrs: { type: 'array', items: { type: 'object' } },
         excludedRoots: { type: 'array', items: { type: 'string' } },
@@ -268,41 +277,48 @@ if (crateNames.length < crateEntries.length || !crateNames.length) {
   )
 }
 // THE CENSUS CAN OMIT A CRATE AND STILL LOOK WELL-FORMED. A partial list whose every entry has a
-// name satisfies the guard above while the omitted crate receives no audit lane. The tree is the
-// independent oracle: every Cargo.toml under backend/crates must be covered by the census names
-// (exact match or census parent prefix). When the checkout has no such tree (offline fixtures),
-// the check is skipped rather than inventing coverage.
+// name satisfies the guard above while the omitted crate receives no audit lane. Collect must
+// return cargoTomlPaths from `find backend/crates -name Cargo.toml`; the script derives on-disk
+// names from that list and aborts on any omission. Workflow sandboxes have no Node filesystem API,
+// so the collector is the oracle — not an in-process directory walk.
 function cratesOmittedFromCensus(onDiskNames, censusNames) {
   return onDiskNames.filter((c) => !censusNames.some((n) => c === n || c.startsWith(`${n}/`)))
 }
-function listCargoCrateNames(cratesRoot, fsApi) {
+function crateNamesFromCargoTomlPaths(paths) {
   const out = []
-  const walk = (dir, rel) => {
-    let entries
-    try { entries = fsApi.readdirSync(dir, { withFileTypes: true }) } catch { return }
-    if (rel && fsApi.existsSync(`${dir}/Cargo.toml`)) out.push(rel.replace(/\\/g, '/'))
-    for (const ent of entries) {
-      if (!ent.isDirectory() || ent.name === 'target' || ent.name.startsWith('.')) continue
-      walk(`${dir}/${ent.name}`, rel ? `${rel}/${ent.name}` : ent.name)
-    }
+  for (const raw of paths || []) {
+    if (typeof raw !== 'string') continue
+    let p = raw.trim().replace(/\\/g, '/')
+    if (!p) continue
+    p = p.replace(/^\.\//, '')
+    if (!p.endsWith('/Cargo.toml') && p !== 'Cargo.toml') continue
+    p = p.replace(/\/Cargo\.toml$/, '')
+    p = p.replace(/^backend\/crates\//, '')
+    if (!p || p.includes('..')) continue
+    out.push(p)
   }
-  walk(cratesRoot, '')
-  return out.sort()
+  return [...new Set(out)].sort()
 }
 {
-  const cratesRoot = `${REPO.replace(/\/+$/, '')}/backend/crates`
-  let onDisk = []
-  try {
-    const fsApi = await import('node:fs')
-    if (fsApi.existsSync(cratesRoot)) onDisk = listCargoCrateNames(cratesRoot, fsApi)
-  } catch (e) {
-    throw new Error(`backlog-audit: could not read crate tree at ${cratesRoot}: ${e.message}`)
+  const cargoTomlPaths = collected && collected.cargoTomlPaths
+  if (!Array.isArray(cargoTomlPaths)) {
+    throw new Error(
+      'backlog-audit: Collect must return cargoTomlPaths (array) from `find backend/crates -name Cargo.toml`. ' +
+      'The harness cannot walk the crate tree itself inside the workflow sandbox.',
+    )
+  }
+  const onDisk = crateNamesFromCargoTomlPaths(cargoTomlPaths)
+  if (!onDisk.length) {
+    throw new Error(
+      'backlog-audit: Collect returned an empty cargoTomlPaths list — domain coverage cannot be ' +
+      'cross-checked against the on-disk Cargo.toml census. Re-run Collect with find output.',
+    )
   }
   const omitted = cratesOmittedFromCensus(onDisk, crateNames)
-  if (onDisk.length && omitted.length) {
+  if (omitted.length) {
     throw new Error(
       `backlog-audit: the census omitted ${omitted.length} crate(s) present under backend/crates ` +
-      `(${onDisk.length} on disk, ${crateNames.length} named). Omitted: ${omitted.slice(0, 20).join(', ')}` +
+      `(${onDisk.length} on disk via cargoTomlPaths, ${crateNames.length} named). Omitted: ${omitted.slice(0, 20).join(', ')}` +
       `${omitted.length > 20 ? ', ...' : ''}. Re-run Collect so every Cargo.toml is named.`,
     )
   }

@@ -538,6 +538,21 @@ const threw = async (args) => {
   check('an owned root with no path in it aborts rather than being silently unguarded',
     !!prose && /no path/i.test(prose), prose)
 
+  // `./backend/crates/foo` and `backend/crates/foo` are the same root; dispatch must refuse.
+  const dotted = await threw(ARGS({ lanes: [
+    LANE({ key: 'bare', wt: '/w1', owned: 'backend/crates/foo/**' }),
+    LANE({ key: 'dot', wt: '/w2', owned: './backend/crates/foo/**' }),
+  ] }))
+  check('./ and bare owned roots collide at dispatch',
+    !!dotted && /overlapping owned root/i.test(dotted), dotted)
+
+  const parentDots = await threw(ARGS({ lanes: [
+    LANE({ key: 'up', wt: '/w1', owned: 'backend/crates/foo/../bar/**' }),
+    LANE({ key: 'other', wt: '/w2', owned: 'docs/x/**' }),
+  ] }))
+  check('owned roots containing .. are refused',
+    !!parentDots && /\.\./.test(parentDots), parentDots)
+
   // ...and it must not OVER-refuse, or it becomes a thing people work around.
   const sibling = await go(ARGS({ lanes: [
     LANE({ key: 'd1', wt: '/w1', owned: 'backend/crates/ab/**' }),
@@ -688,10 +703,20 @@ const threw = async (args) => {
     'args', 'agent', 'parallel', 'pipeline', 'log', 'phase', 'budget', 'workflow',
     fs.readFileSync(path.join(SRCDIR, 'backlog-audit.js'), 'utf8').replace(/^export const meta = /m, 'const meta = '))
 
-  const CENSUS = (over = {}) => ({
-    openIssueNumbers: [1], openIssueCount: 1, issues: [], beads: [],
-    crates: [{ name: 'identity' }, { name: 'policy' }], mergedPrs: [], excludedRoots: [], ...over,
-  })
+  const CENSUS = (over = {}) => {
+    const base = {
+      openIssueNumbers: [1], openIssueCount: 1, issues: [], beads: [],
+      crates: [{ name: 'identity' }, { name: 'policy' }],
+      cargoTomlPaths: ['backend/crates/identity/Cargo.toml', 'backend/crates/policy/Cargo.toml'],
+      mergedPrs: [], excludedRoots: [],
+    }
+    const merged = { ...base, ...over }
+    // Keep cargoTomlPaths consistent with crates unless the caller overrides either explicitly.
+    if (!('cargoTomlPaths' in over) && 'crates' in over) {
+      merged.cargoTomlPaths = (merged.crates || []).map((c) => `backend/crates/${c.name}/Cargo.toml`)
+    }
+    return merged
+  }
   const VERDICT = (over = {}) => ({
     number: 1, title: 't', verdict: 'CLOSE-FIXED',
     evidence: 'implemented in backend/crates/identity/src/lib.rs:12 by commit deadbeefcafe1234 — verified by reading it',
@@ -754,6 +779,22 @@ const threw = async (args) => {
   const blind = await runAudit(CENSUS({ crates: [] }), [VERDICT({ reachableFromDefault: true })])
   check('a census with no crate inventory cannot claim coverage and must abort',
     !!blind.err && /crate inventory/i.test(blind.err), blind.err)
+
+  // cargoTomlPaths is the independent oracle (no Node fs in the workflow sandbox). Omitting a
+  // path that find would have returned must abort — same fail-closed class as a partial crates list.
+  const omittedDisk = await runAudit(CENSUS({
+    crates: [{ name: 'identity' }],
+    cargoTomlPaths: ['backend/crates/identity/Cargo.toml', 'backend/crates/brand-new/Cargo.toml'],
+  }), [VERDICT({ reachableFromDefault: true })])
+  check('a census that omits a cargoTomlPaths crate aborts',
+    !!omittedDisk.err && /omitted/i.test(omittedDisk.err), omittedDisk.err)
+
+  const emptyToml = await runAudit(CENSUS({
+    crates: [{ name: 'identity' }],
+    cargoTomlPaths: [],
+  }), [VERDICT({ reachableFromDefault: true })])
+  check('an empty cargoTomlPaths list cannot cross-check coverage and must abort',
+    !!emptyToml.err && /cargoTomlPaths/i.test(emptyToml.err), emptyToml.err)
 }
 
 // Six green tests over a self-built registry coexisted with a production root that wired none of it.
@@ -803,6 +844,8 @@ const threw = async (args) => {
       ['', null, 'empty rejected'],
       ['backend/**/*.rs', null, 'glob rejected'],
       ['backend/crates/foo/../bar/', null, '.. segments rejected'],
+      ['/Users/x/wt-other/backend/crates/foo/', null, 'sibling worktree absolute rejected'],
+      ['/tmp/evil/backend/crates/foo/src/lib.rs', null, 'absolute outside REPO rejected'],
     ]
     for (const [input, want, why] of cases) {
       check(`scout root: ${why}`, normaliseRoot(input) === want, { input, got: normaliseRoot(input), want })
@@ -1060,11 +1103,19 @@ const threw = async (args) => {
     /fanoutPlan:/.test(SCOUT) && /status: 'incomplete'/.test(SCOUT) && !/Feed straight into lane-fanout/.test(SCOUT))
   check('scout fanoutPlan is explicitly incomplete for lane-fanout',
     /missing tip and per-lane wt\/brief\/accept/.test(SCOUT))
+  check('scout measures depth by downstream dependents (reverse edges)',
+    /corrected\.filter\(\(e\) => e\.to === id\)/.test(SCOUT))
+  check('scout counts rejected paths before deduplicating roots',
+    /const normalised = \(item\.paths/.test(SCOUT) && /rejected = normalised\.filter/.test(SCOUT))
+  check('scout rejects absolute paths outside REPO with a segment boundary',
+    /r\.startsWith\(`\$\{repo\}\/`\)/.test(SCOUT) && /else return null/.test(SCOUT))
 }
 
 // backlog-audit must not treat a partial crate census as complete coverage.
 {
   const AUDIT = fs.readFileSync(path.join(HERE, 'backlog-audit.js'), 'utf8')
+  check('backlog-audit does not import Node fs for the crate census', !/import\(['"]node:fs['"]\)/.test(AUDIT))
+  check('backlog-audit requires cargoTomlPaths on Collect', /cargoTomlPaths/.test(AUDIT) && /required: \[[^\]]*cargoTomlPaths/.test(AUDIT))
   const omitSrc = AUDIT.match(/function cratesOmittedFromCensus\([\s\S]*?\n\}/)
   check('backlog-audit exposes cratesOmittedFromCensus to the preflight', !!omitSrc)
   if (omitSrc) {
@@ -1073,6 +1124,13 @@ const threw = async (args) => {
       cratesOmittedFromCensus(['identity', 'brand-new'], ['identity']).join(',') === 'brand-new')
     check('a census parent prefix still covers nested crates',
       cratesOmittedFromCensus(['identity/domain', 'identity/rest'], ['identity']).length === 0)
+  }
+  const deriveSrc = AUDIT.match(/function crateNamesFromCargoTomlPaths\([\s\S]*?\n\}/)
+  check('backlog-audit exposes crateNamesFromCargoTomlPaths to the preflight', !!deriveSrc)
+  if (deriveSrc) {
+    const crateNamesFromCargoTomlPaths = new Function(`${deriveSrc[0]}; return crateNamesFromCargoTomlPaths`)()
+    check('cargoTomlPaths strip to crate names under backend/crates',
+      crateNamesFromCargoTomlPaths(['backend/crates/identity/Cargo.toml', './backend/crates/policy/Cargo.toml']).join(',') === 'identity,policy')
   }
 }
 
