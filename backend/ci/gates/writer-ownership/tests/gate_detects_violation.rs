@@ -1682,13 +1682,13 @@ fn known_residual_a_dash_inside_quoted_sql_data_hides_a_later_statement()
             "update-then-update",
             "pub const SQL: &str = \"UPDATE t SET note = 'a -- b'; \
              UPDATE employees SET org_unit = 1\";",
-            true,
+            false,
         ),
         (
             "insert-then-update",
             "pub const SQL: &str = \"INSERT INTO t (note) VALUES ('x -- y'); \
              UPDATE employees SET org_unit = 1\";",
-            true,
+            false,
         ),
         (
             // The hole stops at the literal boundary: two separate literals,
