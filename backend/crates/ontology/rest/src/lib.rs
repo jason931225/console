@@ -303,15 +303,16 @@ where
     Arc::new(move |input: ProjectedDispatch| {
         let port = Arc::clone(&port);
         Box::pin(async move {
-            // `target_id`, `reason` and `occurred_at` are deliberately not
-            // consumed here. A canonical command names its own subject inside
-            // the payload (`org_unit_id`, `run_id`, …) and stamps its own
-            // receipt time; taking the engine's instance id instead would make
-            // the port's subject depend on an ontology instance that a
-            // canonical write does not require.
+            // `reason` and `occurred_at` are deliberately not consumed here: a
+            // canonical command stamps its own receipt time. The write subject
+            // still comes from the payload (`org_unit_id`, `run_id`, …) — but
+            // `target_id` is the gated/approved instance id, so when the decoded
+            // query names a subject it must agree with that binding (same seam
+            // as the `dispatch_target()` re-check below).
             let ProjectedDispatch {
                 principal,
                 target,
+                target_id,
                 params,
                 command_id,
                 ..
@@ -362,6 +363,13 @@ where
                     query.dispatch_target().as_str(),
                     target.as_str()
                 )));
+            }
+            if let (Some(bound), Some(subject)) = (target_id, query.subject_id()) {
+                if bound != subject {
+                    return Err(ActionError::Validation(format!(
+                        "payload subject {subject} does not match the action target_id {bound}"
+                    )));
+                }
             }
 
             // PURE, and run before anything opens a connection.

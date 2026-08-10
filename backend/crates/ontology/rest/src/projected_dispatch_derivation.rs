@@ -45,10 +45,21 @@ const ORG: Uuid = Uuid::from_u128(0x0AC1);
 const ACTOR: Uuid = Uuid::from_u128(0x0AC2);
 
 /// A query that decodes ONLY the tag the dispatcher injects, so one stub can
-/// stand in for every port and every target.
+/// stand in for every port and every target. Optional subject fields mirror
+/// revise/pay-run payloads so the `target_id` binding seam can be exercised.
 #[derive(Debug, Deserialize)]
 struct EchoQuery {
     target: String,
+    #[serde(default)]
+    job_position_id: Option<Uuid>,
+    #[serde(default)]
+    org_unit_id: Option<Uuid>,
+    #[serde(default)]
+    person_id: Option<Uuid>,
+    #[serde(default)]
+    run_id: Option<Uuid>,
+    #[serde(default)]
+    employment_id: Option<Uuid>,
 }
 
 impl CanonicalQuery for EchoQuery {
@@ -56,6 +67,14 @@ impl CanonicalQuery for EchoQuery {
         self.target
             .parse()
             .expect("the dispatcher injects a roster member, never a free string")
+    }
+
+    fn subject_id(&self) -> Option<Uuid> {
+        self.job_position_id
+            .or(self.org_unit_id)
+            .or(self.person_id)
+            .or(self.run_id)
+            .or(self.employment_id)
     }
 }
 
@@ -305,6 +324,46 @@ async fn a_payload_that_decodes_as_a_different_target_is_refused() {
             assert!(
                 message.contains("organization.create_org_unit"),
                 "{message}"
+            );
+        }
+        other => panic!("expected Validation, got {other:?}"),
+    }
+    assert!(seen.lock().expect("stub mutex").is_empty());
+}
+
+/// Four-eyes / gate binding seam: approval and instance scope travel as
+/// `target_id`, but the canonical port writes the subject named in params.
+/// When both are present and disagree, refuse before execute — otherwise an
+/// approval bound to I is spent while the port revises J.
+#[tokio::test]
+async fn a_payload_whose_subject_differs_from_target_id_is_refused() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let registry = ProjectedDispatchRegistry::new()
+        .register_port(StubPort::<JobPosition, EchoQuery>::new(&seen));
+
+    let bound = Uuid::from_u128(0x0B01);
+    let other = Uuid::from_u128(0x0B02);
+    let mut dispatch_input = input(
+        "organization.revise_job_position",
+        json!({ "job_position_id": other, "attributes": {} }),
+        Some(Uuid::nil()),
+    );
+    dispatch_input.target_id = Some(bound);
+
+    let error = registry
+        .dispatch(dispatch_input)
+        .await
+        .expect_err("mismatched payload subject must be refused");
+
+    match error {
+        ActionError::Validation(message) => {
+            assert!(
+                message.contains(&bound.to_string()),
+                "refusal must name the bound target_id: {message}"
+            );
+            assert!(
+                message.contains(&other.to_string()),
+                "refusal must name the payload subject: {message}"
             );
         }
         other => panic!("expected Validation, got {other:?}"),
