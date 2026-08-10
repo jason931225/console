@@ -519,7 +519,7 @@ fn path_contains_components(path: &Path, needle: &[&str]) -> bool {
         .any(|window| window.iter().zip(needle.iter()).all(|(a, b)| a == b))
 }
 
-/// Mask `#[cfg(test)]` / `#[cfg(all(test, …))]` modules so inline fixture SQL
+/// Mask `cfg(test)` / `cfg(all(test, …))` attribute modules so inline fixture SQL
 /// under `app/src/**` does not false-positive as unaudited handlers.
 fn compute_test_mask(lines: &[&str]) -> Vec<bool> {
     let mut mask = vec![false; lines.len()];
