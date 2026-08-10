@@ -350,6 +350,7 @@ fn is_scanned_path(path: &Path) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
 
