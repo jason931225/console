@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10
 **Kind:** authority tip ledger bound on candidate C (product tip below); jurisdiction tip T is register-only (#618 grammar)
-**Candidate (authority train):** `565f5e998f16eeb91df51ecdb7fb24aa8bed1366` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
+**Candidate (authority train):** `732eb5bdc960db55cfac24ab4785f6bd96e6f460` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
 **Scope:** twelve critic-APPROVED leaves after #622; bqg hardening needle folded with soe (not a separate ordered leaf); lx6/0lj PARKED.
 **Not product authority.** Clears no HOLD. Makes no production, frontend, or projection claim.
 
@@ -80,7 +80,8 @@
     "937 forces doc-manifest regen onto C; T stays jurisdiction-only.",
     "cm3 migration 0216 did not collide with #622 migrations 0213-0215.",
     "Admit-window fix: cargo fmt on leave/domain; zyw oracle retargeted to refusing repo-wide same-name fallback (proven red after wnv).",
-    "Admit-window: ratcheted executed-tests baseline for cm3/mbl/l6c/ctk/937 attribute gains before push."
+    "Admit-window: ratcheted executed-tests baseline for cm3/mbl/l6c/ctk/937 attribute gains before push.",
+    "Admit-window CI: clippy allow on rls-arming tests; retarget ecosystem-plan carveout citation to allowed_exclusion_set_is_the_bound_carveouts."
   ],
   "decisions_changed_or_rejected": [
     "Rejected separate-leaf admit for bqg; fold needle only.",
