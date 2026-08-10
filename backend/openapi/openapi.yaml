@@ -6749,10 +6749,12 @@ paths:
       - name: status
         in: query
         required: false
-        description: Filter to one status; omitted returns all four.
+        description: >-
+          Filter to one status; omitted returns every status, including the
+          read-only historical `returned`/`rejected` rows.
         schema:
           type: string
-          enum: [pending, approved, returned, rejected]
+          enum: [pending, approved, time_change_consult, returned, rejected]
       - name: limit
         in: query
         required: false
@@ -6891,10 +6893,12 @@ paths:
       - name: status
         in: query
         required: false
-        description: Filter to one status; omitted returns all four.
+        description: >-
+          Filter to one status; omitted returns every status, including the
+          read-only historical `returned`/`rejected` rows.
         schema:
           type: string
-          enum: [pending, approved, returned, rejected]
+          enum: [pending, approved, time_change_consult, returned, rejected]
       - name: limit
         in: query
         required: false
