@@ -1,28 +1,28 @@
 # Authority tip — fail-closed Sol/Codex harness defects on the scout candidate
 
-**Date:** 2026-08-09
-**Kind:** authority tip (T) for the cargoTomlPaths / owned-root canonicalize candidate
-**Candidate (authority train):** sole parent of this tip (`git rev-parse HEAD^`)
-**Workflow fix commit:** `1e8209bba27531f8c3b587e6df1f41803e3b5d70`
-**Scope:** `.claude/workflows/{scout,lane-fanout,backlog-audit}.js`, `.claude/workflows/lane-fanout.test.mjs`, `docs/documentation-manifest.seed.json`, `docs/documentation-index.json`.
+**Date:** 2026-08-10
+**Kind:** authority tip (T) for candidate `5203b7c90244377e961b09649e0dd29ba900c786`
+**Candidate (authority train):** `5203b7c90244377e961b09649e0dd29ba900c786` (immutable absolute SHA; not a relative `HEAD^` expression)
+**Workflow fix commit:** `5203b7c90244377e961b09649e0dd29ba900c786`
+**Authority-train parent tip^:** seed-registration commit that adds the tip ledger blob to the documentation manifest (same harness tree as the candidate above).
+**Scope:** `.claude/workflows/{scout,lane-fanout,stale-take-audit}.js`, `.claude/workflows/lane-fanout.test.mjs`, `scripts/check-platform-contract-drift.mjs`, this ledger tip.
 **Not product authority.** Clears no HOLD. Touches no backend crate, no migration, no OpenAPI document.
 
 ## Summary
 
-Codex P1/P2 fail-closed findings on tip `d9baa2879`, fixed on the workflow commit above (authority-train candidate C is this tip's sole parent):
+Codex P1/P2 fail-closed findings on tip `5a629c66a`, fixed on the candidate above:
 
-1. **backlog-audit.js — no Node fs census.** Collect requires `cargoTomlPaths` from `find backend/crates -name Cargo.toml`; the script derives on-disk names and still aborts via `cratesOmittedFromCensus`. Empty or omitted paths fail closed.
-2. **lane-fanout.js — canonicalize owned roots.** Strip `./`, collapse `.`, reject `..` before `pathOverlap`, so `./backend/crates/foo` and `backend/crates/foo` collide at dispatch.
-3. **scout.js — absolute paths outside REPO.** Require an exact repo-root path boundary; sibling worktree prefixes no longer become fake owned roots.
-4. **scout.js — downstream depth.** Depth walks reverse edges (what a ready bead unlocks), not prerequisites.
-5. **scout.js — rejected count before dedupe.** Failed normalisations are counted before `Set`, so multi-file beads under one directory are not mis-deferred.
-6. **Documentation manifest.** Seed/index register the fail-closed ledger path with the tip blob (product paths on C); tip bytes land on T.
+1. **lane-fanout.js — nonempty claimed commands on done.** `status=done` with omitted/blank `commands` no longer converges vacuously against a verifier's unrelated `commandsRun`.
+2. **stale-take-audit.js — diffs in `args.repo`.** Prompted diffs use `git -C ${REPO}` for both directions so agents audit `args.repo`, not the inherited cwd.
+3. **stale-take-audit.js — per-file audit coverage.** Every requested path must appear exactly once in audit results before "full coverage".
+4. **scout.js — extensionless owned roots.** `Dockerfile` / `BUCK` / `Makefile` paths are preserved as exact file roots instead of inventing `…/Dockerfile/`.
+5. **check-platform-contract-drift.mjs — discover after strip.** Route-source discovery runs `stripRustCommentsAndLiterals` before `.route(` detection so doc-only hits cannot abort the gate.
+6. **Ledger tip binding.** Candidate recorded as an immutable absolute SHA (not a relative `HEAD^` expression).
 
 ## Verification
 
-- `node .claude/workflows/lane-fanout.test.mjs` — 206 PASS, ALL PASS.
+- `node .claude/workflows/lane-fanout.test.mjs` — ALL PASS.
 - `node scripts/check-platform-contract-drift.mjs` — PASS, 582 backend `/api/` operations across 54 route sources.
-- `node scripts/console/generate-documentation-manifest.mjs --check` — OK (418 markdown files).
 - `git diff --check origin/main...HEAD` — clean.
 
 ## HOLDs remaining
@@ -49,24 +49,24 @@ Unchanged. No production promotion, no frontend, no payment execution, no invent
     "Zero-trust / defense-in-depth"
   ],
   "task_fit": {
-    "Cartesian doubt": "Reproduced Codex P1s on tip d9baa2879: node:fs import in backlog-audit and ./ vs bare owned-root disjointness in lane-fanout.",
-    "Essentialism / YAGNI": "Replaced the fs walk with Collect.cargoTomlPaths rather than widening sandbox privileges.",
-    "Red Team": "Treated empty cargoTomlPaths, sibling-worktree absolute prefixes, and ./ ownership spellings as adversarial false-greens.",
-    "Operability / Day-2": "Regression probes cover cargoTomlPaths omission, ./ overlap, absolute-outside-REPO, downstream depth, and rejected-before-dedupe.",
-    "Blast-radius / cell-based": "Canonical owned-root compare keeps equivalent path spellings from dispatching two writers against one root.",
-    "Zero-trust / defense-in-depth": "Census completeness is cross-checked against an agent-supplied find oracle the sandbox cannot forge via Node fs."
+    "Cartesian doubt": "Reproduced empty claimed-commands vacuity and unqualified stale-take git diffs against args.repo.",
+    "Essentialism / YAGNI": "Closed the two P1s and same-class P2s without expanding product scope.",
+    "Red Team": "Treated omitted commands, wrong-cwd audits, partial audit batches, and doc-only .route( hits as adversarial false-greens.",
+    "Operability / Day-2": "Regression probes cover nonempty commands, git -C REPO, missing audit files, extensionless roots, and strip discovery.",
+    "Blast-radius / cell-based": "Harness-only change; no backend/OpenAPI/migration edits.",
+    "Zero-trust / defense-in-depth": "Done greens require named commands the verifier can re-run; coverage claims require one result per requested file."
   },
   "mandatory_lens_exceptions": {},
   "findings": [
-    "backlog-audit imported node:fs after Collect, which sandboxes reject.",
-    "lane-fanout pathOverlap treated ./backend/crates/foo and backend/crates/foo as disjoint.",
-    "scout normaliseRoot accepted absolute paths outside REPO via prefix match.",
-    "scout depthOf walked prerequisites, so every ready bead scored depth 0.",
-    "scout counted rejected paths after Set dedupe, deferring multi-file beads."
+    "Empty claimedCommands made unrun coverage vacuously true.",
+    "stale-take-audit instructed unqualified git diff against inherited cwd.",
+    "Audit coverage counted dead batches only, not missing per-file results.",
+    "scout normaliseRoot invented extensionless file directories.",
+    "Route discovery matched raw .route( inside doc comments."
   ],
   "decisions_changed_or_rejected": [
-    "Rejected restoring Node filesystem access in workflow scripts; Collect must return cargoTomlPaths.",
-    "Rejected leaving P2 absolute-path and rejected-before-dedupe defects open once they were clearly broken and cheap."
+    "Rejected whole-file maskStringLiterals for route discovery after it dropped real multi-line routers.",
+    "Rejected leaving cheap same-class P2s open once P1s were under repair."
   ],
   "lens_set_changes": []
 }
