@@ -729,6 +729,19 @@ fn dependency_edges(manifest: &str) -> (BTreeSet<String>, BTreeSet<String>) {
 
 /// The package a dependency line renames, if it uses Cargo's `package = "..."` form.
 ///
+/// # This has now had three spellings, which means the mechanism is wrong
+///
+/// Cargo accepts a rename in three positions: inline, in a `[dependencies.alias]`
+/// subtable, and inherited via `[workspace.dependencies]` with `alias.workspace
+/// = true`. The first two are handled here; the third is NOT, and is filed as
+/// console-ugg rather than patched, because each fix so far replaced one enumeration of
+/// positions with a slightly larger one. The total primitive is `cargo metadata`,
+/// which resolves every dependency to its real package name authoritatively —
+/// Cargo answering instead of a text scan guessing.
+///
+/// Unreachable at this head: no first-party crate is aliased anywhere, and
+/// `[workspace.dependencies]` carries no `package =` at all.
+///
 /// Deliberately narrow: it reads only the `package` key of an inline table, because that is the
 /// one place Cargo lets a dependency's key differ from the crate it resolves to. Anything else on
 /// the line is irrelevant to who ships what.

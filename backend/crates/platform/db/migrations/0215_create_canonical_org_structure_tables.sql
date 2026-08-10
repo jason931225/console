@@ -346,21 +346,57 @@ CREATE POLICY org_isolation ON job_position_revisions
     WITH CHECK (org_id = NULLIF(current_setting('app.current_org', true), '')::uuid);
 
 REVOKE ALL ON company_revisions FROM PUBLIC;
+-- ...and from console_rt itself. `FROM PUBLIC` does not touch a role that already
+-- holds the privilege through console_app's default privileges, so omitting a verb
+-- from the GRANT below did NOT withhold it. With this line the GRANT is the whole
+-- truth about what console_rt has on this table, which is what every comment in
+-- this file already assumed it was.
+REVOKE ALL ON company_revisions FROM console_rt;
 GRANT SELECT, INSERT ON company_revisions TO console_rt;
 
 REVOKE ALL ON org_units FROM PUBLIC;
+-- ...and from console_rt itself. `FROM PUBLIC` does not touch a role that already
+-- holds the privilege through console_app's default privileges, so omitting a verb
+-- from the GRANT below did NOT withhold it. With this line the GRANT is the whole
+-- truth about what console_rt has on this table, which is what every comment in
+-- this file already assumed it was.
+REVOKE ALL ON org_units FROM console_rt;
 GRANT SELECT, INSERT, DELETE ON org_units TO console_rt;
 
 REVOKE ALL ON org_unit_revisions FROM PUBLIC;
+-- ...and from console_rt itself. `FROM PUBLIC` does not touch a role that already
+-- holds the privilege through console_app's default privileges, so omitting a verb
+-- from the GRANT below did NOT withhold it. With this line the GRANT is the whole
+-- truth about what console_rt has on this table, which is what every comment in
+-- this file already assumed it was.
+REVOKE ALL ON org_unit_revisions FROM console_rt;
 GRANT SELECT, INSERT ON org_unit_revisions TO console_rt;
 
 REVOKE ALL ON org_unit_source_bindings FROM PUBLIC;
+-- ...and from console_rt itself. `FROM PUBLIC` does not touch a role that already
+-- holds the privilege through console_app's default privileges, so omitting a verb
+-- from the GRANT below did NOT withhold it. With this line the GRANT is the whole
+-- truth about what console_rt has on this table, which is what every comment in
+-- this file already assumed it was.
+REVOKE ALL ON org_unit_source_bindings FROM console_rt;
 GRANT SELECT, INSERT, DELETE ON org_unit_source_bindings TO console_rt;
 
 REVOKE ALL ON job_positions FROM PUBLIC;
+-- ...and from console_rt itself. `FROM PUBLIC` does not touch a role that already
+-- holds the privilege through console_app's default privileges, so omitting a verb
+-- from the GRANT below did NOT withhold it. With this line the GRANT is the whole
+-- truth about what console_rt has on this table, which is what every comment in
+-- this file already assumed it was.
+REVOKE ALL ON job_positions FROM console_rt;
 GRANT SELECT, INSERT, UPDATE, DELETE ON job_positions TO console_rt;
 
 REVOKE ALL ON job_position_revisions FROM PUBLIC;
+-- ...and from console_rt itself. `FROM PUBLIC` does not touch a role that already
+-- holds the privilege through console_app's default privileges, so omitting a verb
+-- from the GRANT below did NOT withhold it. With this line the GRANT is the whole
+-- truth about what console_rt has on this table, which is what every comment in
+-- this file already assumed it was.
+REVOKE ALL ON job_position_revisions FROM console_rt;
 GRANT SELECT, INSERT ON job_position_revisions TO console_rt;
 
 -- ---------------------------------------------------------------------------
