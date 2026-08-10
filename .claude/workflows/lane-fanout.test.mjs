@@ -1037,10 +1037,69 @@ const threw = async (args) => {
   check('an upheld STALE without an attested graft payload is unresolved',
     !!noPayload && noPayload.stale.length === 0 && noPayload.unconfirmed.length === 1,
     noPayload && { s: noPayload.stale, u: noPayload.unconfirmed })
+  // console-zd7: a confirmed-stale verdict that never attested content must not publish the
+  // first agent's text under the graft-shaped key. Unconfirmed may retain the claim under a
+  // distinctly-named field so operators see the accusation without a ready-to-apply payload.
+  check('an upheld STALE without attestation does not publish first-pass text as missingFromHead',
+    !!noPayload && noPayload.stale.length === 0
+      && !JSON.stringify(noPayload.stale).includes('the step')
+      && noPayload.unconfirmed.length === 1
+      && !Object.prototype.hasOwnProperty.call(noPayload.unconfirmed[0], 'missingFromHead')
+      && noPayload.unconfirmed[0].claimedMissingFromHead === 'the step',
+    noPayload && { s: noPayload.stale, u: noPayload.unconfirmed })
   const blankPayload = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: false, reasoning: 'real', missingFromHead: '   ' }))
   check('an upheld STALE with a blank graft payload is unresolved',
     !!blankPayload && blankPayload.stale.length === 0 && blankPayload.unconfirmed.length === 1,
     blankPayload && { s: blankPayload.stale, u: blankPayload.unconfirmed })
+  check('a blank confirmer payload does not expose a graft-shaped missingFromHead either',
+    !!blankPayload && blankPayload.unconfirmed.length === 1
+      && !Object.prototype.hasOwnProperty.call(blankPayload.unconfirmed[0], 'missingFromHead')
+      && blankPayload.unconfirmed[0].claimedMissingFromHead === 'the step',
+    blankPayload && blankPayload.unconfirmed)
+  // Confirmer attests a DIFFERENT payload: publish only that. Publishing the first-pass quote
+  // when the confirmation returned something else is the "mismatched" fail-open.
+  check('confirmed stale publishes the confirmer payload, never the first-pass quote',
+    !!kept && kept.stale[0].missingFromHead === 'the step (attested)'
+      && kept.stale[0].missingFromHead !== 'the step',
+    kept && kept.stale[0])
+  // Confirm must re-derive the graft from diffs. Handing the first-pass quote in the prompt
+  // invites rubber-stamping an unread payload (claim, not evidence).
+  {
+    let confirmPrompt = null
+    const agent = async (prompt, o = {}) => {
+      if ((o.label || '').startsWith('audit:')) {
+        return { results: [{ file: '.github/workflows/ci.yml', verdict: 'STALE', evidence: 'main has a step HEAD lacks', missingFromHead: 'FIRST_PASS_SECRET_GRAFT', wouldBreak: 'the suite un-wires' }] }
+      }
+      confirmPrompt = prompt
+      return { file: '.github/workflows/ci.yml', refuted: true, reasoning: 'deliberate', missingFromHead: '' }
+    }
+    await fn({ repo: '/r', main: 'origin/main', files: ['.github/workflows/ci.yml'] },
+      agent, async (t) => Promise.all(t.map((f) => f().catch(() => null))), async (i) => i,
+      () => {}, () => {}, { total: null, spent: () => 0, remaining: () => Infinity }, async () => ({}))
+    check('confirm prompt does not offer the first-pass graft payload for rubber-stamping',
+      typeof confirmPrompt === 'string'
+        && !/FIRST_PASS_SECRET_GRAFT/.test(confirmPrompt)
+        && !/PAYLOAD OFFERED/.test(confirmPrompt)
+        && /EVIDENCE OFFERED/.test(confirmPrompt),
+      confirmPrompt && confirmPrompt.slice(0, 400))
+  }
+  // Oracle integrity: the pre-zd7 publish path (`missingFromHead: r.missingFromHead` from the
+  // audit spread) would leak the first-pass quote under a confirmed-stale verdict. Mutating the
+  // control back to that mapping must go red against the attestation pin.
+  {
+    const leaked = { file: 'ci.yml', missingFromHead: 'FIRST_PASS_WRONG', confirmedMissing: null, refuted: false }
+    const oldPublish = [leaked].filter((c) => c.refuted === false)
+      .map((r) => ({ file: r.file, missingFromHead: r.missingFromHead }))
+    const newPublish = [leaked].filter((c) =>
+      c.refuted === false
+      && typeof c.confirmedMissing === 'string'
+      && c.confirmedMissing.trim() !== '')
+      .map((r) => ({ file: r.file, missingFromHead: r.confirmedMissing }))
+    check('mutate→red: old confirmed-stale publish path leaks the first-pass graft',
+      oldPublish.length === 1 && oldPublish[0].missingFromHead === 'FIRST_PASS_WRONG'
+        && newPublish.length === 0,
+      { oldPublish, newPublish })
+  }
   const dropped = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: true, reasoning: 'deliberate', missingFromHead: '' }))
   check('a live refutation still drops the suspicion',
     !!dropped && dropped.stale.length === 0 && dropped.refuted.length === 1 && dropped.unconfirmed.length === 0,
