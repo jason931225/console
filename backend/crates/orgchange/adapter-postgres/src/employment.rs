@@ -296,6 +296,18 @@ impl CanonicalQuery for EmploymentQuery {
     fn dispatch_target(&self) -> DispatchTarget {
         self.target()
     }
+
+    /// Promote/Transfer name the employment head they revise. Without this, the
+    /// projected-dispatch `target_id` bind skips (trait default `None`) and a
+    /// four-eyes approval for employment I can be spent while the port revises J.
+    fn subject_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Appoint { .. } => None,
+            Self::Promote { employment_id, .. } | Self::Transfer { employment_id, .. } => {
+                Some(*employment_id)
+            }
+        }
+    }
 }
 
 /// The typed write this port accepts. `org_id` is the RLS key and `command_id`

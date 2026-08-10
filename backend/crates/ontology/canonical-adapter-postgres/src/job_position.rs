@@ -130,7 +130,9 @@ impl CanonicalQuery for JobPositionQuery {
     fn subject_id(&self) -> Option<Uuid> {
         match self {
             Self::Create { .. } => None,
-            Self::Revise { job_position_id, .. } => Some(*job_position_id),
+            Self::Revise {
+                job_position_id, ..
+            } => Some(*job_position_id),
         }
     }
 }

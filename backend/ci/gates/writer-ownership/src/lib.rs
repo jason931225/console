@@ -1122,11 +1122,7 @@ fn without_sql_comments(text: &str) -> String {
 /// Macro token streams pass `Literal::to_string()` with surrounding `"`.
 fn strip_one_string_literal_layer(text: &str) -> &str {
     let t = text.trim();
-    if t.len() >= 2
-        && t.starts_with('"')
-        && t.ends_with('"')
-        && !t[1..t.len() - 1].contains('"')
-    {
+    if t.len() >= 2 && t.starts_with('"') && t.ends_with('"') && !t[1..t.len() - 1].contains('"') {
         &t[1..t.len() - 1]
     } else {
         t
@@ -1168,8 +1164,11 @@ fn without_sql_comments_sqlparser(text: &str) -> String {
     use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
     let dialect = PostgreSqlDialect {};
+    // Decode Rust/SQL escapes so `\n` becomes a real newline. With unescape
+    // off, `-- hint\nemployees …` is one EOF line comment and the write vanishes
+    // (fail-OPEN vs the byte path, which left the target unresolved).
     match Tokenizer::new(&dialect, text)
-        .with_unescape(false)
+        .with_unescape(true)
         .tokenize()
     {
         Ok(tokens) => {
@@ -1188,6 +1187,12 @@ fn without_sql_comments_sqlparser(text: &str) -> String {
                         }
                     }
                     Token::Whitespace(Whitespace::MultiLineComment(_)) => " ".to_string(),
+                    // Hold quoted DATA opaque so write_targets cannot charge a
+                    // table name that only appears inside a string literal
+                    // (`INSERT INTO notes VALUES ('-- UPDATE employees …')`).
+                    Token::SingleQuotedString(_)
+                    | Token::NationalStringLiteral(_)
+                    | Token::HexStringLiteral(_) => "''".to_string(),
                     other => other.to_string(),
                 })
                 .collect()

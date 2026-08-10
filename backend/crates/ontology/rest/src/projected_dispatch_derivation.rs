@@ -239,12 +239,16 @@ async fn a_canonical_target_routes_through_the_derivation() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let registry = all_six_ports(&seen);
 
+    let employment_id = Uuid::from_u128(7);
+    let mut dispatch_input = input(
+        "hr.transfer",
+        json!({ "employment_id": employment_id }),
+        Some(Uuid::from_u128(9)),
+    );
+    dispatch_input.target_id = Some(employment_id);
+
     let outcome = registry
-        .dispatch(input(
-            "hr.transfer",
-            json!({ "employment_id": Uuid::from_u128(7) }),
-            Some(Uuid::from_u128(9)),
-        ))
+        .dispatch(dispatch_input)
         .await
         .expect("hr.transfer resolves through the Employment port");
 
@@ -364,6 +368,41 @@ async fn a_payload_whose_subject_differs_from_target_id_is_refused() {
             assert!(
                 message.contains(&other.to_string()),
                 "refusal must name the payload subject: {message}"
+            );
+        }
+        other => panic!("expected Validation, got {other:?}"),
+    }
+    assert!(seen.lock().expect("stub mutex").is_empty());
+}
+
+/// Employment promote/transfer (and any subject-bearing query) must not skip the
+/// bind by omitting `target_id` — that was the live fail-open for EmploymentQuery
+/// while `subject_id()` defaulted to `None` / when the guard only matched Some/Some.
+#[tokio::test]
+async fn a_subject_bearing_payload_without_target_id_is_refused() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let registry = ProjectedDispatchRegistry::new()
+        .register_port(StubPort::<Employment, EchoQuery>::new(&seen));
+
+    let subject = Uuid::from_u128(0x0E01);
+    let error = registry
+        .dispatch(input(
+            "hr.promote",
+            json!({ "employment_id": subject }),
+            Some(Uuid::from_u128(0x0E99)),
+        ))
+        .await
+        .expect_err("subject-bearing promote without target_id must be refused");
+
+    match error {
+        ActionError::Validation(message) => {
+            assert!(
+                message.contains(&subject.to_string()),
+                "refusal must name the payload subject: {message}"
+            );
+            assert!(
+                message.contains("target_id"),
+                "refusal must demand target_id: {message}"
             );
         }
         other => panic!("expected Validation, got {other:?}"),

@@ -3594,6 +3594,16 @@
       "archive_tag": null
     },
     {
+      "path": "docs/program/ledger/2026-08-10-wave1-canonical-hardening.md",
+      "blob_sha": "7113c26f768257091f608663629cc25e5b4d72af",
+      "class": "evidence",
+      "owner": "repository maintainers",
+      "status": "frozen",
+      "replacement": null,
+      "retention": "retain",
+      "archive_tag": null
+    },
+    {
       "path": "docs/program/legacy-intent-register.md",
       "class": "evidence",
       "owner": "repository maintainers",

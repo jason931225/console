@@ -364,12 +364,20 @@ where
                     target.as_str()
                 )));
             }
-            if let (Some(bound), Some(subject)) = (target_id, query.subject_id()) {
-                if bound != subject {
+            match (target_id, query.subject_id()) {
+                (Some(bound), Some(subject)) if bound != subject => {
                     return Err(ActionError::Validation(format!(
                         "payload subject {subject} does not match the action target_id {bound}"
                     )));
                 }
+                (None, Some(subject)) => {
+                    // Subject-bearing writes must carry the gated instance id;
+                    // otherwise the bind above is a no-op and approval scope is lost.
+                    return Err(ActionError::Validation(format!(
+                        "payload subject {subject} requires target_id on the projected action"
+                    )));
+                }
+                _ => {}
             }
 
             // PURE, and run before anything opens a connection.
