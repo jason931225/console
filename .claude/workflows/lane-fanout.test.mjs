@@ -737,6 +737,10 @@ const threw = async (args) => {
       const label = o.label || ''
       dispatched.push({ label, prompt })
       if (label === 'collect') return census
+      // Independent disk oracle — must not reuse Collect's crates as its only source.
+      if (label === 'crate-disk-census') {
+        return { cargoTomlPaths: census.cargoTomlPaths || [] }
+      }
       if (label.startsWith('triage:')) return { verdicts }
       if (label === 'reconcile') return { ok: true }
       return { domain: label, findings: [], coverage: 'read it all' }
@@ -787,21 +791,39 @@ const threw = async (args) => {
   check('a census with no crate inventory cannot claim coverage and must abort',
     !!blind.err && /crate inventory/i.test(blind.err), blind.err)
 
-  // cargoTomlPaths is the independent oracle (no Node fs in the workflow sandbox). Omitting a
+  // crate-disk-census is the independent oracle (workflow sandbox has no Node fs). Omitting a
   // path that find would have returned must abort — same fail-closed class as a partial crates list.
+  // A co-emitted Collect.cargoTomlPaths is NOT enough: Collect can omit from both fields together.
   const omittedDisk = await runAudit(CENSUS({
     crates: [{ name: 'identity' }],
     cargoTomlPaths: ['backend/crates/identity/Cargo.toml', 'backend/crates/brand-new/Cargo.toml'],
   }), [VERDICT({ reachableFromDefault: true })])
-  check('a census that omits a cargoTomlPaths crate aborts',
+  check('a census that omits a crate-disk-census crate aborts',
     !!omittedDisk.err && /omitted/i.test(omittedDisk.err), omittedDisk.err)
+  check('coverage uses a dedicated crate-disk-census agent, not Collect alone',
+    omittedDisk.dispatched.some((d) => d.label === 'crate-disk-census'))
 
   const emptyToml = await runAudit(CENSUS({
     crates: [{ name: 'identity' }],
     cargoTomlPaths: [],
   }), [VERDICT({ reachableFromDefault: true })])
-  check('an empty cargoTomlPaths list cannot cross-check coverage and must abort',
-    !!emptyToml.err && /cargoTomlPaths/i.test(emptyToml.err), emptyToml.err)
+  check('an empty crate-disk-census list cannot cross-check coverage and must abort',
+    !!emptyToml.err && /cargoTomlPaths|crate-disk-census/i.test(emptyToml.err), emptyToml.err)
+
+  // Hostile: Collect's crates list is internally consistent and would have matched a co-emitted
+  // cargoTomlPaths — the old self-validation false green. The independent disk census still sees
+  // the omitted crate and must abort.
+  const coordinatedPartial = await runAudit(CENSUS({
+    crates: [{ name: 'identity' }, { name: 'policy' }],
+    cargoTomlPaths: [
+      'backend/crates/identity/Cargo.toml',
+      'backend/crates/policy/Cargo.toml',
+      'backend/crates/brand-new/Cargo.toml',
+    ],
+  }), [VERDICT({ reachableFromDefault: true })])
+  check('a Collect list that omits an on-disk crate aborts even when well-formed',
+    !!coordinatedPartial.err && /omitted/i.test(coordinatedPartial.err)
+      && /brand-new/.test(coordinatedPartial.err), coordinatedPartial.err)
 }
 
 // Six green tests over a self-built registry coexisted with a production root that wired none of it.
@@ -1244,7 +1266,12 @@ const threw = async (args) => {
 {
   const AUDIT = fs.readFileSync(path.join(HERE, 'backlog-audit.js'), 'utf8')
   check('backlog-audit does not import Node fs for the crate census', !/import\(['"]node:fs['"]\)/.test(AUDIT))
-  check('backlog-audit requires cargoTomlPaths on Collect', /cargoTomlPaths/.test(AUDIT) && /required: \[[^\]]*cargoTomlPaths/.test(AUDIT))
+  check('backlog-audit measures crates via a dedicated crate-disk-census agent',
+    /label: 'crate-disk-census'/.test(AUDIT) && /find backend\/crates -name Cargo\.toml/.test(AUDIT))
+  check('backlog-audit does not treat Collect.cargoTomlPaths as the disk oracle',
+    /required: \['openIssueNumbers', 'openIssueCount', 'issues', 'beads', 'crates'\]/.test(AUDIT)
+      && !/required: \['openIssueNumbers', 'openIssueCount', 'issues', 'beads', 'crates', 'cargoTomlPaths'\]/.test(AUDIT)
+      && /diskCensus\.cargoTomlPaths/.test(AUDIT))
   const omitSrc = AUDIT.match(/function cratesOmittedFromCensus\([\s\S]*?\n\}/)
   check('backlog-audit exposes cratesOmittedFromCensus to the preflight', !!omitSrc)
   if (omitSrc) {
