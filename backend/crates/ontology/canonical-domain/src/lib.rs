@@ -538,12 +538,12 @@ pub trait CanonicalQuery {
     /// The payload subject this query would write, when the command names one.
     ///
     /// `None` for create-style commands and for writes whose subject is the
-    /// tenant itself (company revise). Default so ports that do not yet bind a
-    /// subject keep compiling; the dispatcher only compares when both
+    /// tenant itself (company revise). No default: every `CanonicalQuery` impl
+    /// must spell the bind (or explicitly return `None`) so a new query cannot
+    /// silently inherit "no subject" and skip projected-dispatch `target_id`
+    /// comparison. The dispatcher only compares when both
     /// `ProjectedDispatch::target_id` and this value are present.
-    fn subject_id(&self) -> Option<uuid::Uuid> {
-        None
-    }
+    fn subject_id(&self) -> Option<uuid::Uuid>;
 }
 
 /// The shape every canonical object port has: a typed query, a pure preflight,

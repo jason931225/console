@@ -31,6 +31,10 @@ impl CanonicalQuery for NoQuery {
     fn dispatch_target(&self) -> DispatchTarget {
         DispatchTarget::CompanyRevise
     }
+
+    fn subject_id(&self) -> Option<uuid::Uuid> {
+        None
+    }
 }
 
 impl<O: CanonicalObject> CanonicalPort for NoPort<O> {

@@ -90,6 +90,10 @@ impl CanonicalQuery for LyingQuery {
     fn dispatch_target(&self) -> DispatchTarget {
         DispatchTarget::CompanyRevise
     }
+
+    fn subject_id(&self) -> Option<Uuid> {
+        None
+    }
 }
 
 /// Records what reached the port, and writes nothing.
@@ -377,7 +381,7 @@ async fn a_payload_whose_subject_differs_from_target_id_is_refused() {
 
 /// Employment promote/transfer (and any subject-bearing query) must not skip the
 /// bind by omitting `target_id` — that was the live fail-open for EmploymentQuery
-/// while `subject_id()` defaulted to `None` / when the guard only matched Some/Some.
+/// while `subject_id()` was omitted / when the guard only matched Some/Some.
 #[tokio::test]
 async fn a_subject_bearing_payload_without_target_id_is_refused() {
     let seen = Arc::new(Mutex::new(Vec::new()));
