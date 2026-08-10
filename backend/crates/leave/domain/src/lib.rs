@@ -765,8 +765,7 @@ mod tests {
         assert!(validate_decision_comment(LeaveDecision::TimeChange, None).is_err());
         assert!(validate_decision_comment(LeaveDecision::TimeChange, Some("   ")).is_err());
         assert!(
-            validate_decision_comment(LeaveDecision::TimeChange, Some("성수기 인력 공백"))
-                .is_ok()
+            validate_decision_comment(LeaveDecision::TimeChange, Some("성수기 인력 공백")).is_ok()
         );
         // Approve may omit a comment.
         assert!(validate_decision_comment(LeaveDecision::Approve, None).is_ok());
@@ -774,7 +773,9 @@ mod tests {
 
     #[test]
     fn new_request_validation() {
-        assert!(NewLeaveRequest::new(LeaveType::Annual, d(2026, 7, 7), d(2026, 7, 6), None).is_err());
+        assert!(
+            NewLeaveRequest::new(LeaveType::Annual, d(2026, 7, 7), d(2026, 7, 6), None).is_err()
+        );
         assert!(
             NewLeaveRequest::new(
                 LeaveType::HalfDay,
@@ -785,8 +786,12 @@ mod tests {
             .is_err(),
             "half day must not span multiple dates"
         );
-        assert!(NewLeaveRequest::new(LeaveType::HalfDay, d(2026, 7, 6), d(2026, 7, 6), None).is_err());
-        assert!(NewLeaveRequest::new(LeaveType::Annual, d(2026, 7, 6), d(2026, 7, 8), None).is_ok());
+        assert!(
+            NewLeaveRequest::new(LeaveType::HalfDay, d(2026, 7, 6), d(2026, 7, 6), None).is_err()
+        );
+        assert!(
+            NewLeaveRequest::new(LeaveType::Annual, d(2026, 7, 6), d(2026, 7, 8), None).is_ok()
+        );
         assert!(
             NewLeaveRequest::new(
                 LeaveType::HalfDay,

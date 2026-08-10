@@ -1300,8 +1300,8 @@ const threw = async (args) => {
     driftSrc.includes('trimmedRight.match(/^ {2}(\\/.+):$/)')
       || driftSrc.includes('trimmedRight.match(/^ {2}(/.+):$/)')
       || /\\\/\.+\):\$/.test(driftSrc))
-  check('contract-drift refuses nonlocal resolution of generic PATH names',
-    /refusing nonlocal resolution for a generic name/.test(driftSrc))
+  check('contract-drift refuses repo-wide same-name fallback for undeclared PATH consts',
+    /refusing repo-wide same-name fallback/.test(driftSrc))
   check('contract-drift discovers route sources after stripping comments/literals',
     /stripRustCommentsAndLiterals\(readFileSync\(file, "utf8"\)\)\.includes\(\s*"\.route\("\s*\)/.test(driftSrc)
       || /stripRustCommentsAndLiterals\(readFileSync\(file, "utf8"\)\)\.includes\("\.route\("\)/.test(driftSrc))
