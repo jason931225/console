@@ -797,13 +797,19 @@ const threw = async (args) => {
       ['docs/', null, 'nor is a top-level directory'],
       ['backend/app/src/hr.rs', 'backend/app/src/', 'a file becomes its directory'],
       ['backend/app/src/', 'backend/app/src/', 'a real root survives unchanged'],
+      ['./backend/crates/foo/', 'backend/crates/foo/', './ prefix collapses to the same root'],
+      ['backend/crates/foo/', 'backend/crates/foo/', 'bare form matches the ./ form'],
       ['/', null, 'root rejected'],
       ['', null, 'empty rejected'],
       ['backend/**/*.rs', null, 'glob rejected'],
+      ['backend/crates/foo/../bar/', null, '.. segments rejected'],
     ]
     for (const [input, want, why] of cases) {
       check(`scout root: ${why}`, normaliseRoot(input) === want, { input, got: normaliseRoot(input), want })
     }
+    check('scout root: ./ and bare forms are identical after normalise',
+      normaliseRoot('./backend/crates/foo/') === normaliseRoot('backend/crates/foo/'),
+      { a: normaliseRoot('./backend/crates/foo/'), b: normaliseRoot('backend/crates/foo/') })
   }
 
   // The packing must not be able to emit two lanes sharing territory. The first version decided
@@ -967,10 +973,22 @@ const threw = async (args) => {
     !!fieldless && fieldless.unconfirmed.length === 1, fieldless && fieldless.unconfirmed)
 
   // Controls: the live paths must still work, or the fix is an over-block.
-  const kept = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: false, reasoning: 'real' }))
+  // Upholding STALE also requires this pass to attest the graft payload — publishing the
+  // first agent's missingFromHead unseen is how a wrong quote becomes the "confirmed" patch.
+  const kept = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: false, reasoning: 'real', missingFromHead: 'the step (attested)' }))
   check('a live confirmation that fails to refute still reports STALE',
-    !!kept && kept.stale.length === 1 && kept.unconfirmed.length === 0, kept && { s: kept.stale, u: kept.unconfirmed })
-  const dropped = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: true, reasoning: 'deliberate' }))
+    !!kept && kept.stale.length === 1 && kept.unconfirmed.length === 0
+      && kept.stale[0].missingFromHead === 'the step (attested)',
+    kept && { s: kept.stale, u: kept.unconfirmed })
+  const noPayload = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: false, reasoning: 'real but no graft' }))
+  check('an upheld STALE without an attested graft payload is unresolved',
+    !!noPayload && noPayload.stale.length === 0 && noPayload.unconfirmed.length === 1,
+    noPayload && { s: noPayload.stale, u: noPayload.unconfirmed })
+  const blankPayload = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: false, reasoning: 'real', missingFromHead: '   ' }))
+  check('an upheld STALE with a blank graft payload is unresolved',
+    !!blankPayload && blankPayload.stale.length === 0 && blankPayload.unconfirmed.length === 1,
+    blankPayload && { s: blankPayload.stale, u: blankPayload.unconfirmed })
+  const dropped = await drive(() => ({ file: '.github/workflows/ci.yml', refuted: true, reasoning: 'deliberate', missingFromHead: '' }))
   check('a live refutation still drops the suspicion',
     !!dropped && dropped.stale.length === 0 && dropped.refuted.length === 1 && dropped.unconfirmed.length === 0,
     dropped && { s: dropped.stale, r: dropped.refuted, u: dropped.unconfirmed })
@@ -1004,6 +1022,23 @@ const threw = async (args) => {
   const r4 = await go(ARGS({ maxRounds: 1 }), repeated)
   check('re-running one command three times is not three commands',
     !!r4 && r4.lanes[0].converged === false, r4 && r4.lanes[0].converged)
+
+  // commandsRun: [""] must not converge — every entry has to be a non-empty string.
+  const blankOnly = mkAgent({
+    build: build(['cargo test -p a']),
+    verify: () => VERIFY({ commandsRun: [''], falseGreenRisk: 'none', oracleIntact: true }),
+  })
+  const r5 = await go(ARGS({ maxRounds: 1 }), blankOnly)
+  check('commandsRun of a single empty string does not converge',
+    !!r5 && r5.lanes[0].converged === false, r5 && r5.lanes[0].converged)
+
+  const blankAmong = mkAgent({
+    build: build(['cargo test -p a']),
+    verify: () => VERIFY({ commandsRun: ['cargo test -p a', ''], falseGreenRisk: 'none', oracleIntact: true }),
+  })
+  const r6 = await go(ARGS({ maxRounds: 1 }), blankAmong)
+  check('a blank entry among commandsRun fails closed even if a real command is present',
+    !!r6 && r6.lanes[0].converged === false, r6 && r6.lanes[0].converged)
 }
 
 // scout deferred a bead whose paths were ALL unusable and merely LOGGED the partial case, emitting a
@@ -1016,6 +1051,79 @@ const threw = async (args) => {
   const partial = SCOUT.match(/if \(rejected\) \{[\s\S]*?\n  \}/)
   check('the partial-rejection branch stops the bead being placed',
     !!partial && /continue/.test(partial[0]), partial && partial[0].slice(0, 120))
+
+  // Unverified dependency edges must be dropped, not kept via the stored fallback.
+  check('scout drops edges with no verification verdict (fail closed)',
+    /if \(!v\) \{ unverifiedEdges\.push\(e\); continue \}/.test(SCOUT)
+      && /UNVERIFIED EDGES ARE NOT KEPT/.test(SCOUT))
+  check('scout no longer advertises fanoutArgs as feed-straight-into lane-fanout',
+    /fanoutPlan:/.test(SCOUT) && /status: 'incomplete'/.test(SCOUT) && !/Feed straight into lane-fanout/.test(SCOUT))
+  check('scout fanoutPlan is explicitly incomplete for lane-fanout',
+    /missing tip and per-lane wt\/brief\/accept/.test(SCOUT))
+}
+
+// backlog-audit must not treat a partial crate census as complete coverage.
+{
+  const AUDIT = fs.readFileSync(path.join(HERE, 'backlog-audit.js'), 'utf8')
+  const omitSrc = AUDIT.match(/function cratesOmittedFromCensus\([\s\S]*?\n\}/)
+  check('backlog-audit exposes cratesOmittedFromCensus to the preflight', !!omitSrc)
+  if (omitSrc) {
+    const cratesOmittedFromCensus = new Function(`${omitSrc[0]}; return cratesOmittedFromCensus`)()
+    check('a census that omits an on-disk crate is incomplete',
+      cratesOmittedFromCensus(['identity', 'brand-new'], ['identity']).join(',') === 'brand-new')
+    check('a census parent prefix still covers nested crates',
+      cratesOmittedFromCensus(['identity/domain', 'identity/rest'], ['identity']).length === 0)
+  }
+}
+
+// Contract-drift: string literals must not invent HTTP methods; OpenAPI path keys may contain ':'.
+{
+  const driftPath = path.join(HERE, '..', '..', 'scripts', 'check-platform-contract-drift.mjs')
+  const driftSrc = fs.readFileSync(driftPath, 'utf8')
+  check('contract-drift masks string literals before method discovery',
+    /function maskStringLiterals/.test(driftSrc) && /maskStringLiterals\(methodExpression\)/.test(driftSrc))
+  check('contract-drift OpenAPI path keys allow colons inside the path',
+    driftSrc.includes('trimmedRight.match(/^ {2}(\\/.+):$/)')
+      || driftSrc.includes('trimmedRight.match(/^ {2}(/.+):$/)')
+      || /\\\/\.+\):\$/.test(driftSrc))
+  check('contract-drift refuses nonlocal resolution of generic PATH names',
+    /refusing nonlocal resolution for a generic name/.test(driftSrc))
+
+  const maskSrc = driftSrc.match(/function maskStringLiterals\([\s\S]*?\n\}/)
+  if (maskSrc) {
+    const maskStringLiterals = new Function(`${maskSrc[0]}; return maskStringLiterals`)()
+    const methodConstructor = /\b(get|put|post|delete|options|head|patch|trace)\s*\(/g
+    const expr = 'get(handler).layer(/* "documentation says get() here" */)'
+    // Simulate a string that would false-positive without masking:
+    const withProse = 'get(handler_with_doc("documentation says get() here"))'
+    const rawHits = [...withProse.matchAll(methodConstructor)].map((m) => m[1])
+    const maskedHits = [...maskStringLiterals(withProse).matchAll(methodConstructor)].map((m) => m[1])
+    check('prose get() inside a string is a raw false-positive before masking',
+      rawHits.includes('get') && rawHits.length >= 2, rawHits)
+    check('masking string literals drops the prose get() false-positive',
+      maskedHits.length === 1 && maskedHits[0] === 'get', maskedHits)
+
+    const openApiSrc = driftSrc.match(/function openApiApiOperations\([\s\S]*?\n\}/)
+    check('openApiApiOperations is extractable', !!openApiSrc)
+    if (openApiSrc) {
+      const helpers = driftSrc.match(/function operationKey\([\s\S]*?\n\}\n\nfunction normalizePathParameters\([\s\S]*?\n\}/)
+      const openApiApiOperations = new Function(
+        `const httpMethodSet = new Set(['get','put','post','delete','options','head','patch','trace']);\n`
+        + `${helpers ? helpers[0] : 'function operationKey(m,p){return m.toUpperCase()+\" \"+p} function normalizePathParameters(p){return p}'};\n`
+        + `${openApiSrc[0]}; return openApiApiOperations`,
+      )()
+      const ops = openApiApiOperations([
+        'paths:',
+        '  /api/jobs:run:',
+        '    post:',
+        '      summary: run',
+        '  /api/plain:',
+        '    get:',
+      ].join('\n'))
+      check('OpenAPI path keys with a colon are accepted',
+        ops.has('POST /api/jobs:run') && ops.has('GET /api/plain'), [...ops])
+    }
+  }
 }
 
 console.log(failures ? `\n${failures} FAILURE(S) — do not dispatch` : '\nALL PASS — safe to dispatch')

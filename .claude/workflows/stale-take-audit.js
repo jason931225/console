@@ -127,14 +127,32 @@ const confirmed = await parallel(suspect.map((s) => () =>
 
 CLAIM: ${MAIN} contains content that HEAD dropped by reversion, in ${s.file}.
 EVIDENCE OFFERED: ${s.evidence}
+MISSING-FROM-HEAD PAYLOAD OFFERED (graft candidate):
+${s.missingFromHead || '(none supplied by first pass)'}
 
 ${RULES}
 
 Refute it if: the content is absent from HEAD deliberately (it is the branch's stated deliverable),
 or main's version is not actually newer, or the lines quoted do not exist as claimed. Run the diffs
-yourself rather than trusting the quote.`,
+yourself rather than trusting the quote.
+
+If you uphold STALE (refuted=false), you MUST return missingFromHead as the exact graft payload you
+attest after re-reading the diffs — not the first agent's quote copied unseen. An upheld STALE
+without that payload is unresolved, not confirmed.`,
     {
-      schema: { type: 'object', required: ['file', 'refuted', 'reasoning'], properties: { file: { type: 'string' }, refuted: { type: 'boolean' }, reasoning: { type: 'string' } } },
+      schema: {
+        type: 'object',
+        required: ['file', 'refuted', 'reasoning', 'missingFromHead'],
+        properties: {
+          file: { type: 'string' },
+          refuted: { type: 'boolean' },
+          reasoning: { type: 'string' },
+          missingFromHead: {
+            type: 'string',
+            description: 'When refuted=false: the exact content to graft, attested by THIS pass. When refuted=true: empty string.',
+          },
+        },
+      },
       label: `confirm:${s.file.split('/').pop()}`, phase: 'Confirm',
     },
   // `v && v.refuted` yields NULL for a dead agent, and null is neither `=== false` nor truthy -- so
@@ -142,15 +160,29 @@ yourself rather than trusting the quote.`,
   // said "full coverage". `typeof === 'boolean'` is used rather than a null check because the schema
   // is a request to the model, not an enforcement: an agent that returns an object without `refuted`
   // must land in the same unresolved bucket as one that never returned at all.
-  ).then((v) => ({ ...s, refuted: v ? v.refuted : null, refutation: v ? v.reasoning : null }))))
+  ).then((v) => ({
+    ...s,
+    refuted: v ? v.refuted : null,
+    refutation: v ? v.reasoning : null,
+    confirmedMissing: v && typeof v.missingFromHead === 'string' ? v.missingFromHead : null,
+  }))))
 
 const answered = (confirmed || []).filter((c) => c && typeof c.refuted === 'boolean')
-const real = answered.filter((c) => c.refuted === false)
+// Upholding STALE without attesting the graft payload must not publish the first-pass quote.
+const real = answered.filter((c) =>
+  c.refuted === false
+  && typeof c.confirmedMissing === 'string'
+  && c.confirmedMissing.trim() !== '')
 // A suspicion whose REFUTATION never ran is still a suspicion. This file's own rule two paragraphs
 // up says a false 'stale' costs a wrong revert while a missed one costs another CI round -- but the
 // missed one here is the worse half: the reversion this workflow exists to catch is a file whose
 // un-wiring means the check that would have caught it does not run.
-const unconfirmed = suspect.filter((s) => !answered.some((c) => c.file === s.file))
+const unconfirmed = suspect.filter((s) => {
+  const a = answered.find((c) => c.file === s.file)
+  if (!a) return true
+  if (a.refuted === false && !(typeof a.confirmedMissing === 'string' && a.confirmedMissing.trim())) return true
+  return false
+})
 if (unconfirmed.length) {
   log(`!! ${unconfirmed.length} confirmation(s) never returned — those files are UNRESOLVED, not clean`)
   for (const u of unconfirmed) log(`   ${u.file}`)
@@ -162,7 +194,7 @@ return {
     unconfirmed.length ? `${unconfirmed.length} suspected file(s) UNRESOLVED — their confirmation never returned` : null,
     dead || unconfirmed.length ? `${dead} audit batch(es) died — coverage INCOMPLETE` : 'full coverage',
   ].filter(Boolean),
-  stale: real.map((r) => ({ file: r.file, missingFromHead: r.missingFromHead, wouldBreak: r.wouldBreak, evidence: r.evidence })),
+  stale: real.map((r) => ({ file: r.file, missingFromHead: r.confirmedMissing, wouldBreak: r.wouldBreak, evidence: r.evidence })),
   // Carried at top level with their audit evidence, so an operator sees the accusation rather than
   // having to notice that a count did not add up.
   unconfirmed: unconfirmed.map((u) => ({ file: u.file, evidence: u.evidence, missingFromHead: u.missingFromHead, wouldBreak: u.wouldBreak })),

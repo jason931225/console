@@ -1,7 +1,7 @@
 export const meta = {
   name: 'scout',
-  description: 'Read-only: census the backlog, verify its dependency edges by re-deriving them, compute the critical path in-script, and emit a fan-out plan whose lanes provably cannot collide',
-  whenToUse: 'Before a fan-out, when you need to know WHAT to parallelise and in WHICH order. Produces the args for lane-fanout. Never edits code, never opens a PR.',
+  description: 'Read-only: census the backlog, verify its dependency edges by re-deriving them, compute the critical path in-script, and emit an incomplete fan-out plan (beads + owned roots) whose lanes provably cannot collide',
+  whenToUse: 'Before a fan-out, when you need to know WHAT to parallelise and in WHICH order. Produces bead/root proposals for lane-fanout; callers must still supply tip/wt/brief/accept. Never edits code, never opens a PR.',
   phases: [
     { title: 'Census', detail: 'one agent gathers raw tracker + repo state' },
     { title: 'Verify', detail: 'fan out: is each ready item real, and is each dependency edge real?' },
@@ -289,12 +289,21 @@ if (reversed.length) {
 phase('Plan')
 
 // Corrected graph: flip what verification says is backwards, drop what is not a real dependency.
+// UNVERIFIED EDGES ARE NOT KEPT. A dead edge-verification batch used to fall through to
+// `else corrected.push(stored)`, so the plan ordered work from precisely the edges nobody
+// re-derived — including ones that point the wrong way. Fail closed: no verdict, no edge.
 const corrected = []
+const unverifiedEdges = []
 for (const e of edges) {
   const v = liveEdges.find((x) => x.from === e.from && x.to === e.to)
-  if (v && v.isRealDependency === false) continue
-  if (v && v.storedDirectionIsCorrect === false) corrected.push({ from: e.to, to: e.from })
+  if (!v) { unverifiedEdges.push(e); continue }
+  if (v.isRealDependency === false) continue
+  if (v.storedDirectionIsCorrect === false) corrected.push({ from: e.to, to: e.from })
   else corrected.push({ from: e.from, to: e.to })
+}
+if (unverifiedEdges.length) {
+  log(`!! ${unverifiedEdges.length} stored edge(s) have no verification verdict — dropped from the plan (fail closed)`)
+  for (const e of unverifiedEdges.slice(0, 12)) log(`   unverified: ${e.from} -> ${e.to}`)
 }
 
 const startable = liveReady
@@ -346,9 +355,21 @@ function normaliseRoot(raw) {
   let r = raw.trim()
   if (!r || /\s/.test(r) || /[<>`*?]/.test(r)) return null       // prose, globs, placeholders
   if (r.startsWith(REPO)) r = r.slice(REPO.length)                 // absolute -> repo-relative
-  r = r.replace(/^\/+/, '').replace(/\/[^/]*\.[A-Za-z0-9]+$/, '/') // file -> its directory
+  r = r.replace(/^\/+/, '')
+  // A trailing file becomes its directory before segment collapse, so both spellings of a
+  // directory and a file inside it reduce to the same root.
+  if (r && !r.endsWith('/')) {
+    const base = r.split('/').pop() || ''
+    if (/\.[A-Za-z0-9]+$/.test(base)) r = r.slice(0, -base.length)
+  }
+  // Canonicalise `./backend/crates/foo/` and `backend/crates/foo/` to the same root. Without
+  // this, overlaps treats them as disjoint and the packer can put one directory in two lanes.
+  const parts = r.split('/').filter((seg) => seg && seg !== '.')
+  if (parts.includes('..')) return null
+  r = parts.join('/')
+  if (!r) return null
   if (!r.endsWith('/')) r += '/'
-  if (r === '/' || r === './') return null
+  if (r === '/') return null
   if (r.split('/').filter(Boolean).length < MIN_ROOT_SEGMENTS) return null  // "backend/" is the repo
   return r
 }
@@ -447,7 +468,17 @@ return {
   reversedEdges: reversed,
   alreadyDone: doneAlready,
   deferred,
-  // Feed straight into lane-fanout. Briefs are deliberately NOT written here: a scout that writes
-  // the brief has decided the implementation, and it has read none of the code it would be deciding.
-  fanoutArgs: { integrationBranch: integration, land: true, lanes: lanes.map((l) => ({ key: l.key, bead: l.beads.join(' '), owned: l.roots.join(' ') })) },
+  unverifiedEdges,
+  // INCOMPLETE for lane-fanout. A prior revision advertised this as `fanoutArgs` that could be
+  // "fed straight into lane-fanout", but every nonempty plan aborted: lane-fanout requires tip and
+  // per-lane wt/brief/accept, which a read-only scout must not invent. Briefs especially: writing
+  // them here would decide the implementation without reading the code. Callers must supply the
+  // missing fields before dispatch.
+  fanoutPlan: {
+    status: 'incomplete',
+    reason: 'missing tip and per-lane wt/brief/accept — scout only proposes beads and owned roots',
+    integrationBranch: integration,
+    land: true,
+    lanes: lanes.map((l) => ({ key: l.key, bead: l.beads.join(' '), owned: l.roots.join(' ') })),
+  },
 }

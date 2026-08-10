@@ -167,13 +167,31 @@ function backendRouteOperations(routeSourceFiles) {
           `${sourcePath}: route path constant ${name} is declared with different values in more than one crate and is not declared here; resolving it would guess`,
         );
       }
-      return globalConstants.get(name);
+      const global = globalConstants.get(name);
+      if (global === undefined) {
+        return undefined;
+      }
+      // Generic names like PATH are reused across modules with unrelated meanings. A
+      // repo-wide fallback that finds one declaration will bind every nonlocal
+      // `PATH` to it, inventing or missing /api/ operations. Fail closed: refuse
+      // nonlocal resolution for names that are not distinctive.
+      if (/^(path|route|api_?path|base_?path|prefix)$/i.test(name)) {
+        throw new Error(
+          `${sourcePath}: route path constant ${name} is not declared in this file; refusing nonlocal resolution for a generic name`,
+        );
+      }
+      return global;
     };
 
     let registered = 0;
     const record = (routePath, methodExpression) => {
+      // Method discovery must not see prose inside string literals. A handler body or
+      // comment-turned-string that says `documentation says get() here` would otherwise
+      // invent a GET (or any other verb) that the router never registered.
       const methods = new Set(
-        [...methodExpression.matchAll(methodConstructor)].map((match) => match[1]),
+        [...maskStringLiterals(methodExpression).matchAll(methodConstructor)].map(
+          (match) => match[1],
+        ),
       );
       if (methods.size === 0) {
         throw new Error(`${sourcePath}: route ${routePath} has no recognized HTTP method`);
@@ -265,6 +283,12 @@ function routeTableEntries(source, resolvePath) {
     entries.push([routePath, balancedExpression(source, methodStart)]);
   }
   return entries;
+}
+
+function maskStringLiterals(expression) {
+  return expression
+    .replace(/"(?:\\.|[^"\\])*"/g, '""')
+    .replace(/'(?:\\.|[^'\\])*'/g, "''");
 }
 
 function balancedExpression(source, start) {
@@ -438,7 +462,7 @@ function openApiApiOperations(yaml) {
     if (trimmedRight === "") {
       continue;
     }
-    const pathMatch = trimmedRight.match(/^ {2}(\/[^:]*):$/);
+    const pathMatch = trimmedRight.match(/^ {2}(\/.+):$/);
     if (pathMatch) {
       currentPath = pathMatch[1];
       continue;

@@ -854,14 +854,22 @@ async function runLane(l) {
     // and contradictsClaim=false the lane converged while four suites were never independently run.
     // "Some of it was re-run" is not independent verification of a green; it is a sample of one.
     const claimedCommands = Array.isArray(fix.commands) ? fix.commands.filter((c) => typeof c === 'string' && c.trim()) : []
-    const ranCommands = (verify && Array.isArray(verify.commandsRun) ? verify.commandsRun : [])
-      .filter((c) => typeof c === 'string' && c.trim())
+    // Every commandsRun entry must be a non-empty string. Filtering blanks used to turn
+    // `commandsRun: [""]` (or `["cargo test", ""]`) into a quieter shape and let a hollow list
+    // look like "no commands named" rather than "the verifier answered with nothing". Fail closed:
+    // any blank or non-string entry means the verifier did not answer for what it ran.
+    const rawRan = verify && Array.isArray(verify.commandsRun) ? verify.commandsRun : []
+    const commandsRunWellFormed = rawRan.length > 0
+      && rawRan.every((c) => typeof c === 'string' && c.trim() !== '')
+    const ranCommands = commandsRunWellFormed ? rawRan.map((c) => c.trim()) : []
     // Compared as a SET over normalised text rather than by count, because a verifier that ran the
-    // same command five times would satisfy a count and prove nothing.
+    // same command five times would satisfy a count and prove nothing. Coverage is against EVERY
+    // claimed command, not merely "ran at least one".
     const norm = (c) => c.replace(/\s+/g, ' ').trim()
     const ranSet = new Set(ranCommands.map(norm))
     const unrun = claimedCommands.filter((c) => !ranSet.has(norm(c)))
     const verifierAnswered = !!verify
+      && commandsRunWellFormed
       && ranCommands.length > 0
       // An implementer that claimed no commands cannot be audited by this rule; the standing lenses
       // and the rebuild loop are what catch that, and `redBaseline` is required separately.

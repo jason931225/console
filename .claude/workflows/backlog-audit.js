@@ -267,6 +267,46 @@ if (crateNames.length < crateEntries.length || !crateNames.length) {
     'under backend/crates with a `name`.',
   )
 }
+// THE CENSUS CAN OMIT A CRATE AND STILL LOOK WELL-FORMED. A partial list whose every entry has a
+// name satisfies the guard above while the omitted crate receives no audit lane. The tree is the
+// independent oracle: every Cargo.toml under backend/crates must be covered by the census names
+// (exact match or census parent prefix). When the checkout has no such tree (offline fixtures),
+// the check is skipped rather than inventing coverage.
+function cratesOmittedFromCensus(onDiskNames, censusNames) {
+  return onDiskNames.filter((c) => !censusNames.some((n) => c === n || c.startsWith(`${n}/`)))
+}
+function listCargoCrateNames(cratesRoot, fsApi) {
+  const out = []
+  const walk = (dir, rel) => {
+    let entries
+    try { entries = fsApi.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    if (rel && fsApi.existsSync(`${dir}/Cargo.toml`)) out.push(rel.replace(/\\/g, '/'))
+    for (const ent of entries) {
+      if (!ent.isDirectory() || ent.name === 'target' || ent.name.startsWith('.')) continue
+      walk(`${dir}/${ent.name}`, rel ? `${rel}/${ent.name}` : ent.name)
+    }
+  }
+  walk(cratesRoot, '')
+  return out.sort()
+}
+{
+  const cratesRoot = `${REPO.replace(/\/+$/, '')}/backend/crates`
+  let onDisk = []
+  try {
+    const fsApi = await import('node:fs')
+    if (fsApi.existsSync(cratesRoot)) onDisk = listCargoCrateNames(cratesRoot, fsApi)
+  } catch (e) {
+    throw new Error(`backlog-audit: could not read crate tree at ${cratesRoot}: ${e.message}`)
+  }
+  const omitted = cratesOmittedFromCensus(onDisk, crateNames)
+  if (onDisk.length && omitted.length) {
+    throw new Error(
+      `backlog-audit: the census omitted ${omitted.length} crate(s) present under backend/crates ` +
+      `(${onDisk.length} on disk, ${crateNames.length} named). Omitted: ${omitted.slice(0, 20).join(', ')}` +
+      `${omitted.length > 20 ? ', ...' : ''}. Re-run Collect so every Cargo.toml is named.`,
+    )
+  }
+}
 const claimed = (crate) => BASE_DOMAINS.some((d) => (d.crates || []).some((c) => crate === c || crate.startsWith(`${c}/`)))
 const uncovered = [...new Set(crateNames.filter((c) => !claimed(c)))].sort()
 const DOMAINS = uncovered.length
