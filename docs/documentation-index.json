@@ -3605,7 +3605,7 @@
     },
     {
       "path": "docs/program/ledger/2026-08-10-batch-b-h3e-avb-micro-train.md",
-      "blob_sha": "6cb04edeeee285ee1563979dc8a56b3a8953081d",
+      "blob_sha": "d0edcd75f3ee9b3e0f0d48e3c351f794bcce6c49",
       "class": "evidence",
       "owner": "repository maintainers",
       "status": "frozen",
