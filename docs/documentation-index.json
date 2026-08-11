@@ -4412,6 +4412,12 @@
       "retention": "retain",
       "blob_sha": "091f608ce2f417ce4efdea5b5a2d077e5a8ea651",
       "archive_tag": null
+    },
+    {
+      "path": "docs/program/ledger/2026-08-11-wave3-7sx-xxp-admit.md",
+      "blob_sha": "1fbd58bd5d682de25b3c0b838c892989b18ae63e",
+      "class": "evidence",
+      "owner": "repository maintainers"
     }
   ]
 }
