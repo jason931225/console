@@ -196,6 +196,10 @@ const domainUnitPackages = [
   // through. Pure #[test], no database; its lib binary executed nowhere until
   // the gate was wired.
   "console-ontology-canonical-domain",
+  // avb CanonicalPortError port_error_kind pins (company + employment). Pure
+  // #[test], no database; lib binaries darkened until wired into domain-unit.
+  "console-ontology-canonical-adapter-postgres",
+  "console-orgchange-adapter-postgres",
   // The writer-ownership gate's own lib. Cargo and not the Buck2 mutation-suite
   // step: its integration suite reads the real checkout, so the whole crate
   // stays in one job rather than being split across two build systems.
