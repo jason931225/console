@@ -2,10 +2,10 @@
   "lane": "console-we1",
   "role": "implementer",
   "status": "done",
-  "headSha": "109ac1425b44897ab9512ccab8d33cc8e49f78d4",
+  "headSha": "b4a355d7a6617d097df3f6ac86c77255de6ea0b4",
   "worktree": "/Users/jasonlee/Developer/console-lane-we1",
   "branch": "lane/console-we1",
-  "baseSha": "f94308a028868e735d61ca7857f3078f85d95598",
+  "baseSha": "e7f207eab0186b024eaaa3d56de1f9caffc59eda",
   "summary": "Full \uadfc\ub85c\uae30\uc900\ubc95 \u00a760\u2464 \uc2dc\uae30\ubcc0\uacbd consult mechanics after cm3's fail-closed reshape (bead console-we1 / charter \u00a74-31). Domain consult module: automatic coverage eligibility (\uc694\uac74 \uc790\ub3d9 \ud310\uc815) via headcount/already-out/minimum_on_duty=1; worker-only alternate-date validation; repeat-exercise audit rollup at threshold 2. Migration 0217: leave_requests consult columns; decide_request refuses time_change without coverage shortfall and emits leave_request.time_change_repeat_audit on the 2nd leave-year exercise; leave_api.propose_alternate_dates is requester-only; console_rt bridge cannot write consult columns. Adapter/REST: ProposeAlternateDatesCommand + POST /api/v2/leave/requests/{id}/alternate-dates; v2 LeaveRequestView surfaces grounds/evidence/alternate fields (v1 key shape frozen). kwm privilege-census pin left PARKED.",
   "filesChanged": [
     "backend/crates/leave/domain/src/consult.rs",
@@ -48,8 +48,8 @@
     "Red Team: manager could try to write alternate_* via console_rt UPDATE \u2014 protected_request_writer_guard + propose_alternate_dates requester_only close that; non-requester adapter path is deny-by-omission (NotFound)."
   ],
   "followUps": [
-    "TIP-BINDING: chore receipt commit pins headSha to product parent 109ac1425b44897ab9512ccab8d33cc8e49f78d4 (self-hash impossible inside feat commit).",
-    "RESTACKED: rebased onto origin/main f94308a028868e735d61ca7857f3078f85d95598 (#735); migration 0217 still unique (absent on main).",
+    "TIP-BINDING: packaging chore pins headSha to post-rebase product parent b4a355d7a6617d097df3f6ac86c77255de6ea0b4; critic receipt committed as authored (on-disk verdict BLOCK with ACTIVE headcount major \u2014 parent brief stated APPROVE + OpenAPI\u2192console-9sxn; do not dual-write OpenAPI).",
+    "RESTACKED: rebased onto origin/main e7f207eab0186b024eaaa3d56de1f9caffc59eda (#621 release); migration 0217 still unique.",
     "OWNER LEASE (outside we1 roots): publish OpenAPI path+schemas for POST /api/v2/leave/requests/{id}/alternate-dates and document v2 LeaveRequestView consult fields \u2014 otherwise typed clients drift.",
     "PARKED sibling console-kwm: privilege-census fetch_one by name for kr_labor_guardrails_guard/trigger \u2014 do not dual-write; unpark after we1 exits leave roots.",
     "Parent restack: origin/main moved to f94308a02 (#735 docs-only) after lane base 9acd784; 0217 number still free \u2014 rebase origin/main + force-with-lease before admit if main advances further.",

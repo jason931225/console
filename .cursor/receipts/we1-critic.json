@@ -11,7 +11,7 @@
   "originMainAtReview": "e7f207eab0186b024eaaa3d56de1f9caffc59eda",
   "worktree": "/Users/jasonlee/Developer/console-lane-we1",
   "branch": "lane/console-we1",
-  "reviewedCommitSubject": "feat(leave): §60⑤ consult eligibility, worker alternates, repeat audit",
+  "reviewedCommitSubject": "feat(leave): \u00a760\u2464 consult eligibility, worker alternates, repeat audit",
   "lensesApplied": [
     "ORACLE INTEGRITY",
     "PERIPHERAL DRIFT",
@@ -25,14 +25,14 @@
     "Zero-trust / defense-in-depth"
   ],
   "challenges": [
-    "Chesterton: is unfiltered employees.home_branch_id headcount an intentional total floor (any stamped roster row) rather than ACTIVE-only? Domain TimeChangeCoverageEvidence documents Active employees and sibling leave self-resolve already filters employment_status='ACTIVE' — the 0217 gate is the incomplete spelling, not a defended fence.",
-    "Red Team: EXITED peers retaining home_branch_id can inflate headcount and refuse a legitimate §60⑤ coverage shortfall among ACTIVE staff, stripping the employer proviso while the lane claims automatic 요건 판정."
+    "Chesterton: is unfiltered employees.home_branch_id headcount an intentional total floor (any stamped roster row) rather than ACTIVE-only? Domain TimeChangeCoverageEvidence documents Active employees and sibling leave self-resolve already filters employment_status='ACTIVE' \u2014 the 0217 gate is the incomplete spelling, not a defended fence.",
+    "Red Team: EXITED peers retaining home_branch_id can inflate headcount and refuse a legitimate \u00a760\u2464 coverage shortfall among ACTIVE staff, stripping the employer proviso while the lane claims automatic \uc694\uac74 \ud310\uc815."
   ],
   "findings": [
     {
       "severity": "major",
-      "claim": "0217 decide_request headcount counts every employees row with home_branch_id and never filters employment_status='ACTIVE', contradicting domain TimeChangeCoverageEvidence (Active employees) and the leave adapter's own ACTIVE filter at resolve_self_employee_identity. Tip SQL extracted from 109ac1425; hostile arithmetic on the tip gate: 1 ACTIVE + 2 EXITED → SQL projected_available=2 refuses time_change, while ACTIVE-only projected_available=0 would be eligible.",
-      "failureScenario": "Day-2 roster keeps EXITED employees stamped to the branch. A solo ACTIVE worker requests leave; manager attempts time_change for coverage shortfall; leave_decide.time_change_ineligible fires because ghost EXITED rows inflate headcount. Employer loses §60⑤ 시기변경 협의 and is forced toward approve despite real ACTIVE understaffing.",
+      "claim": "0217 decide_request headcount counts every employees row with home_branch_id and never filters employment_status='ACTIVE', contradicting domain TimeChangeCoverageEvidence (Active employees) and the leave adapter's own ACTIVE filter at resolve_self_employee_identity. Tip SQL extracted from 109ac1425; hostile arithmetic on the tip gate: 1 ACTIVE + 2 EXITED \u2192 SQL projected_available=2 refuses time_change, while ACTIVE-only projected_available=0 would be eligible.",
+      "failureScenario": "Day-2 roster keeps EXITED employees stamped to the branch. A solo ACTIVE worker requests leave; manager attempts time_change for coverage shortfall; leave_decide.time_change_ineligible fires because ghost EXITED rows inflate headcount. Employer loses \u00a760\u2464 \uc2dc\uae30\ubcc0\uacbd \ud611\uc758 and is forced toward approve despite real ACTIVE understaffing.",
       "location": "backend/crates/platform/db/migrations/0217_leave_time_change_consult_mechanics.sql:166-188 (headcount SELECT); backend/crates/leave/domain/src/consult.rs:64-66 (Active contract); contrast backend/crates/leave/adapter-postgres/src/lib.rs:583",
       "provenByExecution": true,
       "ownerLease": false
@@ -63,35 +63,39 @@
     }
   ],
   "commandsRun": [
-    "git rev-parse HEAD → 17f41000e72f1266cc130323b16741884cd8c591",
+    "git rev-parse HEAD \u2192 17f41000e72f1266cc130323b16741884cd8c591",
     "git rev-parse 109ac1425b44897ab9512ccab8d33cc8e49f78d4",
-    "git rev-parse origin/main → e7f207eab0186b024eaaa3d56de1f9caffc59eda",
+    "git rev-parse origin/main \u2192 e7f207eab0186b024eaaa3d56de1f9caffc59eda",
     "git diff --stat f94308a02..109ac1425 (9 files / +1213)",
-    "git log -1 --format=%G? 109ac1425 → G; 17f41000 → G",
-    "cargo test --manifest-path backend/Cargo.toml -p console-leave-domain --all-targets → 30/30",
-    "cargo test --manifest-path backend/Cargo.toml -p console-leave-rest --lib → 10/10",
-    "bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-rls-surfaces-as-runtime-role-pg --num-threads=1 → 14/14 incl. section_60_5_consult_mechanics_*",
-    "rg alternate-dates|time_change_grounds|alternate_start_date backend/openapi/openapi.yaml → no matches",
-    "git show 109ac1425:…/0217_….sql | headcount SELECT lacks employment_status",
-    "python3 hostile headcount arithmetic (1 ACTIVE+2 EXITED) → sql refuses / active-only allows"
+    "git log -1 --format=%G? 109ac1425 \u2192 G; 17f41000 \u2192 G",
+    "cargo test --manifest-path backend/Cargo.toml -p console-leave-domain --all-targets \u2192 30/30",
+    "cargo test --manifest-path backend/Cargo.toml -p console-leave-rest --lib \u2192 10/10",
+    "bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-rls-surfaces-as-runtime-role-pg --num-threads=1 \u2192 14/14 incl. section_60_5_consult_mechanics_*",
+    "rg alternate-dates|time_change_grounds|alternate_start_date backend/openapi/openapi.yaml \u2192 no matches",
+    "git show 109ac1425:\u2026/0217_\u2026.sql | headcount SELECT lacks employment_status",
+    "python3 hostile headcount arithmetic (1 ACTIVE+2 EXITED) \u2192 sql refuses / active-only allows"
   ],
   "standingLenses": {
     "oracleIntegrity": "Domain 30/30 and runtime-role 14/14 green on product tip contents; section_60_5_consult_mechanics_eligibility_alternate_and_repeat_audit passes; no #[ignore]/no deleted controls observed in tip diff. Oracle does not yet pin EXITED-roster inflation (blocking finding).",
-    "peripheralDrift": "Module docs/LEAVE_ROUTE_PATHS/privilege census 7→8/expand-contract comment updated in-lane. OpenAPI path+LeaveRequestV2View consult fields absent (ownerLease console-9sxn). DESIGN.md already named mechanics.",
-    "enforcementPlacement": "decide_request gates before terminal write; propose_alternate_dates requester_only + console_rt bridge null/unchanged on consult columns; privilege census equality fails if GRANT missing. Headcount subject set is wrong (EXITED included) — enforcement sees the wrong population.",
+    "peripheralDrift": "Module docs/LEAVE_ROUTE_PATHS/privilege census 7\u21928/expand-contract comment updated in-lane. OpenAPI path+LeaveRequestV2View consult fields absent (ownerLease console-9sxn). DESIGN.md already named mechanics.",
+    "enforcementPlacement": "decide_request gates before terminal write; propose_alternate_dates requester_only + console_rt bridge null/unchanged on consult columns; privilege census equality fails if GRANT missing. Headcount subject set is wrong (EXITED included) \u2014 enforcement sees the wrong population.",
     "falseGreen": "No --workflow-only; commands re-executed with non-empty counts. HTTP personas green is consistent with solo-branch eligibility under the new gate, not a bypass of ample-coverage refuse (that refuse is covered in runtime-role)."
   },
   "highRiskLenses": {
-    "redTeam": "Manager alternate → NotFound + SQL requester_only; console_rt cannot mint grounds/alternate columns; time_change without shortfall → validation. EXITED headcount inflation is the BLOCK driver.",
+    "redTeam": "Manager alternate \u2192 NotFound + SQL requester_only; console_rt cannot mint grounds/alternate columns; time_change without shortfall \u2192 validation. EXITED headcount inflation is the BLOCK driver.",
     "operability": "Repeat-audit action leave_request.time_change_repeat_audit observable; evidence JSON on row. Restack before admit. ACTIVE roster filter required for Day-2 EXITED retention.",
     "blastRadius": "Owned leave domain/application/adapter/rest + migration 0217 only; v1 LegacyLeaveRequestView key set frozen; OpenAPI/docs/** not mutated in leaf.",
     "zeroTrust": "SECURITY DEFINER decide/propose with REVOKE from PUBLIC/console_rt; GRANT EXECUTE to console_leave_cmd; assert_context + assert_manager retained from 0216."
   },
   "followUps": [
-    "BLOCK FIX (we1 roots): filter headcount to employment_status='ACTIVE'; add PG pin that EXITED home_branch peers do not inflate §60⑤ eligibility; keep examined-zero fail-closed. Class: leave.coverage-roster-status-filter.",
-    "OWNER LEASE: confirm console-9sxn for OpenAPI path+schemas (process.openapi-enum-peripheral-drift) — do not dual-write from we1.",
+    "BLOCK FIX (we1 roots): filter headcount to employment_status='ACTIVE'; add PG pin that EXITED home_branch peers do not inflate \u00a760\u2464 eligibility; keep examined-zero fail-closed. Class: leave.coverage-roster-status-filter.",
+    "OWNER LEASE: confirm console-9sxn for OpenAPI path+schemas (process.openapi-enum-peripheral-drift) \u2014 do not dual-write from we1.",
     "Parent restack before admit: rebase onto current origin/main + force-with-lease (do not gh pr update-branch).",
     "Optional: personas coverage for ineligible time_change + POST /alternate-dates."
   ],
-  "notes": "Reviewed product tip 109ac1425 (feat) with packaging tip 17f41000 (receipt tip-bind only). origin/main at e7f207eab — restack debt recorded, not restacked. Verdict BLOCK on major+proven ACTIVE headcount gap inside owned migration (supersedes any prior APPROVE that filed the same class as unproven minor). OpenAPI drift is ownerLease and does not drive BLOCK. Flow delta: BLOCK — implementer must fix ACTIVE headcount + regression pin before re-critique."
+  "notes": "Reviewed product tip 109ac1425 (feat) with packaging tip 17f41000 (receipt tip-bind only). origin/main at e7f207eab \u2014 restack debt recorded, not restacked. Verdict BLOCK on major+proven ACTIVE headcount gap inside owned migration (supersedes any prior APPROVE that filed the same class as unproven minor). OpenAPI drift is ownerLease and does not drive BLOCK. Flow delta: BLOCK \u2014 implementer must fix ACTIVE headcount + regression pin before re-critique.",
+  "reviewedProductTip": "109ac1425b44897ab9512ccab8d33cc8e49f78d4",
+  "postRebaseProductTip": "b4a355d7a6617d097df3f6ac86c77255de6ea0b4",
+  "postRebasePackagingNote": "Lane restacked onto e7f207eab; product rewrite is postRebaseProductTip. Critic evidence bound to reviewedProductTip.",
+  "baseShaAfterRestack": "e7f207eab0186b024eaaa3d56de1f9caffc59eda"
 }
