@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "notes": "Fail-closed residual register for scripts/check-prototype-chain-lookups.mjs (console-g14a). Unknown findings fail. Stale entries fail. examined-zero (scanned < SCANNED_FLOOR) fails. Shrink when call sites move to Object.hasOwn/own(); do not grow without a bead reason. Not a spelling-list fix lane — the census is the total primitive.",
+  "residuals": [
+    {
+      "file": "scripts/check-ci-preflight.mjs",
+      "kind": "optional-computed",
+      "key": "jobName",
+      "snippet": "const job = workflowModel.jobs?.[jobName];",
+      "reason": "console-i91 sweep residual — workflowModel.jobs/on maps from YAML inherit Object.prototype."
+    },
+    {
+      "file": "scripts/check-ci-preflight.mjs",
+      "kind": "optional-computed",
+      "key": "jobName",
+      "snippet": "const job = workflowModel.jobs?.[jobName];",
+      "reason": "console-i91 sweep residual — workflowModel.jobs/on maps from YAML inherit Object.prototype."
+    },
+    {
+      "file": "scripts/check-ci-preflight.mjs",
+      "kind": "optional-computed",
+      "key": "trigger",
+      "snippet": "const triggerContract = workflowModel.on?.[trigger];",
+      "reason": "console-i91 sweep residual — workflowModel.jobs/on maps from YAML inherit Object.prototype."
+    },
+    {
+      "file": "scripts/check-g007-collaboration-mobile-lifecycle.mjs",
+      "kind": "optional-computed",
+      "key": "key",
+      "snippet": "const contracts = matrix?.[key];",
+      "reason": "console-i91 sweep residual — matrix?.[key] on parsed JSON."
+    },
+    {
+      "file": "scripts/check-production-authority-blocked.mjs",
+      "kind": "in-operator",
+      "key": "key",
+      "snippet": "keys.some((key) => !(key in value))",
+      "reason": "console-i91 sweep residual — key in value on schema maps."
+    },
+    {
+      "file": "scripts/check-production-hardening.mjs",
+      "kind": "optional-computed",
+      "key": "name",
+      "snippet": "Boolean(pkg.scripts?.[name]),",
+      "reason": "console-i91 sweep residual — pkg.scripts?.[name]."
+    },
+    {
+      "file": "scripts/check-request-body-contract.mjs",
+      "kind": "optional-computed",
+      "key": "method",
+      "snippet": "const schema = document.paths?.[path]?.[method]?.requestBody?.content?.[\"application/json\"]?.schema;",
+      "reason": "console-i91 own-property sweep not yet on main; proven fail-open class for schemas/properties."
+    },
+    {
+      "file": "scripts/check-request-body-contract.mjs",
+      "kind": "optional-computed",
+      "key": "path",
+      "snippet": "const schema = document.paths?.[path]?.[method]?.requestBody?.content?.[\"application/json\"]?.schema;",
+      "reason": "console-i91 own-property sweep not yet on main; proven fail-open class for schemas/properties."
+    },
+    {
+      "file": "scripts/check-request-body-contract.mjs",
+      "kind": "optional-computed",
+      "key": "name",
+      "snippet": "return document.components?.schemas?.[name] ?? null;",
+      "reason": "console-i91 own-property sweep not yet on main; proven fail-open class for schemas/properties."
+    },
+    {
+      "file": "scripts/check-request-body-contract.mjs",
+      "kind": "undefined-compare",
+      "key": "field.name",
+      "snippet": "if (wireName(field) !== field.name && schema.properties[field.name] !== undefined) continue;",
+      "reason": "console-i91 own-property sweep not yet on main; proven fail-open class for schemas/properties."
+    },
+    {
+      "file": "scripts/console/plan-fanout.mjs",
+      "kind": "optional-computed",
+      "key": "key",
+      "snippet": "function stateText(capability, key) { return typeof capability.state?.[key] === 'string' ? capability.state[key] : ''; }",
+      "reason": "console-i91 partial sweep residual (state/receipts); eligibility optional-index closed in g14a via Object.hasOwn."
+    },
+    {
+      "file": "scripts/console/plan-fanout.mjs",
+      "kind": "optional-computed",
+      "key": "lane.laneId",
+      "snippet": "const receipt = attestations.receipts?.[lane.laneId];",
+      "reason": "console-i91 partial sweep residual (state/receipts); eligibility optional-index closed in g14a via Object.hasOwn."
+    },
+    {
+      "file": "scripts/console/run-verification-queue.mjs",
+      "kind": "undefined-compare",
+      "key": "key",
+      "snippet": "if (FORBIDDEN_WRAPPER_ENV.some((key) => process.env[key] !== undefined)) fail('wrapper-affecting environment is forbidden for compatible exact-SHA cohorts');",
+      "reason": "console-i91 sweep residual — resourceBudgets?.[key]."
+    },
+    {
+      "file": "scripts/console/run-verification-queue.mjs",
+      "kind": "optional-computed",
+      "key": "key",
+      "snippet": "const available = () => Object.fromEntries(RESOURCE_KEYS.map((key) => [key, resourceBudgets?.[key] ?? Number.MAX_SAFE_INTEGER]));",
+      "reason": "console-i91 sweep residual — resourceBudgets?.[key]."
+    },
+    {
+      "file": "scripts/console/simulate-main-gate.mjs",
+      "kind": "undefined-compare",
+      "key": "key",
+      "snippet": "for (const key of SAFE) if (source[key] !== undefined) environment[key] = source[key];",
+      "reason": "Trusted SAFE key allowlist today; still untrusted-keyed !== undefined shape — residual until own-property."
+    },
+    {
+      "file": "scripts/console/validate-console-truth-ledger.mjs",
+      "kind": "optional-computed",
+      "key": "area",
+      "snippet": "for (const area of ['identity_scope', 'object_action_workflow', 'search', 'audit_lineage', 'interoperability']) nonempty(omni.required_outcomes?.[area], `shared omni-platform gate ${area}`);",
+      "reason": "console-i91 sweep residual — facts/route maps."
+    },
+    {
+      "file": "scripts/console/validate-console-truth-ledger.mjs",
+      "kind": "optional-computed",
+      "key": "key",
+      "snippet": "if (routeFacts) for (const key of route.route_keys) { const fact=routeFacts.facts?.[key]; if (!fact || ROUTE_CLAIM_FIELDS.some((field)=>fact[field]!==route[field])) fail(`${cap.id} route source fact mismatch for ${key}`); }",
+      "reason": "console-i91 sweep residual — facts/route maps."
+    },
+    {
+      "file": "scripts/console/verify-console-pr-authority-bootstrap.mjs",
+      "kind": "undefined-compare",
+      "key": "key",
+      "snippet": "for (const key of SAFE_ENVIRONMENT_KEYS) if (source[key] !== undefined) environment[key] = source[key];",
+      "reason": "Trusted SAFE_ENVIRONMENT_KEYS today; residual until own-property."
+    }
+  ]
+}

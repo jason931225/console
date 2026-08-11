@@ -1,0 +1,65 @@
+{
+  "status": "done",
+  "laneId": "console-g14a",
+  "bead": "console-g14a (P2): prototype-chain census \u2014 mechanical fail-closed scan for untrusted-keyed lookups under scripts/",
+  "headSha": "5f57bdbaec6c4ddff7a5db949c54081fc9bdcab5",
+  "branch": "lane/console-g14a",
+  "worktree": "/Users/jasonlee/Developer/console/.worktrees/lane-console-g14a",
+  "summary": "Shipped scripts/check-prototype-chain-lookups.mjs as the total primitive for the i91.1 residual: fail-closed census over scripts/check-*.mjs + scripts/console/** for optional-computed / undefined-compare / in-operator untrusted-keyed lookups, with named residual register, scanned-floor examined-zero fail, and fixture RED controls. Closed plan-fanout runtimeLaneEligibility / runtimeConsolidationEligibility optional-index via Object.hasOwn (critic-named residual). Did not re-open an i91 spelling-list sweep; residuals stay registered until i91 lands or a shrink follow-up. CI rides check:request-body-contract (package.json) so the suite is exact-wired without a new repo-gates step.",
+  "filesChanged": [
+    "scripts/check-prototype-chain-lookups.mjs",
+    "scripts/check-prototype-chain-lookups.test.mjs",
+    "scripts/prototype-chain-lookup-baseline.json",
+    "scripts/console/plan-fanout.mjs",
+    "package.json",
+    ".cursor/receipts/g14a.json"
+  ],
+  "redBaseline": "Before baseline existed: node scripts/check-prototype-chain-lookups.mjs exited 1 (missing register + unknown findings on tip f94308a02). Fixture RED: map?.[key] + properties[key] !== undefined \u2192 2 unknown findings. Hostile probe: git-added scripts/check-hostile-proto-probe.mjs with m?.[k] \u2192 exit 1 unknown=1. plan-fanout eligibility residual observed via rg runtimeLaneEligibility?.\\[ on tip before Object.hasOwn fix.",
+  "verification": "GREEN on lane tip: (a) node --test scripts/check-prototype-chain-lookups.test.mjs \u2192 9/9; (b) node scripts/check-prototype-chain-lookups.mjs \u2192 scanned 51, residuals 18, findings 18; (c) node --test scripts/console/plan-fanout.test.mjs \u2192 29/29; (d) signing via git commit -S \u2192 %G?=G. Eligibility optional-index absent from census findings after fix.",
+  "commands": [
+    "bash /Users/jasonlee/Developer/console/scripts/cursor/provision-lane-worktree.sh console-g14a",
+    "echo 'g14a signing smoke' | git commit-tree HEAD^{tree} -S -p HEAD -m 'g14a signing smoke' \u2192 %G?=G",
+    "node scripts/check-prototype-chain-lookups.mjs (no baseline) \u2192 exit 1 FAIL",
+    "hostile probe m?.[k] \u2192 exit 1 unknown=1",
+    "node --test scripts/check-prototype-chain-lookups.test.mjs \u2192 9/9",
+    "node scripts/check-prototype-chain-lookups.mjs \u2192 pass scanned 51",
+    "node --test scripts/console/plan-fanout.test.mjs \u2192 29/29",
+    "node /Users/jasonlee/Developer/console/scripts/cursor/validate-lane-receipt.mjs .cursor/receipts/g14a.json"
+  ],
+  "contractBreaches": "none",
+  "enforcementPlacement": "WHERE: scripts/check-prototype-chain-lookups.mjs runs in CI via package.json check:request-body-contract (repo-gates already executes that npm script). SUBJECT EXISTS: git-ls-files subjects under scripts/check-*.mjs + scripts/console/** at gate runtime; optional-computed / undefined-compare / in-operator matches are source text. FINEST DISTINCTION: non-literal computed keys vs literal keys; residual register is id(file|kind|key|snippet) not a key spelling list. EXAMINED-ZERO FAILS: scanned < SCANNED_FLOOR (45) exits 1; fixture asserts belowFloor on empty subject set; unknown findings and stale residuals also exit 1.",
+  "peripheralsUpdated": "package.json: extended check:request-body-contract to run the new suite+gate; added check:prototype-chain-lookups alias. Module header on check-prototype-chain-lookups.mjs documents class + i91.1 provenance. Baseline register scripts/prototype-chain-lookup-baseline.json names 18 residuals. plan-fanout eligibility sites documented inline. Did not edit docs/CI-GATES.md (script name check:request-body-contract unchanged as CI entry). Did not touch check-openapi-refs.mjs (ann leaf).",
+  "lensesApplied": {
+    "cartesianDoubt": "Separated census (mechanical inventory) from call-site sweep (i91); eligibility polarity is fail-closed noise, still closed because it is the same lookup class.",
+    "essentialism": "One census gate + named register instead of a third spelling-list patch round on i91.",
+    "chesterton": "Kept residual register rather than forcing own() across all 18 sites on a tip where i91 product is not yet merged.",
+    "redTeam": "Hostile probe file + fixture RED proved unknown findings fail; regex-literal false positive for in-operator was closed.",
+    "operability": "CI wiring piggybacks existing request-body npm script so reachability/dark-suite ratchets stay green without a new unlocked repo-gates step."
+  },
+  "claims": {
+    "E-observed": [
+      "Census RED without baseline / with hostile probe; GREEN with register on 51 subjects",
+      "plan-fanout tests 29/29 after Object.hasOwn eligibility fix",
+      "Signing smoke commit-tree -S \u2192 G"
+    ],
+    "I-inferred": [
+      "Piggybacking check:request-body-contract is sufficient CI placement because repo-gates already locks that npm script name",
+      "i91 landing will make several residuals stale and force register shrink (fail-closed)"
+    ],
+    "U-uncertain": [
+      "Whether process.env[key] !== undefined residuals should be carved out as a separate env class later"
+    ]
+  },
+  "challenges": [
+    "Brief asked for sibling worktree /Users/jasonlee/Developer/console-lane-g14a; git-lock-enforcer denies siblings \u2014 used allowlisted .worktrees/lane-console-g14a instead (CAPTURE\u2192ELEVATE for brief/SSOT path drift).",
+    "Chesterton on shipping a residual register: an empty-register tip would force the whole i91 spelling sweep into this lane and recreate the treadmill the bead forbids; register+stale-fail is the total primitive.",
+    "Contrarian on new repo-gates step: a new unlocked step is false coverage; extending the already-locked request-body npm script body keeps enforcement on a protected CI edge."
+  ],
+  "followUps": [
+    "ELEVATE: parent brief path ../console-lane-g14a is hook-denied; update SSOT briefs to scripts/cursor/provision-lane-worktree.sh / .worktrees/.",
+    "Integrator: when console-i91 merges, re-run census and shrink scripts/prototype-chain-lookup-baseline.json (stale residuals will fail closed).",
+    "Optional: lock a dedicated repo-gates step for check:prototype-chain-lookups (needs ci.yml + check-ci-preflight ordered contract) \u2014 not required while request-body script body invokes it.",
+    "bd close console-g14a on merge; hub .beads is shared."
+  ],
+  "flowDelta": "leaf ready to admit: census gate + plan-fanout eligibility Object.hasOwn on lane/console-g14a; no #622 admit from this lane"
+}
