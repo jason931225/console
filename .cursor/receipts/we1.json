@@ -2,7 +2,7 @@
   "lane": "console-we1",
   "role": "implementer",
   "status": "done",
-  "headSha": "c34f842c50f3c1187e98c5aa27e4510b01ade8fd",
+  "headSha": "109ac1425b44897ab9512ccab8d33cc8e49f78d4",
   "worktree": "/Users/jasonlee/Developer/console-lane-we1",
   "branch": "lane/console-we1",
   "baseSha": "f94308a028868e735d61ca7857f3078f85d95598",
@@ -48,6 +48,7 @@
     "Red Team: manager could try to write alternate_* via console_rt UPDATE \u2014 protected_request_writer_guard + propose_alternate_dates requester_only close that; non-requester adapter path is deny-by-omission (NotFound)."
   ],
   "followUps": [
+    "TIP-BINDING: chore receipt commit pins headSha to product parent 109ac1425b44897ab9512ccab8d33cc8e49f78d4 (self-hash impossible inside feat commit).",
     "RESTACKED: rebased onto origin/main f94308a028868e735d61ca7857f3078f85d95598 (#735); migration 0217 still unique (absent on main).",
     "OWNER LEASE (outside we1 roots): publish OpenAPI path+schemas for POST /api/v2/leave/requests/{id}/alternate-dates and document v2 LeaveRequestView consult fields \u2014 otherwise typed clients drift.",
     "PARKED sibling console-kwm: privilege-census fetch_one by name for kr_labor_guardrails_guard/trigger \u2014 do not dual-write; unpark after we1 exits leave roots.",
