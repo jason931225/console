@@ -10,7 +10,9 @@ export_file(
 
 rust_library(
     name = "console-orgchange-adapter-postgres",
-    mapped_srcs = repo_mapped_srcs("backend/crates/orgchange/adapter-postgres", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/orgchange/adapter-postgres", glob(["src/**/*.rs"]), external = {
+        "//backend/crates/ontology/canonical-adapter-postgres:crate-source-tree": "backend/crates/ontology/canonical-adapter-postgres/src",
+    }),
     crate = "console_orgchange_adapter_postgres",
     edition = "2024",
     crate_root = "backend/crates/orgchange/adapter-postgres/src/lib.rs",
@@ -19,7 +21,6 @@ rust_library(
     deps = [
         "//backend/crates/governance/domain:console-governance-domain",
         "//backend/crates/kernel/core:console-kernel-core",
-        "//backend/crates/ontology/canonical-adapter-postgres:console-ontology-canonical-adapter-postgres",
         "//backend/crates/ontology/canonical-domain:console-ontology-canonical-domain",
         "//backend/crates/orgchange/domain:console-orgchange-domain",
         "//backend/crates/platform/db:console-platform-db",
@@ -38,7 +39,9 @@ rust_library(
 
 rust_test(
     name = "console-orgchange-adapter-postgres-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/orgchange/adapter-postgres", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/orgchange/adapter-postgres", glob(["src/**/*.rs"]), external = {
+        "//backend/crates/ontology/canonical-adapter-postgres:crate-source-tree": "backend/crates/ontology/canonical-adapter-postgres/src",
+    }),
     crate = "console_orgchange_adapter_postgres",
     edition = "2024",
     crate_root = "backend/crates/orgchange/adapter-postgres/src/lib.rs",
@@ -48,7 +51,6 @@ rust_test(
     deps = [
         "//backend/crates/governance/domain:console-governance-domain",
         "//backend/crates/kernel/core:console-kernel-core",
-        "//backend/crates/ontology/canonical-adapter-postgres:console-ontology-canonical-adapter-postgres",
         "//backend/crates/ontology/canonical-domain:console-ontology-canonical-domain",
         "//backend/crates/orgchange/domain:console-orgchange-domain",
         "//backend/crates/platform/db:console-platform-db",
@@ -79,7 +81,6 @@ rust_test(
     deps = [
         "//backend/crates/governance/domain:console-governance-domain",
         "//backend/crates/kernel/core:console-kernel-core",
-        "//backend/crates/ontology/canonical-adapter-postgres:console-ontology-canonical-adapter-postgres",
         "//backend/crates/ontology/canonical-domain:console-ontology-canonical-domain",
         "//backend/crates/orgchange/domain:console-orgchange-domain",
         "//backend/crates/platform/db:console-platform-db",
@@ -111,7 +112,6 @@ rust_test(
     deps = [
         "//backend/crates/governance/domain:console-governance-domain",
         "//backend/crates/kernel/core:console-kernel-core",
-        "//backend/crates/ontology/canonical-adapter-postgres:console-ontology-canonical-adapter-postgres",
         "//backend/crates/ontology/canonical-domain:console-ontology-canonical-domain",
         "//backend/crates/orgchange/domain:console-orgchange-domain",
         "//backend/crates/platform/db:console-platform-db",
@@ -143,7 +143,6 @@ rust_test(
     deps = [
         "//backend/crates/governance/domain:console-governance-domain",
         "//backend/crates/kernel/core:console-kernel-core",
-        "//backend/crates/ontology/canonical-adapter-postgres:console-ontology-canonical-adapter-postgres",
         "//backend/crates/ontology/canonical-domain:console-ontology-canonical-domain",
         "//backend/crates/orgchange/domain:console-orgchange-domain",
         "//backend/crates/platform/db:console-platform-db",

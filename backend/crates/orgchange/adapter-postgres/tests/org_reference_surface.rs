@@ -12,11 +12,11 @@
 //! owner-pool-only green would mask an unarmed `app.current_org` read.
 
 use console_kernel_core::{OrgId, UserId};
-use console_ontology_canonical_adapter_postgres::org_unit::{
+use console_orgchange_adapter_postgres::PgOrgChangeStore;
+use console_orgchange_adapter_postgres::org_unit_binding::{
     SOURCE_KIND_BRANCH, SOURCE_KIND_REGION, SourceBindingResolution, count_org_units_named,
     ensure_unambiguous_legacy_binding_in_tx, unambiguous_legacy_source_id,
 };
-use console_orgchange_adapter_postgres::PgOrgChangeStore;
 use console_orgchange_domain::CanonicalResolutionStatus;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;

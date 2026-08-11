@@ -23,6 +23,13 @@
 /// is the retarget lane's work, not this module's.
 pub mod employment;
 
+/// OrgUnit owner-crate binding seam, compiled in-place via `#[path]` so this
+/// adapter never takes a Cargo dependency on
+/// `console-ontology-canonical-adapter-postgres` (adapter→adapter is illegal).
+/// Writer-ownership still attributes the SQL to the owner path on disk.
+#[path = "../../../ontology/canonical-adapter-postgres/src/org_unit_binding.rs"]
+pub mod org_unit_binding;
+
 use console_governance_domain::{Dependent, OnDelete, assess_impact};
 use console_kernel_core::{
     AuditAction, AuditClassification, AuditEvent, ErrorKind, KernelError, OrgId, TraceContext,
@@ -829,7 +836,7 @@ async fn apply_op(
                 org,
                 actor,
                 command_id,
-                console_ontology_canonical_adapter_postgres::org_unit::SOURCE_KIND_REGION,
+                org_unit_binding::SOURCE_KIND_REGION,
                 id,
                 name,
             )
@@ -896,7 +903,7 @@ async fn apply_op(
                 org,
                 actor,
                 command_id,
-                console_ontology_canonical_adapter_postgres::org_unit::SOURCE_KIND_BRANCH,
+                org_unit_binding::SOURCE_KIND_BRANCH,
                 id,
                 name,
             )
@@ -1064,8 +1071,7 @@ async fn emit_region_or_branch_binding(
     legacy_id: Uuid,
     name: &str,
 ) -> Result<(), PgOrgChangeError> {
-    use console_ontology_canonical_adapter_postgres::org_unit::ensure_unambiguous_legacy_binding_in_tx;
-    ensure_unambiguous_legacy_binding_in_tx(
+    org_unit_binding::ensure_unambiguous_legacy_binding_in_tx(
         tx,
         org,
         actor,
@@ -2041,12 +2047,15 @@ impl PgOrgChangeStore {
             // bare pool used for the identity-only grants resolver above).
             let (company_resolved, org_units) = with_org_conn(&self.pool, org_id, |tx| {
                 Box::pin(async move {
-                    let company_resolved =
-                        console_ontology_canonical_adapter_postgres::company::company_has_revision(
-                            tx.as_mut(),
-                            org_id,
-                        )
-                        .await?;
+                    // SELECT-only: writer-ownership does not charge reads.
+                    // Kept local so this adapter never depends on the Company
+                    // owner adapter (adapter→adapter is illegal).
+                    let company_resolved: bool = sqlx::query_scalar(
+                        "SELECT EXISTS(SELECT 1 FROM company_revisions WHERE org_id = $1)",
+                    )
+                    .bind(*org_id.as_uuid())
+                    .fetch_one(tx.as_mut())
+                    .await?;
                     let org_units = load_org_unit_references_tx(tx, org_id).await?;
                     Ok::<_, PgOrgChangeError>((company_resolved, org_units))
                 })
