@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10
 **Kind:** authority tip ledger bound on candidate C (product tip below); jurisdiction tip T is register-only (#618 grammar)
-**Candidate (authority train):** `974ac641b2b2033ae81b7909489251f3f6f12f69` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
+**Candidate (authority train):** `8b08a171efd5cef526b5fc1d7cbbb6b9d1bc54d7` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
 **Scope:** Split train A after avb BLOCKED — critic-APPROVED leaves ugg→6n4→nuc plus serial CI lease pnb1. HOLD h3e+avb for later joint admit (hard collision on canonical-domain).
 **Not product authority.** Clears no HOLD. Makes no production, frontend, or projection claim.
 
@@ -64,7 +64,8 @@
     "avb BLOCKED — splitOptionIfAvbBlocked fires; train A = ugg→6n4→nuc→pnb1.",
     "origin/main moved 9acd784f5→f94308a02 (#735) since leaf bases; product chain restacked in in-hub admission worktree.",
     "pnb1 product commit is 5a6ad158b; tip cc99b8d46 is receipt-untrack chore — admit product only.",
-    "jth folded into ugg; close both beads on merge."
+    "jth folded into ugg; close both beads on merge.",
+    "Admit-window CI: regenerate writer-ownership BUCK for serde_json dep from ugg Cargo.toml."
   ],
   "decisions_changed_or_rejected": [
     "Rejected waiting indefinitely for avb tip under BLOCKED signal.",
