@@ -3704,6 +3704,10 @@
       "archive_tag": null
     },
     {
+      "path": "docs/program/ledger/2026-08-11-wave2-dgo1-ae5-i91-admit.md",
+      "blob_sha": "7146d083f12a9bd14f62dff8e666f25a06f56974"
+    },
+    {
       "path": "docs/program/legacy-intent-register.md",
       "class": "evidence",
       "owner": "repository maintainers",

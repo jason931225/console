@@ -66,3 +66,5 @@
 }
 ```
 <!-- REASONING-LENS-EVIDENCE:END -->
+
+**Manifest rebind:** C rebind commit after initial ledger tip adds `docs/documentation-manifest.seed.json` + `docs/documentation-index.json` for the new ledger path (forward-only; no history rewrite).
