@@ -17,7 +17,7 @@ function between(text, start, end) {
 test("employee import replay accounting is required in the OpenAPI wire contract", () => {
   const openapi = read("backend/openapi/openapi.yaml");
   for (const schema of [
-    between(openapi, "    EmployeeImportCompanySummary:\n", "    EmployeeImportColumn:\n"),
+    between(openapi, "    EmployeeImportCompanySummary:\n", "    EmployeeImportDryRunSummary:\n"),
     between(openapi, "    EmployeeImportReport:\n", "    HrOrgChartEmployee:\n"),
   ]) {
     assert.match(schema, /required:\n(?:      - [^\n]+\n)*      - skipped\n/);

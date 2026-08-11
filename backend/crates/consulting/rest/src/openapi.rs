@@ -16,10 +16,7 @@ pub const OPENAPI_FRAGMENT: Fragment = Fragment {
     external_schemas: EXTERNAL_SCHEMAS,
 };
 
-const EXTERNAL_SCHEMAS: &[&str] = &[
-    "ErrorBody",
-    "Uuid",
-];
+const EXTERNAL_SCHEMAS: &[&str] = &["ErrorBody", "Uuid"];
 
 const PATHS: &[PathItem] = &[
     PathItem {
@@ -37,66 +34,66 @@ const PATHS: &[PathItem] = &[
     },
     PathItem {
         path: "/api/v1/consulting/engagements/{engagement_id}",
-        operations: &[
-            Operation {
-                method: "get",
-                body: include_str!("../openapi/paths/api__v1__consulting__engagements__engagement_id.get.yaml"),
-            },
-        ],
+        operations: &[Operation {
+            method: "get",
+            body: include_str!(
+                "../openapi/paths/api__v1__consulting__engagements__engagement_id.get.yaml"
+            ),
+        }],
     },
     PathItem {
         path: "/api/v1/consulting/engagements/{engagement_id}/diagnostics",
-        operations: &[
-            Operation {
-                method: "post",
-                body: include_str!("../openapi/paths/api__v1__consulting__engagements__engagement_id__diagnostics.post.yaml"),
-            },
-        ],
+        operations: &[Operation {
+            method: "post",
+            body: include_str!(
+                "../openapi/paths/api__v1__consulting__engagements__engagement_id__diagnostics.post.yaml"
+            ),
+        }],
     },
     PathItem {
         path: "/api/v1/consulting/engagements/{engagement_id}/findings",
-        operations: &[
-            Operation {
-                method: "post",
-                body: include_str!("../openapi/paths/api__v1__consulting__engagements__engagement_id__findings.post.yaml"),
-            },
-        ],
+        operations: &[Operation {
+            method: "post",
+            body: include_str!(
+                "../openapi/paths/api__v1__consulting__engagements__engagement_id__findings.post.yaml"
+            ),
+        }],
     },
     PathItem {
         path: "/api/v1/consulting/engagements/{engagement_id}/history",
-        operations: &[
-            Operation {
-                method: "get",
-                body: include_str!("../openapi/paths/api__v1__consulting__engagements__engagement_id__history.get.yaml"),
-            },
-        ],
+        operations: &[Operation {
+            method: "get",
+            body: include_str!(
+                "../openapi/paths/api__v1__consulting__engagements__engagement_id__history.get.yaml"
+            ),
+        }],
     },
     PathItem {
         path: "/api/v1/consulting/engagements/{engagement_id}/initiatives",
-        operations: &[
-            Operation {
-                method: "post",
-                body: include_str!("../openapi/paths/api__v1__consulting__engagements__engagement_id__initiatives.post.yaml"),
-            },
-        ],
+        operations: &[Operation {
+            method: "post",
+            body: include_str!(
+                "../openapi/paths/api__v1__consulting__engagements__engagement_id__initiatives.post.yaml"
+            ),
+        }],
     },
     PathItem {
         path: "/api/v1/consulting/engagements/{engagement_id}/observations",
-        operations: &[
-            Operation {
-                method: "post",
-                body: include_str!("../openapi/paths/api__v1__consulting__engagements__engagement_id__observations.post.yaml"),
-            },
-        ],
+        operations: &[Operation {
+            method: "post",
+            body: include_str!(
+                "../openapi/paths/api__v1__consulting__engagements__engagement_id__observations.post.yaml"
+            ),
+        }],
     },
     PathItem {
         path: "/api/v1/consulting/engagements/{engagement_id}/transition",
-        operations: &[
-            Operation {
-                method: "post",
-                body: include_str!("../openapi/paths/api__v1__consulting__engagements__engagement_id__transition.post.yaml"),
-            },
-        ],
+        operations: &[Operation {
+            method: "post",
+            body: include_str!(
+                "../openapi/paths/api__v1__consulting__engagements__engagement_id__transition.post.yaml"
+            ),
+        }],
     },
 ];
 
