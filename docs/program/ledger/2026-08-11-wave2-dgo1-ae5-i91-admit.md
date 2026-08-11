@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-11
 **Kind:** authority tip ledger bound on candidate C (product tip below); jurisdiction tip T is register-only (#618 grammar)
-**Candidate (authority train):** `e288d290d87effecdc52f9ac1ad50dc49b4b1114` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
-**Scope:** three critic-APPROVED leaves after #621 (v0.3.4) on main `e288d290d87effecdc52f9ac1ad50dc49b4b1114` ancestry base `e7f207eab0186b024eaaa3d56de1f9caffc59eda`. we1 HOLD optional (critic stalled).
+**Candidate (authority train):** `2d72baa687030cd6360454b3c7824fdd350ea121` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time after #743 restack)
+**Scope:** three critic-APPROVED leaves after restack onto main `2d5d285135499d50d20964fd17783ba7fc9c275b` (#743 release-squash C). we1 critic APPROVE exists but is HOLD for this PR (not folded).
 **Not product authority.** Clears no HOLD beyond beads closed on merge. Makes no production tamper-evident claim for ae5 custody daemon (console-9gk).
 
 ## Summary
@@ -14,7 +14,7 @@
 
 ## Remaining HOLDs / follow-ups (not closed by this tip)
 
-- console-we1 — leave §60⑤ consult; critic receipt missing (ef1e3fb8 stalled); re-dispatch before admit
+- console-we1 — leave §60⑤ consult; critic APPROVE exists but not admitted on #742 (separate train)
 - console-9gk — custody daemon E2E / do not overclaim gh#271 closed-as-tamper-evident
 - console-g14a — i91.1 residual census
 - console-9sxn — we1 OpenAPI lease
@@ -51,23 +51,23 @@
     "Zero-trust / defense-in-depth"
   ],
   "task_fit": {
-    "Cartesian doubt": "Verified origin/main e7f207eab (#621) before cherry-pick; we1 critic transcript stalled at 2 lines — HOLD optional rather than invent APPROVE.",
-    "Essentialism / YAGNI": "Admit only path-disjoint APPROVED trio; leave we1 out until critic receipt exists.",
-    "Chesterton's Fence": "Keep #618 C=ledger+seed/index, T=jurisdiction-only grammar.",
-    "Red Team": "Path overlap check dgo.1/ae5/i91 = NONE before serial cherry-pick.",
-    "Operability / Day-2": "Ops bead console-uhlv for RELEASE_PLEASE_TOKEN; umgn residual annotated not re-landed as 621.",
-    "Blast-radius / cell-based": "Single admission WT under hub .worktrees/; no sibling checkout writes.",
-    "Zero-trust / defense-in-depth": "SSH-signed C and T; critic APPROVE receipts required for each admitted leaf."
+    "Cartesian doubt": "Restacked onto origin/main 2d5d28513 (#743) before push; product tip parent of C is 2d72baa68 (i91); we1 APPROVE exists but is out of this PR.",
+    "Essentialism / YAGNI": "Admit only path-disjoint APPROVED trio dgo.1/ae5/i91; refuse folding we1 into #742 despite critic APPROVE.",
+    "Chesterton's Fence": "Keep #618 C=ledger+seed/index, T=jurisdiction-only grammar after restack.",
+    "Red Team": "Path overlap check dgo.1/ae5/i91 = NONE; we1 leave paths remain absent from this tip.",
+    "Operability / Day-2": "Ops bead console-uhlv for RELEASE_PLEASE_TOKEN; we1 remains a separate admit after #742.",
+    "Blast-radius / cell-based": "Single admission lane checkout under hub nesting; restack via rebase onto main, never unsigned branch button.",
+    "Zero-trust / defense-in-depth": "SSH-signed C and T after restack; critic APPROVE required for each admitted leaf only."
   },
   "mandatory_lens_exceptions": {},
   "findings": [
-    "we1 HOLD optional — no we1-critic.json.",
+    "we1 critic APPROVE observed but not admitted on #742 — separate train.",
     "ae5 custody daemon E2E remains HOLD (console-9gk).",
     "Actions RELEASE_PLEASE_TOKEN tracked as console-uhlv — never commit secret."
   ],
   "decisions_changed_or_rejected": [
-    "Rejected admitting we1 without critic APPROVE receipt; HOLD optional per brief gate.",
-    "Rejected inventing we1 APPROVE from stalled critic transcript (2 lines, no receipt)."
+    "Rejected folding we1 into #742 after main #743 restack despite critic APPROVE.",
+    "Rejected inventing a four-leaf admit; keep three-leaf scope (dgo.1/ae5/i91)."
   ],
   "lens_set_changes": []
 }
