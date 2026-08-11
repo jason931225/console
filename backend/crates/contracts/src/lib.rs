@@ -670,8 +670,11 @@ fn order_paths_for_yaml_anchors<'a>(
             if definer == user {
                 continue;
             }
-            if successors.get_mut(definer).expect("definer").insert(*user) {
-                *indegree.get_mut(user).expect("user") += 1;
+            if let Some(succ_set) = successors.get_mut(definer)
+                && succ_set.insert(*user)
+                && let Some(deg) = indegree.get_mut(user)
+            {
+                *deg += 1;
             }
         }
     }
@@ -685,8 +688,13 @@ fn order_paths_for_yaml_anchors<'a>(
     while let Some(path) = ready.iter().next().copied() {
         ready.remove(&path);
         ordered.push(path);
-        for succ in successors.get(path).expect("succ set").clone() {
-            let deg = indegree.get_mut(succ).expect("succ deg");
+        let Some(succ_set) = successors.get(path) else {
+            continue;
+        };
+        for succ in succ_set.clone() {
+            let Some(deg) = indegree.get_mut(succ) else {
+                continue;
+            };
             *deg -= 1;
             if *deg == 0 {
                 ready.insert(succ);
