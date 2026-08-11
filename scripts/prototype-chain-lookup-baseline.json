@@ -1,9 +1,10 @@
 {
   "schema_version": 1,
-  "notes": "Fail-closed residual register for scripts/check-prototype-chain-lookups.mjs (console-g14a). Unknown findings fail. Stale entries fail. examined-zero (scanned < SCANNED_FLOOR) fails. Shrink when call sites move to Object.hasOwn/own(); do not grow without a bead reason. Not a spelling-list fix lane — the census is the total primitive.",
+  "notes": "Fail-closed residual register for scripts/check-prototype-chain-lookups.mjs (console-g14a). Unknown findings fail. Stale entries fail. Missing listed subjects fail closed. examined-zero fails on files actually read (scanned < SCANNED_FLOOR). findingId includes line so duplicate snippets at distinct sites stay distinct. Shrink when call sites move to Object.hasOwn/own(); do not grow without a bead reason. Not a spelling-list fix lane — the census is the total primitive.",
   "residuals": [
     {
       "file": "scripts/check-ci-preflight.mjs",
+      "line": 964,
       "kind": "optional-computed",
       "key": "jobName",
       "snippet": "const job = workflowModel.jobs?.[jobName];",
@@ -11,6 +12,7 @@
     },
     {
       "file": "scripts/check-ci-preflight.mjs",
+      "line": 1483,
       "kind": "optional-computed",
       "key": "jobName",
       "snippet": "const job = workflowModel.jobs?.[jobName];",
@@ -18,6 +20,7 @@
     },
     {
       "file": "scripts/check-ci-preflight.mjs",
+      "line": 1681,
       "kind": "optional-computed",
       "key": "trigger",
       "snippet": "const triggerContract = workflowModel.on?.[trigger];",
@@ -25,6 +28,7 @@
     },
     {
       "file": "scripts/check-g007-collaboration-mobile-lifecycle.mjs",
+      "line": 82,
       "kind": "optional-computed",
       "key": "key",
       "snippet": "const contracts = matrix?.[key];",
@@ -32,6 +36,7 @@
     },
     {
       "file": "scripts/check-production-authority-blocked.mjs",
+      "line": 261,
       "kind": "in-operator",
       "key": "key",
       "snippet": "keys.some((key) => !(key in value))",
@@ -39,6 +44,7 @@
     },
     {
       "file": "scripts/check-production-hardening.mjs",
+      "line": 85,
       "kind": "optional-computed",
       "key": "name",
       "snippet": "Boolean(pkg.scripts?.[name]),",
@@ -46,6 +52,7 @@
     },
     {
       "file": "scripts/check-request-body-contract.mjs",
+      "line": 151,
       "kind": "optional-computed",
       "key": "method",
       "snippet": "const schema = document.paths?.[path]?.[method]?.requestBody?.content?.[\"application/json\"]?.schema;",
@@ -53,6 +60,7 @@
     },
     {
       "file": "scripts/check-request-body-contract.mjs",
+      "line": 151,
       "kind": "optional-computed",
       "key": "path",
       "snippet": "const schema = document.paths?.[path]?.[method]?.requestBody?.content?.[\"application/json\"]?.schema;",
@@ -60,6 +68,7 @@
     },
     {
       "file": "scripts/check-request-body-contract.mjs",
+      "line": 155,
       "kind": "optional-computed",
       "key": "name",
       "snippet": "return document.components?.schemas?.[name] ?? null;",
@@ -67,6 +76,7 @@
     },
     {
       "file": "scripts/check-request-body-contract.mjs",
+      "line": 225,
       "kind": "undefined-compare",
       "key": "field.name",
       "snippet": "if (wireName(field) !== field.name && schema.properties[field.name] !== undefined) continue;",
@@ -74,6 +84,7 @@
     },
     {
       "file": "scripts/console/plan-fanout.mjs",
+      "line": 58,
       "kind": "optional-computed",
       "key": "key",
       "snippet": "function stateText(capability, key) { return typeof capability.state?.[key] === 'string' ? capability.state[key] : ''; }",
@@ -81,6 +92,7 @@
     },
     {
       "file": "scripts/console/plan-fanout.mjs",
+      "line": 167,
       "kind": "optional-computed",
       "key": "lane.laneId",
       "snippet": "const receipt = attestations.receipts?.[lane.laneId];",
@@ -88,6 +100,7 @@
     },
     {
       "file": "scripts/console/run-verification-queue.mjs",
+      "line": 249,
       "kind": "undefined-compare",
       "key": "key",
       "snippet": "if (FORBIDDEN_WRAPPER_ENV.some((key) => process.env[key] !== undefined)) fail('wrapper-affecting environment is forbidden for compatible exact-SHA cohorts');",
@@ -95,6 +108,7 @@
     },
     {
       "file": "scripts/console/run-verification-queue.mjs",
+      "line": 312,
       "kind": "optional-computed",
       "key": "key",
       "snippet": "const available = () => Object.fromEntries(RESOURCE_KEYS.map((key) => [key, resourceBudgets?.[key] ?? Number.MAX_SAFE_INTEGER]));",
@@ -102,6 +116,7 @@
     },
     {
       "file": "scripts/console/simulate-main-gate.mjs",
+      "line": 29,
       "kind": "undefined-compare",
       "key": "key",
       "snippet": "for (const key of SAFE) if (source[key] !== undefined) environment[key] = source[key];",
@@ -109,6 +124,7 @@
     },
     {
       "file": "scripts/console/validate-console-truth-ledger.mjs",
+      "line": 303,
       "kind": "optional-computed",
       "key": "area",
       "snippet": "for (const area of ['identity_scope', 'object_action_workflow', 'search', 'audit_lineage', 'interoperability']) nonempty(omni.required_outcomes?.[area], `shared omni-platform gate ${area}`);",
@@ -116,6 +132,7 @@
     },
     {
       "file": "scripts/console/validate-console-truth-ledger.mjs",
+      "line": 403,
       "kind": "optional-computed",
       "key": "key",
       "snippet": "if (routeFacts) for (const key of route.route_keys) { const fact=routeFacts.facts?.[key]; if (!fact || ROUTE_CLAIM_FIELDS.some((field)=>fact[field]!==route[field])) fail(`${cap.id} route source fact mismatch for ${key}`); }",
@@ -123,6 +140,7 @@
     },
     {
       "file": "scripts/console/verify-console-pr-authority-bootstrap.mjs",
+      "line": 53,
       "kind": "undefined-compare",
       "key": "key",
       "snippet": "for (const key of SAFE_ENVIRONMENT_KEYS) if (source[key] !== undefined) environment[key] = source[key];",

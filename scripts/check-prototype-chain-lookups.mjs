@@ -11,7 +11,8 @@
  *
  * Literal keys ('x', "x", `x`, 0) are out of class. A named residual register
  * (scripts/prototype-chain-lookup-baseline.json) admits known pre-sweep sites;
- * unknown findings fail, stale register entries fail, and examined-zero fails.
+ * unknown findings fail, stale register entries fail, missing listed subjects
+ * fail closed, and examined-zero fails on files actually read (not declared).
  *
  * This is the total primitive that replaces another spelling-list patch round
  * on the i91 tip. Call-site ownership for clearing residuals remains with the
@@ -150,10 +151,12 @@ function isInsideRegexLiteral(source, index) {
 }
 
 /**
- * @param {{ file: string, kind: string, key: string, snippet: string }} finding
+ * Line is required so identical snippets at distinct sites stay distinct
+ * (e.g. check-ci-preflight workflowModel.jobs?.[jobName] at two lines).
+ * @param {{ file: string, line: number, kind: string, key: string, snippet: string }} finding
  */
 export function findingId(finding) {
-  return `${finding.file}|${finding.kind}|${finding.key}|${finding.snippet}`;
+  return `${finding.file}|${finding.line}|${finding.kind}|${finding.key}|${finding.snippet}`;
 }
 
 /**
@@ -237,11 +240,18 @@ export function evaluatePrototypeChainLookups(root, options = {}) {
   const subjects = options.subjects ?? listSubjectFiles(root);
   /** @type {{ file: string, line: number, kind: string, key: string, snippet: string }[]} */
   const findings = [];
+  /** @type {string[]} */
+  const missingSubjects = [];
+  let scanned = 0;
 
   for (const file of subjects) {
     const abs = resolve(root, file);
-    if (!existsSync(abs)) continue;
+    if (!existsSync(abs)) {
+      missingSubjects.push(file);
+      continue;
+    }
     findings.push(...scanSource(readFileSync(abs, "utf8"), file));
+    scanned += 1;
   }
 
   findings.sort((a, b) =>
@@ -250,14 +260,17 @@ export function evaluatePrototypeChainLookups(root, options = {}) {
     || a.kind.localeCompare(b.kind)
     || a.key.localeCompare(b.key));
 
+  const belowFloor = scanned < SCANNED_FLOOR;
+
   if (!existsSync(baselinePath)) {
     return {
-      scanned: subjects.length,
+      scanned,
       findings,
       unknown: findings,
       stale: [],
+      missingSubjects,
       baselineMissing: true,
-      belowFloor: subjects.length < SCANNED_FLOOR,
+      belowFloor,
     };
   }
 
@@ -266,9 +279,16 @@ export function evaluatePrototypeChainLookups(root, options = {}) {
     throw new Error(`${BASELINE_REL}: schema_version must be 1 with residuals[]`);
   }
 
+  for (const entry of baseline.residuals) {
+    if (!Number.isInteger(entry.line) || entry.line < 1) {
+      throw new Error(`${BASELINE_REL}: residual for ${entry.file} requires positive integer line`);
+    }
+  }
+
   const residualIds = new Set(
     baseline.residuals.map((entry) => findingId({
       file: entry.file,
+      line: entry.line,
       kind: entry.kind,
       key: entry.key,
       snippet: entry.snippet,
@@ -280,12 +300,13 @@ export function evaluatePrototypeChainLookups(root, options = {}) {
   const stale = baseline.residuals.filter((entry) => !observedIds.has(findingId(entry)));
 
   return {
-    scanned: subjects.length,
+    scanned,
     findings,
     unknown,
     stale,
+    missingSubjects,
     baselineMissing: false,
-    belowFloor: subjects.length < SCANNED_FLOOR,
+    belowFloor,
     baselineCount: baseline.residuals.length,
   };
 }
@@ -296,6 +317,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
   if (result.baselineMissing) {
     console.error(`${BASELINE_REL}: missing (must ship with named residuals or residuals: [])`);
+  }
+  if (result.missingSubjects.length > 0) {
+    console.error(
+      `listed subject path(s) missing on disk (fail closed; scanned counts only files read): `
+        + result.missingSubjects.join(", "),
+    );
   }
   if (result.belowFloor) {
     console.error(
@@ -312,11 +339,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   for (const entry of result.stale) {
     console.error(
       `${BASELINE_REL}: stale residual no longer observed: `
-        + `${entry.file} ${entry.kind} key=${JSON.stringify(entry.key)}`,
+        + `${entry.file}:${entry.line} ${entry.kind} key=${JSON.stringify(entry.key)}`,
     );
   }
 
   const failed = result.baselineMissing
+    || result.missingSubjects.length > 0
     || result.belowFloor
     || result.unknown.length > 0
     || result.stale.length > 0;
@@ -324,6 +352,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (failed) {
     console.error(
       `prototype-chain lookup census FAILED: scanned=${result.scanned} `
+        + `missing=${result.missingSubjects.length} `
         + `findings=${result.findings.length} unknown=${result.unknown.length} `
         + `stale=${result.stale.length}`,
     );

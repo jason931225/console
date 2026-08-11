@@ -118,6 +118,7 @@ describe("prototype-chain lookup census", () => {
     const snippet = "if (map?.[key]) return map[key];";
     const residual = {
       file: "scripts/check-hostile.mjs",
+      line: 2,
       kind: "optional-computed",
       key: "key",
       snippet,
@@ -139,6 +140,7 @@ describe("prototype-chain lookup census", () => {
       "scripts/check-clean.mjs": "export const ok = true;\n",
       [BASELINE_REL]: emptyBaseline([{
         file: "scripts/check-missing.mjs",
+        line: 1,
         kind: "optional-computed",
         key: "ghost",
         snippet: "map?.[ghost]",
@@ -149,6 +151,7 @@ describe("prototype-chain lookup census", () => {
     const result = evaluatePrototypeChainLookups(root);
     assert.equal(result.stale.length, 1);
     assert.equal(result.findings.length, 0);
+    assert.deepEqual(result.missingSubjects, []);
 
     const emptyRoot = fixture({
       "README.md": "no subjects\n",
@@ -158,6 +161,30 @@ describe("prototype-chain lookup census", () => {
     assert.equal(empty.scanned, 0);
     assert.equal(empty.belowFloor, true);
     assert.ok(empty.scanned < SCANNED_FLOOR);
+  });
+
+  it("fails closed when a listed subject path is missing on disk (unread ≠ scanned)", () => {
+    const root = fixture({
+      "scripts/check-present.mjs": "export const ok = true;\n",
+      [BASELINE_REL]: emptyBaseline(),
+    });
+    const missing = Array.from(
+      { length: SCANNED_FLOOR },
+      (_, i) => `scripts/check-ghost-${i}.mjs`,
+    );
+    const result = evaluatePrototypeChainLookups(root, {
+      subjects: ["scripts/check-present.mjs", ...missing],
+    });
+    assert.equal(result.scanned, 1, "scanned counts only files actually read");
+    assert.equal(result.missingSubjects.length, SCANNED_FLOOR);
+    assert.equal(result.belowFloor, true);
+    // Critic PROOF_A inverted: declared-but-unread subjects must not clear the floor.
+    const wouldCliFail = result.baselineMissing
+      || result.missingSubjects.length > 0
+      || result.belowFloor
+      || result.unknown.length > 0
+      || result.stale.length > 0;
+    assert.equal(wouldCliFail, true);
   });
 
   it("CLI exits non-zero on unknown findings", () => {
