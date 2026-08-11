@@ -1032,7 +1032,7 @@ const requiredJobMetadataSha256 = Object.freeze({
   "postgres-reachability-ontology": "4a4e5c51ca540f183445ff18df800b6c0534d76e12fdf143a4e6aea0cf611e1b",
   "postgres-reachability-domain-a": "917142d29d3469ab88a68fee4946045576764bdc4f0304d2621904c2093920dd",
   "postgres-reachability-domain-b": "80669c99278f0574a6795d4eaa3cb3314958e1695e274cccd5ef5a22a1315c5d",
-  "postgres-domain-reachability": "ac2f47d4fe60725610c175e03651324d77a7480668052d8c34a152d72253b9af",
+  "postgres-domain-reachability": "a550cd1d598d606236777ed184ee873c60a3a0e8844401c3ac14a5dc4bf8f074",
 });
 
 const workflowExecutionEnvelopeSha256 = "e91330f0f5ccd53cb457ef43231e1c8e59d9f986ec7a2fa68f98e93665b439bd";
@@ -2080,6 +2080,12 @@ export function evaluateCiPreflight(
     );
     if (!/name:\s*Dispatch, attendance and ontology — disposable PostgreSQL reachability/.test(postgresDomainReachability)) {
       failures.push("postgres-domain-reachability must keep load-bearing display name");
+    }
+    // needs.preflight is not transitive from facet jobs; without a direct need,
+    // run_heavy/path_class are empty and the aggregator always takes the skip-proof path.
+    const needsBlock = postgresDomainReachability.match(/\n    needs:\n((?:      - .+\n)+)/);
+    if (!needsBlock || !needsBlock[1].includes("      - preflight\n")) {
+      failures.push("postgres-domain-reachability must declare preflight as a direct need");
     }
     requireCargoPostgresMapCoversWorkflow(failures);
   }

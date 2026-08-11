@@ -587,6 +587,7 @@ jobs:
     # any facet is not success. Do not matrix this display name.
     name: Dispatch, attendance and ontology — disposable PostgreSQL reachability
     needs:
+      - preflight
       - postgres-reachability-app
       - postgres-reachability-platform
       - postgres-reachability-ontology
