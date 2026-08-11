@@ -21,7 +21,7 @@
 //! Layer: domain. No sqlx, no axum, no tokio — the layer-boundary gate enforces
 //! that, which is what keeps `preflight` honest about being pure.
 
-use console_kernel_core::{OrgId, UserId};
+use console_kernel_core::{KernelError, OrgId, UserId};
 
 // ---------------------------------------------------------------------------
 // Object keys and the writer-ownership registry
@@ -546,6 +546,24 @@ pub trait CanonicalQuery {
     fn subject_id(&self) -> Option<uuid::Uuid>;
 }
 
+/// Maps a port [`CanonicalPort::Error`] into the shared kernel taxonomy.
+///
+/// The projected dispatcher used to flatten every port failure through
+/// [`KernelError::internal`], so a `DigestConflict` (retry-never) surfaced as
+/// HTTP 500 and a `Blocked` preflight as an opaque internal fault. Implementors
+/// must preserve the real distinction: conflict → 409, validation → 422,
+/// database / unreadable receipt → 500.
+pub trait CanonicalPortError: std::fmt::Display + Send {
+    /// Consume the port error into a [`KernelError`].
+    fn into_kernel_error(self) -> KernelError;
+}
+
+impl CanonicalPortError for std::convert::Infallible {
+    fn into_kernel_error(self) -> KernelError {
+        match self {}
+    }
+}
+
 /// The shape every canonical object port has: a typed query, a pure preflight,
 /// and an execute that returns an immutable receipt.
 pub trait CanonicalPort {
@@ -555,8 +573,9 @@ pub trait CanonicalPort {
     type Query: CanonicalQuery;
     /// The typed write this port accepts.
     type Command;
-    /// Failure of [`Self::execute`].
-    type Error;
+    /// Failure of [`Self::execute`]. Bound so the dispatcher cannot forget the
+    /// kind mapping and flatten every variant to internal again.
+    type Error: CanonicalPortError;
 
     /// PURE. No `&self`, no IO, no async, no persistence: a preflight that
     /// cannot reach a connection cannot write PRECHECKED rows, events, audits,
