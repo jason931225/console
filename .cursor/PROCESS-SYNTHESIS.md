@@ -1,7 +1,7 @@
 # Console / Oyatie / Grok → Cursor process synthesis
 
 Date: 2026-08-09  
-Sources: [Console study](db618751), [Oyatie study](03ed4126), [mm-* study](096755da), [Cursor hooks map](2734d259), existing plan `cursor_agentic_parity_8fa3c09c`.
+Sources: Console study, Oyatie study, mm-* study, Cursor hooks map, existing plan `cursor_agentic_parity_8fa3c09c` (chat evidence; not in-repo paths).
 
 ## Diagnosis
 
