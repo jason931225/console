@@ -1,7 +1,8 @@
 -- 근로기준법 §60⑤ consult mechanics (charter §4-31, bead console-we1):
 --   · 요건 자동 판정 — time_change is refused unless branch coverage evidence
 --     shows granting the request would leave fewer than minimum_on_duty (1)
---     home-branch employees available;
+--     ACTIVE home-branch employees available (employment_status='ACTIVE' only;
+--     EXITED stamps must not inflate headcount);
 --   · 대체 일자는 근로자 선택 — only the original requester may write
 --     alternate_* columns on a time_change_consult row;
 --   · 반복 행사=감사 집계 — the Nth exercise (N≥2) in the same leave-year
@@ -163,10 +164,13 @@ BEGIN
         END IF;
     ELSE
         -- §60⑤ 요건 자동 판정 (domain::judge_time_change_eligibility).
+        -- Headcount is ACTIVE roster only — EXITED rows retaining home_branch_id
+        -- must not inflate coverage and refuse a real shortfall (console-we1 critic).
         SELECT count(*)::INT INTO v_headcount
           FROM public.employees e
          WHERE e.org_id = p_org_id
-           AND e.home_branch_id = v_request.branch_id;
+           AND e.home_branch_id = v_request.branch_id
+           AND e.employment_status = 'ACTIVE';
         SELECT count(DISTINCT lr.subject_employee_id)::INT INTO v_already_out
           FROM public.leave_requests lr
          WHERE lr.org_id = p_org_id

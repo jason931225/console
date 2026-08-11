@@ -62,7 +62,10 @@ pub const TIME_CHANGE_REPEAT_AUDIT_THRESHOLD: u32 = 2;
 /// [`judge_time_change_eligibility`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimeChangeCoverageEvidence {
-    /// Active employees whose `home_branch_id` is the request's branch.
+    /// Count of `employees` with `home_branch_id` on the request's branch and
+    /// `employment_status = 'ACTIVE'`. EXITED (or UNKNOWN) rows that still
+    /// carry a home branch must not inflate this figure — the SQL gate mirrors
+    /// this contract fail-closed.
     pub headcount: u32,
     /// Distinct subjects (excluding the requester's subject) with approved
     /// leave overlapping the requested span on that branch.
@@ -233,6 +236,30 @@ mod tests {
             minimum_on_duty: MINIMUM_ON_DUTY,
         };
         assert!(!judge_time_change_eligibility(evidence).is_eligible());
+    }
+
+    /// EXITED peers must not be counted in headcount. Domain arithmetic: one
+    /// ACTIVE subject + two EXITED home-branch stamps ⇒ headcount=1 ⇒ shortfall.
+    #[test]
+    fn exited_peers_are_excluded_from_active_headcount_arithmetic() {
+        let active_only = TimeChangeCoverageEvidence {
+            headcount: 1, // ACTIVE subject only; EXITED peers omitted
+            already_out: 0,
+            minimum_on_duty: MINIMUM_ON_DUTY,
+        };
+        assert!(
+            judge_time_change_eligibility(active_only).is_eligible(),
+            "ACTIVE-only headcount=1 must open §60⑤ when granting would empty the branch"
+        );
+        let inflated_with_exited = TimeChangeCoverageEvidence {
+            headcount: 3, // bug: counting EXITED peers
+            already_out: 0,
+            minimum_on_duty: MINIMUM_ON_DUTY,
+        };
+        assert!(
+            !judge_time_change_eligibility(inflated_with_exited).is_eligible(),
+            "control: inflated headcount refuses — SQL must not produce this for EXITED peers"
+        );
     }
 
     #[test]

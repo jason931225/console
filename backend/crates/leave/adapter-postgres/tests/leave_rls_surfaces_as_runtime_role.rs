@@ -2753,3 +2753,100 @@ async fn section_60_5_consult_mechanics_eligibility_alternate_and_repeat_audit(o
         "second §60⑤ exercise in the leave-year must emit the audit rollup"
     );
 }
+
+/// EXITED home-branch peers must not inflate §60⑤ coverage headcount
+/// (`leave.coverage-roster-status-filter`). Hostile: 1 ACTIVE + 2 EXITED →
+/// without ACTIVE filter, projected_available=2 refuses time_change; with it,
+/// projected_available=0 is eligible. Examined-zero remains fail-closed via
+/// headcount=0 in decide_request.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn section_60_5_exited_peers_do_not_inflate_coverage_headcount(owner_pool: PgPool) {
+    let rt = runtime_role_pool(&owner_pool).await;
+    let command_pool = leave_command_role_pool(&owner_pool).await;
+    let knl = OrgId::knl();
+    let knl_uuid = *knl.as_uuid();
+    let branch = seed_branch(&owner_pool, knl_uuid).await;
+    let requester = seed_user(&owner_pool, knl_uuid).await;
+    let approver = seed_user(&owner_pool, knl_uuid).await;
+    let store = test_store(&rt, &command_pool);
+
+    let subject = seed_employee(&owner_pool, knl_uuid, 15.0, 0.0, 15.0).await;
+    let exited_a = seed_employee(&owner_pool, knl_uuid, 15.0, 0.0, 15.0).await;
+    let exited_b = seed_employee(&owner_pool, knl_uuid, 15.0, 0.0, 15.0).await;
+    let exited_user_a = seed_user(&owner_pool, knl_uuid).await;
+    let exited_user_b = seed_user(&owner_pool, knl_uuid).await;
+    link_user_to_employee_and_branch(&owner_pool, knl_uuid, requester, subject, branch).await;
+    link_user_to_employee_and_branch(&owner_pool, knl_uuid, exited_user_a, exited_a, branch).await;
+    link_user_to_employee_and_branch(&owner_pool, knl_uuid, exited_user_b, exited_b, branch).await;
+    link_user_to_branch(&owner_pool, knl_uuid, approver, branch).await;
+
+    sqlx::query(
+        "UPDATE employees SET employment_status = 'EXITED' \
+         WHERE org_id = $1 AND id = ANY($2)",
+    )
+    .bind(knl_uuid)
+    .bind(&[exited_a, exited_b][..])
+    .execute(&owner_pool)
+    .await
+    .expect("stamp EXITED peers retaining home_branch_id");
+
+    let roster: (i64, i64) = sqlx::query_as(
+        "SELECT \
+            count(*) FILTER (WHERE employment_status = 'ACTIVE')::BIGINT, \
+            count(*) FILTER (WHERE employment_status = 'EXITED')::BIGINT \
+         FROM employees \
+         WHERE org_id = $1 AND home_branch_id = $2",
+    )
+    .bind(knl_uuid)
+    .bind(branch)
+    .fetch_one(&owner_pool)
+    .await
+    .expect("roster census");
+    assert_eq!(
+        roster.0, 1,
+        "fixture must examine exactly one ACTIVE subject"
+    );
+    assert_eq!(
+        roster.1, 2,
+        "fixture must stamp two EXITED home-branch peers"
+    );
+
+    let pending = console_platform_request_context::scope_org(knl, async {
+        store
+            .create_request(create_cmd(branch, requester, subject, 3.0))
+            .await
+    })
+    .await
+    .expect("create with EXITED peers on roster");
+
+    let consult = console_platform_request_context::scope_org(knl, async {
+        store
+            .decide(decide_cmd(
+                pending.id,
+                approver,
+                scope_of(branch),
+                LeaveDecision::TimeChange,
+            ))
+            .await
+    })
+    .await
+    .expect("EXITED peers must not inflate headcount: ACTIVE-only shortfall opens §60⑤ consult");
+    assert_eq!(
+        consult.time_change_grounds,
+        Some(TimeChangeGroundsCode::BranchCoverageShortfall)
+    );
+    let evidence = consult
+        .time_change_evidence
+        .as_ref()
+        .expect("coverage evidence persisted");
+    assert_eq!(
+        evidence.get("headcount").and_then(|v| v.as_i64()),
+        Some(1),
+        "headcount must count ACTIVE only (not 1 ACTIVE + 2 EXITED = 3)"
+    );
+    assert_eq!(
+        evidence.get("projected_available").and_then(|v| v.as_i64()),
+        Some(0),
+        "projected_available must be ACTIVE shortfall, not inflated by EXITED"
+    );
+}
