@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-identity-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/identity/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/identity/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"]) + ["openapi/paths/.well-known__apple-app-site-association.get.yaml", "openapi/paths/.well-known__assetlinks.json.get.yaml"]),
     crate = "console_identity_rest",
     edition = "2024",
     crate_root = "backend/crates/identity/rest/src/lib.rs",
@@ -41,7 +41,7 @@ rust_library(
 
 rust_test(
     name = "console-identity-rest-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/identity/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/identity/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"]) + ["openapi/paths/.well-known__apple-app-site-association.get.yaml", "openapi/paths/.well-known__assetlinks.json.get.yaml"]),
     crate = "console_identity_rest",
     edition = "2024",
     crate_root = "backend/crates/identity/rest/src/lib.rs",

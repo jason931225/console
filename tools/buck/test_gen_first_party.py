@@ -6,6 +6,7 @@ import inspect
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -200,6 +201,60 @@ class FirstPartyBuckGeneratorTests(unittest.TestCase):
             [],
             missing,
             "BUCK faces missing openapi/**/*.yaml mapped_srcs (regenerate gen_first_party)",
+        )
+
+    def test_openapi_dotfile_srcs_and_lib_srcs_expr_include_hidden(self) -> None:
+        """Lock: Buck2 glob omits leading-dot basenames; generator must union them.
+
+        Would have failed on tip 3c803bdc4 where identity BUCK used only
+        glob(["...","openapi/**/*.yaml","openapi/**/*.json"]) with no explicit
+        .well-known__* listsrcs union (CI Backend include_str missing those files).
+        """
+        identity = Path(GENERATOR.REPO) / "backend/crates/identity/rest"
+        expected = [
+            "openapi/paths/.well-known__apple-app-site-association.get.yaml",
+            "openapi/paths/.well-known__assetlinks.json.get.yaml",
+        ]
+        found = GENERATOR.openapi_dotfile_srcs(str(identity))
+        self.assertEqual(expected, found)
+
+        # Temp tree: any leading-dot component must appear in emitted srcs expr.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hidden = root / "openapi" / "paths" / ".hidden.yaml"
+            hidden.parent.mkdir(parents=True)
+            hidden.write_text("x: 1\n", encoding="utf-8")
+            (root / "openapi" / "paths" / "visible.yaml").write_text("y: 2\n", encoding="utf-8")
+            dots = GENERATOR.openapi_dotfile_srcs(str(root))
+            self.assertEqual(["openapi/paths/.hidden.yaml"], dots)
+            expr = GENERATOR.lib_srcs_expr(
+                ["src/**/*.rs", "openapi/**/*.yaml"],
+                explicit=dots,
+            )
+            self.assertIn('glob(["src/**/*.rs", "openapi/**/*.yaml"])', expr)
+            self.assertIn('"openapi/paths/.hidden.yaml"', expr)
+            self.assertIn(" + ", expr)
+
+    def test_identity_rest_buck_maps_well_known_openapi_dotfiles(self) -> None:
+        """Examined-zero lock: identity BUCK mapped_srcs must name both .well-known files.
+
+        Plain openapi/**/*.yaml glob is insufficient on Buck2 (dot basenames excluded).
+        """
+        buck = Path(GENERATOR.REPO) / "backend/crates/identity/rest" / "BUCK"
+        text = buck.read_text(encoding="utf-8")
+        for path in (
+            "openapi/paths/.well-known__apple-app-site-association.get.yaml",
+            "openapi/paths/.well-known__assetlinks.json.get.yaml",
+        ):
+            self.assertIn(
+                path,
+                text,
+                "identity rest BUCK must list {} after gen_first_party regen".format(path),
+            )
+        self.assertIn(
+            " + ",
+            text,
+            "identity rest BUCK must union listsrcs for openapi dotfiles",
         )
 
     def test_workbench_integration_test_maps_its_path_module(self) -> None:
