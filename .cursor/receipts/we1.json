@@ -2,57 +2,45 @@
   "lane": "console-we1",
   "role": "implementer",
   "status": "done",
-  "headSha": "b4a355d7a6617d097df3f6ac86c77255de6ea0b4",
+  "headSha": "34cab73c7cf82d6dd70fff25b9c8c22c645a9efa",
   "worktree": "/Users/jasonlee/Developer/console-lane-we1",
   "branch": "lane/console-we1",
   "baseSha": "e7f207eab0186b024eaaa3d56de1f9caffc59eda",
-  "summary": "Full \uadfc\ub85c\uae30\uc900\ubc95 \u00a760\u2464 \uc2dc\uae30\ubcc0\uacbd consult mechanics after cm3's fail-closed reshape (bead console-we1 / charter \u00a74-31). Domain consult module: automatic coverage eligibility (\uc694\uac74 \uc790\ub3d9 \ud310\uc815) via headcount/already-out/minimum_on_duty=1; worker-only alternate-date validation; repeat-exercise audit rollup at threshold 2. Migration 0217: leave_requests consult columns; decide_request refuses time_change without coverage shortfall and emits leave_request.time_change_repeat_audit on the 2nd leave-year exercise; leave_api.propose_alternate_dates is requester-only; console_rt bridge cannot write consult columns. Adapter/REST: ProposeAlternateDatesCommand + POST /api/v2/leave/requests/{id}/alternate-dates; v2 LeaveRequestView surfaces grounds/evidence/alternate fields (v1 key shape frozen). kwm privilege-census pin left PARKED.",
+  "summary": "Fix-round after we1-critic BLOCK: 0217 decide_request headcount now filters employment_status='ACTIVE' so EXITED peers retaining home_branch_id cannot inflate coverage and refuse a real §60⑤ shortfall. Domain TimeChangeCoverageEvidence docs + unit arithmetic pin ACTIVE-only; RLS probe section_60_5_exited_peers_do_not_inflate_coverage_headcount proves 1 ACTIVE + 2 EXITED → headcount=1 and time_change eligible. OpenAPI left on console-9sxn; personas pin and kwm census not taken.",
   "filesChanged": [
-    "backend/crates/leave/domain/src/consult.rs",
-    "backend/crates/leave/domain/src/lib.rs",
-    "backend/crates/leave/application/src/lib.rs",
-    "backend/crates/leave/adapter-postgres/src/lib.rs",
-    "backend/crates/leave/adapter-postgres/tests/leave_rls_surfaces_as_runtime_role.rs",
-    "backend/crates/leave/adapter-postgres/tests/leave_migration_expand_contract.rs",
-    "backend/crates/leave/rest/src/lib.rs",
     "backend/crates/platform/db/migrations/0217_leave_time_change_consult_mechanics.sql",
+    "backend/crates/leave/domain/src/consult.rs",
+    "backend/crates/leave/adapter-postgres/tests/leave_rls_surfaces_as_runtime_role.rs",
     ".cursor/receipts/we1.json"
   ],
-  "redBaseline": "Before 0217, time_change succeeded with only a manager comment even when branch headcount=5 and already_out=0 (no automatic \uc694\uac74). Domain probes judge_time_change_eligibility / validate_alternate_dates / rollup_time_change_exercises did not exist. PG suite section_60_5_consult_mechanics_* was written to fail closed on ample coverage, require worker-only alternate proposal, and require leave_request.time_change_repeat_audit on the second leave-year exercise \u2014 all RED on tip without 0217, GREEN after.",
-  "verification": "cargo test -p console-leave-domain --all-targets \u2192 30/30 (incl. 8 consult tests). cargo test -p console-leave-rest --lib \u2192 10/10. cargo clippy -p console-leave-{domain,application,adapter-postgres,rest} --all-targets -- -D warnings clean. cargo fmt --check clean on those packages. bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-rls-surfaces-as-runtime-role-pg \u2192 14/14. --only leave-adapter-postgres-leave-migration-expand-contract-pg \u2192 9/9. --only leave-rest-leave-http-personas-pg \u2192 3/3. Signing: commit -S with %G?=G.",
+  "redBaseline": "Critic hostile arithmetic on pre-fix tip: 1 ACTIVE + 2 EXITED home-branch peers → unfiltered SQL headcount=3 / projected_available=2 refuses time_change while ACTIVE-only projected_available=0 is eligible. Control section_60_5_exited_peers_do_not_inflate_coverage_headcount asserts evidence headcount=1 and successful time_change — would fail closed without the ACTIVE filter.",
+  "verification": "cargo test -p console-leave-domain --all-targets → 31/31 (incl. exited_peers_are_excluded_from_active_headcount_arithmetic). cargo fmt --check on domain+adapter-postgres clean. CARGO_TARGET_DIR=/tmp/we1-fix-target bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-rls-surfaces-as-runtime-role-pg → 15/15 incl. section_60_5_exited_peers_do_not_inflate_coverage_headcount. Product commit -S %G?=G (34cab73c7).",
   "commands": [
     "cargo test --manifest-path backend/Cargo.toml -p console-leave-domain --all-targets",
-    "cargo test --manifest-path backend/Cargo.toml -p console-leave-rest --lib",
-    "cargo clippy --manifest-path backend/Cargo.toml -p console-leave-domain -p console-leave-application -p console-leave-adapter-postgres -p console-leave-rest --all-targets -- -D warnings",
-    "cargo fmt --manifest-path backend/Cargo.toml -p console-leave-domain -p console-leave-application -p console-leave-adapter-postgres -p console-leave-rest -- --check",
-    "bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-rls-surfaces-as-runtime-role-pg --num-threads=1",
-    "bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-migration-expand-contract-pg --num-threads=1",
-    "bash tools/ci/cargo_needs_postgres.sh --only leave-rest-leave-http-personas-pg --num-threads=1",
-    "git commit -S (product; %G? = G)",
+    "cargo fmt --manifest-path backend/Cargo.toml -p console-leave-domain -p console-leave-adapter-postgres -- --check",
+    "CARGO_TARGET_DIR=/tmp/we1-fix-target bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-rls-surfaces-as-runtime-role-pg --num-threads=1",
+    "git commit -S (product fix; %G? = G → 34cab73c7cf82d6dd70fff25b9c8c22c645a9efa)",
     "node /Users/jasonlee/Developer/console/scripts/cursor/validate-lane-receipt.mjs /Users/jasonlee/Developer/console-lane-we1/.cursor/receipts/we1.json"
   ],
-  "contractBreaches": "Additive v2 LeaveRequestView fields (time_change_grounds/evidence/alternate_*) with skip_serializing_if; v1 LegacyLeaveRequestView key set unchanged. New REST route POST /api/v2/leave/requests/{id}/alternate-dates (self-service, no manage capability). decide_request behaviour strictens: time_change without coverage shortfall \u2192 leave_decide.time_change_ineligible (422). OpenAPI path/schema for the new route is OUT of owned roots \u2014 elevated in followUps (not silently omitted from inventory).",
-  "enforcementPlacement": "WHERE: (1) leave_api.decide_request BEFORE terminal status write \u2014 subject leave_requests row + employees.home_branch_id headcount + overlapping approved leave EXISTS at decide time; (2) leave_api.propose_alternate_dates FOR UPDATE on consult row \u2014 subject exists as time_change_consult; (3) leave_api.protected_request_writer_guard on every console_rt INSERT/UPDATE \u2014 consult columns must remain NULL/unchanged. Finest distinction: per-request coverage integers and per-subject leave-year exercise count. Examined-zero fails: headcount=0 \u2192 ineligible (cannot invoke proviso); decide_request always evaluates evidence on time_change (no skip path); command-role census lists propose_alternate_dates so a missing GRANT fails the privilege matrix equality (8 entrypoints).",
-  "peripheralsUpdated": "Domain module docs now describe consult mechanics; LeaveDecision/TimeChangeConsult docs reference automatic eligibility + worker alternate; LeaveRequestView gained consult fields; LEAVE_ROUTE_PATHS includes alternate-dates; leave_api command privilege census assertion updated 7\u21928 with propose_alternate_dates; expand-contract test documents why it still exercises 0166 reject (surgical pre-0166 restore). OpenAPI.yaml NOT updated (outside owned roots) \u2014 followUp. DESIGN.md charter line already names the three mechanics; no docs/** edit (not owned).",
+  "contractBreaches": "None for this fix round — SQL headcount predicate only. Wire/OpenAPI still owned by console-9sxn (not dual-written).",
+  "enforcementPlacement": "WHERE: leave_api.decide_request coverage SELECT on public.employees BEFORE terminal time_change write — subject EXISTS as the leave_requests row under decide; roster subjects are ACTIVE employees with home_branch_id = request.branch_id. Finest distinction: employment_status discriminates ACTIVE vs EXITED (and any non-ACTIVE stamp). Examined-zero fails: headcount=0 → ineligible (cannot invoke proviso); EXITED-only branch cannot invent coverage; the new RLS probe fails if the filter is dropped.",
+  "peripheralsUpdated": "0217 header comment + decide_request SQL comment state ACTIVE-only headcount; domain consult.rs TimeChangeCoverageEvidence / judge docs aligned; domain unit test + RLS section_60_5_exited_peers_* pin the control. OpenAPI not touched (9sxn). Critic receipt we1-critic.json kept as authority BLOCK for re-critique.",
   "lensesApplied": [
     "Cartesian doubt",
-    "Essentialism / YAGNI",
     "Chesterton's Fence",
     "Red Team",
+    "Operability / Day-2",
     "Blast-radius / cell-based",
-    "Zero-trust / defense-in-depth",
-    "Operability / Day-2"
+    "Zero-trust / defense-in-depth"
   ],
   "challenges": [
-    "Chesterton: cm3 intentionally left time_change comment-only \u2014 is auto coverage too narrow a \ub9c9\ub300\ud55c \uc9c0\uc7a5 proxy? Kept as the total, catalog-free floor (minimum_on_duty=1); catalog overrides are a later lease rather than inventing manager-chosen grounds codes that would restore discretion.",
-    "Red Team: manager could try to write alternate_* via console_rt UPDATE \u2014 protected_request_writer_guard + propose_alternate_dates requester_only close that; non-requester adapter path is deny-by-omission (NotFound)."
+    "Chesterton: is unfiltered employees.home_branch_id an intentional total-floor? Domain already said Active employees and self-resolve filters ACTIVE — incomplete spelling, not a defended fence; fixed to ACTIVE-only.",
+    "Red Team: EXITED peers stamped to home_branch_id must not strip employer §60⑤ time_change when ACTIVE staff are short — proven by RLS EXITED inflation probe."
   ],
   "followUps": [
-    "TIP-BINDING: packaging chore pins headSha to post-rebase product parent b4a355d7a6617d097df3f6ac86c77255de6ea0b4; critic receipt committed as authored (on-disk verdict BLOCK with ACTIVE headcount major \u2014 parent brief stated APPROVE + OpenAPI\u2192console-9sxn; do not dual-write OpenAPI).",
-    "RESTACKED: rebased onto origin/main e7f207eab0186b024eaaa3d56de1f9caffc59eda (#621 release); migration 0217 still unique.",
-    "OWNER LEASE (outside we1 roots): publish OpenAPI path+schemas for POST /api/v2/leave/requests/{id}/alternate-dates and document v2 LeaveRequestView consult fields \u2014 otherwise typed clients drift.",
-    "PARKED sibling console-kwm: privilege-census fetch_one by name for kr_labor_guardrails_guard/trigger \u2014 do not dual-write; unpark after we1 exits leave roots.",
-    "Parent restack: origin/main moved to f94308a02 (#735 docs-only) after lane base 9acd784; 0217 number still free \u2014 rebase origin/main + force-with-lease before admit if main advances further.",
-    "Optional later: catalog-driven minimum_on_duty / blackout calendars as richer \uc694\uac74 inputs; auto-refile from alternate proposal into a new pending request."
+    "FIX-ROUND: product tip 34cab73c7 closes critic major (ACTIVE headcount); packaging tip-bind pins we1.json headSha; keep we1-critic.json for parent re-critique — no PR this turn.",
+    "OWNER LEASE (outside we1 roots): OpenAPI path+schemas for alternate-dates / consult fields → console-9sxn; do not dual-write.",
+    "PARKED sibling console-kwm: privilege-census for kr_labor_guardrails — do not dual-write.",
+    "Optional (unproven/minor, not taken): leave-http-personas-pg pin for alternate-dates / ample-coverage ineligibility."
   ]
 }
