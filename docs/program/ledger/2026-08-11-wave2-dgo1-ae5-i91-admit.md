@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-11
 **Kind:** authority tip ledger bound on candidate C (product tip below); jurisdiction tip T is register-only (#618 grammar)
-**Candidate (authority train):** `2d72baa687030cd6360454b3c7824fdd350ea121` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time after #743 restack)
-**Scope:** three critic-APPROVED leaves after restack onto main `2d5d285135499d50d20964fd17783ba7fc9c275b` (#743 release-squash C). we1 critic APPROVE exists but is HOLD for this PR (not folded).
+**Candidate (authority train):** `42f7a30e1048d08c6137e8b748d43333fae2c323` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time after #740 restack)
+**Scope:** three critic-APPROVED leaves after restack onto main `1af779cacb98f46b976c42d98d6de0d9bd1b38c2` (#740 poisoned-committer heal). we1 critic APPROVE exists but is HOLD for this PR (not folded).
 **Not product authority.** Clears no HOLD beyond beads closed on merge. Makes no production tamper-evident claim for ae5 custody daemon (console-9gk).
 
 ## Summary
@@ -51,7 +51,7 @@
     "Zero-trust / defense-in-depth"
   ],
   "task_fit": {
-    "Cartesian doubt": "Restacked onto origin/main 2d5d28513 (#743) before push; product tip parent of C is 2d72baa68 (i91); we1 APPROVE exists but is out of this PR.",
+    "Cartesian doubt": "Restacked onto origin/main 1af779cac (#740) before push; product tip parent of C is 42f7a30e1 (i91); we1 APPROVE exists but is out of this PR.",
     "Essentialism / YAGNI": "Admit only path-disjoint APPROVED trio dgo.1/ae5/i91; refuse folding we1 into #742 despite critic APPROVE.",
     "Chesterton's Fence": "Keep #618 C=ledger+seed/index, T=jurisdiction-only grammar after restack.",
     "Red Team": "Path overlap check dgo.1/ae5/i91 = NONE; we1 leave paths remain absent from this tip.",
@@ -66,7 +66,7 @@
     "Actions RELEASE_PLEASE_TOKEN tracked as console-uhlv — never commit secret."
   ],
   "decisions_changed_or_rejected": [
-    "Rejected folding we1 into #742 after main #743 restack despite critic APPROVE.",
+    "Rejected folding we1 into #742 after main #740 restack despite critic APPROVE.",
     "Rejected inventing a four-leaf admit; keep three-leaf scope (dgo.1/ae5/i91)."
   ],
   "lens_set_changes": []
