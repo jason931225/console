@@ -33,9 +33,14 @@
 ```json
 {
   "lens_contract": "v1",
+  "lens_contract_digest": "ac1e7d6b8150808ef73e5e3cd1a1e54d2f37eb43e84aaa1370dbbaaff3c44373",
   "task_class": "implementation",
   "risk_class": "high",
-  "risk_domains": ["authz", "hr_payroll", "release"],
+  "risk_domains": [
+    "authz",
+    "hr_payroll",
+    "release"
+  ],
   "selected_lenses": [
     "Cartesian doubt",
     "Essentialism / YAGNI",
@@ -60,9 +65,11 @@
     "ae5 custody daemon E2E remains HOLD (console-9gk).",
     "Actions RELEASE_PLEASE_TOKEN tracked as console-uhlv — never commit secret."
   ],
-  "challenges": [
-    "Challenge: admitting without we1 might strand leave consult — accepted; brief gate allows HOLD-only-optional leaves."
-  ]
+  "decisions_changed_or_rejected": [
+    "Rejected admitting we1 without critic APPROVE receipt; HOLD optional per brief gate.",
+    "Rejected inventing we1 APPROVE from stalled critic transcript (2 lines, no receipt)."
+  ],
+  "lens_set_changes": []
 }
 ```
 <!-- REASONING-LENS-EVIDENCE:END -->
