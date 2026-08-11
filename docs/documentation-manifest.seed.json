@@ -956,7 +956,7 @@
     "status": "active",
     "replacement": null,
     "retention": "retain",
-    "blob_sha": "296965e8b387f4afba9d487014d8f0ba9439c9cb",
+    "blob_sha": "4a4a38bbc59a5ac276d28b7078a7086c1a94fffa",
     "archive_tag": null
   },
   {
@@ -3650,6 +3650,7 @@
     "archive_tag": null
   },
   {
+<<<<<<< HEAD
     "path": "docs/program/ledger/2026-08-11-wave3-7sx-xxp-admit.md",
     "class": "evidence",
     "owner": "repository maintainers",
@@ -3660,6 +3661,19 @@
     "archive_tag": null
   },
   {
+||||||| parent of c29b53dff (docs(ledger): bind wave-4 09c/b4z admit C)
+=======
+    "path": "docs/program/ledger/2026-08-11-wave4-09c-b4z-admit.md",
+    "blob_sha": "037d26655e7fe92d9b89015205b23f3df7d2ef42",
+    "class": "evidence",
+    "owner": "repository maintainers",
+    "status": "frozen",
+    "replacement": null,
+    "retention": "retain",
+    "archive_tag": null
+  },
+  {
+>>>>>>> c29b53dff (docs(ledger): bind wave-4 09c/b4z admit C)
     "path": "docs/program/legacy-intent-register.md",
     "class": "evidence",
     "owner": "repository maintainers",
