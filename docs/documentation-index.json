@@ -3705,7 +3705,13 @@
     },
     {
       "path": "docs/program/ledger/2026-08-11-wave2-dgo1-ae5-i91-admit.md",
-      "blob_sha": "7146d083f12a9bd14f62dff8e666f25a06f56974"
+      "blob_sha": "9f3c042e23b7cbd82fa431b7c2497573300aa381",
+      "class": "evidence",
+      "owner": "repository maintainers",
+      "status": "frozen",
+      "replacement": null,
+      "retention": "retain",
+      "archive_tag": null
     },
     {
       "path": "docs/program/legacy-intent-register.md",
