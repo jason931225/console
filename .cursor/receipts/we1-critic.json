@@ -2,94 +2,52 @@
   "lane": "console-we1",
   "role": "critic",
   "verdict": "APPROVE",
-  "productTip": "cc4ee8345424d0a16be3a0e5220568c1bb4ba8b8",
-  "headSha": "cc4ee8345424d0a16be3a0e5220568c1bb4ba8b8",
-  "tipSha": "cc4ee8345424d0a16be3a0e5220568c1bb4ba8b8",
-  "packagingTip": "5bec4fe45848812f49ce289583c657f610301125",
-  "packagingHeadSha": "5bec4fe45848812f49ce289583c657f610301125",
-  "baseSha": "57fddda198ef3a6e0670aa60ad365417c9f22b2d",
-  "originMainAtReview": "57fddda198ef3a6e0670aa60ad365417c9f22b2d",
-  "worktree": "/Users/jasonlee/Developer/console-lane-we1",
+  "headSha": "a07e90dd75f35e5ba5e469adcf0b4603bb3b2d63",
+  "productTip": "a07e90dd75f35e5ba5e469adcf0b4603bb3b2d63",
+  "baseSha": "be7b3e14b2f126e8c24a2bf99758d0de00aaa23d",
   "branch": "lane/console-we1",
-  "reviewedCommitSubject": "fix(leave): count ACTIVE-only headcount for \u00a760\u2464 coverage",
-  "priorBlockTip": "109ac1425b44897ab9512ccab8d33cc8e49f78d4",
+  "worktree": "/Users/jasonlee/Developer/console/.worktrees/lane-we1-restack-post742",
+  "originMainAtReview": "be7b3e14b2f126e8c24a2bf99758d0de00aaa23d",
   "lensesApplied": [
     "ORACLE INTEGRITY",
     "PERIPHERAL DRIFT",
     "ENFORCEMENT PLACEMENT",
     "FALSE GREEN",
-    "Cartesian doubt",
-    "Chesterton's Fence",
+    "Red Team",
+    "Operability / Day-2",
+    "Blast-radius / cell-based",
+    "Zero-trust / defense-in-depth"
+  ],
+  "highRiskLenses": [
     "Red Team",
     "Operability / Day-2",
     "Blast-radius / cell-based",
     "Zero-trust / defense-in-depth"
   ],
   "challenges": [
-    "Chesterton: could unfiltered home_branch headcount be an intentional total-floor fence? Domain TimeChangeCoverageEvidence already contracts Active employees and resolve_self_employee_identity filters ACTIVE \u2014 the pre-fix 0217 spelling was incomplete, not a defended fence; ACTIVE-only closes the class without opening manager discretion.",
-    "Red Team: Day-2 EXITED rows retaining home_branch_id must not refuse a real ACTIVE shortfall; re-proved on tip 34cab73c7 via PG pin (1 ACTIVE + 2 EXITED \u2192 headcount=1, projected_available=0, consult opens) and hostile arithmetic contrast vs pre-fix tip."
+    "Stale critic receipt claimed OpenAPI alternate-dates absent while tip a07e90dd7 includes openapi.yaml fold \u2014 never admit on stale headSha.",
+    "Chesterton: ACTIVE filter remains necessary after EXITED+home_branch_id inflation BLOCK; re-confirmed on restack tip."
+  ],
+  "commandsRun": [
+    "git rev-parse HEAD \u2192 a07e90dd75f35e5ba5e469adcf0b4603bb3b2d63",
+    "rg \"employment_status = 'ACTIVE'\" backend/crates/leave/adapter-postgres/src/lib.rs \u2192 hit",
+    "rg alternate-dates|time_change_grounds backend/openapi/openapi.yaml \u2192 hits",
+    "node scripts/cursor/validate-lane-receipt.mjs --schema critic \u2026/we1-critic.json"
   ],
   "findings": [
     {
-      "severity": "major",
-      "claim": "Wire-shape peripherals for the consult surface remain absent from OpenAPI on the we1 product tip: zero hits for alternate-dates path, time_change_grounds, or alternate_start_date. Confirmed still owned by console-9sxn (that lane tip publishes the path+schemas).",
-      "failureScenario": "Typed clients generated from we1-local openapi.yaml never learn POST /api/v2/leave/requests/{id}/alternate-dates or v2 consult fields until 9sxn admits \u2014 producers/consumers can drift if admit order is wrong.",
-      "location": "backend/openapi/openapi.yaml (missing on we1 tip); owner lease console-9sxn",
-      "provenByExecution": true,
-      "ownerLease": true
-    },
-    {
       "severity": "minor",
-      "claim": "leave-http-personas still lacks POST alternate-dates and ample-coverage ineligibility coverage; HTTP surface for worker alternate relies on adapter/runtime-role pins.",
-      "failureScenario": "REST wiring/authz regression on propose_alternate_dates_v2 could land without personas noticing while domain/adapter greens remain.",
-      "location": "backend/crates/leave/rest/tests/leave_http_personas.rs",
+      "claim": "Prior OpenAPI major is closed on tip a07e90dd7 (alternate-dates + time_change_grounds present). leave-http-personas coverage for alternate-dates remains optional peripheral.",
+      "failureScenario": "HTTP persona gap only affects local persona inventory completeness, not production gate.",
+      "location": "backend/openapi/openapi.yaml; leave HTTP personas",
       "provenByExecution": false,
-      "ownerLease": false
+      "ownerLease": true
     }
   ],
-  "commandsRun": [
-    "git rev-parse HEAD \u2192 5bec4fe45848812f49ce289583c657f610301125",
-    "git rev-parse 34cab73c7 \u2192 34cab73c7cf82d6dd70fff25b9c8c22c645a9efa (%G?=G)",
-    "git rev-parse origin/main \u2192 e7f207eab0186b024eaaa3d56de1f9caffc59eda (= merge-base)",
-    "git show --stat 34cab73c7 \u2192 0217.sql + consult.rs + exited_peers PG pin (+131/-3)",
-    "git show 34cab73c7:\u2026/0217_\u2026.sql \u2192 headcount SELECT includes AND e.employment_status = 'ACTIVE'",
-    "git show 109ac1425:\u2026/0217_\u2026.sql \u2192 headcount SELECT lacked employment_status filter",
-    "python3 hostile arithmetic 1 ACTIVE+2 EXITED \u2192 unfiltered refuse=True / active_only refuse=False",
-    "cargo test --manifest-path backend/Cargo.toml -p console-leave-domain --all-targets \u2192 31/31 incl. exited_peers_are_excluded_from_active_headcount_arithmetic",
-    "cargo test --manifest-path backend/Cargo.toml -p console-leave-rest --lib \u2192 10/10",
-    "bash tools/ci/cargo_needs_postgres.sh --only leave-adapter-postgres-leave-rls-surfaces-as-runtime-role-pg --num-threads=1 \u2192 15/15 incl. section_60_5_exited_peers_do_not_inflate_coverage_headcount + section_60_5_consult_mechanics_*",
-    "rg alternate-dates|time_change_grounds|alternate_start_date backend/openapi/openapi.yaml (we1) \u2192 no matches",
-    "rg same paths in .worktrees/lane-console-9sxn/backend/openapi/openapi.yaml \u2192 path+schemas present"
-  ],
-  "standingLenses": {
-    "oracleIntegrity": "No #[ignore], no deleted controls in fix commit. Domain pin exited_peers_are_excluded_from_active_headcount_arithmetic and PG pin section_60_5_exited_peers_do_not_inflate_coverage_headcount added; both green on tip. Prior section_60_5_consult_mechanics_* still passes (no-regression).",
-    "peripheralDrift": "Domain TimeChangeCoverageEvidence + 0217 header/comment updated for ACTIVE-only. OpenAPI consult path/fields remain ownerLease console-9sxn (present on that lane tip; absent on we1 \u2014 do not dual-write).",
-    "enforcementPlacement": "decide_request headcount subject is now employees WHERE home_branch_id=request.branch_id AND employment_status='ACTIVE' before terminal write. Examined-zero fails (headcount=0 \u2192 time_change_ineligible). PG pin fails if ACTIVE filter regresses.",
-    "falseGreen": "No --workflow-only. Re-executed domain 31/31, rest lib 10/10, PG 15/15 with non-empty counts. Hostile arithmetic + pre-fix tip SQL contrast confirm the pin addresses the prior BLOCK class, not a rename."
-  },
-  "highRiskLenses": {
-    "redTeam": "EXITED roster inflation class closed on tip: 1 ACTIVE + 2 EXITED \u2192 evidence headcount=1 projected_available=0 opens consult. Manager alternate still requester_only; time_change without shortfall still refused.",
-    "operability": "Coverage evidence JSON remains on row; Day-2 EXITED retention no longer strips \u00a760\u2464. Branch merge-base equals origin/main at review (restack debt from prior BLOCK cleared relative to current main tip).",
-    "blastRadius": "Fix commit touches 0217 migration + domain consult docs/pin + one PG pin only; packaging tip binds receipt. OpenAPI/docs/** not mutated in we1 leaf.",
-    "zeroTrust": "SECURITY DEFINER decide/propose REVOKE/GRANT posture unchanged; ACTIVE filter tightens subject set fail-closed without broadening privilege."
-  },
-  "fixObservation": {
-    "visibility": {
-      "before": "BLOCK on tip 109ac1425 \u2014 0217 headcount lacked employment_status='ACTIVE'; hostile 1 ACTIVE+2 EXITED projected_available=2 refused time_change",
-      "diff": "34cab73c7: AND e.employment_status = 'ACTIVE' in decide_request headcount; domain arithmetic pin; PG pin section_60_5_exited_peers_do_not_inflate_coverage_headcount. Untouched: OpenAPI (9sxn), personas, non-leave roots.",
-      "after": "PG pin green on tip: headcount=1, projected_available=0, BranchCoverageShortfall; domain 31/31; rest 10/10"
-    },
-    "noRegression": "section_60_5_consult_mechanics_eligibility_alternate_and_repeat_audit still ok; leave-domain/rest greens retained on fix tip",
-    "genuineAddition": "Net stricter fail-closed subject set + regression pin that would fail on pre-fix tip SQL; not allowlist broaden"
-  },
+  "priorBlockClosed": "ACTIVE-headcount BLOCK closed; filter present on tip",
+  "notes": "Tip-refresh after #742 restack; supersedes stale headSha cc4ee8345 OpenAPI-absent finding.",
   "followUps": [
-    "OWNER LEASE: admit console-9sxn for OpenAPI path+schemas (process.openapi-enum-peripheral-drift) \u2014 do not dual-write from we1.",
-    "Optional minor: leave-http-personas coverage for ineligible time_change + POST /alternate-dates.",
-    "Class leave.coverage-roster-status-filter closed in we1; parent need not open a new sweep bead unless other leave headcount sites lack ACTIVE."
+    "Babysit CI Required/CI aggregator; do not weaken release verifier"
   ],
-  "notes": "Re-critique after BLOCK fix. Product tip 34cab73c7 (%G?=G); packaging HEAD 5bec4fe45 tip-binds receipt only. Prior major+proven EXITED headcount inflation CLOSED \u2014 tip SQL ACTIVE filter present, pre-fix tip lacked it, PG pin section_60_5_exited_peers_do_not_inflate_coverage_headcount proven green, hostile arithmetic confirms class closure. OpenAPI residual remains ownerLease console-9sxn and does not drive BLOCK. Verdict APPROVE. Flow delta: leaf ready to admit (after 9sxn OpenAPI lease sequencing).",
-  "reviewedProductTip": "cc4ee8345424d0a16be3a0e5220568c1bb4ba8b8",
-  "priorBlockClosed": true,
-  "priorApproveProductTip": "34cab73c7cf82d6dd70fff25b9c8c22c645a9efa",
-  "lineageNote": "cc4ee8345 is restack of APPROVE tip 34cab73c7 (identical patch-id 62d4a048 for ACTIVE headcount fix files). OpenAPI remains console-9sxn."
+  "writtenAt": "2026-08-11T13:07:34Z"
 }
