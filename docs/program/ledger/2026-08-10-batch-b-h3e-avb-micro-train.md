@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10
 **Kind:** authority tip ledger bound on candidate C (product tip below); jurisdiction tip T is register-only (#618 grammar)
-**Candidate (authority train):** `93581ff87f3f4a4f2d257c7b0dcc9a871a39a612` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
+**Candidate (authority train):** `f10937d6ca91599afbf7e3516f554dd1589e99b4` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
 **Scope:** Micro-train after split Batch B (#736) — critic-APPROVED h3e then avb (avb stacks on h3e; hard exact-file collision on canonical-domain). Does **not** re-admit ugg/6n4/nuc/pnb1 (already on main via #736).
 **Not product authority.** Clears no HOLD beyond the beads closed on merge. Makes no production, frontend, or projection claim.
 
@@ -65,7 +65,8 @@ Close: console-h3e, console-avb, console-q06. Do not re-open/re-admit ugg/6n4/nu
     "projected_dispatch 9/9 including digest_conflict call-site pin; canonical-domain 11/11; company port_error_kind 2/2.",
     "q06 closes only with h3e on landed admit tip.",
     "Admit-window CI: declare unit test resources for avb port_error_kind pins (canonical-adapter + orgchange BUCK).",
-    "Admit-window CI: wire console-ontology-canonical-adapter-postgres + console-orgchange-adapter-postgres --lib into domain-unit; ratchet executed-tests attribute baseline; rehash domain-unit proofDigest."
+    "Admit-window CI: wire console-ontology-canonical-adapter-postgres + console-orgchange-adapter-postgres --lib into domain-unit; ratchet executed-tests attribute baseline; rehash domain-unit proofDigest.",
+    "Admit-window CI: EchoQuery in canonical_dispatch_audit_as_runtime_role implements subject_id after h3e deleted the trait default."
   ],
   "decisions_changed_or_rejected": [
     "Rejected re-admitting ugg/6n4/nuc/pnb1 after #736.",
