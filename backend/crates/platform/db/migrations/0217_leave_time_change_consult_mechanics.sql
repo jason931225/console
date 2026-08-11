@@ -54,6 +54,16 @@ ALTER TABLE leave_requests
             )
         );
 
+-- Personal-data classification for post-0209 columns on baselined leave_requests.
+-- leave_requests rows identify a natural person (subject_employee_id); dates/grounds
+-- are personal by 개보법 제2조제1호나목 combination. Evidence JSONB is undeclared.
+COMMENT ON COLUMN leave_requests.time_change_grounds IS 'pd:personal — §60⑤ 시기변경 협의 사유 (branch_coverage_shortfall); row identifies subject employee';
+COMMENT ON COLUMN leave_requests.time_change_evidence IS 'pd:undeclared — §60⑤ coverage evidence JSONB; schema not fully bounded';
+COMMENT ON COLUMN leave_requests.alternate_start_date IS 'pd:personal — worker-proposed alternate leave start; row identifies subject employee';
+COMMENT ON COLUMN leave_requests.alternate_end_date IS 'pd:personal — worker-proposed alternate leave end; row identifies subject employee';
+COMMENT ON COLUMN leave_requests.alternate_partial_day_period IS 'pd:personal — worker-proposed am/pm partial-day period; row identifies subject employee';
+COMMENT ON COLUMN leave_requests.alternate_proposed_at IS 'pd:personal — timestamp of alternate-date proposal; row identifies subject employee';
+
 -- ---------------------------------------------------------------------------
 -- 2. decide_request: gate time_change on automatic coverage eligibility and
 --    emit the repeat-audit rollup when the leave-year exercise count ≥ 2.
