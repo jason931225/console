@@ -218,6 +218,78 @@ describe("CI preflight contract", () => {
     );
   });
 
+  it("empty successful changed-path list keeps runHeavy / non-docs-only", () => {
+    const empty = classifyChangedPaths([]);
+    assert.equal(empty.runHeavy, true);
+    assert.equal(empty.docsOnly, false);
+    assert.notEqual(empty.pathClass, "docs-only");
+    assert.equal(empty.reason, "empty-or-unreadable");
+  });
+
+  it("lists rename sources so product→docs rename is not docs-only", () => {
+    const repo = mkdtempSync(join(tmpdir(), "ci-preflight-rename-inventory-"));
+    const git = (args) => {
+      const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      return result;
+    };
+    try {
+      git(["init", "-q"]);
+      git(["config", "user.email", "ci-preflight@example.test"]);
+      git(["config", "user.name", "ci-preflight"]);
+      mkdirSync(join(repo, "docs"));
+      mkdirSync(join(repo, "backend"));
+      writeFileSync(join(repo, "docs/a.md"), "a\n");
+      writeFileSync(join(repo, "backend/x.rs"), "fn main() {}\n");
+      git(["add", "."]);
+      git(["commit", "-qm", "base"]);
+      const base = git(["rev-parse", "HEAD"]).stdout.trim();
+      git(["mv", "backend/x.rs", "docs/x.md"]);
+      git(["commit", "-qm", "rename product to docs"]);
+      const head = git(["rev-parse", "HEAD"]).stdout.trim();
+
+      // Hostile control: default rename detection drops the source path.
+      const defaultListed = spawnSync(
+        "git",
+        ["diff", "--name-only", `${base}...${head}`],
+        { cwd: repo, encoding: "utf8" },
+      );
+      assert.equal(defaultListed.status, 0, defaultListed.stderr || defaultListed.stdout);
+      const defaultPaths = defaultListed.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      assert.ok(
+        defaultPaths.includes("docs/x.md") && !defaultPaths.includes("backend/x.rs"),
+        `expected rename false-green inventory, got ${defaultPaths}`,
+      );
+      assert.equal(classifyChangedPaths(defaultPaths).pathClass, "docs-only");
+      assert.equal(classifyChangedPaths(defaultPaths).runHeavy, false);
+
+      const prev = process.cwd();
+      process.chdir(repo);
+      try {
+        const listed = listChangedPathsForPathClass({
+          PATH_CLASS_EVENT_NAME: "pull_request",
+          PATH_CLASS_PR_BASE_SHA: base,
+          PATH_CLASS_PR_HEAD_SHA: head,
+        });
+        assert.equal(listed.ok, true);
+        assert.ok(listed.paths.includes("backend/x.rs"), `rename source missing: ${listed.paths}`);
+        assert.ok(listed.paths.includes("docs/x.md"), `rename dest missing: ${listed.paths}`);
+        const resolved = resolvePathClassFromEnv({
+          PATH_CLASS_EVENT_NAME: "pull_request",
+          PATH_CLASS_PR_BASE_SHA: base,
+          PATH_CLASS_PR_HEAD_SHA: head,
+        });
+        assert.notEqual(resolved.pathClass, "docs-only");
+        assert.equal(resolved.runHeavy, true);
+        assert.equal(resolved.docsOnly, false);
+      } finally {
+        process.chdir(prev);
+      }
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   it("lists deletions so docs edit + product delete is mixed / runHeavy", () => {
     const repo = mkdtempSync(join(tmpdir(), "ci-preflight-delete-inventory-"));
     const git = (args) => {

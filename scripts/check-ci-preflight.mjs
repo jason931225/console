@@ -81,7 +81,7 @@ const runHeavyUnlessCancelledCondition =
 const runHeavyAlwaysCondition =
   "${{ always() && needs.preflight.outputs.run_heavy == 'true' }}";
 
-export const PATH_CLASS_RULES_VERSION = "2";
+export const PATH_CLASS_RULES_VERSION = "3";
 const docsOnlyRootFiles = new Set([
   "README.md",
   "CHANGELOG.md",
@@ -204,9 +204,11 @@ export function listChangedPathsForPathClass(env = process.env) {
   }
   // Include deletions (D). ACMR alone drops product deletes beside docs edits and
   // false-greens docs_only + Path-class skip proofs (console-7rc critic E6).
+  // --no-renames: default rename detection emits only the destination path, so a
+  // product→docs rename would inventory as docs-only (console-q58y residual).
   const result = spawnSync(
     "git",
-    ["diff", "--name-only", range],
+    ["diff", "--name-only", "--no-renames", range],
     { encoding: "utf8" },
   );
   if (result.status !== 0) {
