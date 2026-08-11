@@ -168,8 +168,7 @@ fn rust_sources_under(root: &Path) -> Result<Vec<PathBuf>, String> {
                     continue;
                 }
                 stack.push(path);
-            } else if file_type.is_file()
-                && path.extension().and_then(|s| s.to_str()) == Some("rs")
+            } else if file_type.is_file() && path.extension().and_then(|s| s.to_str()) == Some("rs")
             {
                 out.push(path);
             }
