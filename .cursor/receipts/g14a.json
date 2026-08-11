@@ -2,7 +2,7 @@
   "status": "done",
   "laneId": "console-g14a",
   "bead": "console-g14a (P2): prototype-chain census \u2014 mechanical fail-closed scan for untrusted-keyed lookups under scripts/",
-  "headSha": "5f57bdbaec6c4ddff7a5db949c54081fc9bdcab5",
+  "headSha": "84a2161eda214a4935db65e4dc275b6a2f13874d",
   "branch": "lane/console-g14a",
   "worktree": "/Users/jasonlee/Developer/console/.worktrees/lane-console-g14a",
   "summary": "Shipped scripts/check-prototype-chain-lookups.mjs as the total primitive for the i91.1 residual: fail-closed census over scripts/check-*.mjs + scripts/console/** for optional-computed / undefined-compare / in-operator untrusted-keyed lookups, with named residual register, scanned-floor examined-zero fail, and fixture RED controls. Closed plan-fanout runtimeLaneEligibility / runtimeConsolidationEligibility optional-index via Object.hasOwn (critic-named residual). Did not re-open an i91 spelling-list sweep; residuals stay registered until i91 lands or a shrink follow-up. CI rides check:request-body-contract (package.json) so the suite is exact-wired without a new repo-gates step.",
