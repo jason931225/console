@@ -81,7 +81,7 @@ const runHeavyUnlessCancelledCondition =
 const runHeavyAlwaysCondition =
   "${{ always() && needs.preflight.outputs.run_heavy == 'true' }}";
 
-export const PATH_CLASS_RULES_VERSION = "1";
+export const PATH_CLASS_RULES_VERSION = "2";
 const docsOnlyRootFiles = new Set([
   "README.md",
   "CHANGELOG.md",
@@ -202,9 +202,11 @@ export function listChangedPathsForPathClass(env = process.env) {
   } else {
     return { ok: false, reason: "unsupported-event", paths: [] };
   }
+  // Include deletions (D). ACMR alone drops product deletes beside docs edits and
+  // false-greens docs_only + Path-class skip proofs (console-7rc critic E6).
   const result = spawnSync(
     "git",
-    ["diff", "--name-only", "--diff-filter=ACMR", range],
+    ["diff", "--name-only", range],
     { encoding: "utf8" },
   );
   if (result.status !== 0) {

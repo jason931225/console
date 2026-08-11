@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,7 @@ import {
   classifyChangedPaths,
   evaluateCiPreflight,
   emitPathClassGithubOutput,
+  listChangedPathsForPathClass,
   resolvePathClassFromEnv,
 } from "./check-ci-preflight.mjs";
 
@@ -215,6 +216,57 @@ describe("CI preflight contract", () => {
       resolvePathClassFromEnv({ PATH_CLASS_EVENT_NAME: "workflow_dispatch" }).runHeavy,
       true,
     );
+  });
+
+  it("lists deletions so docs edit + product delete is mixed / runHeavy", () => {
+    const repo = mkdtempSync(join(tmpdir(), "ci-preflight-delete-inventory-"));
+    const git = (args) => {
+      const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      return result;
+    };
+    try {
+      git(["init", "-q"]);
+      git(["config", "user.email", "ci-preflight@example.test"]);
+      git(["config", "user.name", "ci-preflight"]);
+      mkdirSync(join(repo, "docs"));
+      mkdirSync(join(repo, "backend"));
+      writeFileSync(join(repo, "docs/a.md"), "a\n");
+      writeFileSync(join(repo, "backend/x.rs"), "fn main() {}\n");
+      git(["add", "."]);
+      git(["commit", "-qm", "base"]);
+      const base = git(["rev-parse", "HEAD"]).stdout.trim();
+      writeFileSync(join(repo, "docs/a.md"), "a edited\n");
+      unlinkSync(join(repo, "backend/x.rs"));
+      git(["add", "-A"]);
+      git(["commit", "-qm", "docs edit + backend delete"]);
+      const head = git(["rev-parse", "HEAD"]).stdout.trim();
+
+      const prev = process.cwd();
+      process.chdir(repo);
+      try {
+        const listed = listChangedPathsForPathClass({
+          PATH_CLASS_EVENT_NAME: "pull_request",
+          PATH_CLASS_PR_BASE_SHA: base,
+          PATH_CLASS_PR_HEAD_SHA: head,
+        });
+        assert.equal(listed.ok, true);
+        assert.ok(listed.paths.includes("backend/x.rs"), `delete missing from inventory: ${listed.paths}`);
+        assert.ok(listed.paths.includes("docs/a.md"), `docs edit missing: ${listed.paths}`);
+        const resolved = resolvePathClassFromEnv({
+          PATH_CLASS_EVENT_NAME: "pull_request",
+          PATH_CLASS_PR_BASE_SHA: base,
+          PATH_CLASS_PR_HEAD_SHA: head,
+        });
+        assert.notEqual(resolved.pathClass, "docs-only");
+        assert.equal(resolved.runHeavy, true);
+        assert.equal(resolved.pathClass, "mixed");
+      } finally {
+        process.chdir(prev);
+      }
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   it("accepts the workflow's cheap preflight and protected expensive jobs", () => {
