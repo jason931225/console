@@ -38,6 +38,15 @@ fn main() {
         }
     };
 
+    // Fail closed even if a future compose path forgets the post-check: never
+    // publish a document where `*name` precedes `&name`.
+    if let Some(name) = console_contracts::first_yaml_alias_before_anchor(&doc) {
+        eprintln!(
+            "console-openapi-gen: refusing to write openapi.yaml: YAML alias *{name} appears before its &{name} anchor"
+        );
+        process::exit(1);
+    }
+
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let out = manifest_dir
         .join("../../openapi/openapi.yaml")

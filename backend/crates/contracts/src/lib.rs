@@ -9,9 +9,12 @@
 //!   twice is a [`DuplicateKey`], never last-writer-wins. Silent overwrite is
 //!   how a face loses an endpoint from the published contract without any
 //!   diff showing it.
-//! * **Output is a function of the fragment set.** Keys are emitted in sorted
-//!   order and bodies are re-indented from scratch, so the bytes do not depend
-//!   on registration order or on how an author indented a raw string.
+//! * **Output is a function of the fragment set.** Component keys are emitted
+//!   in sorted order and bodies are re-indented from scratch, so the bytes do
+//!   not depend on registration order or on how an author indented a raw string.
+//!   Path keys stay lexicographic except when a YAML anchor edge forces a
+//!   definition path before its aliasing paths (otherwise `*name` can precede
+//!   `&name` under pure lex order).
 //! * **Every `$ref` this scanner SEES points into this document, and every
 //!   schema `$ref` it sees resolves.** Read the qualifier: this is a text scan,
 //!   not a parse, so it is total over the positions it covers and NOT over YAML.
@@ -270,6 +273,9 @@ pub struct ComposeError {
     pub duplicates: Vec<DuplicateKey>,
     pub unresolvable: Vec<UnresolvableRef>,
     pub dangling: Vec<DanglingRef>,
+    /// YAML aliases whose first `*name` appears before the defining `&name`.
+    /// Empty when path emit order is sound; fail-closed when a topo bug slips.
+    pub yaml_alias_before_anchor: Vec<String>,
 }
 
 impl fmt::Display for ComposeError {
@@ -283,6 +289,12 @@ impl fmt::Display for ComposeError {
         }
         for dangling in &self.dangling {
             write!(f, "\n  {dangling}")?;
+        }
+        for name in &self.yaml_alias_before_anchor {
+            write!(
+                f,
+                "\n  YAML alias *{name} appears before its &{name} anchor"
+            )?;
         }
         Ok(())
     }
@@ -393,6 +405,7 @@ fn compose_parts(
             duplicates,
             unresolvable: Vec::new(),
             dangling: Vec::new(),
+            yaml_alias_before_anchor: Vec::new(),
         });
     }
 
@@ -450,6 +463,7 @@ fn compose_parts(
             duplicates,
             unresolvable,
             dangling,
+            yaml_alias_before_anchor: Vec::new(),
         });
     }
 
@@ -462,8 +476,12 @@ fn compose_parts(
         out.push_str(&reindent(preamble.info, 2));
     }
 
+    // Paths stay BTree-keyed for collision detection, but emit order is
+    // YAML-anchor-aware: anchors before aliases, else lexicographic. Pure lex
+    // put `/archive` + `/finalize` (*alias) before `/open` (&anchor).
     out.push_str("paths:\n");
-    for (path, (_, operations)) in &paths {
+    for path in order_paths_for_yaml_anchors(&paths) {
+        let (_, operations) = &paths[path];
         out.push_str(&format!("  {path}:\n"));
         for (method, body) in operations {
             out.push_str(&format!("    {method}:\n"));
@@ -481,6 +499,15 @@ fn compose_parts(
         emit_component_section(&mut out, "parameters", &parameters);
         emit_component_section(&mut out, "responses", &responses);
         emit_component_section(&mut out, "schemas", &schemas);
+    }
+
+    if let Some(name) = first_yaml_alias_before_anchor(&out) {
+        return Err(ComposeError {
+            duplicates: Vec::new(),
+            unresolvable: Vec::new(),
+            dangling: Vec::new(),
+            yaml_alias_before_anchor: vec![name],
+        });
     }
 
     Ok(out)
@@ -522,6 +549,161 @@ fn emit_component_section(
         out.push_str(&format!("    {name}:\n"));
         out.push_str(body);
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum YamlNodeIndicator {
+    Anchor,
+    Alias,
+}
+
+/// Scan for YAML node indicators written as `: &name` / `: *name` only.
+///
+/// This matches how face path bodies author shared response blocks today. It is
+/// deliberately not a YAML parse — same honesty as [`schema_refs`].
+fn yaml_node_indicators(text: &str) -> Vec<(usize, YamlNodeIndicator, &str)> {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    let mut out = Vec::new();
+    while i + 3 < bytes.len() {
+        if bytes[i] == b':'
+            && bytes[i + 1] == b' '
+            && (bytes[i + 2] == b'&' || bytes[i + 2] == b'*')
+        {
+            let kind = if bytes[i + 2] == b'&' {
+                YamlNodeIndicator::Anchor
+            } else {
+                YamlNodeIndicator::Alias
+            };
+            let start = i + 3;
+            let mut end = start;
+            while end < bytes.len() && is_yaml_anchor_name_byte(bytes[end]) {
+                end += 1;
+            }
+            if end > start {
+                out.push((i, kind, &text[start..end]));
+                i = end;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+fn is_yaml_anchor_name_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
+}
+
+/// First alias name whose earliest `*name` appears before its `&name`, or whose
+/// anchor is missing entirely. `None` means every alias is preceded by its anchor.
+pub fn first_yaml_alias_before_anchor(doc: &str) -> Option<String> {
+    let mut first_alias: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut first_anchor: BTreeMap<&str, usize> = BTreeMap::new();
+    for (pos, kind, name) in yaml_node_indicators(doc) {
+        match kind {
+            YamlNodeIndicator::Alias => {
+                first_alias.entry(name).or_insert(pos);
+            }
+            YamlNodeIndicator::Anchor => {
+                first_anchor.entry(name).or_insert(pos);
+            }
+        }
+    }
+    for (name, alias_pos) in &first_alias {
+        match first_anchor.get(name) {
+            Some(anchor_pos) if alias_pos < anchor_pos => return Some((*name).to_owned()),
+            None => return Some((*name).to_owned()),
+            Some(_) => {}
+        }
+    }
+    None
+}
+
+/// Emit paths in an order where YAML anchors precede aliases that reference them.
+///
+/// Independent paths keep lexicographic order via a `BTreeSet` Kahn ready-set —
+/// byte stability for the common case is preserved; only anchor edges reorder.
+fn order_paths_for_yaml_anchors<'a>(
+    paths: &BTreeMap<&'a str, (&'static str, BTreeMap<String, String>)>,
+) -> Vec<&'a str> {
+    let mut defines: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut uses: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for (path, (_, operations)) in paths {
+        let mut defined = BTreeSet::new();
+        let mut used = BTreeSet::new();
+        for body in operations.values() {
+            for (_, kind, name) in yaml_node_indicators(body) {
+                match kind {
+                    YamlNodeIndicator::Anchor => {
+                        defined.insert(name);
+                    }
+                    YamlNodeIndicator::Alias => {
+                        used.insert(name);
+                    }
+                }
+            }
+        }
+        defines.insert(*path, defined);
+        uses.insert(*path, used);
+    }
+
+    // First lex path wins if two fragments somehow define the same name.
+    let mut anchor_definer: BTreeMap<&str, &str> = BTreeMap::new();
+    for (path, names) in &defines {
+        for name in names {
+            anchor_definer.entry(*name).or_insert(*path);
+        }
+    }
+
+    let mut successors: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut indegree: BTreeMap<&str, usize> = BTreeMap::new();
+    for path in paths.keys() {
+        successors.insert(*path, BTreeSet::new());
+        indegree.insert(*path, 0);
+    }
+    for (user, names) in &uses {
+        for name in names {
+            let Some(definer) = anchor_definer.get(name) else {
+                continue;
+            };
+            if definer == user {
+                continue;
+            }
+            if successors.get_mut(definer).expect("definer").insert(*user) {
+                *indegree.get_mut(user).expect("user") += 1;
+            }
+        }
+    }
+
+    let mut ready: BTreeSet<&str> = indegree
+        .iter()
+        .filter(|(_, deg)| **deg == 0)
+        .map(|(path, _)| *path)
+        .collect();
+    let mut ordered = Vec::with_capacity(paths.len());
+    while let Some(path) = ready.iter().next().copied() {
+        ready.remove(&path);
+        ordered.push(path);
+        for succ in successors.get(path).expect("succ set").clone() {
+            let deg = indegree.get_mut(succ).expect("succ deg");
+            *deg -= 1;
+            if *deg == 0 {
+                ready.insert(succ);
+            }
+        }
+    }
+
+    // Cycle / missing-edge residue: keep lex remainder so emit still totals.
+    // [`first_yaml_alias_before_anchor`] then fail-closes if order is still wrong.
+    if ordered.len() != paths.len() {
+        for path in paths.keys() {
+            if !ordered.contains(path) {
+                ordered.push(*path);
+            }
+        }
+    }
+    ordered
 }
 
 /// Every `#/components/schemas/…` key `body` names, from every position a

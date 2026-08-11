@@ -1275,3 +1275,96 @@ fn a_response_ref_resolves_against_a_contributed_response() -> Result<(), Box<dy
     compose(&[&FACE, &SHARED])?;
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// 6. YAML anchors must emit before aliases
+//
+// Face path bodies share response maps via `: &name` / `: *name`. Pure
+// lexicographic path emit puts `/archive` and `/finalize` (*alias) before
+// `/open` (&anchor). Compose must topo-order those edges and refuse an
+// inverted document.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn yaml_anchor_path_emits_before_aliasing_paths() -> Result<(), Box<dyn std::error::Error>> {
+    use console_contracts::first_yaml_alias_before_anchor;
+
+    const FACE: Fragment = Fragment {
+        source: "console-eval-anchor-demo",
+        paths: &[
+            PathItem {
+                path: "/api/v1/evaluation/cycles/{cycle_id}/archive",
+                operations: &[Operation {
+                    method: "post",
+                    body: "responses: *evaluationTransitionResponses\n",
+                }],
+            },
+            PathItem {
+                path: "/api/v1/evaluation/cycles/{cycle_id}/finalize",
+                operations: &[Operation {
+                    method: "post",
+                    body: "responses: *evaluationTransitionResponses\n",
+                }],
+            },
+            PathItem {
+                path: "/api/v1/evaluation/cycles/{cycle_id}/open",
+                operations: &[Operation {
+                    method: "post",
+                    body: "responses: &evaluationTransitionResponses\n  '200': { description: ok }\n",
+                }],
+            },
+            PathItem {
+                path: "/api/v1/evaluation/cycles/{cycle_id}/start-calibration",
+                operations: &[Operation {
+                    method: "post",
+                    body: "responses: *evaluationTransitionResponses\n",
+                }],
+            },
+        ],
+        schemas: &[],
+        parameters: &[],
+        responses: &[],
+        security_schemes: &[],
+        external_schemas: &[],
+    };
+
+    let out = compose(&[&FACE])?;
+    let open = out
+        .find("/api/v1/evaluation/cycles/{cycle_id}/open:")
+        .ok_or("open path missing")?;
+    let archive = out
+        .find("/api/v1/evaluation/cycles/{cycle_id}/archive:")
+        .ok_or("archive path missing")?;
+    let finalize = out
+        .find("/api/v1/evaluation/cycles/{cycle_id}/finalize:")
+        .ok_or("finalize path missing")?;
+    assert!(
+        open < archive && open < finalize,
+        "anchor path /open must emit before aliasing /archive and /finalize;\n{out}"
+    );
+    assert_eq!(
+        first_yaml_alias_before_anchor(&out),
+        None,
+        "composed document must not alias before anchor;\n{out}"
+    );
+    Ok(())
+}
+
+#[test]
+fn first_yaml_alias_before_anchor_detects_inverted_order() {
+    use console_contracts::first_yaml_alias_before_anchor;
+
+    let inverted = "paths:\n  /a:\n    post:\n      responses: *foo\n  /b:\n    post:\n      responses: &foo\n        '200': { description: ok }\n";
+    assert_eq!(
+        first_yaml_alias_before_anchor(inverted).as_deref(),
+        Some("foo"),
+        "pin must see *foo before &foo"
+    );
+
+    let sound = "paths:\n  /b:\n    post:\n      responses: &foo\n        '200': { description: ok }\n  /a:\n    post:\n      responses: *foo\n";
+    assert_eq!(
+        first_yaml_alias_before_anchor(sound),
+        None,
+        "sound order must pass"
+    );
+}
