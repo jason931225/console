@@ -1800,6 +1800,7 @@ mod tests {
     /// `cargo metadata` resolves every `package =` spelling — including
     /// workspace-inherited aliases — so a production edge cannot fail-open as
     /// "dev-only" when another crate lists the real name under `[dev-dependencies]`.
+    #[allow(clippy::unwrap_used, clippy::panic)]
     #[test]
     fn cargo_metadata_records_workspace_inherited_package_renames() {
         let root = std::env::temp_dir().join(format!("console-wo-ugg-meta-{}", std::process::id()));
