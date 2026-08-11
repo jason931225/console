@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-compliance-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/compliance/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/compliance/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_compliance_rest",
     edition = "2024",
     crate_root = "backend/crates/compliance/rest/src/lib.rs",
@@ -35,7 +35,7 @@ rust_library(
 
 rust_test(
     name = "console-compliance-rest-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/compliance/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/compliance/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_compliance_rest",
     edition = "2024",
     crate_root = "backend/crates/compliance/rest/src/lib.rs",

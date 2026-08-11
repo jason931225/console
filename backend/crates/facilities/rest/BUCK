@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-facilities-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/facilities/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/facilities/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_facilities_rest",
     edition = "2024",
     crate_root = "backend/crates/facilities/rest/src/lib.rs",
@@ -36,7 +36,7 @@ rust_library(
 
 rust_test(
     name = "console-facilities-rest-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/facilities/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/facilities/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_facilities_rest",
     edition = "2024",
     crate_root = "backend/crates/facilities/rest/src/lib.rs",

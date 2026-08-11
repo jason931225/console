@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-comms-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/comms/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/comms/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_comms_rest",
     edition = "2024",
     crate_root = "backend/crates/comms/rest/src/lib.rs",
@@ -47,7 +47,7 @@ rust_library(
 
 rust_test(
     name = "console-comms-rest-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/comms/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/comms/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_comms_rest",
     edition = "2024",
     crate_root = "backend/crates/comms/rest/src/lib.rs",

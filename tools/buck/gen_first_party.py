@@ -1252,6 +1252,31 @@ def tree_has(root, *markers):
     return False
 
 
+def openapi_fragment_globs(package_dir, src_dir):
+    """Return mapped_srcs globs for per-crate OpenAPI fragment trees.
+
+    Rest faces (and any other crate) that keep fragments under ``openapi/`` and
+    pull them in with ``include_str!("../openapi/...")`` must map those files
+    hermetically. Detect via an ``openapi/`` directory or the include_str marker
+    in ``src/``. YAML is always required when detected; JSON is added only when
+    at least one ``.json`` exists under ``openapi/`` (examined-zero stays
+    fail-closed: detection without a tree still emits the YAML glob so missing
+    fragments fail at buck/rustc rather than silently omitting the map).
+    """
+    openapi_dir = os.path.join(package_dir, "openapi")
+    needs = os.path.isdir(openapi_dir) or tree_has(
+        src_dir, 'include_str!("../openapi/'
+    )
+    if not needs:
+        return []
+    pats = ["openapi/**/*.yaml"]
+    if os.path.isdir(openapi_dir):
+        for _dp, _dns, files in os.walk(openapi_dir):
+            if any(name.endswith(".json") for name in files):
+                pats.append("openapi/**/*.json")
+                break
+    return pats
+
 
 def map_deps(dep_table, first_party):
     """Map a [dependencies]/[dev-dependencies] table to (deps_list, named_dict)."""
@@ -1439,6 +1464,10 @@ def emit(d, name, deps, named, dev_deps, dev_named):
     env = base_env(package, uses_sqlx=uses_sqlx)
     resources = RESOURCE_CONFIG.get(name, {})
     lib_pats = ["src/**/*.rs"] + list(resources.get("srcs", []))
+    # Face crates compile OpenAPI fragments via include_str!("../openapi/..."); Buck
+    # hermeticity requires those YAML/JSON files in mapped_srcs (src/**/*.rs alone is
+    # insufficient — rustc cannot read unmapped siblings).
+    lib_pats.extend(openapi_fragment_globs(d, src))
     lib_external = dict(resources.get("external", {}))
     if tree_has(src, "#[sqlx::test"):
         lib_external.update(MIGRATION_TREE)

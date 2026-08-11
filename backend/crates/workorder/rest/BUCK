@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-workorder-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/workorder/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/workorder/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_workorder_rest",
     edition = "2024",
     crate_root = "backend/crates/workorder/rest/src/lib.rs",
@@ -46,7 +46,7 @@ rust_library(
 
 rust_test(
     name = "console-workorder-rest-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/workorder/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/workorder/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_workorder_rest",
     edition = "2024",
     crate_root = "backend/crates/workorder/rest/src/lib.rs",

@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-equipment-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/equipment/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/equipment/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_equipment_rest",
     edition = "2024",
     crate_root = "backend/crates/equipment/rest/src/lib.rs",

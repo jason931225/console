@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-docs-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/docs/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/docs/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_docs_rest",
     edition = "2024",
     crate_root = "backend/crates/docs/rest/src/lib.rs",
@@ -42,7 +42,7 @@ rust_library(
 
 rust_test(
     name = "console-docs-rest-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/docs/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/docs/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_docs_rest",
     edition = "2024",
     crate_root = "backend/crates/docs/rest/src/lib.rs",

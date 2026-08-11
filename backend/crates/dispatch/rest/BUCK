@@ -10,7 +10,7 @@ export_file(
 
 rust_library(
     name = "console-dispatch-rest",
-    mapped_srcs = repo_mapped_srcs("backend/crates/dispatch/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/dispatch/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_dispatch_rest",
     edition = "2024",
     crate_root = "backend/crates/dispatch/rest/src/lib.rs",
@@ -41,7 +41,7 @@ rust_library(
 
 rust_test(
     name = "console-dispatch-rest-unit",
-    mapped_srcs = repo_mapped_srcs("backend/crates/dispatch/rest", glob(["src/**/*.rs"])),
+    mapped_srcs = repo_mapped_srcs("backend/crates/dispatch/rest", glob(["src/**/*.rs", "openapi/**/*.yaml", "openapi/**/*.json"])),
     crate = "console_dispatch_rest",
     edition = "2024",
     crate_root = "backend/crates/dispatch/rest/src/lib.rs",

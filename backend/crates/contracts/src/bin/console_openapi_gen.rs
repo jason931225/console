@@ -57,11 +57,19 @@ fn main() {
     let out = if out.exists() {
         out
     } else {
-        manifest_dir
+        match manifest_dir
             .parent()
             .and_then(|p| p.parent())
             .map(|backend| backend.join("openapi/openapi.yaml"))
-            .expect("contracts crate must live at backend/crates/contracts")
+        {
+            Some(path) => path,
+            None => {
+                eprintln!(
+                    "console-openapi-gen: contracts crate must live at backend/crates/contracts"
+                );
+                process::exit(1);
+            }
+        }
     };
 
     if let Err(err) = fs::write(&out, &doc) {

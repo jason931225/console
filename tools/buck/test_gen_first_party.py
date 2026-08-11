@@ -157,6 +157,51 @@ class FirstPartyBuckGeneratorTests(unittest.TestCase):
 
         self.assertEqual([], unmapped, "openapi_drift has unmapped include_str resources")
 
+    def test_openapi_fragment_globs_detect_tree_and_include_str(self) -> None:
+        governance = Path(GENERATOR.REPO) / "backend/crates/governance/rest"
+        src = governance / "src"
+        pats = GENERATOR.openapi_fragment_globs(str(governance), str(src))
+        self.assertEqual(
+            ["openapi/**/*.yaml", "openapi/**/*.json"],
+            pats,
+            "governance rest must map YAML + manifest.json under openapi/",
+        )
+
+        # include_str marker alone (no openapi/ dir) still emits YAML so examined-zero
+        # cannot silently pass — buck/rustc fail closed when fragments are absent.
+        bare = Path(GENERATOR.REPO) / "backend/crates/contracts"
+        bare_src = bare / "src"
+        # contracts has no openapi/ sibling and no ../openapi include_str in src
+        self.assertEqual([], GENERATOR.openapi_fragment_globs(str(bare), str(bare_src)))
+
+    def test_rest_faces_with_openapi_tree_map_fragment_globs_in_buck(self) -> None:
+        """Lock: every first-party package with openapi/ must map fragments in BUCK.
+
+        Examined-zero fails: if no openapi trees exist this assertion is wrong;
+        if trees exist but BUCK omits the glob, the list is non-empty (RED).
+        """
+        missing = []
+        examined = 0
+        for directory in GENERATOR.find_members():
+            openapi = Path(directory) / "openapi"
+            if not openapi.is_dir():
+                continue
+            examined += 1
+            buck = Path(directory) / "BUCK"
+            text = buck.read_text(encoding="utf-8")
+            if "openapi/**/*.yaml" not in text:
+                missing.append(str(Path(directory).relative_to(GENERATOR.REPO)))
+        self.assertGreater(
+            examined,
+            0,
+            "expected at least one first-party crate with an openapi/ tree",
+        )
+        self.assertEqual(
+            [],
+            missing,
+            "BUCK faces missing openapi/**/*.yaml mapped_srcs (regenerate gen_first_party)",
+        )
+
     def test_workbench_integration_test_maps_its_path_module(self) -> None:
         config = GENERATOR.integration_resource_config(
             "console-app",
