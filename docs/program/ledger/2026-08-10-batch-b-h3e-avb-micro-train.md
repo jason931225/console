@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10
 **Kind:** authority tip ledger bound on candidate C (product tip below); jurisdiction tip T is register-only (#618 grammar)
-**Candidate (authority train):** `faffbf0a802c9b553b134a0e364b9c24fb9cd8d9` (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
+**Candidate (authority train):**  (immutable absolute SHA of the product tip that C parents; rekeyed at C commit time)
 **Scope:** Micro-train after split Batch B (#736) — critic-APPROVED h3e then avb (avb stacks on h3e; hard exact-file collision on canonical-domain). Does **not** re-admit ugg/6n4/nuc/pnb1 (already on main via #736).
 **Not product authority.** Clears no HOLD beyond the beads closed on merge. Makes no production, frontend, or projection claim.
 
@@ -63,7 +63,8 @@ Close: console-h3e, console-avb, console-q06. Do not re-open/re-admit ugg/6n4/nu
     "Split #736 MERGED e391abb91 before micro-train open.",
     "h3e cherry-pick clean; avb auto-merge preserved 6n4/nuc product surfaces.",
     "projected_dispatch 9/9 including digest_conflict call-site pin; canonical-domain 11/11; company port_error_kind 2/2.",
-    "q06 closes only with h3e on landed admit tip."
+    "q06 closes only with h3e on landed admit tip.",
+    "Admit-window CI: declare unit test resources for avb port_error_kind pins (canonical-adapter + orgchange BUCK)."
   ],
   "decisions_changed_or_rejected": [
     "Rejected re-admitting ugg/6n4/nuc/pnb1 after #736.",
