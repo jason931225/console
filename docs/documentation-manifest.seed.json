@@ -3527,7 +3527,8 @@
     "status": "frozen",
     "replacement": null,
     "retention": "retain",
-    "archive_tag": null
+    "archive_tag": null,
+    "class_": "x"
   },
   {
     "path": "docs/program/ledger/2026-08-10-batch-b-split-ugg-6n4-nuc-pnb1.md",
