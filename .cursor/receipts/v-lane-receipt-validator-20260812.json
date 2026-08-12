@@ -1,0 +1,66 @@
+{
+  "kind": "lane",
+  "lane": "v-lane-receipt-validator-20260812",
+  "status": "done",
+  "summary": "Tracked lane-receipt schema (scripts/console/lane-receipt.schema.json), dependency-free validator CLI (scripts/console/validate-lane-receipt.mjs), 8-test node:test suite, wired into package.json scripts, ci.yml preflight step, check-ci-preflight proofRun + pins, CI-GATES.md inventory, and regenerated doc manifests.",
+  "filesChanged": [
+    "scripts/console/lane-receipt.schema.json",
+    "scripts/console/validate-lane-receipt.mjs",
+    "scripts/console/validate-lane-receipt.test.mjs",
+    "package.json",
+    ".github/workflows/ci.yml",
+    "scripts/check-ci-preflight.mjs",
+    "scripts/check-ci-preflight.test.mjs",
+    "docs/CI-GATES.md",
+    "docs/documentation-manifest.seed.json",
+    "docs/documentation-index.json",
+    ".cursor/receipts/v-lane-receipt-validator-20260812.json"
+  ],
+  "redBaseline": "Planted-red proofs executed and pasted in test suite development: schema-violating receipt (missing required field) exits 1; examined-zero (no-arg invocation) exits 1; foundation-gates docs-drift gate observed RED when test:lane-receipt was undocumented in CI-GATES.md, then GREEN after inventory entry (bisect: clean b2acd80c 6/6 PASS, dbb5443 6/6 PASS, wiring-without-doc FAIL).",
+  "verification": "npm run test:lane-receipt 8/8 pass; node scripts/check-ci-preflight.mjs contract passed; node --test scripts/check-ci-preflight.test.mjs 57/57 pass; js-test-reachability 47 suites exact-wired dark 0; check-mjs-dark-suites --strict ok; foundation-gates 6/6 pass; generate-documentation-manifest --check OK (438 markdown files); porcelain clean at tip.",
+  "contractBreaches": "none",
+  "headSha": "88dcbc845a18fa6283d3b2e5a16a412a01021d40",
+  "baseSha": "b2acd80c4d7f340199b9147f6df9318d74af5f8d",
+  "worktree": ".worktrees/v-lane-validator",
+  "commands": [
+    "npm run test:lane-receipt",
+    "node scripts/check-ci-preflight.mjs",
+    "node --test scripts/check-ci-preflight.test.mjs",
+    "node scripts/check-js-test-reachability.mjs",
+    "node --test scripts/check-foundation-gates.test.mjs"
+  ],
+  "commandsRun": [
+    "npm run test:lane-receipt",
+    "node --test scripts/console/validate-lane-receipt.test.mjs",
+    "node scripts/check-ci-preflight.mjs",
+    "node --test scripts/check-ci-preflight.test.mjs",
+    "node scripts/check-js-test-reachability.mjs",
+    "node tools/ci/check-mjs-dark-suites.mjs --strict",
+    "node --test scripts/check-foundation-gates.test.mjs",
+    "node scripts/console/generate-documentation-manifest.mjs --write",
+    "node scripts/console/generate-documentation-manifest.mjs --check"
+  ],
+  "enforcementPlacement": "WHERE: ci.yml preflight job step 'Console lane-receipt validator regression' runs npm run test:lane-receipt; the validator itself (scripts/console/validate-lane-receipt.mjs) is invocable via check:lane-receipt against any receipt path. Subject EXISTS: 30 tracked receipts under .cursor/receipts/ on origin/main plus this lane's receipt. FINEST DISTINCTION: per-field JSON Schema 2020-12 validation (required fields, enum kinds, 40-hex SHA pattern, nonempty strings, minItems on commandsRun/reviewIdentities) plus two conditional rules beyond schema. EXAMINED-ZERO FAILS: validator invoked with zero arguments exits 1 (proven by scripts/console/validate-lane-receipt.test.mjs zero-arg test); CI step runs the suite, so a suite that discovers zero tests fails the js-test-reachability ratchet (exact-wired 47/47, dark 0).",
+  "peripheralsUpdated": "docs/CI-GATES.md: test:lane-receipt added to 'Root package scripts run by CI' inventory (foundation-gates drift parity); docs/documentation-manifest.seed.json + docs/documentation-index.json regenerated via generate-documentation-manifest.mjs --write; scripts/check-ci-preflight.test.mjs pins updated: preflight run-step 28->29, total 121->122, mutation matrix 363->366",
+  "classification": {
+    "personalData": false,
+    "holdAdjacent": false,
+    "notes": "Validator tooling only; no product, contract, migration, HR, or payroll surface touched. Ordinary R2 review path, no GAAC."
+  },
+  "preMortem": "Risk 1: schema too strict blocks future legitimate lane receipts -> mitigated: schema derived from all 30 tracked receipt shapes plus untracked hub validator field list; critic-kind supported. Risk 2: preflight pin drift causes false red on unrelated PRs -> pins co-edited with mutation inventory in same commit, contract test 57/57 green. Risk 3: undocumented CI step trips foundation-gates docs-drift parity -> hit during development, fixed by CI-GATES.md inventory entry (designed gate worked).",
+  "blastRadius": "Additive: new schema+validator+test under scripts/console/, two package.json scripts, one CI preflight step, one proofRun, doc inventory line, regenerated manifests. No existing behavior modified; no oracle weakened; mutation inventory still exercises all 29 preflight steps.",
+  "detection": "CI preflight step fails on validator regression; check-ci-preflight.mjs proofRun fails if step removed or reordered; foundation-gates docs-drift gate fails if CI-GATES.md inventory diverges from ci.yml; js-test-reachability fails if suite goes dark.",
+  "rollback": "Single revert of the squash-merge commit restores prior state; no data, migration, or hosted-state coupling.",
+  "stopConditions": "behind>0 at pre-admission revalidation without clean restack; any required check red on PR; R2 BLOCK with proven finding; foundation-gates or preflight contract red at tip.",
+  "reviewIdentities": [
+    "executor: 29-VLaneValidator (Grok 4.6) authored dbb544347",
+    "leader: GJC session 019ff78e (Fable) authored wiring 88dcbc845 + this receipt",
+    "R2 pending: architect (Opus, cross-family) read-only verdict required before admission"
+  ],
+  "remainingHolds": [],
+  "result": "green",
+  "followUps": [
+    "Pre-existing on origin/main: docs/CI-GATES.md has 1 broken citation (line ~902, migration 0600 .xctestrun) and 2 unverifiable line-number citations; CI-GATES.md is not in wired check:doc-citations scope; route to W1.1 T1 custody lane",
+    "Migrate untracked scripts/cursor/validate-lane-receipt.mjs callers to tracked scripts/console/validate-lane-receipt.mjs once chore-cursor-ratchet lands"
+  ]
+}
