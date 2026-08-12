@@ -2,7 +2,7 @@
   "status": "done",
   "laneId": "console-g14a",
   "bead": "console-g14a (P2): prototype-chain census \u2014 mechanical fail-closed scan for untrusted-keyed lookups under scripts/",
-  "headSha": "010ac049897dd15ca44fcb456afbe6f4f3956a0b",
+  "headSha": "f7b49495dad62bc2ea7781cb4dff92683b091fd2",
   "branch": "lane/console-g14a",
   "worktree": "/Users/jasonlee/Developer/console/.worktrees/lane-console-g14a",
   "summary": "Restacked lane/console-g14a onto origin/main 84655ce7881c764bbe81081b193cdd2d85d523c1 after admit parked the leaf for census red (14 stale + unknown). Kept the total primitive (check-prototype-chain-lookups + examined-zero missingSubjects fail-closed + plan-fanout eligibility Object.hasOwn). One inventory commit shrinks scripts/prototype-chain-lookup-baseline.json from 18\u21925 residuals: drops 14 sites cleared by console-i91 (#742) and rebinds the line-shifted verify-console-pr-authority-bootstrap residual (53\u219254). No spelling-list call-site sweep; no #622 admit from this lane.",
