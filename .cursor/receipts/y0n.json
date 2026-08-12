@@ -1,53 +1,48 @@
 {
   "lane": "console-y0n",
   "laneId": "console-y0n",
-  "bead": "console-y0n (gh#682 — L5-HR Canonical HR assignment writer)",
+  "bead": "console-y0n (gh#682 \u2014 L5-HR Canonical HR assignment writer)",
   "role": "implementer",
   "status": "done",
-  "baseSha": "84655ce78",
-  "headSha": "cdb8b47a1288d293ebeff558c27f9a1098553c02",
+  "baseSha": "84655ce7881c764bbe81081b193cdd2d85d523c1",
+  "headSha": "ad84e2d2ca4ad73377ac09230e6e29521a31fe08",
   "worktree": "/Users/jasonlee/Developer/console/.worktrees/lane-console-y0n (branch lane/console-y0n)",
-  "summary": "L5-HR residual closed: EmploymentAttributes now carries OrgUnit/JobPosition UUIDs (legacy employees TEXT stores UUID strings); ReassignOrgUnit is PORT-ROUTED through reassign_org_unit_via_transfers_in_tx → one hr.transfer per matched employee inside the apply tx. Free-text team labels fail closed. Signing smoke folded as 5eb3223d9; product tip cdb8b47a1 (rebased onto #755/#754 main).",
+  "summary": "Critic BLOCK peripheral fix: OrgProposalOpReassignOrgUnit OpenAPI + CAP-ORG fragment now document hr.transfer semantics and OrgUnit UUID wire (Uuid $ref / format:uuid). Closes process.openapi-enum-peripheral-drift for ReassignOrgUnit. REST hr.rs free-text dual-namespace left ownerLease.",
   "filesChanged": [
-    "backend/crates/orgchange/adapter-postgres/src/employment.rs",
-    "backend/crates/orgchange/adapter-postgres/src/lib.rs",
-    "backend/crates/orgchange/adapter-postgres/tests/employment_port_as_runtime_role.rs",
-    "backend/crates/orgchange/domain/src/lib.rs",
+    "backend/crates/orgchange/rest/openapi/schemas/OrgProposalOpReassignOrgUnit.yaml",
+    "backend/openapi/openapi.yaml",
+    "docs/evidence/console/CAP-ORG-CONSOLE/manifests/openapi-fragment.yaml",
     ".cursor/receipts/y0n.json"
   ],
-  "redBaseline": "At base 9e29b627: EmploymentAttributes.org_unit/position were Option<String>; ReassignOrgUnit did UPDATE employees SET org_unit=… with free-text team labels; domain accepted Hangul team names. Hostile proofs now green: unknown OrgUnit UUID → UnknownOrgUnit; free-text ReassignOrgUnit → OrgUnitRefNotUuid / domain validation err; reassign emits employment_revisions receipt target hr.transfer.",
-  "verification": "GREEN. cargo fmt -p console-orgchange-adapter-postgres -p console-orgchange-domain --check. cargo test -p console-orgchange-domain --lib → 8 passed. cargo test -p console-orgchange-adapter-postgres --lib → 4 passed. tools/ci/cargo_needs_postgres.sh --only orgchange-adapter-postgres-employment-port-as-runtime-role-pg → 19 passed; org-reference-surface-pg → 4 passed. git commit -S → %G?=G.",
-  "contractBreaches": "none. Owned roots only (orgchange adapter employment + apply_op + domain ReassignOrgUnit validate + employment runtime-role tests). Did not edit hr.rs REST free-text lifecycle, OpenAPI, canonical-domain owner string (1qw.4), payroll, Wave4, docs/current/**.",
-  "enforcementPlacement": "WHERE: (1) EmploymentAttributes preflight blocks nil UUIDs before IO; write_in_tx ensure_org_unit_exists/ensure_job_position_exists against org_units/job_positions (subjects exist post-0215). (2) Domain OrgProposalOp::ReassignOrgUnit validate requires UUID parse — examined free-text fails closed. (3) reassign_org_unit_via_transfers_in_tx refuses unbound employees (no employment_source_bindings) and OrgUnitRefNotUuid. Finest distinction: UUID string in employees.org_unit vs free-text team label. Examined-zero: empty match set moves 0 (observable) rather than inventing authority.",
-  "peripheralsUpdated": "employment.rs module doc: ReassignOrgUnit PORT-ROUTED. orgchange adapter lib.rs mod doc. domain ReassignOrgUnit doc + validate + wire tests use UUID strings and pin free-text fail-closed. Runtime-role suite: UUID fixtures, unknown-unit, nil-id preflight, reassign→hr.transfer proof.",
+  "redBaseline": "Before fix: OrgProposalOpReassignOrgUnit.yaml L3 description='Bounded employees.org_unit rewrite'; fromOrgUnit/toOrgUnit unconstrained string minLength/maxLength 120 (no Uuid). openapi.yaml OrgProposalOpReassignOrgUnit identical rewrite + unconstrained strings. CAP-ORG openapi-fragment.yaml fromOrgUnit/toOrgUnit type:string maxLength:120 without format:uuid or hr.transfer prose.",
+  "verification": "GREEN peripheral sync. python3 assert: rest schema + openapi.yaml Reassign section contain hr.transfer, Uuid $ref, no rewrite; CAP-ORG fragment fromOrgUnit/toOrgUnit format:uuid + hr.transfer, no maxLength:120 on those fields. Did not re-run product PG suites (no product code change). Product tip signed G.",
+  "contractBreaches": "none on allowlist. Did not touch hr.rs / employment.rs / domain. Only allowlisted OpenAPI/CAP-ORG + receipt.",
+  "enforcementPlacement": "n/a - adds no enforcement",
+  "peripheralsUpdated": "OrgProposalOpReassignOrgUnit.yaml description->hr.transfer + fromOrgUnit/toOrgUnit Uuid $ref; backend/openapi/openapi.yaml same section; CAP-ORG manifests/openapi-fragment.yaml fromOrgUnit/toOrgUnit format:uuid + hr.transfer descriptions. CAP-ORG design-contract.md / gap-analysis.md still mention employees.org_unit rewrite \u2014 outside allowlist; elevated.",
   "commands": [
-    "git commit -S --allow-empty -m 'chore(console-y0n): signing smoke' → %G?=G",
-    "cargo fmt -p console-orgchange-adapter-postgres -p console-orgchange-domain --manifest-path backend/Cargo.toml -- --check",
-    "cargo test --manifest-path backend/Cargo.toml -p console-orgchange-domain --lib → 8 passed",
-    "cargo test --manifest-path backend/Cargo.toml -p console-orgchange-adapter-postgres --lib → 4 passed",
-    "bash tools/ci/cargo_needs_postgres.sh --only orgchange-adapter-postgres-employment-port-as-runtime-role-pg --num-threads=1 → 19 passed; 0 failed",
-    "bash tools/ci/cargo_needs_postgres.sh --only orgchange-adapter-postgres-org-reference-surface-pg --num-threads=1 → 4 passed; 0 failed",
-    "git log -1 --format='%G?' → G",
-    "node /Users/jasonlee/Developer/console/scripts/cursor/validate-lane-receipt.mjs .cursor/receipts/y0n.json"
+    "python3 probe RED: rewrite description + unconstrained fromOrgUnit/toOrgUnit on three OpenAPI surfaces",
+    "python3 assert GREEN: three files hr.transfer + Uuid/format:uuid; no rewrite in Reassign sections",
+    "git commit -S docs(console-y0n): sync ReassignOrgUnit OpenAPI to hr.transfer UUIDs -> %G?=G",
+    "node /Users/jasonlee/Developer/console/scripts/cursor/validate-lane-receipt.mjs /Users/jasonlee/Developer/console/.worktrees/lane-console-y0n/.cursor/receipts/y0n.json",
+    "bash /Users/jasonlee/Developer/console/scripts/cursor/preflight-forge.sh",
+    "git push --force-with-lease origin lane/console-y0n"
   ],
   "lenses": [
     "Cartesian doubt",
     "Essentialism / YAGNI",
     "Chesterton's Fence",
-    "Red Team",
-    "Operability / Day-2",
-    "Blast-radius / cell-based",
-    "Zero-trust / defense-in-depth"
+    "Peripheral drift",
+    "Blast-radius / cell-based"
   ],
   "challenges": [
-    "Chesterton: CAP-ORG ReassignOrgUnit used free-text team labels because teams had no table; after 7sx OrgUnit UUIDs exist — keeping free-text as authority would dual-write string namespaces against OrgUnitPort. Fail-closed UUID wire + legacy TEXT storing UUID strings is the smallest bridge without migrating employees columns or OpenAPI tip-serial.",
-    "Red Team: appoint does not rewrite legacy org_unit; Reassign matching on UUID text would silently move 0 if heads never stamped — documented in reassign test (promote stamps first) and UnboundEmployeeForTransfer refuse path."
+    "Chesterton: CAP-ORG ReassignOrgUnit advertised employees.org_unit rewrite when teams had no table; after L5-ORG + tip cdb8b47a1 the runtime is UUID + hr.transfer \u2014 keeping rewrite prose would lie to codegen/clients (process.openapi-enum-peripheral-drift).",
+    "Opportunity cost: regenerating openapi.yaml via house generator would touch files beyond allowlist \u2014 manual three-file sync chosen; CAP-ORG design-contract.md rewrite prose left elevated rather than expanding scope."
   ],
   "followUps": [
-    "Critic on tip cdb8b47a1; admit owns train PR (not this lane).",
-    "ownerLease REST/hr.rs: still free-text org_unit/position on People lifecycle — separate surface; do not dual-write OpenAPI here.",
-    "ownerLease console-1qw.4: Employment owner string retarget to canonical adapter (unchanged this lane).",
-    "HOLD: frontend L6-UI-HR deferred; docs/current authority untouched; production promotion HOLD."
+    "ownerLease REST/hr.rs free-text org_unit/position dual-namespace remains \u2014 do not expand this tip to People lifecycle / OpenAPI tip-serial for REST.",
+    "ELEVATE: CAP-ORG design-contract.md + gap-analysis.md still claim employees.org_unit rewrite (outside this lane allowlist).",
+    "minor unproven JobPosition/org_unit coherence on reassign \u2014 skipped this round.",
+    "Critic re-review on new tip; admit owns train PR (not this lane)."
   ],
-  "flowDelta": "leaf ready to admit — HR assignment attrs are OrgUnit/JobPosition UUIDs; ReassignOrgUnit emits hr.transfer; a2l no longer process-blocked by missing y0n product"
+  "flowDelta": "OpenAPI/CAP-ORG ReassignOrgUnit peripherals match UUID + hr.transfer tip; REST ownerLease still open; leaf ready for critic re-pass"
 }
