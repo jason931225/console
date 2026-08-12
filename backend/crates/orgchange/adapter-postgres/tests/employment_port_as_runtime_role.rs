@@ -1360,3 +1360,166 @@ async fn reassign_org_unit_emits_hr_transfer_not_a_raw_bulk_rewrite(owner_pool: 
 
     let _ = port;
 }
+
+/// EXITED employees in the source unit must not be transferred. Preflight
+/// `scope_headcount` counts ACTIVE only; reassign must match that set so an
+/// org-structure move cannot rewrite a closed `employment_heads.valid_to`.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn reassign_org_unit_skips_exited_employees_and_leaves_valid_to(owner_pool: PgPool) {
+    let (org, actor, port) = fixture(&owner_pool).await;
+    let (active_employee, active_employment) =
+        appointed(&owner_pool, org, actor, &port, "reassign-active").await;
+    let (exited_employee, exited_employment) =
+        appointed(&owner_pool, org, actor, &port, "reassign-exited").await;
+
+    // Stamp UUID org_unit onto both legacy heads (appointment leaves org_unit null).
+    execute(
+        &port,
+        command(
+            org,
+            actor,
+            EmploymentQuery::Promote {
+                employment_id: active_employment,
+                valid_from: at(3_600),
+                attributes: attributes(ORG_UNIT_SALES, JOB_STAFF, "ACTIVE"),
+            },
+        ),
+    )
+    .await
+    .unwrap();
+    execute(
+        &port,
+        command(
+            org,
+            actor,
+            EmploymentQuery::Promote {
+                employment_id: exited_employment,
+                valid_from: at(3_600),
+                attributes: attributes(ORG_UNIT_SALES, JOB_STAFF, "ACTIVE"),
+            },
+        ),
+    )
+    .await
+    .unwrap();
+
+    let exit_at = at(7_200);
+    execute(
+        &port,
+        command(
+            org,
+            actor,
+            EmploymentQuery::Promote {
+                employment_id: exited_employment,
+                valid_from: exit_at,
+                attributes: attributes(ORG_UNIT_SALES, JOB_STAFF, "EXITED"),
+            },
+        ),
+    )
+    .await
+    .unwrap();
+
+    let exited_valid_to_before: Option<OffsetDateTime> =
+        sqlx::query_scalar("SELECT valid_to FROM employment_heads WHERE org_id = $1 AND id = $2")
+            .bind(ORG)
+            .bind(exited_employment)
+            .fetch_one(&owner_pool)
+            .await
+            .unwrap();
+    assert_eq!(exited_valid_to_before, Some(exit_at));
+    assert_eq!(
+        legacy_head(&owner_pool, exited_employee).await.3,
+        "EXITED".to_owned()
+    );
+    assert_eq!(
+        legacy_head(&owner_pool, exited_employee).await.1,
+        Some(ORG_UNIT_SALES.to_string())
+    );
+
+    let reassign_at = at(86_400);
+    let mut tx = owner_pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('app.current_org', $1, true)")
+        .bind(ORG.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let moved = reassign_org_unit_via_transfers_in_tx(
+        &mut tx,
+        org,
+        actor,
+        Uuid::from_u128(0xe3b0_0000_0000_0000_0000_0000_0000_00ab),
+        &ORG_UNIT_SALES.to_string(),
+        &ORG_UNIT_TECH.to_string(),
+        "ACME",
+        reassign_at,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    assert_eq!(
+        moved, 1,
+        "only the ACTIVE peer must move; EXITED must be excluded from the SELECT"
+    );
+    assert_eq!(
+        legacy_head(&owner_pool, active_employee).await.1,
+        Some(ORG_UNIT_TECH.to_string()),
+        "ACTIVE peer must transfer to the destination OrgUnit"
+    );
+    assert_eq!(
+        legacy_head(&owner_pool, exited_employee).await.1,
+        Some(ORG_UNIT_SALES.to_string()),
+        "EXITED employee must not be moved"
+    );
+    assert_eq!(
+        legacy_head(&owner_pool, exited_employee).await.3,
+        "EXITED".to_owned()
+    );
+    let exited_valid_to_after: Option<OffsetDateTime> =
+        sqlx::query_scalar("SELECT valid_to FROM employment_heads WHERE org_id = $1 AND id = $2")
+            .bind(ORG)
+            .bind(exited_employment)
+            .fetch_one(&owner_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        exited_valid_to_after, exited_valid_to_before,
+        "EXITED employment_heads.valid_to must stay at the original exit instant, not the reassignment timestamp"
+    );
+
+    let _ = port;
+}
+
+/// A syntactically valid but nonexistent source OrgUnit must fail closed as
+/// `UnknownOrgUnit`, not succeed with `moved=0` (silent apply audit).
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn reassign_org_unit_unknown_from_org_unit_is_refused(owner_pool: PgPool) {
+    let (org, actor, port) = fixture(&owner_pool).await;
+    let unknown_from = Uuid::from_u128(0xe3b0_0000_0000_0000_0000_0000_0000_0098);
+
+    let mut tx = owner_pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('app.current_org', $1, true)")
+        .bind(ORG.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let refused = reassign_org_unit_via_transfers_in_tx(
+        &mut tx,
+        org,
+        actor,
+        Uuid::new_v4(),
+        &unknown_from.to_string(),
+        &ORG_UNIT_TECH.to_string(),
+        "ACME",
+        at(86_400),
+    )
+    .await
+    .unwrap_err();
+    drop(tx);
+
+    assert!(
+        matches!(refused, EmploymentError::UnknownOrgUnit(id) if id == unknown_from),
+        "unknown source OrgUnit must be UnknownOrgUnit, not Ok(0); got {refused:?}"
+    );
+
+    let _ = port;
+}

@@ -2,8 +2,9 @@
 //! and the home of every `employees` statement that used to live outside the
 //! owning crate. Org-change `ReassignOrgUnit` is PORT-ROUTED: `apply_op` calls
 //! [`reassign_org_unit_via_transfers_in_tx`], which emits one `hr.transfer`
-//! per matched employee inside the apply transaction (no raw bulk rewrite as
-//! authority).
+//! per matched ACTIVE employee inside the apply transaction (no raw bulk
+//! rewrite as authority; EXITED heads are excluded; unknown from/to OrgUnits
+//! fail closed).
 //!
 //! Owned tables, verbatim from the contract
 //! (`backend/crates/ontology/canonical-domain/src/lib.rs`): `employees`,
@@ -595,11 +596,15 @@ pub async fn write_in_tx(
     ))
 }
 
-/// Org-change `ReassignOrgUnit` → one `hr.transfer` per matched employee.
+/// Org-change `ReassignOrgUnit` → one `hr.transfer` per matched **ACTIVE** employee.
 ///
 /// `from_org_unit` / `to_org_unit` must be OrgUnit UUID strings (fail closed on
-/// free-text team labels). Employees without an `employment_source_bindings`
-/// row are refused — a bulk rewrite of unbound heads is not a transfer.
+/// free-text team labels). Both source and destination OrgUnits must exist —
+/// a syntactically valid but unknown `from` must not audit as `moved=0` success.
+/// Only `employment_status = 'ACTIVE'` rows are selected, matching preflight
+/// `scope_headcount` (ACTIVE-only) so EXITED heads are not rewritten via
+/// Transfer. Employees without an `employment_source_bindings` row are refused
+/// — a bulk rewrite of unbound heads is not a transfer.
 pub async fn reassign_org_unit_via_transfers_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     org: OrgId,
@@ -620,12 +625,15 @@ pub async fn reassign_org_unit_via_transfers_in_tx(
         ]));
     }
 
+    // Fail closed on both ends before SELECT — unknown source must not return Ok(0).
+    ensure_org_unit_exists(tx, *org.as_uuid(), from_id).await?;
     ensure_org_unit_exists(tx, *org.as_uuid(), to_id).await?;
 
     let from_text = from_id.to_string();
     let rows = sqlx::query(
         "SELECT id, position, employment_status FROM employees \
-         WHERE org_id = $1 AND company = $2 AND org_unit = $3",
+         WHERE org_id = $1 AND company = $2 AND org_unit = $3 \
+           AND employment_status = 'ACTIVE'",
     )
     .bind(org.as_uuid())
     .bind(company)
