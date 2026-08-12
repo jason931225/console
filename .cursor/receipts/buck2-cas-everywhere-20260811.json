@@ -4,7 +4,7 @@
   "status": "ready",
   "summary": "Wave A committed: opt-in Buck2 CAS overlays + cas helper scripts + DN-0006 (Buck2-everywhere, supersedes DN-0005 cargo-primary planning) + expanded handoff. Cold Buck2 without overlay green. CI cargo\u2192Buck flips deferred to Waves C\u2013E under sole-writer lease.",
   "baseSha": "5770c04c4",
-  "headSha": "151225136a6f44085f35febbb28ae706547184c9",
+  "headSha": "09983fed13154714881134c70374079c78de8c7a",
   "ownedRoots": [
     "infra/ci/buckconfig/",
     "scripts/cas/",
