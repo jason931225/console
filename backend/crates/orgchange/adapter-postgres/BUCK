@@ -160,6 +160,7 @@ rust_test(
     ],
 )
 
+rust_test(
     name = "console-orgchange-adapter-postgres-itest-preflight_persists_nothing",
     mapped_srcs = repo_mapped_srcs("backend/crates/orgchange/adapter-postgres", ["tests/preflight_persists_nothing.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
