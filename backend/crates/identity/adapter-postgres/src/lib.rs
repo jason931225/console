@@ -2134,56 +2134,6 @@ async fn replace_user_branches(
     Ok(())
 }
 
-#[cfg(test)]
-mod ensure_branch_rewrite_in_scope_tests {
-    use super::*;
-
-    /// console-o498: Branches({A}) must not drop U from B by rewriting to [A].
-    #[test]
-    fn refuses_branch_removal_outside_caller_scope() {
-        let branch_a = BranchId::new();
-        let branch_b = BranchId::new();
-        let scope = BranchScope::single(branch_a);
-        let current = vec![*branch_a.as_uuid(), *branch_b.as_uuid()];
-        let requested = vec![*branch_a.as_uuid()];
-        let err = ensure_branch_rewrite_in_scope(&scope, &current, &requested)
-            .expect_err("removing B outside actor scope must fail closed");
-        assert_eq!(err.kind(), ErrorKind::Forbidden);
-    }
-
-    #[test]
-    fn allows_in_scope_membership_rewrite() {
-        let branch_a = BranchId::new();
-        let scope = BranchScope::single(branch_a);
-        let current = vec![*branch_a.as_uuid()];
-        let requested = vec![*branch_a.as_uuid()];
-        ensure_branch_rewrite_in_scope(&scope, &current, &requested)
-            .expect("in-scope rewrite must pass");
-    }
-
-    #[test]
-    fn still_refuses_branch_addition_outside_caller_scope() {
-        let branch_a = BranchId::new();
-        let branch_b = BranchId::new();
-        let scope = BranchScope::single(branch_a);
-        let current = vec![*branch_a.as_uuid()];
-        let requested = vec![*branch_a.as_uuid(), *branch_b.as_uuid()];
-        let err = ensure_branch_rewrite_in_scope(&scope, &current, &requested)
-            .expect_err("adding B outside actor scope must fail closed");
-        assert_eq!(err.kind(), ErrorKind::Forbidden);
-    }
-
-    #[test]
-    fn all_scope_allows_cross_branch_rewrite() {
-        let branch_a = BranchId::new();
-        let branch_b = BranchId::new();
-        let current = vec![*branch_a.as_uuid(), *branch_b.as_uuid()];
-        let requested = vec![*branch_a.as_uuid()];
-        ensure_branch_rewrite_in_scope(&BranchScope::All, &current, &requested)
-            .expect("BranchScope::All must not gate membership rewrites");
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Scope check + row fetchers
 // ---------------------------------------------------------------------------
@@ -2827,4 +2777,54 @@ fn branch_from_row(row: &sqlx::postgres::PgRow) -> Result<BranchSummary, PgOrgEr
         deactivated_at: row.try_get("deactivated_at")?,
         created_at: row.try_get("created_at")?,
     })
+}
+
+#[cfg(test)]
+mod ensure_branch_rewrite_in_scope_tests {
+    use super::*;
+
+    /// console-o498: Branches({A}) must not drop U from B by rewriting to [A].
+    #[test]
+    fn refuses_branch_removal_outside_caller_scope() {
+        let branch_a = BranchId::new();
+        let branch_b = BranchId::new();
+        let scope = BranchScope::single(branch_a);
+        let current = vec![*branch_a.as_uuid(), *branch_b.as_uuid()];
+        let requested = vec![*branch_a.as_uuid()];
+        let err = ensure_branch_rewrite_in_scope(&scope, &current, &requested)
+            .expect_err("removing B outside actor scope must fail closed");
+        assert_eq!(err.kind(), ErrorKind::Forbidden);
+    }
+
+    #[test]
+    fn allows_in_scope_membership_rewrite() {
+        let branch_a = BranchId::new();
+        let scope = BranchScope::single(branch_a);
+        let current = vec![*branch_a.as_uuid()];
+        let requested = vec![*branch_a.as_uuid()];
+        ensure_branch_rewrite_in_scope(&scope, &current, &requested)
+            .expect("in-scope rewrite must pass");
+    }
+
+    #[test]
+    fn still_refuses_branch_addition_outside_caller_scope() {
+        let branch_a = BranchId::new();
+        let branch_b = BranchId::new();
+        let scope = BranchScope::single(branch_a);
+        let current = vec![*branch_a.as_uuid()];
+        let requested = vec![*branch_a.as_uuid(), *branch_b.as_uuid()];
+        let err = ensure_branch_rewrite_in_scope(&scope, &current, &requested)
+            .expect_err("adding B outside actor scope must fail closed");
+        assert_eq!(err.kind(), ErrorKind::Forbidden);
+    }
+
+    #[test]
+    fn all_scope_allows_cross_branch_rewrite() {
+        let branch_a = BranchId::new();
+        let branch_b = BranchId::new();
+        let current = vec![*branch_a.as_uuid(), *branch_b.as_uuid()];
+        let requested = vec![*branch_a.as_uuid()];
+        ensure_branch_rewrite_in_scope(&BranchScope::All, &current, &requested)
+            .expect("BranchScope::All must not gate membership rewrites");
+    }
 }
