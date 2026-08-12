@@ -605,6 +605,7 @@ pub async fn write_in_tx(
 /// `scope_headcount` (ACTIVE-only) so EXITED heads are not rewritten via
 /// Transfer. Employees without an `employment_source_bindings` row are refused
 /// — a bulk rewrite of unbound heads is not a transfer.
+#[allow(clippy::too_many_arguments)] // tx + org/actor/op ids + from/to/company/valid_from mirror the apply-op surface
 pub async fn reassign_org_unit_via_transfers_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     org: OrgId,
