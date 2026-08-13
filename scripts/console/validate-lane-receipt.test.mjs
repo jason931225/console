@@ -14,7 +14,9 @@ const BASE = '4417bb377a1b2c3d4e5f60718293a4b5c6d7e8f9';
 
 // Suite floor: an emptied suite must not stay green. Every test body increments; the
 // after() hook fails if fewer than FLOOR bodies executed (same idiom as SCANNED_FLOOR).
-const FLOOR = 18;
+// Pin-to-current-count discipline: bump FLOOR when adding a test, exactly like the
+// 29/122/366 preflight pins.
+const FLOOR = 21;
 let executed = 0;
 after(() => {
   assert.ok(executed >= FLOOR, `suite floor: ${executed} test bodies executed, expected >= ${FLOOR}`);

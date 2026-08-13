@@ -85,9 +85,9 @@
         "rollback": { "$ref": "#/$defs/nonEmptyString" },
         "stopConditions": { "$ref": "#/$defs/nonEmptyString" },
         "reviewIdentities": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "remainingHolds": { "type": "array" },
+        "remainingHolds": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" } },
         "result": { "type": "string", "enum": ["green", "red", "parked"] },
-        "followUps": { "type": "array" }
+        "followUps": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" } }
       }
     },
     "criticReceipt": {

@@ -2,7 +2,7 @@
   "kind": "lane",
   "lane": "v-lane-receipt-validator-20260812",
   "status": "done",
-  "summary": "Tracked lane-receipt schema (scripts/console/lane-receipt.schema.json), dependency-free validator CLI (scripts/console/validate-lane-receipt.mjs), 8-test node:test suite, wired into package.json scripts, ci.yml preflight step, check-ci-preflight proofRun + pins, CI-GATES.md inventory, and regenerated doc manifests.",
+  "summary": "Tracked lane-receipt schema (scripts/console/lane-receipt.schema.json), dependency-free validator CLI (scripts/console/validate-lane-receipt.mjs), 21-test node:test suite (incl. cross-authority parity pins, dual-validation, and --dir examined-zero scans), wired into package.json scripts, ci.yml preflight step, check-ci-preflight proofRun + pins, CI-GATES.md inventory, and regenerated doc manifests.",
   "filesChanged": [
     "scripts/console/lane-receipt.schema.json",
     "scripts/console/validate-lane-receipt.mjs",
@@ -17,7 +17,7 @@
     ".cursor/receipts/v-lane-receipt-validator-20260812.json"
   ],
   "redBaseline": "Planted-red proofs executed and pasted in test suite development: schema-violating receipt (missing required field) exits 1; examined-zero (no-arg invocation) exits 1; foundation-gates docs-drift gate observed RED when test:lane-receipt was undocumented in CI-GATES.md, then GREEN after inventory entry (bisect: clean b2acd80c 6/6 PASS, dbb5443 6/6 PASS, wiring-without-doc FAIL).",
-  "verification": "npm run test:lane-receipt 8/8 pass; node scripts/check-ci-preflight.mjs contract passed; node --test scripts/check-ci-preflight.test.mjs 57/57 pass; js-test-reachability 47 suites exact-wired dark 0; check-mjs-dark-suites --strict ok; foundation-gates 6/6 pass; generate-documentation-manifest --check OK (438 markdown files); porcelain clean at tip.",
+  "verification": "npm run test:lane-receipt 21/21 pass; npm run check:lane-receipt (--dir scan of .cursor/receipts) exit 0; node scripts/check-ci-preflight.mjs contract passed; node --test scripts/check-ci-preflight.test.mjs 57/57 pass; js-test-reachability 47 suites exact-wired dark 0; check-mjs-dark-suites --strict ok; foundation-gates 6/6 pass; generate-documentation-manifest --check OK (438 markdown files); porcelain clean at tip.",
   "contractBreaches": "none",
   "headSha": "9595fc64a51196f86b3e0ee7cdbcbd83efae61cf",
   "baseSha": "b2acd80c4d7f340199b9147f6df9318d74af5f8d",
@@ -55,13 +55,14 @@
   "reviewIdentities": [
     "executor: 29-VLaneValidator (Grok 4.6) authored dbb544347",
     "leader: GJC sessions 019ff78e/019ff867 (Fable) authored wiring 88dcbc845, this receipt, and the R2 fix round",
-    "R2: architect R2-VLaneValidator (Opus, cross-family, read-only) verdict BLOCK at 55331bc27 — 1 blocker (third field-list spelling, proven), 3 major, 5 minor, 6 challenges; all blocker/major findings and cheap minors fixed in one consolidated round; verdict receipt at .cursor/receipts/v-lane-receipt-validator-20260812-critic.json"
+    "R2: architect R2-VLaneValidator (Opus, cross-family, read-only). Round 1: BLOCK at 55331bc27 (1 blocker proven: third field-list spelling; 3 major; 5 minor; 6 challenges). One consolidated fix round (9595fc64a + ac6f2a4de). Round 2 delta re-critique: APPROVE with filed findings (1 unproven major routed to consolidation lane). Verdict receipt: .cursor/receipts/v-lane-receipt-validator-20260812-critic.json"
   ],
   "remainingHolds": [],
   "result": "green",
   "followUps": [
     "Pre-existing on origin/main: docs/CI-GATES.md has 1 broken citation (line ~902, migration 0600 .xctestrun) and 2 unverifiable line-number citations; CI-GATES.md is not in wired check:doc-citations scope despite being a declared documentInputs entry of check:foundation-gates; route to W1.1 T1 custody lane",
     "CONSOLIDATION LANE (third-spelling closure): scripts/cursor/validate-lane-receipt.mjs is TRACKED since a762d1d6c (#738), and .claude/workflows/lane-fanout.js BUILD_SCHEMA/REVIEW_SCHEMA is CI-pinned by lane-fanout.test.mjs (preflight step 28). Three authorities must collapse to ONE survivor: this schema JSON, with the cursor validator and lane-fanout deriving from it. Owned roots .cursor/** and .claude/** are leased — needs its own lane. Includes: migrate 30 legacy kind-less receipts (add kind), update .cursor/PROCESS-SYNTHESIS.md:24 row mapping schema-required fields to BUILD_SCHEMA, update agent-card/hook validation commands, and decide critic-branch tip binding (headSha on critic receipts) — deliberately NOT added here to avoid diverging from all three incumbent authorities (Chesterton)",
-    "Interim parity is pinned by execution: BUILD_SCHEMA.required subset-of laneReceipt.required and REVIEW_SCHEMA.required subset-of criticReceipt.required tests fail on drift in either direction, and this receipt is dual-validated by an executed test"
+    "Interim parity is pinned by execution: BUILD_SCHEMA.required subset-of laneReceipt.required and REVIEW_SCHEMA.required subset-of criticReceipt.required tests fail on drift in either direction, and this receipt is dual-validated by an executed test",
+    "R2-APPROVE filed findings for the consolidation lane (see critic receipt): scanDir must skip only ABSENT kind (present-but-unrecognised kind = defect, unproven major); converge the commands/commandsRun vocabulary; report the closest oneOf branch failure instead of branchFailures[0]; give check:lane-receipt a caller or fold it into the suite; reject --schema combined with --dir"
   ]
 }
