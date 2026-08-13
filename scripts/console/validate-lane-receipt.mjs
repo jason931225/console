@@ -5,14 +5,56 @@
  * Usage:
  *   node scripts/console/validate-lane-receipt.mjs <receipt.json...> [--schema lane|critic]
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCHEMA_URL = new URL('./lane-receipt.schema.json', import.meta.url);
 const SCHEMA = JSON.parse(readFileSync(SCHEMA_URL, 'utf8'));
-const NA_ENFORCEMENT = 'n/a - adds no enforcement';
-const KINDS = new Set(['lane', 'critic']);
+// Parity with the tracked incumbent (scripts/cursor/validate-lane-receipt.mjs) and
+// .claude/workflows/lane-fanout.js BUILD_SCHEMA: case-insensitive prefix, not exact equality.
+const NA_ENFORCEMENT = /^n\/a\s*-\s*adds no enforcement\b/i;
+
+// Every JSON Schema keyword the walker implements. A schema edit that introduces a keyword
+// outside this set must throw at load time instead of silently enforcing nothing.
+const IMPLEMENTED_KEYWORDS = new Set([
+  '$ref', 'oneOf', 'type', 'const', 'enum', 'minLength', 'pattern',
+  'properties', 'required', 'minItems', 'items',
+]);
+const METADATA_KEYS = new Set(['$schema', '$id', 'title', '$defs', 'description']);
+
+function assertSchemaKeywords(node, path) {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return;
+  for (const [key, child] of Object.entries(node)) {
+    if (!IMPLEMENTED_KEYWORDS.has(key) && !METADATA_KEYS.has(key)) {
+      throw new Error(`schema keyword "${key}" at ${path} is not implemented by this validator`);
+    }
+    if (key === '$defs' || key === 'properties') {
+      for (const [name, sub] of Object.entries(child)) assertSchemaKeywords(sub, `${path}/${key}/${name}`);
+    } else if (key === 'oneOf') {
+      child.forEach((sub, i) => assertSchemaKeywords(sub, `${path}/oneOf/${i}`));
+    } else if (key === 'items') {
+      assertSchemaKeywords(child, `${path}/items`);
+    }
+  }
+}
+assertSchemaKeywords(SCHEMA, '#');
+
+// Kind registry derived from the root oneOf so the schema file stays the single source
+// of which receipt kinds exist; no JS-side duplicate list.
+function buildShapes() {
+  const shapes = new Map();
+  for (const branch of SCHEMA.oneOf) {
+    const shape = resolveRef(branch, SCHEMA);
+    const kinds = shape?.properties?.kind?.enum;
+    if (!Array.isArray(kinds) || kinds.length !== 1) {
+      throw new Error('every root oneOf branch must declare properties.kind.enum with exactly one kind');
+    }
+    shapes.set(kinds[0], shape);
+  }
+  if (shapes.size === 0) throw new Error('schema root oneOf declares zero receipt kinds');
+  return shapes;
+}
 
 function pointer(base, key) {
   if (base === '') return String(key);
@@ -58,16 +100,23 @@ function walk(value, node, field, defects, root) {
 
   if (Array.isArray(schema.oneOf)) {
     const branchFailures = [];
+    let matched = false;
     for (const branch of schema.oneOf) {
       const inner = [];
       walk(value, branch, field, inner, root);
-      if (inner.length === 0) return;
+      if (inner.length === 0) {
+        matched = true;
+        break;
+      }
       branchFailures.push(inner);
     }
-    for (const inner of branchFailures[0] ?? [{ field, reason: 'does not match any oneOf branch' }]) {
-      defects.push(inner);
+    if (!matched) {
+      for (const inner of branchFailures[0] ?? [{ field, reason: 'does not match any oneOf branch' }]) {
+        defects.push(inner);
+      }
+      return;
     }
-    return;
+    // fall through: sibling keywords on the same node still apply after a oneOf match
   }
 
   if (schema.type !== undefined) {
@@ -94,10 +143,10 @@ function walk(value, node, field, defects, root) {
   }
 
   if (typeof schema.pattern === 'string' && typeof value === 'string' && !new RegExp(schema.pattern).test(value)) {
-    defects.push({
-      field,
-      reason: schema.pattern === '^[0-9a-fA-F]{40}$' ? 'must be 40-hex' : `must match ${schema.pattern}`,
-    });
+    let reason = `must match ${schema.pattern}`;
+    if (schema.pattern === '^[0-9a-fA-F]{40}$') reason = 'must be 40-hex';
+    if (schema.pattern === '\\S') reason = 'must not be blank (whitespace-only strings are a false green)';
+    defects.push({ field, reason });
   }
 
   if (jsType(value) === 'object' && schema.properties) {
@@ -126,36 +175,61 @@ function walk(value, node, field, defects, root) {
 }
 
 function enforcementAnswersContract(text) {
+  // Exact parity with scripts/cursor/validate-lane-receipt.mjs: the answer must name
+  // WHERE/sequence/subject; no third keyword contract spelling.
   const lowered = text.toLowerCase();
-  const where = lowered.includes('where') || /\bruns\b/.test(lowered);
-  const finest = lowered.includes('finest') || lowered.includes('data-source') || lowered.includes('data source');
-  const examinedZero = lowered.includes('examined-zero') || lowered.includes('examined zero');
-  return where && finest && examinedZero;
+  return lowered.includes('where') || lowered.includes('sequence') || lowered.includes('subject');
+}
+
+function blockingFindings(findings) {
+  return findings.filter((f) => {
+    if (!f || typeof f !== 'object' || f.ownerLease === true) return false;
+    if (f.severity === 'blocker') return true;
+    return f.severity === 'major' && f.provenByExecution === true;
+  });
+}
+
+function nonEmptyCommands(value) {
+  return Array.isArray(value) && value.length > 0
+    && value.every((c) => typeof c === 'string' && c.trim().length > 0);
 }
 
 function applyConditionalRules(receipt, kind, defects) {
   if (kind === 'lane' && typeof receipt.enforcementPlacement === 'string' && receipt.enforcementPlacement.length > 0) {
-    if (receipt.enforcementPlacement !== NA_ENFORCEMENT && !enforcementAnswersContract(receipt.enforcementPlacement)) {
+    if (!NA_ENFORCEMENT.test(receipt.enforcementPlacement) && !enforcementAnswersContract(receipt.enforcementPlacement)) {
       defects.push({
         field: 'enforcementPlacement',
-        reason: `must be exactly "${NA_ENFORCEMENT}" or answer where the gate runs, finest data-source distinction, and how examined-zero fails`,
+        reason: 'must start with "n/a - adds no enforcement" or answer WHERE the gate runs / its subject (see agent ritual card)',
       });
     }
   }
-  if (
-    kind === 'critic'
-    && receipt.verdict === 'BLOCK'
-    && Array.isArray(receipt.findings)
-    && receipt.findings.length === 0
-  ) {
-    defects.push({ field: 'findings', reason: 'empty findings array is valid only with verdict APPROVE' });
+  if (kind === 'lane' && receipt.status === 'done' && !nonEmptyCommands(receipt.commands)) {
+    defects.push({
+      field: 'commands',
+      reason: 'status=done requires commands: non-empty string[] with no blank entries (commands:[""] is a false green)',
+    });
+  }
+  if (kind === 'critic' && Array.isArray(receipt.findings)) {
+    if (receipt.verdict === 'BLOCK' && receipt.findings.length === 0) {
+      defects.push({ field: 'findings', reason: 'empty findings array is valid only with verdict APPROVE' });
+    }
+    if (receipt.verdict === 'APPROVE') {
+      const blocking = blockingFindings(receipt.findings);
+      if (blocking.length > 0) {
+        defects.push({
+          field: 'verdict',
+          reason: `APPROVE conflicts with ${blocking.length} blocking finding(s) (blocker, or major+provenByExecution, ownerLease excluded)`,
+        });
+      }
+    }
   }
 }
 
+const SHAPES = buildShapes();
+const KINDS = new Set(SHAPES.keys());
+
 function selectShape(kind) {
-  if (kind === 'lane') return SCHEMA.$defs.laneReceipt;
-  if (kind === 'critic') return SCHEMA.$defs.criticReceipt;
-  return null;
+  return SHAPES.get(kind) ?? null;
 }
 
 function detectKind(receipt, forced) {
@@ -191,6 +265,7 @@ export function validateReceipt(receipt, forcedKind = null) {
 
 export function parseArgs(argv) {
   let schemaKind = null;
+  let dir = null;
   const files = [];
   const defects = [];
   for (let i = 0; i < argv.length; i++) {
@@ -202,13 +277,55 @@ export function parseArgs(argv) {
       } else {
         schemaKind = value;
       }
+    } else if (arg === '--dir') {
+      const value = argv[++i];
+      if (typeof value !== 'string' || value.length === 0) {
+        defects.push({ path: '', field: '--dir', reason: 'requires a directory path' });
+      } else {
+        dir = value;
+      }
     } else if (arg.startsWith('-')) {
       defects.push({ path: '', field: arg, reason: 'unknown option' });
     } else {
       files.push(arg);
     }
   }
-  return { schemaKind, files, defects };
+  return { schemaKind, dir, files, defects };
+}
+
+// Directory scan: validate every kind-bearing receipt under dir. Receipts without a `kind`
+// discriminator predate this schema and stay under the incumbent validators until the
+// consolidation lane migrates them; a scan that examines ZERO kind-bearing receipts FAILS.
+export function scanDir(dir, lines) {
+  let entries;
+  try {
+    entries = readdirSync(dir).filter((name) => name.endsWith('.json')).sort();
+  } catch (error) {
+    lines.push(formatDefect(dir, '', `cannot read directory: ${error.message}`));
+    return 0;
+  }
+  let examined = 0;
+  for (const name of entries) {
+    const file = join(dir, name);
+    let receipt;
+    try {
+      receipt = JSON.parse(readFileSync(file, 'utf8'));
+    } catch (error) {
+      lines.push(formatDefect(file, '', `invalid JSON: ${error.message}`));
+      continue;
+    }
+    if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) || !KINDS.has(receipt.kind)) {
+      continue; // legacy pre-schema receipt: incumbent validators own it until consolidation
+    }
+    examined += 1;
+    for (const defect of validateReceipt(receipt)) {
+      lines.push(formatDefect(file, defect.field, defect.reason));
+    }
+  }
+  if (examined === 0) {
+    lines.push(formatDefect(dir, '', 'examined zero kind-bearing receipts (examined-zero must fail, never pass)'));
+  }
+  return examined;
 }
 
 function formatDefect(path, field, reason) {
@@ -217,10 +334,20 @@ function formatDefect(path, field, reason) {
 }
 
 export function main(argv = process.argv.slice(2)) {
-  const { schemaKind, files, defects: argDefects } = parseArgs(argv);
-  if (files.length === 0) {
+  const { schemaKind, dir, files, defects: argDefects } = parseArgs(argv);
+  if (files.length === 0 && dir === null) {
     console.error('examined zero receipts');
     return 1;
+  }
+  if (dir !== null) {
+    const lines = argDefects.map((d) => formatDefect(d.path, d.field, d.reason));
+    for (const file of files) lines.push(formatDefect(file, '', 'positional receipts cannot be combined with --dir'));
+    scanDir(dir, lines);
+    if (lines.length) {
+      for (const line of lines) console.error(line);
+      return 1;
+    }
+    return 0;
   }
   const lines = argDefects.map((d) => formatDefect(d.path, d.field, d.reason));
   for (const file of files) {
