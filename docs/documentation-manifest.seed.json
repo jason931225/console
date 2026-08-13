@@ -3690,6 +3690,16 @@
     "archive_tag": null
   },
   {
+    "path": "docs/program/ledger/2026-08-12-w1-lane-receipt-validator-admit.md",
+    "class": "evidence",
+    "owner": "repository maintainers",
+    "status": "frozen",
+    "replacement": null,
+    "retention": "retain",
+    "blob_sha": "179f950731a1e0eda497526d554aa6a1beb9f494",
+    "archive_tag": null
+  },
+  {
     "path": "docs/program/legacy-intent-register.md",
     "class": "evidence",
     "owner": "repository maintainers",

@@ -3,12 +3,12 @@
   "verdict": "APPROVE",
   "reviewer": "architect R2-VLaneValidator (Claude Opus, cross-family; executor was Grok)",
   "reviewedRange": "b2acd80c4d7f340199b9147f6df9318d74af5f8d..ac6f2a4dee3aaab0101d0e0f2af7a378dde9f7fb",
-  "rounds": "R1 BLOCK at 55331bc27 (1 blocker proven: third tracked spelling of the receipt field list dropping CI-pinned BUILD_SCHEMA fields; 3 major; 5 minor). One consolidated fix round (9595fc64a + ac6f2a4de). R2 delta re-critique: APPROVE.",
+  "rounds": "R1 BLOCK at 55331bc27 (1 blocker proven: third tracked spelling of the receipt field list dropping CI-pinned BUILD_SCHEMA fields; 3 major; 5 minor). One consolidated fix round (9595fc64a + ac6f2a4de). R2 delta re-critique: APPROVE. R3 delta pass (1-R3-VLaneDelta, Opus): APPROVE bound to final product tip 21fbc60bc covering ac6f2a4de..21fbc60bc; see -critic-r3.json.",
   "findings": [
     {
       "severity": "major",
       "claim": "scanDir skip predicate conflates 'kind absent' with 'kind unrecognised': a receipt opting in with a malformed discriminator (e.g. kind:'build' or kind:'Lane') is silently skipped and validated by nothing; examined-zero cannot catch it while this lane's receipt keeps examined >= 1. Total form: skip only when the kind property is ABSENT; present-but-unrecognised must be a defect.",
-      "failureScenario": "A future lane copies the only kind-bearing receipt as template with kind:'build', omits redBaseline and stopConditions; test:lane-receipt and check:lane-receipt both exit 0; the invalid receipt is never seen by any validator. Routed to the consolidation lane followUp (unproven major: filed per convergence doctrine, not a merge bar).",
+      "failureScenario": "A future lane copies the only kind-bearing receipt as template with kind:'build', omits redBaseline and stopConditions; test:lane-receipt and check:lane-receipt both exit 0; the invalid receipt is never seen by any validator. Originally routed to the consolidation lane as unproven. POST-VERDICT: proven by a Codex review probe and reproduced by the leader (exit 0 pre-fix); CLOSED in 21fbc60bc (skip keys on Object.hasOwn(receipt,\"kind\"); planted-red test added, FLOOR 22). provenByExecution stays false here because it records the R2 verdict-time state; the proof and fix are bound in -critic-r3.json.",
       "location": "scripts/console/validate-lane-receipt.mjs scanDir skip predicate",
       "provenByExecution": false,
       "ownerLease": false
