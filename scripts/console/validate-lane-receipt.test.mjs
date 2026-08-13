@@ -16,7 +16,7 @@ const BASE = '4417bb377a1b2c3d4e5f60718293a4b5c6d7e8f9';
 // after() hook fails if fewer than FLOOR bodies executed (same idiom as SCANNED_FLOOR).
 // Pin-to-current-count discipline: bump FLOOR when adding a test, exactly like the
 // 29/122/366 preflight pins.
-const FLOOR = 21;
+const FLOOR = 22;
 let executed = 0;
 after(() => {
   assert.ok(executed >= FLOOR, `suite floor: ${executed} test bodies executed, expected >= ${FLOOR}`);
@@ -284,6 +284,17 @@ test('--dir scan validates kind-bearing receipts and fails on a bad one', () => 
   });
 });
 
+test('--dir scan FAILS a present-but-unrecognised kind instead of skipping it (planted red)', () => {
+  executed += 1;
+  withTemp((dir) => {
+    writeReceipt(dir, 'good.json', validLane());
+    writeReceipt(dir, 'misspelled.json', { kind: 'build', status: 'done' });
+    const result = run(['--dir', dir]);
+    assert.equal(result.status, 1, 'a kind-bearing receipt with an unrecognised kind must fail, not be skipped');
+    assert.match(result.stderr, /kind must be lane\|critic/);
+  });
+});
+
 test('--dir scan of the real tracked receipts directory examines at least this lane receipt and passes', () => {
   executed += 1;
   const result = run(['--dir', join(repoRoot, '.cursor', 'receipts')]);
@@ -298,7 +309,13 @@ test('cross-authority parity: BUILD_SCHEMA required fields are a subset of laneR
   const buildMatch = laneFanout.match(/const BUILD_SCHEMA = \{[^]*?required: \[([^\]]*)\]/);
   assert.ok(buildMatch, 'BUILD_SCHEMA required list must be extractable (examined-zero fails)');
   const buildRequired = [...buildMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  assert.ok(buildRequired.length >= 8, `BUILD_SCHEMA extraction found only ${buildRequired.length} fields`);
+  // Exact pin, not a one-way floor: a same-size substitution inside BUILD_SCHEMA.required
+  // (e.g. swapping 'verification' for an already-present lane-only field) must go red here.
+  assert.deepEqual(
+    [...buildRequired].sort(),
+    ['contractBreaches', 'enforcementPlacement', 'filesChanged', 'peripheralsUpdated', 'redBaseline', 'status', 'summary', 'verification'],
+    'BUILD_SCHEMA.required drifted from the pinned cross-authority list',
+  );
   const laneRequired = new Set(schema.$defs.laneReceipt.required);
   for (const field of buildRequired) {
     assert.ok(laneRequired.has(field), `laneReceipt.required must include BUILD_SCHEMA field "${field}"`);
@@ -307,7 +324,11 @@ test('cross-authority parity: BUILD_SCHEMA required fields are a subset of laneR
   const reviewMatch = laneFanout.match(/const REVIEW_SCHEMA = \{[^]*?required: \[([^\]]*)\]/);
   assert.ok(reviewMatch, 'REVIEW_SCHEMA required list must be extractable (examined-zero fails)');
   const reviewRequired = [...reviewMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  assert.ok(reviewRequired.length >= 2, `REVIEW_SCHEMA extraction found only ${reviewRequired.length} fields`);
+  assert.deepEqual(
+    [...reviewRequired].sort(),
+    ['findings', 'verdict'],
+    'REVIEW_SCHEMA.required drifted from the pinned cross-authority list',
+  );
   const criticRequired = new Set(schema.$defs.criticReceipt.required);
   for (const field of reviewRequired) {
     assert.ok(criticRequired.has(field), `criticReceipt.required must include REVIEW_SCHEMA field "${field}"`);

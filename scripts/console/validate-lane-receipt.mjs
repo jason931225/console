@@ -293,9 +293,11 @@ export function parseArgs(argv) {
   return { schemaKind, dir, files, defects };
 }
 
-// Directory scan: validate every kind-bearing receipt under dir. Receipts without a `kind`
-// discriminator predate this schema and stay under the incumbent validators until the
-// consolidation lane migrates them; a scan that examines ZERO kind-bearing receipts FAILS.
+// Directory scan: validate every kind-bearing receipt under dir. Only receipts with NO own
+// `kind` property predate this schema and stay under the incumbent validators until the
+// consolidation lane migrates them; a receipt that carries a `kind` — recognised or not —
+// is examined, so a misspelled or incumbent kind (e.g. "build") FAILS instead of slipping
+// past the gate. A scan that examines ZERO kind-bearing receipts FAILS.
 export function scanDir(dir, lines) {
   let entries;
   try {
@@ -314,8 +316,8 @@ export function scanDir(dir, lines) {
       lines.push(formatDefect(file, '', `invalid JSON: ${error.message}`));
       continue;
     }
-    if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) || !KINDS.has(receipt.kind)) {
-      continue; // legacy pre-schema receipt: incumbent validators own it until consolidation
+    if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) || !Object.hasOwn(receipt, 'kind')) {
+      continue; // legacy pre-schema receipt (no kind discriminator): incumbent validators own it until consolidation
     }
     examined += 1;
     for (const defect of validateReceipt(receipt)) {
