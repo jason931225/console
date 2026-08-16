@@ -8,6 +8,7 @@ import test from 'node:test';
 import yaml from 'js-yaml';
 import {
   assertReleasePleaseActionCoreBinding,
+  assertReleasePleasePrePushSnapshot,
   createReleasePushAskpass,
   parseReleasePleaseActionPr,
   pollReleasePleasePostPushHead,
@@ -136,7 +137,7 @@ const pollFixture = (overrides = {}) => ({
   ...overrides,
 });
 const protectedReleaseIssuerClosure = Object.freeze([
-  ['./converge-release-please-doc-custody.mjs', 'd8a2f061dc639ee903fbb45be81728947e8ed0c9264f8a4370d6eeda5a4c495a'],
+  ['./converge-release-please-doc-custody.mjs', '5079387e9c5553e00f7ec34fa1d120b5bcd33a5a995201ab6a9f0669f6227693'],
   ['./generate-documentation-manifest.mjs', 'eb353f442a6d7d84b659d43424dd52fbf9243f73d813f840e2d14aa7277fef77'],
   ['./release-please-bot-candidate.mjs', 'ae3d1069165ca4aaa88a36cac8f13d8d45d952f87fb23c510da0d0a957e62fdf'],
   ['./authority-ledger-path.mjs', '756e838e3979508d3be0b7d9974a0e719de9f1a08effbe60c272c2cad25b498e'],
@@ -162,6 +163,38 @@ test('post-push proof polling accepts only the exact new tip with bounded old-ti
     assert.equal(accepted.head.sha, N);
     assert.equal(reads, expectedReads);
     assert.equal(sleeps, expectedSleeps);
+  }
+});
+
+test('pre-push validation rejects stable metadata drift before transport work', () => {
+  const independentlyBoundFields = new Set([
+    'number',
+    'state',
+    'draft state',
+    'title',
+    'body',
+    'creator login',
+    'head ref',
+    'head repository name',
+    'base ref',
+    'base SHA',
+    'base repository name',
+  ]);
+  for (const [label, mutate] of postPushMetadataMutations) {
+    if (!independentlyBoundFields.has(label)) continue;
+    const initialPr = postPushPr(T);
+    mutate(initialPr);
+    assert.throws(
+      () => assertReleasePleasePrePushSnapshot({
+        actionPr,
+        initialPr,
+        repository: REPOSITORY,
+        expectedParentSha: C,
+        oldTip: T,
+      }),
+      new RegExp(`pre-push live PR ${label} changed`, 'i'),
+      label,
+    );
   }
 });
 
@@ -503,18 +536,22 @@ test('keeps the push token out of argv, process errors, and non-password askpass
   }
 });
 
-test('protected producer accepts the exact post-push head before emitting proof outputs', () => {
+test('protected producer validates before transport and accepts the exact post-push head before proof', () => {
   const source = readFileSync(
     new URL('./converge-release-please-doc-custody.mjs', import.meta.url),
     'utf8',
   );
   const main = source.slice(source.indexOf('export function main()'));
+  assert.equal([...main.matchAll(/assertReleasePleasePrePushSnapshot\(\{/g)].length, 1);
   assert.equal([...main.matchAll(/pollReleasePleasePostPushHead\(\{/g)].length, 1);
   assert.equal([...main.matchAll(/emitProofOutputs\(\{/g)].length, 1);
+  const prePushValidation = main.indexOf('assertReleasePleasePrePushSnapshot({');
+  const worktree = main.indexOf("run('git', ['worktree', 'add', '--detach', work, tip]);");
   const push = main.indexOf("run('git', invocation.args, { cwd: work, env: invocation.env });");
   const poll = main.indexOf('pollReleasePleasePostPushHead({', push);
   const output = main.indexOf('emitProofOutputs({ prNumber: binding.prNumber', poll);
-  assert.ok(push >= 0 && poll > push && output > poll);
+  assert.ok(prePushValidation >= 0 && worktree > prePushValidation);
+  assert.ok(push > worktree && poll > push && output > poll);
   assert.doesNotMatch(main.slice(push, output), /const finalPr = ghJson/);
 });
 
@@ -528,6 +565,7 @@ const expectedReleaseWorkflow = Object.freeze({
   jobs: {
     'release-please': {
       'runs-on': 'ubuntu-latest',
+      'timeout-minutes': 10,
       permissions: { contents: 'write', 'pull-requests': 'write' },
       outputs: {
         pr_number: '${{ steps.converge.outputs.pr_number }}',
@@ -607,6 +645,7 @@ test('protected release workflow keeps the PAT transport-only and emits one nati
   );
   const model = yaml.load(source);
   assert.deepEqual(model, expectedReleaseWorkflow);
+  assert.equal(model.jobs['release-please']['timeout-minutes'], 10);
   const releaseConfig = JSON.parse(readFileSync(
     new URL('../../release-please-config.json', import.meta.url),
     'utf8',

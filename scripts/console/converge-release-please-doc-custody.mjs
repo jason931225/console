@@ -85,9 +85,9 @@ function positiveSafeInteger(value, label) {
   return value;
 }
 
-function assertPostPushStablePr(pr, expected) {
+function assertStableReleasePr(pr, expected, phase) {
   if (pr === null || Array.isArray(pr) || typeof pr !== 'object') {
-    fail('post-push live PR metadata must be an object');
+    fail(`${phase} live PR metadata must be an object`);
   }
   const checks = [
     [pr.number === expected.number, 'number'],
@@ -106,7 +106,7 @@ function assertPostPushStablePr(pr, expected) {
     [pr?.base?.repo?.id === expected.repositoryId, 'base repository id'],
   ];
   for (const [valid, label] of checks) {
-    if (!valid) fail(`post-push live PR ${label} changed`);
+    if (!valid) fail(`${phase} live PR ${label} changed`);
   }
 }
 
@@ -149,17 +149,12 @@ export function parseReleasePleaseActionPr(raw) {
   });
 }
 
-export function pollReleasePleasePostPushHead({
+export function assertReleasePleasePrePushSnapshot({
   actionPr,
   initialPr,
   repository,
   expectedParentSha,
   oldTip,
-  newTip,
-  readPullRequest,
-  sleep,
-  maxReads = 20,
-  delayMs = 500,
 } = {}) {
   if (!actionPr || typeof actionPr !== 'object') fail('release action PR output is unavailable');
   const repo = nonEmptyString(repository, 'protected repository');
@@ -168,17 +163,6 @@ export function pollReleasePleasePostPushHead({
   }
   const parentSha = exactSha(expectedParentSha, 'triggering main SHA');
   const oldSha = exactSha(oldTip, 'pre-push lease tip SHA');
-  const newSha = exactSha(newTip, 'post-push custody tip SHA');
-  if (oldSha === newSha) fail('pre-push and post-push tips must differ');
-  if (typeof readPullRequest !== 'function') fail('post-push PR reader must be a function');
-  if (typeof sleep !== 'function') fail('post-push sleeper must be a function');
-  if (!Number.isSafeInteger(maxReads) || maxReads < 1 || maxReads > 20) {
-    fail('post-push maximum reads must be an integer from 1 through 20');
-  }
-  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 500) {
-    fail('post-push delay must be an integer from 0 through 500 milliseconds');
-  }
-
   if (initialPr === null || Array.isArray(initialPr) || typeof initialPr !== 'object') {
     fail('pre-push live PR metadata must be an object');
   }
@@ -205,14 +189,46 @@ export function pollReleasePleasePostPushHead({
   if (initialPr?.base?.repo?.id !== expected.repositoryId) {
     fail('pre-push head and base repository ids must match');
   }
-  assertPostPushStablePr(initialPr, expected);
+  assertStableReleasePr(initialPr, expected, 'pre-push');
   if (exactSha(initialPr?.head?.sha, 'pre-push live PR head SHA') !== oldSha) {
     fail('pre-push live PR head must equal the lease tip');
   }
+  return Object.freeze({ expected, oldSha });
+}
+
+export function pollReleasePleasePostPushHead({
+  actionPr,
+  initialPr,
+  repository,
+  expectedParentSha,
+  oldTip,
+  newTip,
+  readPullRequest,
+  sleep,
+  maxReads = 20,
+  delayMs = 500,
+} = {}) {
+  const newSha = exactSha(newTip, 'post-push custody tip SHA');
+  if (typeof readPullRequest !== 'function') fail('post-push PR reader must be a function');
+  if (typeof sleep !== 'function') fail('post-push sleeper must be a function');
+  if (!Number.isSafeInteger(maxReads) || maxReads < 1 || maxReads > 20) {
+    fail('post-push maximum reads must be an integer from 1 through 20');
+  }
+  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 500) {
+    fail('post-push delay must be an integer from 0 through 500 milliseconds');
+  }
+  const { expected, oldSha } = assertReleasePleasePrePushSnapshot({
+    actionPr,
+    initialPr,
+    repository,
+    expectedParentSha,
+    oldTip,
+  });
+  if (oldSha === newSha) fail('pre-push and post-push tips must differ');
 
   for (let read = 1; read <= maxReads; read += 1) {
     const current = readPullRequest();
-    assertPostPushStablePr(current, expected);
+    assertStableReleasePr(current, expected, 'post-push');
     const currentSha = exactSha(current?.head?.sha, 'post-push live PR head SHA');
     if (currentSha === newSha) return current;
     if (currentSha !== oldSha) {
@@ -496,6 +512,13 @@ export function main() {
     headManifest: gitBytes(PROTECTED_ROOT, ['show', `${tip}:.release-please-manifest.json`]),
     baseChangelog: gitBytes(PROTECTED_ROOT, ['show', `${parent}:CHANGELOG.md`]),
     headChangelog: gitBytes(PROTECTED_ROOT, ['show', `${tip}:CHANGELOG.md`]),
+  });
+  assertReleasePleasePrePushSnapshot({
+    actionPr,
+    initialPr: pr,
+    repository,
+    expectedParentSha,
+    oldTip: tip,
   });
 
   const work = mkdtempSync(join(tmpdir(), 'console-rp-custody-'));

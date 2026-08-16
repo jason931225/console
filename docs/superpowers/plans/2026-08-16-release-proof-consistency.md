@@ -9,7 +9,7 @@
 
 **Goal:** Make the protected Release Please producer tolerate only a bounded stale-old-head GitHub API projection after its custody push, while preserving exact metadata and new-head proof binding.
 
-**Architecture:** Add a synchronous, dependency-injected polling seam to the protected convergence script. It validates the complete stable PR tuple before considering the head SHA, accepts only the exact new custody tip, retries only the exact old lease tip, and fails immediately on all other state. The existing producer calls the helper after force-with-lease and emits its native proof outputs only after exact-new acceptance.
+**Architecture:** Add a synchronous, dependency-injected polling seam to the protected convergence script. A shared validator rejects stable initial PR drift before any transport mutation and validates the complete tuple again before considering the head SHA on every post-push read. The poller accepts only the exact new custody tip, retries only the exact old lease tip, and fails immediately on all other state. The producer emits native proof outputs only after exact-new acceptance, and its job has a finite 10-minute deadline.
 
 **Tech Stack:** Node.js 24 ESM, `node:test`, GitHub CLI REST reads, GitHub Actions, repository documentation-custody generator.
 
@@ -22,7 +22,9 @@
 - Retry only the exact pre-push lease tip; accept only the exact new custody tip; reject any missing, malformed, or third SHA immediately.
 - API, JSON, stable-field, repository, creator, base, and bounds failures are terminal and are never retried.
 - Emit proof coordinates only after exact-new acceptance.
-- Do not change `.github/workflows/release-please.yml`, branch protection, secrets, signing, packages, images, or production configuration.
+- Change `.github/workflows/release-please.yml` only to add a 10-minute timeout
+  to the protected producer job; do not change triggers, permissions, secrets,
+  proof identity, branch protection, signing, packages, images, or production.
 - Do not overwrite the existing `RELEASE_PLEASE_TOKEN` secret.
 - Do not rerun protected run `31940004916` as a source-fix test; a new main push must exercise the merged protected source.
 - Stop on workflow ID/path drift, unexpected main/base/head/metadata movement, duplicate required contexts, wrong check provider, or any manual package/image/production action.
@@ -31,6 +33,9 @@
 
 - Modify `scripts/console/converge-release-please-doc-custody.mjs`: define the bounded polling state machine and call it after the custody push.
 - Modify `scripts/console/converge-release-please-doc-custody.test.mjs`: exercise every accepted, retryable, terminal, and integration-order state; refresh only the convergence-script closure digest.
+- Modify `.github/workflows/release-please.yml`: bound the protected producer
+  job to 10 minutes so a hung API read cannot hold the release concurrency lane
+  for GitHub's default limit.
 - Create `docs/superpowers/plans/2026-08-16-release-proof-consistency.md`: retain this non-authority implementation record.
 - Modify `docs/documentation-manifest.seed.json` and `docs/documentation-index.json`: generated custody records for this plan only.
 
@@ -497,7 +502,7 @@ Replace the `finalPr` block with:
     emitProofOutputs({ prNumber: binding.prNumber, headSha: newTip, parentSha: parent });
 ```
 
-Keep the existing `emitProofOutputs` call and returned coordinates unchanged. Do not catch poller errors, do not add a fallback output, and do not change workflow YAML.
+Keep the existing `emitProofOutputs` call and returned coordinates unchanged. Do not catch poller errors or add a fallback output. Extract the initial stable-field validation and invoke it before worktree/transport mutation, then add only the producer timeout described above to workflow YAML.
 
 - [ ] **Step 4: Refresh only the protected convergence-source digest**
 
@@ -652,7 +657,7 @@ gh pr create --repo jason931225/console \
 
 Exact candidate: head ${repair_head_sha}; tree ${repair_tree_sha}; patch SHA-256 ${repair_patch_sha}; base $(git rev-parse origin/main).
 
-Root cause: the protected producer treated one stale post-push Pulls API projection as terminal after a successful force-with-lease. This patch validates every stable PR field first, retries only the exact old lease SHA for at most 20 reads/9.5 seconds, accepts only the exact new custody SHA, and emits no proof on any other state.
+Root cause: the protected producer treated one stale post-push Pulls API projection as terminal after a successful force-with-lease. This patch rejects stable initial drift before transport, revalidates every stable field on each read, retries only the exact old lease SHA for at most 20 reads/9.5 seconds of deliberate sleep, accepts only the exact new custody SHA, and emits no proof on any other state. A 10-minute protected-producer deadline bounds a hung API call.
 
 Review lenses: Red Team, Operability/Day-2, Blast-radius, Zero-trust, YAGNI. Writer: /root. Independent reviewers: /root/security_review and /root/test_contract_review.
 
@@ -660,7 +665,7 @@ Verification: focused release-authority suite, CI-preflight contracts, syntax/di
 
 Pre-mortem: stale API state, third-SHA movement, stable metadata drift, token exposure, wrong proof provider, or base movement. Detection: exact read/sleep assertions, closure digest, exact-head hosted checks, native proof identity, and final PR/base/tree/path readback. Rollback: ordinary revert of this helper and digest. Stop: any unexpected SHA/metadata/provider/workflow/base drift.
 
-Blast radius is limited to Release Please post-push readback. No workflow, secret, branch-protection, package, image, or production change. Image/package/production work remains HOLD."
+Blast radius is limited to Release Please pre/post-push validation and a finite producer timeout. No workflow trigger/permission, secret, branch-protection, package, image, or production change. Image/package/production work remains HOLD."
 repair_pr_number="$(gh pr view codex/release-proof-consistency \
   --repo jason931225/console --json number --jq .number)"
 ```

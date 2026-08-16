@@ -37,6 +37,7 @@ boundary. It is not permission to weaken the exact-head proof.
 Goals:
 
 - tolerate only the observed stale-old-head window after a successful push;
+- reject stable initial PR drift before creating or pushing a transport commit;
 - preserve exact PR identity, metadata, repository, base, and head binding;
 - bound work and wall time deterministically;
 - emit proof outputs only after the API reports the exact new custody SHA;
@@ -49,7 +50,8 @@ Non-goals:
 - no branch-protection, workflow-trigger, secret, signing, package, image, or
   production changes;
 - no acceptance of historical proof or a third head SHA;
-- no change to the protected workflow YAML.
+- no protected workflow change beyond a finite producer-job timeout; triggers,
+  permissions, secrets, and proof-job identity remain byte-for-byte unchanged.
 
 ## Considered approaches
 
@@ -68,7 +70,15 @@ Non-goals:
 Add an exported helper in
 `scripts/console/converge-release-please-doc-custody.mjs`. Its production call
 uses protected `GITHUB_TOKEN` reads, a maximum of 20 reads, and 500 milliseconds
-between retryable reads (9.5 seconds maximum sleep).
+between retryable reads (9.5 seconds maximum deliberate sleep). The protected
+producer job has a 10-minute deadline so a network call that accepts a
+connection but never returns cannot occupy the serialized release lane until
+GitHub's default six-hour limit.
+
+The same stable-field validator runs on the authenticated initial Pulls API
+snapshot before any worktree creation, token acquisition, commit creation, or
+force-with-lease. The post-push loop then repeats that complete validation on
+every read.
 
 Before examining the head SHA on every response, the helper requires:
 
