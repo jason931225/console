@@ -136,7 +136,7 @@ const pollFixture = (overrides = {}) => ({
   ...overrides,
 });
 const protectedReleaseIssuerClosure = Object.freeze([
-  ['./converge-release-please-doc-custody.mjs', '7fa74dbcc24e203bf3368ae057c02d7792c2b37e18a535e88a5492bae742395a'],
+  ['./converge-release-please-doc-custody.mjs', 'd8a2f061dc639ee903fbb45be81728947e8ed0c9264f8a4370d6eeda5a4c495a'],
   ['./generate-documentation-manifest.mjs', 'eb353f442a6d7d84b659d43424dd52fbf9243f73d813f840e2d14aa7277fef77'],
   ['./release-please-bot-candidate.mjs', 'ae3d1069165ca4aaa88a36cac8f13d8d45d952f87fb23c510da0d0a957e62fdf'],
   ['./authority-ledger-path.mjs', '756e838e3979508d3be0b7d9974a0e719de9f1a08effbe60c272c2cad25b498e'],
@@ -488,6 +488,21 @@ test('keeps the push token out of argv, process errors, and non-password askpass
   } finally {
     rmSync(transportDirectory, { recursive: true, force: true });
   }
+});
+
+test('protected producer accepts the exact post-push head before emitting proof outputs', () => {
+  const source = readFileSync(
+    new URL('./converge-release-please-doc-custody.mjs', import.meta.url),
+    'utf8',
+  );
+  const main = source.slice(source.indexOf('export function main()'));
+  assert.equal([...main.matchAll(/pollReleasePleasePostPushHead\(\{/g)].length, 1);
+  assert.equal([...main.matchAll(/emitProofOutputs\(\{/g)].length, 1);
+  const push = main.indexOf("run('git', invocation.args, { cwd: work, env: invocation.env });");
+  const poll = main.indexOf('pollReleasePleasePostPushHead({', push);
+  const output = main.indexOf('emitProofOutputs({ prNumber: binding.prNumber', poll);
+  assert.ok(push >= 0 && poll > push && output > poll);
+  assert.doesNotMatch(main.slice(push, output), /const finalPr = ghJson/);
 });
 
 const expectedReleaseWorkflow = Object.freeze({

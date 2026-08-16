@@ -591,19 +591,20 @@ export function main() {
     } finally {
       rmSync(transportDirectory, { recursive: true, force: true });
     }
-    const finalPr = ghJson(['api', `repos/${repository}/pulls/${actionPr.number}`]);
-    if (
-      finalPr?.number !== actionPr.number
-      || finalPr?.state !== 'open'
-      || finalPr?.head?.sha !== newTip
-      || finalPr?.head?.ref !== actionPr.headBranchName
-      || finalPr?.head?.repo?.full_name !== repository
-      || finalPr?.base?.ref !== 'main'
-      || finalPr?.title !== actionPr.title
-      || finalPr?.body !== actionPr.body
-    ) {
-      throw new Error('live PR moved or metadata changed after custody push; refusing proof output');
-    }
+    pollReleasePleasePostPushHead({
+      actionPr,
+      initialPr: pr,
+      repository,
+      expectedParentSha,
+      oldTip: tip,
+      newTip,
+      readPullRequest: () => ghJson([
+        'api', `repos/${repository}/pulls/${actionPr.number}`,
+      ]),
+      sleep: (milliseconds) => {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+      },
+    });
     emitProofOutputs({ prNumber: binding.prNumber, headSha: newTip, parentSha: parent });
     console.log(
       `converge-release-please-doc-custody: PR #${pr.number} tip ${tip} -> ${newTip}`
