@@ -4514,6 +4514,16 @@
       "archive_tag": null
     },
     {
+      "path": "docs/superpowers/specs/2026-08-16-release-proof-consistency-design.md",
+      "class": "historical",
+      "owner": "repository maintainers",
+      "status": "active",
+      "replacement": null,
+      "retention": "retain",
+      "blob_sha": "28e98349478ccfc3ef425e7ef58777c84e41e9a7",
+      "archive_tag": null
+    },
+    {
       "path": "docs/web-console-overhaul-spec.md",
       "class": "historical",
       "owner": "repository maintainers",
