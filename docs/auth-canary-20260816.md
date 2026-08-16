@@ -1,1 +1,1 @@
-# Authority admission canary\n\nEphemeral one-commit ordinary-PR probe. This branch will not be merged.
+# Authority admission canary\n\nEphemeral two-commit ordinary-PR synchronize probe. This branch will not be merged.
