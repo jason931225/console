@@ -176,6 +176,19 @@ test('post-push proof polling times out on a persistently stale old tip', () => 
   assert.equal(sleeps, 2);
 });
 
+test('post-push proof polling defaults to twenty reads and 500 millisecond delays', () => {
+  let reads = 0;
+  const delays = [];
+  assert.throws(() => pollReleasePleasePostPushHead(pollFixture({
+    maxReads: undefined,
+    delayMs: undefined,
+    readPullRequest: () => { reads += 1; return postPushPr(T); },
+    sleep: (milliseconds) => { delays.push(milliseconds); },
+  })), /old lease tip.*20 reads/);
+  assert.equal(reads, 20);
+  assert.deepEqual(delays, Array(19).fill(500));
+});
+
 test('post-push proof polling fails immediately on any non-old, non-new head', () => {
   for (const sha of [undefined, '', 'ABC', 'd'.repeat(40)]) {
     let reads = 0;
