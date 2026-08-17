@@ -35,6 +35,20 @@
 -- payable = TRUE` still succeeded afterwards. The privilege has to be removed
 -- at table scope and re-granted per column.
 --
+-- WHAT THIS DOES NOT CLOSE. `console_rt` keeps column-level INSERT, because
+-- the calculation writer needs it, and issuance reads the HIGHEST version per
+-- line: `load_payslip_issuance_in_tx` selects
+-- `DISTINCT ON (c.line_id) ... ORDER BY c.line_id, c.version DESC` and does not
+-- consult `payable`. A compromised tenant-scoped session can therefore append a
+-- row at a higher `version` with arbitrary money fields after approval and
+-- before issuance, and that row becomes the payslip -- the same outcome an
+-- in-place rewrite would have produced. Revoking UPDATE and DELETE closes
+-- mutation and erasure; it does not close forgery by append. Closing that
+-- requires routing INSERT through a status-checked writer that refuses a new
+-- version once the run leaves the calculating state, which is a change to the
+-- calculation path rather than a grant change, and is tracked as an open HOLD
+-- on this lane rather than claimed here.
+--
 -- `console_app` (the migration owner) deliberately keeps its privileges. The
 -- release path `payable` exists for is a later, separately reviewed decision;
 -- this removes the ambient ability, it does not decide who may eventually
