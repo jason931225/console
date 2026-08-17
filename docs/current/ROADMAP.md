@@ -6,15 +6,15 @@ Status: active roadmap authority. Product scope comes from [`PRODUCT.md`](PRODUC
 
 1. **Documentation custody and active authority**
    - Establish README plus PRODUCT, ROADMAP, and DELIVERY as the only active authority concerns.
-   - Generate the full first-party tracked-document manifest with class, owner, status, replacement, retention, blob SHA, and archive tag; vendored and generated trees remain outside that project-owned universe.
-   - Fail CI on new unclassified documents. The current `authority-slice` index is intentionally not a complete-coverage claim.
+   - Generate the full first-party tracked-document manifest with class, owner, status, replacement, retention, and blob SHA. Archive tags remain structurally unpopulated: `archive_tag` is null for all 456 records, and `scripts/check-doc-links.mjs` and `scripts/console/generate-documentation-manifest.mjs` both require null until a signed-archive validation contract exists. Vendored trees (`third-party/`, 9 tracked files) and the `.grok` agent delivery harness (11 tracked, hand-authored first-party files) remain outside that project-owned universe; `buck-out/`, `node_modules/` and `target/` are also excluded but contain no tracked Markdown.
+   - Fail CI on new unclassified documents. The index reached `first-party-manifest` coverage and IS now a complete-coverage claim over every tracked first-party markdown file: `check-doc-links` enforces exactly one record per first-party document and rejects records outside that universe. `authority-slice` survives only as a legacy alternative the checker still accepts.
 2. **Executable-contract decoupling**
    - Replace machine checks that depend on historical prose or draft ideas with source-derived or machine-readable contracts while retaining behavioral regressions.
 3. **Delivery substrate convergence**
-   - Prove `Required / CI` and `Required / Security` in shadow mode, then migrate branch protection to those two contexts plus the independent protected-target authority check.
-   - Partition the exact 183-test PostgreSQL reachability inventory across isolated disposable databases while retaining a strict compatibility aggregate and proving no omission or duplication.
+   - Done: `Required / CI` (`.github/workflows/ci.yml`) and `Required / Security` (`.github/workflows/security.yml`) are out of shadow mode, report success on recent runs, and are merge-blocking required contexts on `main` alongside the independent `authenticate-console-authority` check.
+   - Partition the exact 209-test PostgreSQL reachability inventory (224 mapped entries, 209 in-workflow targets) across isolated disposable databases while retaining a strict compatibility aggregate and proving no omission or duplication. The partitioning, the five disposable-database facet jobs, and the fail-closed aggregate are already implemented.
    - Prove Cargo test membership, feature-bearing reachability, JavaScript reachability, credential safety, and zero required Buck-only coverage before any Buck deletion.
-   - Fix migration-parser gaps before admitting new migrations.
+   - Fix the remaining migration-parser gaps. The migration-safety gaps (`ALTER TABLE ONLY`, schema-qualified audited tables) are fixed. The personal-data-classification gaps remain open — a multi-action `ALTER TABLE` is still judged from its first action, and concatenation-split keywords are still unreachable — and migrations 0212-0221 were admitted since 2026-08-04 under the compensating catalog-based completeness assertion in `backend/crates/platform/db/tests/personal_data_classification.rs`, not under a parser fix.
 4. **Architecture foundations**
    - Complete branchless capability and temporal-grant contracts, contracts-crate/OpenAPI composition, true preflight, and distinct-human approval rules.
 5. **Organization and HR**

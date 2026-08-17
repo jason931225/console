@@ -19,8 +19,15 @@ Merge only the reviewed candidate through the repository's protected integration
 Run the smallest targeted regression first, then the applicable format, lint/type, contract, security, and domain gates. The supported repository entrypoint is:
 
 ```sh
+# one-time: install the pinned DotSlash runtime that tools/buck2 shells out to
+tools/buck/install_dotslash.sh
+
 npm run verify
 ```
+
+The Buck2-backed steps require the pinned DotSlash runtime on PATH. Without it
+`npm run verify` exits 1 with six failures that are environment, not
+regressions.
 
 For documentation-authority changes, also run the doc-link tests and gate, ADR tests and gate, citation checks, foundation tests and gate, CI-preflight tests and gate, verifier tests, `npm run verify`, and `git diff --check`. Inspect the exact changed-path allowlist and ignored/untracked state before signing a candidate.
 
