@@ -198,3 +198,52 @@ async fn lifecycle_tables_are_org_isolated_and_write_checked(pool: PgPool) {
     assert_eq!(own.open, 1);
     assert_eq!(own.items[0].kind, "OVERTIME_ALLOWANCE");
 }
+
+/// REG-P4: `payable` must fail closed in the database, not in review.
+///
+/// `payroll_line_calculations.payable` gates payslip issuance and is documented
+/// as "true only after release-gate pass" (migration 0186). Before 0222 that was
+/// enforced by nothing but the absence of code that sets it: `console_rt` held
+/// table-wide INSERT and UPDATE, so `SET payable = TRUE` succeeded.
+///
+/// Both directions are asserted. Proving only the denial would let an
+/// over-broad revoke pass while breaking the calculation writer, and the
+/// SQLSTATE is checked rather than "an error occurred" — a misspelled column
+/// also errors, and would otherwise read as a denial.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn runtime_role_cannot_mark_a_calculation_payable(pool: PgPool) {
+    let rt_pool = runtime_role_pool(&pool).await;
+
+    // Column privileges are resolved at plan time, so `WHERE FALSE` proves the
+    // denial without seeding a row the runtime role could not write anyway.
+    for statement in [
+        "UPDATE payroll_line_calculations SET payable = TRUE WHERE FALSE",
+        "INSERT INTO payroll_line_calculations (org_id, version, payable) \
+         SELECT NULL, 1, TRUE WHERE FALSE",
+    ] {
+        let error = sqlx::query(statement)
+            .execute(&rt_pool)
+            .await
+            .expect_err("console_rt must not be able to write payable");
+        let code = error
+            .as_database_error()
+            .and_then(|e| e.code())
+            .map(|c| c.into_owned())
+            .unwrap_or_default();
+        assert_eq!(
+            code, "42501",
+            "must be insufficient_privilege, not an unrelated failure: {error}"
+        );
+    }
+
+    // The calculation writer inserts an explicit column list excluding
+    // `payable` (see lifecycle.rs). Those writes must survive untouched.
+    sqlx::query("UPDATE payroll_line_calculations SET net_won = 1 WHERE FALSE")
+        .execute(&rt_pool)
+        .await
+        .expect("console_rt must retain UPDATE on non-payable columns");
+    sqlx::query("INSERT INTO payroll_line_calculations (org_id, version) SELECT NULL, 1 WHERE FALSE")
+        .execute(&rt_pool)
+        .await
+        .expect("console_rt must retain INSERT omitting payable");
+}
