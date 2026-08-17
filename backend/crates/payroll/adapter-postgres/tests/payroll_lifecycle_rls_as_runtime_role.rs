@@ -199,32 +199,38 @@ async fn lifecycle_tables_are_org_isolated_and_write_checked(pool: PgPool) {
     assert_eq!(own.items[0].kind, "OVERTIME_ALLOWANCE");
 }
 
-/// REG-P4: `payable` must fail closed in the database, not in review.
+/// REG-P4: `payroll_line_calculations` must be append-only in the database,
+/// not in review.
 ///
-/// `payroll_line_calculations.payable` gates payslip issuance and is documented
-/// as "true only after release-gate pass" (migration 0186). Before 0222 that was
-/// enforced by nothing but the absence of code that sets it: `console_rt` held
-/// table-wide INSERT and UPDATE, so `SET payable = TRUE` succeeded.
+/// Migration 0186 declares these rows append-only with only the `payable` flip
+/// as a legal update. Before 0222 that was enforced by nothing: `console_rt`
+/// held table-wide INSERT and UPDATE, so it could both set `payable` and
+/// rewrite `gross_won`/`net_won` after calculation and review.
 ///
-/// Both directions are asserted. Proving only the denial would let an
+/// Every direction is asserted. Proving only the denials would let an
 /// over-broad revoke pass while breaking the calculation writer, and the
-/// SQLSTATE is checked rather than "an error occurred" — a misspelled column
+/// SQLSTATE is checked rather than "an error occurred" -- a misspelled column
 /// also errors, and would otherwise read as a denial.
 #[sqlx::test(migrations = "../../platform/db/migrations")]
-async fn runtime_role_cannot_mark_a_calculation_payable(pool: PgPool) {
+async fn runtime_role_cannot_write_calculations_after_insert(pool: PgPool) {
     let rt_pool = runtime_role_pool(&pool).await;
 
     // Column privileges are resolved at plan time, so `WHERE FALSE` proves the
     // denial without seeding a row the runtime role could not write anyway.
     for statement in [
+        // the `payable` flip -- the release-gate bit
         "UPDATE payroll_line_calculations SET payable = TRUE WHERE FALSE",
         "INSERT INTO payroll_line_calculations (org_id, version, payable) \
          SELECT NULL, 1, TRUE WHERE FALSE",
+        // and the money columns, which feed payslip issuance verbatim
+        "UPDATE payroll_line_calculations SET net_won = 1 WHERE FALSE",
+        "UPDATE payroll_line_calculations SET gross_won = 1 WHERE FALSE",
+        "UPDATE payroll_line_calculations SET tax_table_version = 'x' WHERE FALSE",
     ] {
         let error = sqlx::query(statement)
             .execute(&rt_pool)
             .await
-            .expect_err("console_rt must not be able to write payable");
+            .expect_err("console_rt must not be able to rewrite a calculation");
         let code = error
             .as_database_error()
             .and_then(|e| e.code())
@@ -237,11 +243,7 @@ async fn runtime_role_cannot_mark_a_calculation_payable(pool: PgPool) {
     }
 
     // The calculation writer inserts an explicit column list excluding
-    // `payable` (see lifecycle.rs). Those writes must survive untouched.
-    sqlx::query("UPDATE payroll_line_calculations SET net_won = 1 WHERE FALSE")
-        .execute(&rt_pool)
-        .await
-        .expect("console_rt must retain UPDATE on non-payable columns");
+    // `payable` (see lifecycle.rs). That write must survive untouched.
     sqlx::query(
         "INSERT INTO payroll_line_calculations (org_id, version) SELECT NULL, 1 WHERE FALSE",
     )
