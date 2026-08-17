@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-17
 **Kind:** lane record for candidate PR #793, written to satisfy [AGENTS.md](../../../AGENTS.md) L8.
-**Base:** `3785fe3bd1550c19748f7f7f37e7605a7e6db6b05` (origin/main, post-#792) — the immutable diff base.
+**Base:** `3785fe3b1550c19748f7f7f37e7605a7e6db6b05` (origin/main, post-#792) — the immutable diff base.
 **Candidate head at review:** `d8ee9ae8` was the head the fourth-round review bound to; this record is amended on the head that answers it. A candidate cannot contain its own final SHA, so the merge SHA is recorded by the documentation-only closeout rather than predicted here — that recursion is register row V7.
 **Review:** automated adversarial review by `chatgpt-codex-connector[bot]` on head `0e3bf6be89`, verdict **COMMENTED**, three P1 findings. All three accepted; two changed the migration, one produced this file. No human reviewer identity is recorded because branch protection requires zero approvals — that gap is register row V6 and is not resolved here.
 **Scope:** `backend/crates/platform/db/migrations/0222_payroll_payable_runtime_write_revoked.sql` (new), `backend/crates/payroll/adapter-postgres/tests/payroll_lifecycle_rls_as_runtime_role.rs` (one added test), `docs/program/executed-tests-baseline.json` (ratchet), this ledger. No Cargo.toml/Cargo.lock, no OpenAPI, no `ci.yml`.
@@ -25,15 +25,35 @@ The way this change kills payroll is by revoking too much: if `console_rt` loses
 
 ## Blast radius
 
-`payroll_line_calculations` only, and only the `console_rt` grant. `console_app` (migration owner) is untouched, so the release path `payable` exists for remains buildable by a later, separately reviewed change. No data is read, written, or migrated; this is a privilege change against an empty-by-default grant surface.
+**Three tables, not one.** `payroll_line_calculations` loses `console_rt`'s
+INSERT and UPDATE (re-granted per column, excluding `payable`) and DELETE.
+`payroll_draft_runs` and `payroll_draft_lines` each lose `console_rt`'s DELETE
+and keep INSERT, SELECT, UPDATE — they are revoked because both foreign keys
+from the child cascade, so the child revoke alone was bypassable through either
+parent. Those two are used throughout the payroll lifecycle, so an operator
+inspecting or restoring this change must look at all three ACLs, not just the
+child's.
+
+`console_app` (migration owner) is untouched everywhere, so the release path
+`payable` exists for remains buildable by a later, separately reviewed change.
+No data is read, written, or migrated; this is a privilege change only.
 
 ## Detection
 
-The migration proves its own effect and refuses to apply otherwise: it raises `payroll_payable.runtime_update_not_revoked` if any UPDATE survives, `payroll_payable.runtime_insert_not_revoked` if `payable` remains insertable, and `payroll_payable.runtime_lost_legitimate_insert` if the writer's own columns were dropped. In service, the symptom of over-revocation is `calculate` returning insufficient-privilege (SQLSTATE 42501) rather than a wrong number.
+The migration proves its own effect and refuses to apply otherwise: it raises `payroll_payable.runtime_update_not_revoked` if any UPDATE survives, `payroll_payable.runtime_insert_not_revoked` if `payable` remains insertable, and `payroll_payable.runtime_lost_legitimate_insert` if the writer's own columns were dropped. It also raises `payroll_payable.cascade_parent_delete_not_revoked` if either
+parent keeps DELETE. In service, the symptom of over-revocation is a payroll
+write returning insufficient-privilege (SQLSTATE 42501) rather than a wrong
+number — on the child that is `calculate`; on either parent it would be any
+lifecycle write, which is why the parents keep INSERT/SELECT/UPDATE and lose
+only DELETE.
 
 ## Rollback
 
-Additive and reversible by a corrective migration that re-grants what 0222 removed. Applied migrations are never edited. There is no data change to undo.
+Additive and reversible by a corrective migration that re-grants what 0222
+removed — on all three tables: column-level INSERT and UPDATE plus DELETE on
+`payroll_line_calculations`, and DELETE on `payroll_draft_runs` and
+`payroll_draft_lines`. Applied migrations are never edited. There is no data
+change to undo.
 
 ## Stop conditions
 
@@ -65,6 +85,21 @@ because this candidate adds a ledger record and modifies both manifests):
   attributes across 362 reachable sources (static; not an executed count)
 - `node scripts/check-reasoning-lens-contract.mjs --changed-since <base>` — passed
 - `git diff --check` — clean
+
+**Required test invocations** (`DELIVERY.md` names the tests, not only the
+gates; discovered/executed counts recorded):
+
+- `node --test scripts/check-doc-links.test.mjs` — 36 passed, 0 failed
+- `node --test scripts/check-adrs.test.mjs` — 29 passed, 0 failed
+- `node --test scripts/check-foundation-gates.test.mjs` — 6 passed, 0 failed
+- `node --test scripts/check-ci-preflight.test.mjs` — 63 passed, 0 failed
+- `node --test scripts/verify.test.mjs` — 15 passed, 0 failed
+- `npm run verify` — `verify(fast) passed.` (exit 0)
+
+`npm run verify` required the pinned DotSlash runtime on PATH. It is obtainable
+only with the export precedence corrected in #794 —
+`${CONSOLE_DOTSLASH_BIN_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}/console-dotslash}/bin}`
+— which is why the earlier revision of this record could not produce it.
 
  Note `cargo fmt` without `--all` does not format `tests/` and exits "Failed to find targets" against this workspace; an earlier run of it reported success while formatting nothing.
 
