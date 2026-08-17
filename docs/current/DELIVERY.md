@@ -23,7 +23,7 @@ Run the smallest targeted regression first, then the applicable format, lint/typ
 # then put it on PATH -- the installer only appends to $GITHUB_PATH, which does
 # not exist outside GitHub Actions, and it cannot modify its parent shell.
 tools/buck/install_dotslash.sh
-export PATH="${CONSOLE_DOTSLASH_BIN_DIR:-${TMPDIR:-/tmp}/console-dotslash/bin}:$PATH"
+export PATH="${CONSOLE_DOTSLASH_BIN_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}/console-dotslash}/bin}:$PATH"
 
 npm run verify
 ```
