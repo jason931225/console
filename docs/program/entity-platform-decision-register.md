@@ -154,13 +154,53 @@ guarantees. Reconciling ADR-0018 is an open item (§5.3).
 | # | Decision | Verdict | Binding condition |
 | --- | --- | --- | --- |
 | V1 | Gate and test inventory authority = **generated graph** | HELD | Keyed by `(package, binary, feature set)`; compares test *identities*, not command counts or lexical reachability. Known hazard: the generator becomes unverified authority on day one unless checked against what it replaces during a dual-run window. Resolves blocker #7 |
-| V2 | Runtime execution evidence | **REVERSED [E]** | `cargo-nextest` is **already adopted and already pinned** — `.config/nextest.toml` exists under a "DN-0005 P3" control and `tools/ci/check-nextest-config.mjs:38` pins **0.9.138**. "Pin nextest" was never an open decision. And nextest **cannot run doctests**, while 10 files carry them, including `platform/authz/src/temporal.rs`, `platform/authz/src/lib.rs`, `ontology/canonical-domain/src/lib.rs`, and `ontology/adapter-postgres/src/instances.rs` — precisely the crates carrying the A2, D1, and D4 contracts. Restated: adopt the *existing* pin as execution-evidence authority and reconcile with DN-0005 rather than re-pinning; nextest may **not** be the sole authority — a separate `cargo test --doc` lane must run and report, or those doctests go dark exactly where the hash and grant contracts live |
+| V2 | Runtime execution evidence | **REVERSED [E]** | `cargo-nextest` is **already adopted and already pinned** — `.config/nextest.toml` exists under a "DN-0005 P3" control and `tools/ci/check-nextest-config.mjs:38` pins **0.9.138**. "Pin nextest" was never an open decision. Restated: adopt the *existing* pin as execution-evidence authority and reconcile with DN-0005 rather than re-pinning. Nextest may **not** be the sole authority, because it cannot run doctests — and doctests here carry `compile_fail` claims, the only artifact able to hold a NEGATIVE type-boundary assertion ("this must not compile"). **Corrected 2026-08-17 — see the amendment note below; the original wording of this row was wrong on the specifics.** |
 | V3 | Playwright prerequisite setup = **layered real backend** | BOUND **[E]** | Login is a passkey/WebAuthn ceremony (`platform/auth-rest/src/lib.rs:66`), so "log in through the real flow" requires a CDP virtual authenticator. The tempting shortcut is the `dev-auth` feature — which `console-gate-dev-auth-absence` exists to keep out of every shipped build. Enabling `dev-auth` to make login work would prove a path that ships nowhere: an explicit stop condition |
 | V4 | `.beads` dirty-file custody | **RESOLVED [E]** | Inspection closed this. The delta is a one-line `issue-prefix: "console"` config setting plus 6 append-only `interactions.jsonl` records (all `actor: jasonlee`) and 4 untracked `issues.jsonl` records — all recording the *closure* of issues whose work is **already merged into `origin/main`**, the last one citing `b68e89ff` itself. This is the trailing local audit trail of completed work, not another lane's live state. Verdict: **preserve**; it is a record of merged history. The prior framing as a program-level custody blocker was disproportionate to a 7-line delta |
 | V5 | Fully autonomous agent review as the merge gate | **REVERSED** | Candidate-controlled workflows, prompts, hooks, and shared credentials make N agents **one correlated trust domain**. A three-agent quorum inside that domain is redundancy, not independence |
 | V6 | Replacement merge gate = **external trust plane** | HELD | The reviewer runs outside the candidate's trust domain; the authoring agent may never self-approve; autonomous merge occurs only through branch protection after independent exact-head review contexts succeed. The *design* of that plane is still open (§5.2) |
 | V7 | Corrected readback protocol | HELD | Require all three contexts on the **frozen PR head** → named independent review of that same head → squash merge → prove reviewed-head tree equality → require only `Required / CI` and `Required / Security` on the merged `main` SHA → record the implementation merge SHA in a **documentation-only closeout PR**, whose own readback lives in Beads/GitHub rather than recursively inside itself. Resolves blocker #2 |
 | V8 | Tracker granularity | **REVERSED** | "One child issue per gate" is unworkable — gate issues **plus bounded candidate/lane issues**. The larger gates are far too big for one ownership and one review receipt each |
+
+### 3.8 Amendments
+
+Rows are corrected here rather than silently rewritten, so a reader can see what
+the register got wrong and on what evidence it changed.
+
+**A-1 · 2026-08-17 · row V2 — the doctest claim was wrong on the specifics, and
+the real defect was worse.**
+
+The original V2 wording asserted that ten files carried dark doctests, naming
+`ontology/canonical-domain/src/lib.rs` and `ontology/adapter-postgres/src/instances.rs`
+among "precisely the crates carrying the A2, D1, and D4 contracts". Verified
+against `b68e89ff` with rustdoc rather than by grepping for fences:
+
+- Those two files carry ` ```sql ` and ` ```json ` fences. Rustdoc never compiles
+  or runs them. **Both packages contain zero doctests.** The claim was an
+  artifact of counting fences instead of asking the tool.
+- The genuine dark set is `console-platform-authz` (17 doctests, 10 of them
+  `compile_fail`) and `console-workorder-application` (1).
+- The larger defect the row missed entirely: the doctest gate was **executing
+  zero tests**. `--doc -p console-kernel-core` was the whole gate from
+  `4a9c7579 (#559)`, and that crate has no doc fence anywhere in its source, so
+  the step reported green on 0 tests for months. It is not recorded in
+  `docs/program/false-green-gate-holes.md`.
+- The ten dark `compile_fail` claims guarded `ResourceBranch`, `authorize`,
+  `authorize_scoped`, and `GrantValidity` — the branch-scope and effective-dated
+  grant contracts, i.e. A2's subject matter.
+
+Remedy landed as `--doc --workspace`: 23 doctests discovered, 18 execute and
+pass, 5 are `ignore` fences that never execute by design. Nothing fails, so it
+arms existing coverage rather than changing behaviour. Workspace-wide rather
+than a longer `-p` list because a hand-maintained list is exactly what failed,
+and nothing compared it against the tree.
+
+**The transferable lesson**, which generalises past this row: the wrong claim
+came from inspecting source text, and the correction came from running the
+tool. Fence-counting is static reachability; `cargo test --doc` is execution.
+The register already says static reachability is not runtime execution (V1, V2)
+— it then violated its own rule. Treat any row justified by grep alone as
+provisional until something executes.
 
 ## 4. Adversarial method and result
 
@@ -209,7 +249,10 @@ node -e "const p=require('./tools/ci/postgres-cargo-map.json');\
  console.log(p.counts, p.entries.length, p.entries.filter(e=>e.in_workflow_postgres_job).length)"  # #7
 
 # §3 evidence-forced verdicts
-grep -rl '/// ```' --include='*.rs' backend/crates                            # V2 doctests
+# V2 doctests — ask rustdoc, do NOT grep for fences (see amendment A-1: fence
+# counting produced a wrong row; ```sql/```json fences are not doctests).
+SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \
+  --doc --workspace                                                           # V2 doctests
 grep -n 'nextest' tools/ci/check-nextest-config.mjs                           # V2 existing pin
 sed -n '42p' docs/decisions/ADR-0024-bare-metal-portability-and-ha.md         # W3 clause 5
 sed -n '59p' backend/crates/platform/db/migrations/0186_payroll_run_lifecycle.sql       # P4
