@@ -54,6 +54,7 @@ Halt and reverse if any payroll calculation write fails with SQLSTATE 42501 in a
 
 ## Reasoning lens contract
 
+<!-- REASONING-LENS-EVIDENCE:START -->
 ```json
 {
   "lens_contract": "v1",
@@ -100,3 +101,4 @@ Halt and reverse if any payroll calculation write fails with SQLSTATE 42501 in a
   "lens_set_changes": []
 }
 ```
+<!-- REASONING-LENS-EVIDENCE:END -->
