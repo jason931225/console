@@ -57,6 +57,15 @@ BEGIN
     END IF;
 
     EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON public.payroll_line_calculations FROM console_rt';
+    -- Revoking DELETE on the child alone does not make it append-only. Both
+    -- foreign keys cascade (0186: line_id -> payroll_draft_lines, and
+    -- (run_id, org_id) -> payroll_draft_runs, each ON DELETE CASCADE), and 0074
+    -- grants the parents SELECT, INSERT, UPDATE while DELETE arrives from
+    -- 0031's default ACL and is never revoked. A tenant-scoped session could
+    -- therefore erase calculations by deleting a parent, without ever holding
+    -- DELETE here. Nothing in the tree deletes either parent.
+    EXECUTE 'REVOKE DELETE ON public.payroll_draft_runs FROM console_rt';
+    EXECUTE 'REVOKE DELETE ON public.payroll_draft_lines FROM console_rt';
     EXECUTE format(
         'GRANT INSERT (%s) ON public.payroll_line_calculations TO console_rt', v_insert_columns);
 END $$;
@@ -99,6 +108,17 @@ BEGIN
         RAISE EXCEPTION USING
             ERRCODE = '42501',
             MESSAGE = 'payroll_payable.runtime_insert_not_revoked';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_privileges
+         WHERE table_name IN ('payroll_draft_runs', 'payroll_draft_lines')
+           AND grantee = 'console_rt'
+           AND privilege_type = 'DELETE'
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'payroll_payable.cascade_parent_delete_not_revoked';
     END IF;
 
     IF NOT EXISTS (

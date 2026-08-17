@@ -241,6 +241,11 @@ async fn runtime_role_cannot_write_calculations_after_insert(pool: PgPool) {
         // `payroll_payable.runtime_delete_not_revoked` assertion, which runs
         // wherever migrations run.
         "DELETE FROM payroll_line_calculations WHERE FALSE",
+        // Both FKs cascade, so deleting a parent erases calculations without
+        // ever needing DELETE on the child. Revoking the child alone is not
+        // append-only.
+        "DELETE FROM payroll_draft_lines WHERE FALSE",
+        "DELETE FROM payroll_draft_runs WHERE FALSE",
     ] {
         let error = sqlx::query(statement)
             .execute(&rt_pool)

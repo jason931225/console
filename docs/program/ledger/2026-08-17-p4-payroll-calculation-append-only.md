@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-17
 **Kind:** lane record for candidate PR #793, written to satisfy [AGENTS.md](../../../AGENTS.md) L8.
-**Base:** `3785fe3bd` (origin/main, post-#792). Lane head at the time of writing: see the PR; the merge SHA is recorded by the closeout, not predicted here.
+**Base:** `3785fe3bd1550c19748f7f7f37e7605a7e6db6b05` (origin/main, post-#792) — the immutable diff base.
+**Candidate head at review:** `d8ee9ae8` was the head the fourth-round review bound to; this record is amended on the head that answers it. A candidate cannot contain its own final SHA, so the merge SHA is recorded by the documentation-only closeout rather than predicted here — that recursion is register row V7.
 **Review:** automated adversarial review by `chatgpt-codex-connector[bot]` on head `0e3bf6be89`, verdict **COMMENTED**, three P1 findings. All three accepted; two changed the migration, one produced this file. No human reviewer identity is recorded because branch protection requires zero approvals — that gap is register row V6 and is not resolved here.
 **Scope:** `backend/crates/platform/db/migrations/0222_payroll_payable_runtime_write_revoked.sql` (new), `backend/crates/payroll/adapter-postgres/tests/payroll_lifecycle_rls_as_runtime_role.rs` (one added test), `docs/program/executed-tests-baseline.json` (ratchet), this ledger. No Cargo.toml/Cargo.lock, no OpenAPI, no `ci.yml`.
 **Not product authority.** Clears no HOLD. Authorizes no production, payment, issuance, or compliance action.
@@ -44,7 +45,28 @@ Halt and reverse if any payroll calculation write fails with SQLSTATE 42501 in a
 - Fail-closed matrix, as `console_rt`: `UPDATE ... SET payable = TRUE` **denied**; `INSERT ... (payable)` **denied**; `UPDATE ... SET net_won` / `gross_won` / `tax_table_version` **denied**; `INSERT` omitting `payable` **allowed**; `SELECT payable` **allowed**.
 - `cargo test -p console-payroll-adapter-postgres --test payroll_lifecycle_rls_as_runtime_role` — 2 passed (the new test plus the pre-existing RLS test).
 - Mutation proof: **RED** with 0222 removed, **GREEN** restored. This required forcing a rebuild — `#[sqlx::test(migrations = ...)]` embeds the migration set at **compile time**, so moving the file out and back leaves a stale binary that silently tests the old schema. Two earlier attempts at this proof were invalid for exactly that reason and were discarded.
-- `cargo fmt --all -- --check` and `cargo clippy --all-targets -- -D warnings` green. Note `cargo fmt` without `--all` does not format `tests/` and exits "Failed to find targets" against this workspace; an earlier run of it reported success while formatting nothing.
+- `cargo fmt --all -- --check` and `cargo clippy --all-targets -- -D warnings` green.
+- Cascade closure, same database: `DELETE` on `payroll_line_calculations`,
+  `payroll_draft_lines` and `payroll_draft_runs` all denied (42501), while the
+  parents keep `INSERT,SELECT,UPDATE` and the child keeps `SELECT` plus
+  column-level `INSERT`. Both FKs are `ON DELETE CASCADE` (0186), so revoking
+  only the child left the rows erasable through either parent.
+
+**Documentation-authority gates** (required by `docs/current/DELIVERY.md`
+because this candidate adds a ledger record and modifies both manifests):
+
+- `npm run check:doc-links` — `doc links OK (457 markdown files)`
+- `npm run check:doc-manifest` — `documentation manifest OK (457 markdown files)`
+- `npm run check:doc-citations` — passed, 0 missing
+- `npm run check:adrs` — `ADR governance gate passed: 39 ADRs, 6 design notes`
+- `npm run check:foundation-gates` — passed
+- `node scripts/check-ci-preflight.mjs` — `CI preflight contract passed.`
+- `node scripts/check-executed-tests.mjs` — ratchet green at 2690 declared test
+  attributes across 362 reachable sources (static; not an executed count)
+- `node scripts/check-reasoning-lens-contract.mjs --changed-since <base>` — passed
+- `git diff --check` — clean
+
+ Note `cargo fmt` without `--all` does not format `tests/` and exits "Failed to find targets" against this workspace; an earlier run of it reported success while formatting nothing.
 
 ## Harness limitation found while fixing this
 
@@ -54,16 +76,22 @@ Halt and reverse if any payroll calculation write fails with SQLSTATE 42501 in a
 migrations as `console_buck_admin`, so tables it creates never carry that
 default. Measured: on a database built the production way `console_rt` holds
 `INSERT,SELECT,UPDATE,DELETE` on `payroll_line_calculations` before 0222 and
-`SELECT` after it, while in a sqlx test database it holds none of them either
-way.
+`SELECT` after it.
 
-The consequence is general, not specific to this lane: any `*_as_runtime_role`
-test asserting a *grant* boundary is weaker than it appears. Those tests do
-prove RLS, which works through `SET ROLE` regardless of ownership. They cannot
-prove a default-privilege-derived grant. The DELETE case here passes whether or
-not the revoke exists, which is why the migration's own
-`payroll_payable.runtime_delete_not_revoked` assertion — evaluated wherever
-migrations run — is the enforcement rather than the test.
+**The gap is narrower than first recorded, and the earlier wording was wrong.**
+0186 grants `SELECT, INSERT, UPDATE` explicitly, so those arrive in a sqlx
+database regardless of which role creates the table, and the tests asserting
+them are sound. Only the *default-privilege-derived* grants are absent — DELETE
+here, and DELETE on the two cascade parents. So the limitation is specific:
+a `*_as_runtime_role` test cannot prove a privilege that arrives through
+`ALTER DEFAULT PRIVILEGES FOR ROLE console_app`, because the harness applies
+migrations as `console_buck_admin`. It proves explicit grants and RLS normally.
+Recording it as "runtime-role grant tests are generally ineffective" would have
+invited discarding valid regressions.
+
+What covers the default-derived cases is the migration's own
+`runtime_delete_not_revoked` and `cascade_parent_delete_not_revoked`
+assertions, evaluated wherever migrations run.
 
 ## Remaining HOLDs
 
