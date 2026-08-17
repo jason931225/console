@@ -1606,6 +1606,10 @@ jobs:
         if: ${{ !cancelled() && needs.preflight.outputs.run_heavy == 'true' }}
         run: npm run check:production-hardening
 
+      - name: Install production-hardening test dependencies
+        if: ${{ !cancelled() && needs.preflight.outputs.run_heavy == 'true' }}
+        run: npm ci --ignore-scripts
+
       - name: Production hardening regression tests
         if: ${{ !cancelled() && needs.preflight.outputs.run_heavy == 'true' }}
         run: npm run test:production-hardening

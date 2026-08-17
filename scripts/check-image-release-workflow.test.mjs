@@ -25,6 +25,8 @@ const workflowText = readFileSync(workflowPath, "utf8");
 const workflow = yaml.load(workflowText);
 const admission = workflow.jobs["ci-admission"];
 const admissionStep = admission.steps.find((step) => step.id === "admit");
+const ciWorkflowPath = new URL("../.github/workflows/ci.yml", import.meta.url);
+const ciWorkflow = yaml.load(readFileSync(ciWorkflowPath, "utf8"));
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 const cacheHygienePath = new URL(
   "../.github/workflows/cache-hygiene.yml",
@@ -493,6 +495,26 @@ describe("Image Release protected workflow shape", () => {
         `${filename} must not subscribe write-capable follow-up work to Image Release`,
       );
     }
+  });
+
+  it("installs locked dependencies before the dependency-backed hardening suite", () => {
+    const steps = ciWorkflow.jobs["kubernetes-manifests"].steps;
+    const installIndex = steps.findIndex(
+      (step) =>
+        step.name === "Install production-hardening test dependencies" &&
+        step.run === "npm ci --ignore-scripts",
+    );
+    const testIndex = steps.findIndex(
+      (step) =>
+        step.name === "Production hardening regression tests" &&
+        step.run === "npm run test:production-hardening",
+    );
+    assert.ok(installIndex >= 0, "dependency install step is absent");
+    assert.ok(testIndex > installIndex, "hardening tests run before dependency install");
+    assert.equal(
+      steps[installIndex].if,
+      "${{ !cancelled() && needs.preflight.outputs.run_heavy == 'true' }}",
+    );
   });
 });
 
