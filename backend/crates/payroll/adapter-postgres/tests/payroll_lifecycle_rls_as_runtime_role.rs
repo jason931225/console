@@ -242,8 +242,10 @@ async fn runtime_role_cannot_mark_a_calculation_payable(pool: PgPool) {
         .execute(&rt_pool)
         .await
         .expect("console_rt must retain UPDATE on non-payable columns");
-    sqlx::query("INSERT INTO payroll_line_calculations (org_id, version) SELECT NULL, 1 WHERE FALSE")
-        .execute(&rt_pool)
-        .await
-        .expect("console_rt must retain INSERT omitting payable");
+    sqlx::query(
+        "INSERT INTO payroll_line_calculations (org_id, version) SELECT NULL, 1 WHERE FALSE",
+    )
+    .execute(&rt_pool)
+    .await
+    .expect("console_rt must retain INSERT omitting payable");
 }
