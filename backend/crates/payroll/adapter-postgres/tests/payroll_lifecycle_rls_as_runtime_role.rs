@@ -226,6 +226,21 @@ async fn runtime_role_cannot_write_calculations_after_insert(pool: PgPool) {
         "UPDATE payroll_line_calculations SET net_won = 1 WHERE FALSE",
         "UPDATE payroll_line_calculations SET gross_won = 1 WHERE FALSE",
         "UPDATE payroll_line_calculations SET tax_table_version = 'x' WHERE FALSE",
+        // DELETE defeats append-only exactly as UPDATE does, and it is never
+        // granted explicitly: migration 0031 hands it to `console_rt` through
+        // ALTER DEFAULT PRIVILEGES on every future table.
+        //
+        // NOTE: this assertion cannot fail in this harness, and that is a
+        // property of the harness, not of the grant. 0031 scopes the default
+        // to `FOR ROLE console_app`, while `#[sqlx::test]` applies migrations
+        // as `console_buck_admin`, so `console_rt` never receives DELETE here
+        // and the case is unreachable. Measured on a database built the
+        // production way -- migrations applied as `console_app` -- `console_rt`
+        // holds INSERT,SELECT,UPDATE,DELETE before 0222 and SELECT after it.
+        // The enforcement that covers this is the migration's own
+        // `payroll_payable.runtime_delete_not_revoked` assertion, which runs
+        // wherever migrations run.
+        "DELETE FROM payroll_line_calculations WHERE FALSE",
     ] {
         let error = sqlx::query(statement)
             .execute(&rt_pool)

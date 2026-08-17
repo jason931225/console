@@ -46,6 +46,25 @@ Halt and reverse if any payroll calculation write fails with SQLSTATE 42501 in a
 - Mutation proof: **RED** with 0222 removed, **GREEN** restored. This required forcing a rebuild — `#[sqlx::test(migrations = ...)]` embeds the migration set at **compile time**, so moving the file out and back leaves a stale binary that silently tests the old schema. Two earlier attempts at this proof were invalid for exactly that reason and were discarded.
 - `cargo fmt --all -- --check` and `cargo clippy --all-targets -- -D warnings` green. Note `cargo fmt` without `--all` does not format `tests/` and exits "Failed to find targets" against this workspace; an earlier run of it reported success while formatting nothing.
 
+## Harness limitation found while fixing this
+
+`#[sqlx::test]` does not reproduce the production privilege topology. Migration
+0031 grants the runtime role DML on future tables via
+`ALTER DEFAULT PRIVILEGES **FOR ROLE console_app**`; the sqlx harness applies
+migrations as `console_buck_admin`, so tables it creates never carry that
+default. Measured: on a database built the production way `console_rt` holds
+`INSERT,SELECT,UPDATE,DELETE` on `payroll_line_calculations` before 0222 and
+`SELECT` after it, while in a sqlx test database it holds none of them either
+way.
+
+The consequence is general, not specific to this lane: any `*_as_runtime_role`
+test asserting a *grant* boundary is weaker than it appears. Those tests do
+prove RLS, which works through `SET ROLE` regardless of ownership. They cannot
+prove a default-privilege-derived grant. The DELETE case here passes whether or
+not the revoke exists, which is why the migration's own
+`payroll_payable.runtime_delete_not_revoked` assertion — evaluated wherever
+migrations run — is the enforcement rather than the test.
+
 ## Remaining HOLDs
 
 - `payable` still gates no production path. Issuance validates `legal_basis` only.

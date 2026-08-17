@@ -8,6 +8,15 @@
 -- PostgreSQL 18.4 replica of the CI topology, as `console_rt`:
 -- `UPDATE payroll_line_calculations SET payable = TRUE` succeeded.
 --
+-- DELETE MUST BE REVOKED TOO, and it is not granted by 0186 -- it arrives
+-- silently. `0031_runtime_role_and_immutable_org.sql:75` sets ALTER DEFAULT
+-- PRIVILEGES granting SELECT, INSERT, UPDATE, DELETE on every future table to
+-- `console_rt`, so `payroll_line_calculations` received DELETE the moment 0186
+-- created it, without any GRANT naming it. Append-only that revokes UPDATE and
+-- leaves DELETE is not append-only. The same file already applies the correct
+-- pattern to `audit_events`: "INSERT + SELECT only -- NO update/delete
+-- (append-only is preserved at the grant layer)".
+--
 -- NO UPDATE IS GRANTED BACK. An earlier revision of this migration re-granted
 -- UPDATE on every non-`payable` column to avoid disturbing the writer. That was
 -- wrong: nothing in the tree updates this table -- the only writer
@@ -47,7 +56,7 @@ BEGIN
             MESSAGE = 'payroll_payable.table_absent_or_columnless';
     END IF;
 
-    EXECUTE 'REVOKE INSERT, UPDATE ON public.payroll_line_calculations FROM console_rt';
+    EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON public.payroll_line_calculations FROM console_rt';
     EXECUTE format(
         'GRANT INSERT (%s) ON public.payroll_line_calculations TO console_rt', v_insert_columns);
 END $$;
@@ -67,6 +76,17 @@ BEGIN
         RAISE EXCEPTION USING
             ERRCODE = '42501',
             MESSAGE = 'payroll_payable.runtime_update_not_revoked';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_privileges
+         WHERE table_name = 'payroll_line_calculations'
+           AND grantee = 'console_rt'
+           AND privilege_type = 'DELETE'
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'payroll_payable.runtime_delete_not_revoked';
     END IF;
 
     IF EXISTS (
