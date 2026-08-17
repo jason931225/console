@@ -92,7 +92,8 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.column_privileges
-         WHERE table_name = 'payroll_line_calculations'
+         WHERE table_schema = 'public'
+           AND table_name = 'payroll_line_calculations'
            AND grantee = 'console_rt'
            AND privilege_type = 'UPDATE'
     ) THEN
@@ -114,7 +115,8 @@ BEGIN
 
     IF EXISTS (
         SELECT 1 FROM information_schema.column_privileges
-         WHERE table_name = 'payroll_line_calculations'
+         WHERE table_schema = 'public'
+           AND table_name = 'payroll_line_calculations'
            AND column_name = 'payable'
            AND grantee = 'console_rt'
            AND privilege_type = 'INSERT'
@@ -126,7 +128,8 @@ BEGIN
 
     IF EXISTS (
         SELECT 1 FROM information_schema.table_privileges
-         WHERE table_name IN ('payroll_draft_runs', 'payroll_draft_lines')
+         WHERE table_schema = 'public'
+           AND table_name IN ('payroll_draft_runs', 'payroll_draft_lines')
            AND grantee = 'console_rt'
            AND privilege_type = 'DELETE'
     ) THEN
@@ -137,7 +140,8 @@ BEGIN
 
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.column_privileges
-         WHERE table_name = 'payroll_line_calculations'
+         WHERE table_schema = 'public'
+           AND table_name = 'payroll_line_calculations'
            AND column_name = 'net_won'
            AND grantee = 'console_rt'
            AND privilege_type = 'INSERT'

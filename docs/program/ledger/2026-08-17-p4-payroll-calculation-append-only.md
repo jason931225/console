@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-17
 **Kind:** lane record for candidate PR #793, written to satisfy [AGENTS.md](../../../AGENTS.md) L8.
-**Base:** `3785fe3b1550c19748f7f7f37e7605a7e6db6b05` (origin/main, post-#792) — the immutable diff base.
+**Base:** `bc70e1587480cf149ba8b944b7201917f866d140` (origin/main) — the immutable diff base, taken from `git merge-base HEAD origin/main` on the reviewed head rather than transcribed. It moved once when #794 merged and this branch was brought up to date; a candidate's base is only immutable relative to a fixed head, which is why it is derived here and not copied forward.
 **Candidate head at review:** `d8ee9ae8` was the head the fourth-round review bound to; this record is amended on the head that answers it. A candidate cannot contain its own final SHA, so the merge SHA is recorded by the documentation-only closeout rather than predicted here — that recursion is register row V7.
 **Review:** automated adversarial review by `chatgpt-codex-connector[bot]` on head `0e3bf6be89`, verdict **COMMENTED**, three P1 findings. All three accepted; two changed the migration, one produced this file. No human reviewer identity is recorded because branch protection requires zero approvals — that gap is register row V6 and is not resolved here.
 **Scope:** `backend/crates/platform/db/migrations/0222_payroll_payable_runtime_write_revoked.sql` (new), `backend/crates/payroll/adapter-postgres/tests/payroll_lifecycle_rls_as_runtime_role.rs` (one added test), `docs/program/executed-tests-baseline.json` (ratchet), `docs/documentation-manifest.seed.json` and `docs/documentation-index.json` (both regenerated for this ledger's blob), and this ledger. No Cargo.toml/Cargo.lock, no OpenAPI, no `ci.yml`.
