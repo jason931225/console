@@ -11,15 +11,6 @@
       "admit_commands": []
     },
     {
-      "id": "lens.noncanonical-json",
-      "symptom": "REASONING-LENS-EVIDENCE block fails canonical JSON.stringify(value, null, 2)+newline",
-      "detector": "node scripts/check-reasoning-lens-contract.mjs --changed-since <base>",
-      "control": "Always re-serialize lens JSON via JSON.stringify; include in admit for ledger paths",
-      "admit_commands": [
-        "node scripts/check-reasoning-lens-contract.mjs --changed-since origin/main"
-      ]
-    },
-    {
       "id": "docs.tip-blob-prebind",
       "symptom": "documentation-manifest blob_sha does not match tip ledger blob",
       "detector": "npm run check:doc-manifest (on tip tree)",
@@ -121,6 +112,16 @@
       "control": "Admit requires baseline --update commit",
       "admit_commands": [
         "node scripts/check-executed-tests.mjs"
+      ]
+    },
+    {
+      "id": "lens.manifest-drift",
+      "symptom": "CLAUDE.md or README.md lens projection drifted from the AGENTS.md canonical list",
+      "detector": "node scripts/check-reasoning-lens-manifest.mjs",
+      "control": "Regenerate the numbered projections from AGENTS.md; never hand-edit one projection alone",
+      "admit_commands": [
+        "node --test scripts/check-reasoning-lens-manifest.test.mjs",
+        "node scripts/check-reasoning-lens-manifest.mjs"
       ]
     }
   ]
