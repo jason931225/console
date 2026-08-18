@@ -2378,7 +2378,7 @@ export function evaluateGlobalHardeningChecks(readText) {
   for (const needle of [
     "kind: ClusterImagePolicy",
     "mode: warn",
-    "ghcr.io/jason931225/console-app",
+    "ghcr.io/oyatie/console-app",
     "https://token.actions.githubusercontent.com",
     "image-release\\.yml@refs/(heads/main|tags/v[0-9].*)",
     "https://fulcio.sigstore.dev",
