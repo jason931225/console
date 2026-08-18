@@ -4,7 +4,7 @@
 
 Refreshed: 2026-08-17 from `.github/workflows/ci.yml`, `.github/workflows/security.yml`, and root `package.json` on `main` at `7705578e`.
 
-The workflow is the executable inventory. This file is the short, machine-checked mirror. Historical per-gate prose lives in [`docs/program/ci-gates-historical-narrative.md`](program/ci-gates-historical-narrative.md) and may describe deleted surfaces.
+The workflow is the executable inventory. This file is the short, machine-checked mirror. Pre-2026-08-17 per-gate prose is historical and lives in git history at `main:docs/CI-GATES.md` (the 69KB essay). Do not treat that history as dispatch authority.
 
 Current `main` branch protection requires exactly three GitHub-Actions-app-bound contexts: `Required / CI`, `Required / Security`, and `authenticate-console-authority`.
 
@@ -68,8 +68,6 @@ Current `main` branch protection requires exactly three GitHub-Actions-app-bound
 Local verification for a new clone is the sequence in [`docs/current/DELIVERY.md`](current/DELIVERY.md), not a partial subset of the lists above.
 
 ## Backend gates
-
-Per-gate essay (historical, possibly stale): [`docs/program/ci-gates-historical-narrative.md`](program/ci-gates-historical-narrative.md).
 
 `console-gate-vendor-lockin` exists under `backend/ci/gates/` and is **not** in the CI-run list above.
 
