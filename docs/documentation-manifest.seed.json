@@ -2940,16 +2940,6 @@
     "archive_tag": null
   },
   {
-    "path": "docs/program/ci-gates-historical-narrative.md",
-    "class": "historical",
-    "owner": "repository maintainers",
-    "status": "frozen",
-    "replacement": "docs/CI-GATES.md",
-    "retention": "retain as context",
-    "blob_sha": "ca10fb0318578a75f637c296f113777b7d93aed7",
-    "archive_tag": null
-  },
-  {
     "path": "docs/program/console-buck2-scale-playbook.md",
     "class": "historical",
     "owner": "repository maintainers",
