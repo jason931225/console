@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0.0",
-  "commit_sha": "bcbd588a6569e7f8f0ce1712239b01f3cf7e979a",
+  "commit_sha": "022d5cac178f2465ce274813829517c91f88906c",
   "pr_number": 829,
   "attestation_engine": "Oyatie Autonomous Engineering Pipeline",
-  "timestamp_utc": "2026-08-19T09:09:17.809489+00:00",
+  "timestamp_utc": "2026-08-19T09:09:46.444337+00:00",
   "gates_verified": [
     "DocGuard (ADR & Doc Parity)",
     "CedarGuard (IAM & Policy-as-Code)",
