@@ -1150,7 +1150,7 @@
       "status": "active",
       "replacement": null,
       "retention": "retain",
-      "blob_sha": "71ee9f2fd07f815ce1d6f7e286275fbe828dc63e",
+      "blob_sha": "91f8c30f962a984add3da9a625fe636b4fec5ea2",
       "archive_tag": null
     },
     {
@@ -1221,6 +1221,16 @@
       "replacement": null,
       "retention": "retain",
       "blob_sha": "773290d5c0e1b5d16f37a37fc5068ac28a554a9a",
+      "archive_tag": null
+    },
+    {
+      "path": "docs/decisions/notes/DN-0008-cargo-primary-buck2-hermeticity.md",
+      "class": "decision",
+      "owner": "repository maintainers",
+      "status": "active",
+      "replacement": null,
+      "retention": "retain",
+      "blob_sha": "6542b359da7d72a6962afd4718e14aeb2b052275",
       "archive_tag": null
     },
     {
