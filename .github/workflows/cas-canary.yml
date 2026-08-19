@@ -1,0 +1,59 @@
+# Non-required canary. Proves the warm-cache path degrades safely.
+#
+# It is deliberately NOT a required context and is not referenced by
+# check-ci-preflight or check-foundation-gates: a shared build cache must never
+# be able to fail Required CI. Buck2 hard-fails when a configured CAS is
+# unreachable, so the fallback this workflow exercises is load-bearing.
+name: CAS canary
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: host:port to probe
+        required: false
+        default: 127.0.0.1:50051
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fallback:
+    name: Warm cache degrades to local
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      # No CAS is reachable from a hosted runner today, and fork pull_request
+      # events hold no credentials by policy. Both must land on the cold path.
+      - name: Preflight
+        id: cas
+        uses: ./.github/actions/cas-warm
+        with:
+          endpoint: ${{ github.event.inputs.endpoint || '127.0.0.1:50051' }}
+          role: reader
+
+      - name: Assert the contract
+        env:
+          CAS_UP: ${{ steps.cas.outputs.cas-up }}
+          FLAGS: ${{ steps.cas.outputs.flags }}
+        run: |
+          echo "cas_up=${CAS_UP} flags='${FLAGS}'"
+          if [ "$CAS_UP" = "1" ]; then
+            [ -z "$FLAGS" ] || { echo "reachable cache must not pass --no-remote-cache"; exit 1; }
+            [ -f .buckconfig.local ] || { echo "reachable cache must leave RE config in place"; exit 1; }
+            echo "OK: warm path selected"
+          else
+            [ "$FLAGS" = "--no-remote-cache" ] || { echo "unreachable cache must fall back"; exit 1; }
+            [ ! -f .buckconfig.local ] || { echo "unreachable cache must not leave RE config"; exit 1; }
+            echo "OK: cold path selected, build may proceed locally"
+          fi
+
+      - name: Preflight never fails the job
+        run: echo "reached the step after preflight — a cache outage cannot break this workflow"
