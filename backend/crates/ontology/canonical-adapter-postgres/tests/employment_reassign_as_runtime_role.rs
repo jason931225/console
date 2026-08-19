@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-#![cfg_attr(rustfmt, rustfmt::skip)]
 //! Four ReassignOrgUnit fail-closed cases. Sibling of
 //! `employment_port_as_runtime_role` so the 2k employment file does not grow.
 
@@ -75,17 +74,29 @@ async fn fixture(owner_pool: &PgPool) -> (OrgId, UserId, PgEmploymentPort) {
     .bind(ORG).bind("org-employment").bind("Org employment").execute(owner_pool).await.unwrap();
     let actor = UserId::new();
     sqlx::query("INSERT INTO users (id, display_name, roles, org_id) VALUES ($1, $2, $3, $4)")
-        .bind(*actor.as_uuid()).bind("Admin employment").bind(["SUPER_ADMIN"].as_slice()).bind(ORG)
-        .execute(owner_pool).await.unwrap();
+        .bind(*actor.as_uuid())
+        .bind("Admin employment")
+        .bind(["SUPER_ADMIN"].as_slice())
+        .bind(ORG)
+        .execute(owner_pool)
+        .await
+        .unwrap();
     for unit in [ORG_UNIT_SALES, ORG_UNIT_TECH] {
         sqlx::query("INSERT INTO org_units (org_id, id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
-            .bind(ORG).bind(unit).execute(owner_pool).await.unwrap();
+            .bind(ORG)
+            .bind(unit)
+            .execute(owner_pool)
+            .await
+            .unwrap();
     }
     sqlx::query(
         "INSERT INTO job_positions (org_id, id, org_unit_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
     )
     .bind(ORG).bind(JOB_STAFF).bind(ORG_UNIT_SALES).execute(owner_pool).await.unwrap();
-    let port = PgEmploymentPort::new(runtime_role_pool(owner_pool).await, tokio::runtime::Handle::current());
+    let port = PgEmploymentPort::new(
+        runtime_role_pool(owner_pool).await,
+        tokio::runtime::Handle::current(),
+    );
     (OrgId::from_uuid(ORG), actor, port)
 }
 
@@ -118,7 +129,9 @@ async fn execute(
     command: EmploymentCommand,
 ) -> Result<CommandReceipt, EmploymentError> {
     let port = port.clone();
-    tokio::task::spawn_blocking(move || port.execute(&command)).await.unwrap()
+    tokio::task::spawn_blocking(move || port.execute(&command))
+        .await
+        .unwrap()
 }
 
 async fn count_rows(owner_pool: &PgPool, sql: &'static str) -> i64 {
@@ -127,7 +140,12 @@ async fn count_rows(owner_pool: &PgPool, sql: &'static str) -> i64 {
 
 async fn legacy_head(owner_pool: &PgPool, employee: Uuid) -> Option<String> {
     sqlx::query("SELECT org_unit FROM employees WHERE org_id = $1 AND id = $2")
-        .bind(ORG).bind(employee).fetch_one(owner_pool).await.unwrap().get("org_unit")
+        .bind(ORG)
+        .bind(employee)
+        .fetch_one(owner_pool)
+        .await
+        .unwrap()
+        .get("org_unit")
 }
 
 async fn appointed(
@@ -140,15 +158,26 @@ async fn appointed(
     let employee = seed_employee(owner_pool, tag).await;
     let receipt = execute(
         port,
-        command(org, actor, EmploymentQuery::Appoint {
-            employee_id: employee,
-            valid_from: at(0),
-            attributes: attributes(),
-        }),
+        command(
+            org,
+            actor,
+            EmploymentQuery::Appoint {
+                employee_id: employee,
+                valid_from: at(0),
+                attributes: attributes(),
+            },
+        ),
     )
     .await
     .unwrap();
-    (employee, receipt.result()["employment_id"].as_str().unwrap().parse().unwrap())
+    (
+        employee,
+        receipt.result()["employment_id"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap(),
+    )
 }
 
 async fn drive_reassign(
@@ -161,7 +190,14 @@ async fn drive_reassign(
 ) -> EmploymentError {
     let mut tx = begin_org_armed_tx(owner_pool).await;
     let refused = reassign_org_unit_via_transfers_in_tx(
-        &mut tx, org, actor, command_id, from, to, "ACME", at(86_400),
+        &mut tx,
+        org,
+        actor,
+        command_id,
+        from,
+        to,
+        "ACME",
+        at(86_400),
     )
     .await
     .expect_err("reassign must fail closed");
@@ -186,8 +222,12 @@ async fn reassign_org_unit_refuses_unbound_employee_and_writes_nothing(owner_poo
     let revisions = count_rows(&owner_pool, COUNT_REVISIONS).await;
     let receipts = count_rows(&owner_pool, COUNT_RECEIPTS).await;
     let refused = drive_reassign(
-        &owner_pool, org, actor, Uuid::new_v4(),
-        &ORG_UNIT_SALES.to_string(), &ORG_UNIT_TECH.to_string(),
+        &owner_pool,
+        org,
+        actor,
+        Uuid::new_v4(),
+        &ORG_UNIT_SALES.to_string(),
+        &ORG_UNIT_TECH.to_string(),
     )
     .await;
     assert!(
@@ -197,7 +237,10 @@ async fn reassign_org_unit_refuses_unbound_employee_and_writes_nothing(owner_poo
         ),
         "got {refused:?}"
     );
-    assert_eq!(legacy_head(&owner_pool, unbound).await, Some(ORG_UNIT_SALES.to_string()));
+    assert_eq!(
+        legacy_head(&owner_pool, unbound).await,
+        Some(ORG_UNIT_SALES.to_string())
+    );
     assert_eq!(count_rows(&owner_pool, COUNT_REVISIONS).await, revisions);
     assert_eq!(count_rows(&owner_pool, COUNT_RECEIPTS).await, receipts);
 }
@@ -210,11 +253,15 @@ async fn reassign_org_unit_refuses_when_a_peer_is_unbound(owner_pool: PgPool) {
         appointed(&owner_pool, org, actor, &port, "reassign-bound-peer").await;
     execute(
         &port,
-        command(org, actor, EmploymentQuery::Promote {
-            employment_id: bound_employment,
-            valid_from: at(3_600),
-            attributes: attributes(),
-        }),
+        command(
+            org,
+            actor,
+            EmploymentQuery::Promote {
+                employment_id: bound_employment,
+                valid_from: at(3_600),
+                attributes: attributes(),
+            },
+        ),
     )
     .await
     .unwrap();
@@ -238,8 +285,14 @@ async fn reassign_org_unit_refuses_when_a_peer_is_unbound(owner_pool: PgPool) {
         ),
         "got {refused:?}"
     );
-    assert_eq!(legacy_head(&owner_pool, bound_employee).await, Some(ORG_UNIT_SALES.to_string()));
-    assert_eq!(legacy_head(&owner_pool, unbound).await, Some(ORG_UNIT_SALES.to_string()));
+    assert_eq!(
+        legacy_head(&owner_pool, bound_employee).await,
+        Some(ORG_UNIT_SALES.to_string())
+    );
+    assert_eq!(
+        legacy_head(&owner_pool, unbound).await,
+        Some(ORG_UNIT_SALES.to_string())
+    );
     assert_eq!(count_rows(&owner_pool, COUNT_REVISIONS).await, revisions);
     assert_eq!(count_rows(&owner_pool, COUNT_RECEIPTS).await, receipts);
 }
@@ -254,7 +307,9 @@ async fn reassign_org_unit_same_source_and_target_is_refused(owner_pool: PgPool)
         panic!("same source and target must be Blocked, got {refused:?}");
     };
     assert!(
-        blockers.iter().any(|b| b.contains("source and target must differ")),
+        blockers
+            .iter()
+            .any(|b| b.contains("source and target must differ")),
         "got {blockers:?}"
     );
 }
@@ -265,8 +320,12 @@ async fn reassign_org_unit_unknown_to_org_unit_is_refused(owner_pool: PgPool) {
     let (org, actor, _port) = fixture(&owner_pool).await;
     let unknown_to = Uuid::from_u128(0xe3b0_0000_0000_0000_0000_0000_0000_0099);
     let refused = drive_reassign(
-        &owner_pool, org, actor, Uuid::new_v4(),
-        &ORG_UNIT_SALES.to_string(), &unknown_to.to_string(),
+        &owner_pool,
+        org,
+        actor,
+        Uuid::new_v4(),
+        &ORG_UNIT_SALES.to_string(),
+        &unknown_to.to_string(),
     )
     .await;
     assert!(
