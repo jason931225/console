@@ -67,6 +67,19 @@ Current `main` branch protection requires exactly three GitHub-Actions-app-bound
 
 Local verification for a new clone is the sequence in [`docs/current/DELIVERY.md`](current/DELIVERY.md), not a partial subset of the lists above.
 
+## Deployment gates
+
+`check:k8s` renders manifests only; CI warns rather than fails when no live cluster is
+reachable. Enforcement of the rendered NetworkPolicy is a separate, opt-in preflight, and
+`scripts/check-production-hardening.mjs` requires this exact invocation to be documented
+here — a deployment checklist that omits it reads as if rendering were sufficient:
+
+```bash
+CONSOLE_NETWORKPOLICY_PREFLIGHT=require npm run check:k8s:networkpolicy
+```
+
+`deploy/README.md` carries the same line for the deployment checklist.
+
 ## Backend gates
 
 `console-gate-vendor-lockin` exists under `backend/ci/gates/` and is **not** in the CI-run list above.
