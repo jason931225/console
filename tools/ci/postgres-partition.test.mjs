@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
+  SHARD_ORDER,
   balanceSummary,
+  entriesForShard,
   packPackages,
   packageWeights,
   partitionByDuration,
@@ -110,6 +113,34 @@ test("postgres-partition", async (t) => {
   await t.test("a healthy partition reports no failures", () => {
     const entries = [e("a", "p", 10), e("b", "q", 9), e("c", "r", 8), e("d", "s", 7)];
     assert.deepEqual(partitionFailures(entries, 2), []);
+  });
+
+  await t.test("SHARD_ORDER matches the ci.yml job ids the harness selects by", () => {
+    assert.deepEqual([...SHARD_ORDER], ["app", "platform", "ontology", "domain-a", "domain-b"]);
+  });
+
+  await t.test("entriesForShard partitions the real map completely and disjointly", () => {
+    const map = JSON.parse(
+      readFileSync(new URL("./postgres-cargo-map.json", import.meta.url), "utf8"),
+    );
+    const workflow = (map.entries ?? []).filter((e) => e.in_workflow_postgres_job);
+    const seen = new Set();
+    let total = 0;
+    for (const id of SHARD_ORDER) {
+      for (const entry of entriesForShard(map.entries ?? [], id)) {
+        assert.equal(seen.has(entry.name), false, `${entry.name} appears in two shards`);
+        seen.add(entry.name);
+        total += 1;
+      }
+    }
+    // Every workflow target runs exactly once. A shard scheme that drops or
+    // duplicates targets is the false green this partitioner replaces.
+    assert.equal(total, workflow.length);
+    assert.equal(seen.size, workflow.length);
+  });
+
+  await t.test("entriesForShard rejects an unknown shard id", () => {
+    assert.throws(() => entriesForShard([], "nope"), /unknown shard id nope/);
   });
 
   await t.test("balanceSummary reports the spread that matters", () => {
