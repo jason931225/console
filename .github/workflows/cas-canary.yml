@@ -57,3 +57,83 @@ jobs:
 
       - name: Preflight never fails the job
         run: echo "reached the step after preflight — a cache outage cannot break this workflow"
+
+  seed:
+    name: Seed — fill the in-runner cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/buck2-setup
+      - uses: ./.github/actions/cas-inrunner
+        id: cas
+      - uses: ./.github/actions/cas-warm
+        id: warm
+        with: { endpoint: "127.0.0.1:50051", role: writer }
+      - name: Build (expect cold)
+        run: |
+          buck2 --isolation-dir ci build --config-file infra/ci/buckconfig/warm-cache.buckconfig \
+            ${{ steps.warm.outputs.flags }} \
+            //backend/ci/gates/layer-boundary:console-gate-layer-boundary --console=simple 2>&1 | tail -6
+      - name: Store size before save
+        run: du -sh ~/nativelink-cas || true
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/nativelink-cas
+          key: nativelink-cas-linux-x64-${{ github.run_id }}
+
+  reuse:
+    name: Reuse — a second runner hits it
+    needs: [seed]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/buck2-setup
+      - uses: ./.github/actions/cas-inrunner
+        id: cas
+      - uses: ./.github/actions/cas-warm
+        id: warm
+        with: { endpoint: "127.0.0.1:50051", role: writer }
+      - name: Build and require cache hits
+        run: |
+          set -o pipefail
+          buck2 --isolation-dir ci build --config-file infra/ci/buckconfig/warm-cache.buckconfig \
+            ${{ steps.warm.outputs.flags }} \
+            //backend/ci/gates/layer-boundary:console-gate-layer-boundary --console=simple 2>&1 | tee /tmp/b.log | tail -6
+          echo "--- verdict ---"
+          if grep -qE 'Cache hits: (100|[1-9][0-9])%' /tmp/b.log; then
+            echo "OK: a second runner reused the first runner's work"
+          else
+            echo "NO REUSE: this is the cached:0-across-runners failure, still present"
+            grep -E 'Cache hits|Commands:' /tmp/b.log || true
+            exit 1
+          fi
+
+  prune:
+    name: Prune — leave the shared cache budget as we found it
+    needs: [seed, reuse]
+    if: always() && github.event.pull_request.head.repo.fork != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Delete this run's CAS cache entries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # cache-hygiene.yml holds the repo to an 8 GiB soft budget and hard-fails
+          # above it. A canary must not spend that budget, so it cleans up after
+          # itself rather than waiting for the daily protocol.
+          gh api "repos/${GITHUB_REPOSITORY}/actions/caches?per_page=100" \
+            -q '.actions_caches[] | select(.key|startswith("nativelink-cas-")) | "\(.id) \(.key) \(.size_in_bytes)"' \
+          | while read -r id key size; do
+              echo "deleting $key ($((size/1048576)) MiB)"
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${id}" || true
+            done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/cache/usage" \
+            -q '"remaining usage: \(.active_caches_size_in_bytes/1073741824*100|round/100) GiB across \(.active_caches_count) caches"'

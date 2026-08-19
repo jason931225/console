@@ -1,0 +1,29 @@
+name: Set up Buck2
+description: Install a checksum-pinned Buck2 and the system toolchains it resolves against.
+runs:
+  using: composite
+  steps:
+    - name: Install checksum-pinned Buck2
+      shell: bash
+      run: |
+        set -euo pipefail
+        archive="${RUNNER_TEMP}/buck2.zst"
+        curl --disable --fail --silent --show-error --location \
+          "https://github.com/facebook/buck2/releases/download/2026-07-15/buck2-x86_64-unknown-linux-musl.zst" \
+          --output "$archive"
+        printf '%s  %s\n' '4d31666ece6f66bedc0c0df53f1e966e93aee13491529bb301fc83e8607d0955' "$archive" | sha256sum --check
+        zstd -dq "$archive" -o "${RUNNER_TEMP}/buck2"
+        sudo install -m 0755 "${RUNNER_TEMP}/buck2" /usr/local/bin/buck2
+        buck2 --version
+
+    - name: Ensure toolchains//:cxx and rust resolve
+      shell: bash
+      run: |
+        set -euo pipefail
+        # toolchains/BUCK hardcodes /usr/bin/clang and /usr/bin/clang++.
+        if [ ! -x /usr/bin/clang ] || [ ! -x /usr/bin/clang++ ]; then
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang
+        fi
+        /usr/bin/clang --version | head -1
+        rustc --version
