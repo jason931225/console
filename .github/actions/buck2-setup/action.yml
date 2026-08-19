@@ -1,20 +1,15 @@
 name: Set up Buck2
-description: Install a checksum-pinned Buck2 and the system toolchains it resolves against.
+description: >
+  Install the repository-pinned DotSlash runtime and the system toolchains
+  tools/buck2 resolves against. Buck2 itself is version-pinned by tools/buck2, so
+  CI and the warm cache always agree on a version — a mismatch would silently
+  change action digests and fragment the cache.
 runs:
   using: composite
   steps:
-    - name: Install checksum-pinned Buck2
+    - name: Install pinned DotSlash runtime
       shell: bash
-      run: |
-        set -euo pipefail
-        archive="${RUNNER_TEMP}/buck2.zst"
-        curl --disable --fail --silent --show-error --location \
-          "https://github.com/facebook/buck2/releases/download/2026-07-15/buck2-x86_64-unknown-linux-musl.zst" \
-          --output "$archive"
-        printf '%s  %s\n' '4d31666ece6f66bedc0c0df53f1e966e93aee13491529bb301fc83e8607d0955' "$archive" | sha256sum --check
-        zstd -dq "$archive" -o "${RUNNER_TEMP}/buck2"
-        sudo install -m 0755 "${RUNNER_TEMP}/buck2" /usr/local/bin/buck2
-        buck2 --version
+      run: tools/buck/install_dotslash.sh
 
     - name: Ensure toolchains//:cxx and rust resolve
       shell: bash
@@ -27,3 +22,4 @@ runs:
         fi
         /usr/bin/clang --version | head -1
         rustc --version
+        tools/buck2 --version

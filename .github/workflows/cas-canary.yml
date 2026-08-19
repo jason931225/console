@@ -73,7 +73,7 @@ jobs:
         with: { endpoint: "127.0.0.1:50051", role: writer }
       - name: Build (expect cold)
         run: |
-          buck2 --isolation-dir ci build --config-file infra/ci/buckconfig/warm-cache.buckconfig \
+          tools/buck2 --isolation-dir ci build --config-file infra/ci/buckconfig/warm-cache.buckconfig \
             ${{ steps.warm.outputs.flags }} \
             //backend/ci/gates/layer-boundary:console-gate-layer-boundary --console=simple 2>&1 | tail -6
       - name: Store size before save
@@ -96,11 +96,11 @@ jobs:
         id: cas
       - uses: ./.github/actions/cas-warm
         id: warm
-        with: { endpoint: "127.0.0.1:50051", role: writer }
+        with: { endpoint: "127.0.0.1:50051", role: reader }
       - name: Build and require cache hits
         run: |
           set -o pipefail
-          buck2 --isolation-dir ci build --config-file infra/ci/buckconfig/warm-cache.buckconfig \
+          tools/buck2 --isolation-dir ci build --config-file infra/ci/buckconfig/warm-cache.buckconfig \
             ${{ steps.warm.outputs.flags }} \
             //backend/ci/gates/layer-boundary:console-gate-layer-boundary --console=simple 2>&1 | tee /tmp/b.log | tail -6
           echo "--- verdict ---"

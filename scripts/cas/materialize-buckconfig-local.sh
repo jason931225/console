@@ -42,12 +42,20 @@ done
 
 case "$ROLE" in writer|reader) ;; *) echo "role must be writer|reader" >&2; exit 2 ;; esac
 
+# Ports are derived from the same variables start-access-tcp.sh honours. Hard-coding
+# them lets a forwarder bind one port while Buck2 dials another, and every cache
+# request then fails.
+LAB_WRITE_PORT="${CAS_LOCAL_WRITE_PORT:-50051}"
+LAB_READ_PORT="${CAS_LOCAL_READ_PORT:-50052}"
+GHA_WRITE_PORT="${CAS_LOCAL_WRITE_PORT:-55051}"
+GHA_READ_PORT="${CAS_LOCAL_READ_PORT:-55052}"
+
 if [[ -z "$ENDPOINT" ]]; then
   case "${PROFILE}:${ROLE}" in
-    lab:writer) ENDPOINT="127.0.0.1:50051" ;;
-    lab:reader) ENDPOINT="127.0.0.1:50052" ;;
-    gha:writer) ENDPOINT="127.0.0.1:55051" ;;
-    gha:reader) ENDPOINT="127.0.0.1:55052" ;;
+    lab:writer) ENDPOINT="127.0.0.1:${LAB_WRITE_PORT}" ;;
+    lab:reader) ENDPOINT="127.0.0.1:${LAB_READ_PORT}" ;;
+    gha:writer) ENDPOINT="127.0.0.1:${GHA_WRITE_PORT}" ;;
+    gha:reader) ENDPOINT="127.0.0.1:${GHA_READ_PORT}" ;;
     *) echo "unknown profile: $PROFILE (expected lab|gha)" >&2; exit 2 ;;
   esac
 fi
