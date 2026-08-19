@@ -69,8 +69,12 @@ something adjacent to the claim.
 1. **Cargo remains the CI driver.** rust-cache remains the CI warm path.
 2. **The five existing Buck2 Required jobs stay.** They are green and they are the
    hermetic ones; reverting carries its own risk. Stop adding.
-3. **Buck2 runs nightly as a hermeticity check** (`nightly.yml` →
-   `buck2-hermeticity`). Buck2's differentiator here is that it forces declared
+3. **Buck2 runs on a daily schedule as a hermeticity check**
+   (`.github/workflows/buck2-hermeticity.yml`, 06:53 UTC). It is a separate
+   workflow rather than a job in `nightly.yml`, because that workflow's contract
+   test asserts the locked `dev-up-smoke` step list covers every step the file
+   declares — adding a job there would weaken a guard this change does not own.
+   Buck2's differentiator here is that it forces declared
    inputs where Cargo tolerates undeclared ones. That value is about catching
    drift, not speed, and does not belong on every PR.
 4. **The warm cache keeps two honest roles**: a developer cache on the workstation

@@ -5,8 +5,8 @@
   "status": "done",
   "worktree": "/Users/jasonlee/Developer/console-cas-worktree",
   "branch": "ci/buck2-warm-cache-measured",
-  "baseSha": "ad1a1078ae8790b1ae6023b004c1af7bc8960ce5",
-  "headSha": "34019b019cf72c37c4b055a34384ae8c391f2973",
+  "baseSha": "8dbec91b18e4d970077b5621e8cc1add1d35d8b1",
+  "headSha": "627db01bb7b22bf9c26c68b09dc7815ccf5e30e9",
   "ownedRoots": [
     "platforms/",
     "infra/ci/buckconfig/",
