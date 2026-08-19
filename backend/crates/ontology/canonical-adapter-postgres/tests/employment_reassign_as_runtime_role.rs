@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! Four ReassignOrgUnit fail-closed cases. Sibling of
-//! `employment_port_as_runtime_role` so the 2k employment file does not grow.
+//! Unbound and mixed-peer ReassignOrgUnit fail-closed cases. Sibling of
+//! `employment_port_as_runtime_role`. Identity and unknown destination live
+//! in `employment_reassign_identity_as_runtime_role`.
 
 use console_kernel_core::{OrgId, UserId};
 use console_ontology_canonical_adapter_postgres::employment::{
@@ -295,41 +296,4 @@ async fn reassign_org_unit_refuses_when_a_peer_is_unbound(owner_pool: PgPool) {
     );
     assert_eq!(count_rows(&owner_pool, COUNT_REVISIONS).await, revisions);
     assert_eq!(count_rows(&owner_pool, COUNT_RECEIPTS).await, receipts);
-}
-
-/// source == target → `Blocked` ("source and target must differ").
-#[sqlx::test(migrations = "../../platform/db/migrations")]
-async fn reassign_org_unit_same_source_and_target_is_refused(owner_pool: PgPool) {
-    let (org, actor, _port) = fixture(&owner_pool).await;
-    let sales = ORG_UNIT_SALES.to_string();
-    let refused = drive_reassign(&owner_pool, org, actor, Uuid::new_v4(), &sales, &sales).await;
-    let EmploymentError::Blocked(blockers) = &refused else {
-        panic!("same source and target must be Blocked, got {refused:?}");
-    };
-    assert!(
-        blockers
-            .iter()
-            .any(|b| b.contains("source and target must differ")),
-        "got {blockers:?}"
-    );
-}
-
-/// Unknown destination OrgUnit → `UnknownOrgUnit`, not `Ok(0)`.
-#[sqlx::test(migrations = "../../platform/db/migrations")]
-async fn reassign_org_unit_unknown_to_org_unit_is_refused(owner_pool: PgPool) {
-    let (org, actor, _port) = fixture(&owner_pool).await;
-    let unknown_to = Uuid::from_u128(0xe3b0_0000_0000_0000_0000_0000_0000_0099);
-    let refused = drive_reassign(
-        &owner_pool,
-        org,
-        actor,
-        Uuid::new_v4(),
-        &ORG_UNIT_SALES.to_string(),
-        &unknown_to.to_string(),
-    )
-    .await;
-    assert!(
-        matches!(refused, EmploymentError::UnknownOrgUnit(id) if id == unknown_to),
-        "unknown destination must be UnknownOrgUnit, not Ok(0); got {refused:?}"
-    );
 }
