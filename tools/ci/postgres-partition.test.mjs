@@ -2,6 +2,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 import {
   SHARD_ORDER,
   balanceSummary,
@@ -137,6 +140,30 @@ test("postgres-partition", async (t) => {
     // duplicates targets is the false green this partitioner replaces.
     assert.equal(total, workflow.length);
     assert.equal(seen.size, workflow.length);
+  });
+
+  await t.test("an empty --only selection keeps the phrase the harness gate asserts", () => {
+    // backend/ci/gates/writer-ownership/tests/census_executes_against_postgres.rs
+    // (cargo_needs_postgres_harness_executes_the_enforcement) runs the harness with
+    // a deliberately-absent --only name and asserts the log contains
+    // "no map entries selected" -- that is how it proves canonical enforcement runs
+    // BEFORE target selection. Wiring this partitioner into the harness replaced
+    // that code path, so the phrase is now this module's contract to keep.
+    const { execFileSync } = require("node:child_process");
+    const cli = fileURLToPath(new URL("./postgres-partition.mjs", import.meta.url));
+    let stderr = "";
+    let status = 0;
+    try {
+      execFileSync(process.execPath, [cli, "--emit-shard=", "--only=console-canonical-wiring-probe"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      status = error.status;
+      stderr = String(error.stderr ?? "");
+    }
+    assert.equal(status, 1, "an unmatched --only must fail closed");
+    assert.match(stderr, /no map entries selected/);
   });
 
   await t.test("entriesForShard rejects an unknown shard id", () => {

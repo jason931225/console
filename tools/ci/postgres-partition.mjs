@@ -268,7 +268,15 @@ if (isMain) {
     if (only && emitted !== only.size) {
       // A misspelled --only would otherwise run a silently smaller set.
       console.error(
-        `--only selected ${emitted} of ${only.size} requested targets in shard ${shardId || "(all)"}`,
+        // Keep the phrase "no map entries selected" when the selection is empty:
+        // backend/ci/gates/writer-ownership asserts on it to prove the harness
+        // runs canonical enforcement BEFORE it selects targets. The stricter
+        // partial-match check below is additive to that contract, not a
+        // replacement for it.
+        (emitted === 0
+          ? `no map entries selected: --only matched none of ${only.size} requested target(s)`
+          : `--only selected ${emitted} of ${only.size} requested targets`)
+        + ` in shard ${shardId || "(all)"}`,
       );
       process.exit(1);
     }
