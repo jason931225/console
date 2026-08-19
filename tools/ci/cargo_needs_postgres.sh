@@ -270,7 +270,16 @@ if [[ "${runner}" == nextest ]]; then
     rm -f "${tmp_list}" "${tmp_pkgs}"
     exit 1
   }
-  nextest_args=(cargo nextest run --locked --manifest-path "${repo_root}/backend/Cargo.toml" --profile ci)
+  # --config-file is REQUIRED, not decoration. nextest resolves its config from
+  # <workspace-root>/.config/nextest.toml, and this workspace root is backend/,
+  # while .config/nextest.toml lives at the REPO root. Measured 2026-08-18:
+  # without this flag nextest reports `profile 'ci' not found (known profiles:
+  # default, default-miri)` -- it had read no config at all, which silently
+  # disables the `cluster-global` max-threads=1 group that ADR-0039 / DN-0005 P3
+  # landed as the serial safety mechanism. The config existing is not the same
+  # as the tool reading it.
+  nextest_args=(cargo nextest run --locked --manifest-path "${repo_root}/backend/Cargo.toml"
+    --config-file "${repo_root}/.config/nextest.toml" --profile ci)
   while IFS= read -r p; do
     [[ -n "${p}" ]] && nextest_args+=(-p "${p}")
   done <"${tmp_pkgs}"
