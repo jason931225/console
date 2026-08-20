@@ -9174,9 +9174,10 @@ E-001,홍길동,본사,2026-07-01,25:99
             r#"
             INSERT INTO data_import_runs (
                 id, org_id, entity_type, status, source_filename, source_format,
-                source_sha256, mapping_profile, input_rows, candidate_rows, preserved_rows
+                source_sha256, mapping_profile, input_rows, candidate_rows, preserved_rows,
+                pay_period_start, pay_period_end
             )
-            VALUES ($1, $2, 'attendance_direct', 'DRY_RUN', 'attendance.csv', 'csv', $3, '{}', 2, 2, 0)
+            VALUES ($1, $2, 'attendance_direct', 'DRY_RUN', 'attendance.csv', 'csv', $3, '{}', 2, 2, 0, DATE '2026-06-01', DATE '2026-06-30')
             "#,
         )
         .bind(run_id)
@@ -10010,8 +10011,10 @@ E-001,홍길동,본사,2026-07-01,abc
         let run_id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO data_import_runs (id,org_id,entity_type,status,source_filename,\
-             source_format,source_sha256,mapping_profile,input_rows,candidate_rows,preserved_rows) \
-             VALUES ($1,$2,'employee_hr','DRY_RUN','employees.xlsx','xlsx',$3,'{}',2,2,0)",
+             source_format,source_sha256,mapping_profile,input_rows,candidate_rows,preserved_rows,\
+             pay_period_start,pay_period_end) \
+             VALUES ($1,$2,'employee_hr','DRY_RUN','employees.xlsx','xlsx',$3,'{}',2,2,0,\
+                     DATE '2026-06-01', DATE '2026-06-30')",
         )
         .bind(run_id)
         .bind(org_id)
@@ -12205,9 +12208,10 @@ E-001,홍길동,본사,2026-07-01,abc
             r#"
             INSERT INTO data_import_runs (
                 id, org_id, entity_type, status, source_filename, source_format,
-                source_sha256, mapping_profile, input_rows, candidate_rows, preserved_rows
+                source_sha256, mapping_profile, input_rows, candidate_rows, preserved_rows,
+                pay_period_start, pay_period_end
             )
-            VALUES ($1, $2, 'attendance_direct', 'DRY_RUN', 'attendance.csv', 'csv', $3, '{}', 2, 2, 0)
+            VALUES ($1, $2, 'attendance_direct', 'DRY_RUN', 'attendance.csv', 'csv', $3, '{}', 2, 2, 0, DATE '2026-06-01', DATE '2026-06-30')
             "#,
         )
         .bind(run_id)
@@ -12342,9 +12346,10 @@ E-001,홍길동,본사,2026-07-01,abc
             r#"
             INSERT INTO data_import_runs (
                 id, org_id, entity_type, status, source_filename, source_format,
-                source_sha256, mapping_profile, input_rows, candidate_rows, preserved_rows
+                source_sha256, mapping_profile, input_rows, candidate_rows, preserved_rows,
+                pay_period_start, pay_period_end
             )
-            VALUES ($1, $2, 'attendance_direct', 'DRY_RUN', 'attendance.csv', 'csv', $3, '{}', 1, 1, 0)
+            VALUES ($1, $2, 'attendance_direct', 'DRY_RUN', 'attendance.csv', 'csv', $3, '{}', 1, 1, 0, DATE '2026-06-01', DATE '2026-06-30')
             "#,
         )
         .bind(run_id)
