@@ -64,7 +64,7 @@ rust_test(
 
 rust_test(
     name = "console-payroll-adapter-postgres-itest-pay_run_port_as_runtime_role",
-    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/pay_run_port_as_runtime_role.rs"], external = {
+    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/pay_run_port_as_runtime_role.rs", "tests/roster_materialisation/seed.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
     }),
     crate = "pay_run_port_as_runtime_role",
@@ -95,7 +95,7 @@ rust_test(
 
 rust_test(
     name = "console-payroll-adapter-postgres-itest-payroll_lifecycle_rls_as_runtime_role",
-    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/payroll_lifecycle_rls_as_runtime_role.rs"], external = {
+    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/payroll_lifecycle_rls_as_runtime_role.rs", "tests/roster_materialisation/seed.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
     }),
     crate = "payroll_lifecycle_rls_as_runtime_role",
@@ -126,7 +126,7 @@ rust_test(
 
 rust_test(
     name = "console-payroll-adapter-postgres-itest-payroll_rls_surfaces_as_runtime_role",
-    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/payroll_rls_surfaces_as_runtime_role.rs"], external = {
+    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/payroll_rls_surfaces_as_runtime_role.rs", "tests/roster_materialisation/seed.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
     }),
     crate = "payroll_rls_surfaces_as_runtime_role",
