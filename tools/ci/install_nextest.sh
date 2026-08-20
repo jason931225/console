@@ -43,6 +43,13 @@ printf '%s  %s\n' "${NEXTEST_SHA256}" "${archive}" | sha256sum --check
 
 mkdir -p "${extract_dir}"
 tar -xzf "${archive}" -C "${extract_dir}" cargo-nextest
+# The destination is created here, not assumed. CI passes
+# "${RUNNER_TEMP}/nextest-bin", which does not exist on a fresh runner, and
+# `install` does not create intermediate directories -- the first CI run failed
+# exactly here. The local container test had passed only because the harness
+# ran `mkdir -p` on the target first, which is the harness hiding the defect
+# rather than the script working.
+mkdir -p "${install_root}"
 install -m 0755 "${extract_dir}/cargo-nextest" "${install_root}/cargo-nextest"
 
 # Prove the thing that was installed is the thing that was pinned. A silent
