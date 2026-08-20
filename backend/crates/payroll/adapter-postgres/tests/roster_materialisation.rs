@@ -15,8 +15,8 @@
 mod seed;
 
 use seed::{
-    attendance_row, materialise, roster, seed_employee, seed_import, seed_org_and_run, PERIOD_END,
-    PERIOD_START,
+    PERIOD_END, PERIOD_START, attendance_row, materialise, roster, seed_employee, seed_import,
+    seed_org_and_run,
 };
 use sqlx::PgPool;
 use time::macros::date;
