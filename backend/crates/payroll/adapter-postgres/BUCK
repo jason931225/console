@@ -157,7 +157,7 @@ rust_test(
 
 rust_test(
     name = "console-payroll-adapter-postgres-itest-roster_materialisation",
-    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/roster_materialisation.rs"], external = {
+    mapped_srcs = repo_mapped_srcs("backend/crates/payroll/adapter-postgres", ["tests/roster_materialisation.rs", "tests/roster_materialisation/seed.rs"], external = {
         "//backend/crates/platform/db/migrations:tree": "backend/crates/platform/db/migrations",
     }),
     crate = "roster_materialisation",
