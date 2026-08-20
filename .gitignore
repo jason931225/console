@@ -79,3 +79,5 @@ ci/harness/lane-board.live.json
 .cursor/
 .agents/
 .beads/
+.omx/
+.omc/
