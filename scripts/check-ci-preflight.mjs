@@ -1188,7 +1188,7 @@ const requiredJobMetadataSha256 = Object.freeze({
   "kubernetes-manifests": "1b215a62dac6d9a3decea6d6912792de3d033986833356b403fb157a15cb8b96",
   "repo-gates": "da8a07f3a19a6f46a5901e6a6d8eac2f7f1c11f52818b7dea25caf362335ee92",
   "api-contract": "101b70d29b1776058160ea23296e707a4f682f5987a9873371cb57180a737d41",
-  "generated-face-authority": "1fa4531646e794f14319da40a58b19e3df6a9d89ba6f7039a29e8f88ca7fb61e",
+  "generated-face-authority": "a9440d3b0b2e351b00a75ded87623c0c776a6dd776b2d8529f23403a1df0c5f6",
   "company-conformance": "bae484f4aea8b0b1ce591642e1b06bd61c0d61d1d50a029d39b4edf864877484",
   "postgres-reachability-app": "34e297e0370053666f34ad3e6e9cd5d8f1bdd357ee05b8800746b0ead20a74af",
   "postgres-reachability-platform": "ade19aead076742c4cf8b8d2b0c4100758c36fce6bfd37cf489630e6f2592539",

@@ -882,7 +882,7 @@ jobs:
     # It becomes merge-enforced only after the live GitHub ruleset admits this
     # exact status; cheap `preflight` intentionally defers expensive faces.
     name: Generated faces — full required drift authority
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     needs: preflight
     timeout-minutes: 35
 
