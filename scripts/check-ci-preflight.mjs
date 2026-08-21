@@ -1183,7 +1183,7 @@ const requiredJobActionContracts = Object.freeze({
 const requiredJobMetadataSha256 = Object.freeze({
   "preflight": "1f3b5c6437ba04ccda98e2cbdf78506a69c6f82be7ce2abf7c661660c88fe87f",
   "domain-unit": "868e85391d23aee1746d2589c8c0141098368f30f3c6df5a24942d601bdd6929",
-  "backend": "a2f2bbd276381bb6d01a54e134acb1231d3a7f2e9fd93157c60405dcb50c345e",
+  "backend": "12278506e65da22179d1cc1dc7d04c4c294b0557095595b47ca3eebf4011b43b",
   "migration-expand-contract": "c6f45dea77b33bcfd29183837e5dfa6dccc44a83c6ebb2bb530d0db186b09c08",
   "kubernetes-manifests": "1b215a62dac6d9a3decea6d6912792de3d033986833356b403fb157a15cb8b96",
   "repo-gates": "da8a07f3a19a6f46a5901e6a6d8eac2f7f1c11f52818b7dea25caf362335ee92",

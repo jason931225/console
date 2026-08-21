@@ -941,7 +941,7 @@ jobs:
         run: tools/buck/preflight.sh --full-generated-faces
 
   backend:
-    name: Backend — fmt / clippy / test / gates (${{ matrix.os }})
+    name: Backend — ${{ matrix.leg }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     needs: preflight
     # Three legs run in PARALLEL. Measured on merge_group run 32402124838 this
