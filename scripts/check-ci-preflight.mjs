@@ -1120,7 +1120,7 @@ const requiredJobActionContracts = Object.freeze({
   "backend": [
     actionStep(0, "Checkout", "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", {"persist-credentials":false}, { id: "checkout" }),
     actionStep(3, "Install Rust toolchain (pinned via rust-toolchain.toml)", "dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8", {"toolchain":"1.97.1","components":"rustfmt, clippy"}, { if: backendIndependentCondition, id: "rust" }),
-    actionStep(4, "Cache Rust dependencies + build artifacts", "Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4", {"workspaces":"backend","shared-key":"backend-cargo","cache-all-crates":"true","save-if":"${{ github.ref == 'refs/heads/main' && matrix.leg == 'cargo' }}"}, { if: backendIndependentCondition, id: "rust-cache" }),
+    actionStep(4, "Cache Rust dependencies + build artifacts", "Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4", {"workspaces":"backend","shared-key":"backend-cargo-${{ matrix.os }}","cache-all-crates":"true","save-if":"${{ github.ref == 'refs/heads/main' && matrix.leg == 'cargo' }}"}, { if: backendIndependentCondition, id: "rust-cache" }),
   ],
   "migration-expand-contract": [
     actionStep(0, "Checkout", "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", {"persist-credentials":false}, { id: "checkout" }),
@@ -1183,12 +1183,12 @@ const requiredJobActionContracts = Object.freeze({
 const requiredJobMetadataSha256 = Object.freeze({
   "preflight": "1f3b5c6437ba04ccda98e2cbdf78506a69c6f82be7ce2abf7c661660c88fe87f",
   "domain-unit": "868e85391d23aee1746d2589c8c0141098368f30f3c6df5a24942d601bdd6929",
-  "backend": "6bbf9fbdb72a307430601770f5e469d6dff891d35cc8be56efef0158c2982d07",
+  "backend": "a2f2bbd276381bb6d01a54e134acb1231d3a7f2e9fd93157c60405dcb50c345e",
   "migration-expand-contract": "c6f45dea77b33bcfd29183837e5dfa6dccc44a83c6ebb2bb530d0db186b09c08",
   "kubernetes-manifests": "1b215a62dac6d9a3decea6d6912792de3d033986833356b403fb157a15cb8b96",
   "repo-gates": "da8a07f3a19a6f46a5901e6a6d8eac2f7f1c11f52818b7dea25caf362335ee92",
   "api-contract": "101b70d29b1776058160ea23296e707a4f682f5987a9873371cb57180a737d41",
-  "generated-face-authority": "a9440d3b0b2e351b00a75ded87623c0c776a6dd776b2d8529f23403a1df0c5f6",
+  "generated-face-authority": "1fa4531646e794f14319da40a58b19e3df6a9d89ba6f7039a29e8f88ca7fb61e",
   "company-conformance": "bae484f4aea8b0b1ce591642e1b06bd61c0d61d1d50a029d39b4edf864877484",
   "postgres-reachability-app": "34e297e0370053666f34ad3e6e9cd5d8f1bdd357ee05b8800746b0ead20a74af",
   "postgres-reachability-platform": "ade19aead076742c4cf8b8d2b0c4100758c36fce6bfd37cf489630e6f2592539",
