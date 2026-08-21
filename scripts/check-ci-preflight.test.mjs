@@ -54,6 +54,15 @@ const preflightRustHeavyIf =
   "${{ !cancelled() && steps.rust-toolchain.outcome == 'success' && steps.path_class.outputs.run_heavy == 'true' }}";
 const backendIndependentIf =
   "${{ !cancelled() && needs.preflight.outputs.run_heavy == 'true' }}";
+// `backend` is a three-leg matrix. Steps that belong to ONE leg carry the leg in
+// their guard; `backendIndependentIf` above is now only right for steps that run
+// on EVERY leg (setup, topology, collect). A mutation that replaces a leg-gated
+// step's `if:` must match the leg-gated text or it silently replaces nothing --
+// which is how two of these tests went quiet when the matrix landed.
+const backendCargoLegIf =
+  "${{ !cancelled() && matrix.leg == 'cargo' && needs.preflight.outputs.run_heavy == 'true' }}";
+const backendBuckAppLegIf =
+  "${{ !cancelled() && matrix.leg == 'buck-app' && needs.preflight.outputs.run_heavy == 'true' }}";
 const npmCiIf = "${{ !cancelled() && steps.npm-ci.outcome == 'success' }}";
 const npmCiPrIf = "${{ !cancelled() && steps.derive.outcome == 'success' && steps.npm-ci.outcome == 'success' && github.event_name == 'pull_request' }}";
 
@@ -640,10 +649,10 @@ describe("CI preflight contract", () => {
       "api-contract": 5,
       "generated-face-authority": 5,
       "company-conformance": 3,
-      "postgres-reachability-app": 2,
-      "postgres-reachability-platform": 2,
-      "postgres-reachability-ontology": 2,
-      "postgres-reachability-domain-a": 2,
+      "postgres-reachability-app": 3,
+      "postgres-reachability-platform": 3,
+      "postgres-reachability-ontology": 3,
+      "postgres-reachability-domain-a": 3,
       // 3, not 2: domain-b is the cargo-nextest pilot and installs the pinned
       // runner before the harness runs. Every one of its run steps is still put
       // through the bypass mutations below, which is what this inventory is for.
@@ -697,11 +706,14 @@ describe("CI preflight contract", () => {
     // 2026-08-18: +5 run steps / +3 setup actions from migration-expand-contract,
     // split out of `backend`. Coverage GREW; the ratchet moves up, never down.
     // 2026-08-19: +1 run step from the cargo-nextest install in
-    // postgres-reachability-domain-b, the runner pilot. Coverage GREW: the new
+    // postgres-reachability-domain-b, the runner pilot.
+    // 2026-08-20: +4 more as the pilot rolled out to the remaining four shards.
+    // Coverage GREW; each new install step goes through the same three bypass
+    // mutations as every other run step. Coverage GREW: the new
     // step goes through the same three bypass mutations as every other one.
-    assert.equal(runStepCount, 126, "required and planned job run-step coverage must not shrink");
-    // Three mutations per run step: 126*3 = 378.
-    assert.equal(mutationCount, 378, "exhaustive bypass matrix must not shrink");
+    assert.equal(runStepCount, 130, "required and planned job run-step coverage must not shrink");
+    // Three mutations per run step: 130*3 = 390.
+    assert.equal(mutationCount, 390, "exhaustive bypass matrix must not shrink");
   });
 
   it("rejects every setup-action condition and soft-failure bypass", () => {
@@ -1864,8 +1876,8 @@ describe("CI preflight contract", () => {
     );
     expectFailure(
       replaceJob(workflow, "domain-unit", (block) => block.replace(
-        "  domain-unit:\n",
-        "  domain-unit:\n    env:\n      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: true\n",
+        "      CARGO_PROFILE_TEST_DEBUG: \"0\"\n",
+        "      CARGO_PROFILE_TEST_DEBUG: \"0\"\n      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: true\n",
       )),
       "domain-unit must use the default shell with no job or step env/defaults overrides",
     );
@@ -1987,7 +1999,7 @@ describe("CI preflight contract", () => {
   it("keeps protected backend steps fail-slow and runs PR 473 contract tests before topology", () => {
     expectFailure(
       workflow.replace(
-        `      - name: rustfmt check\n        id: fmt\n        if: ${backendIndependentIf}\n`,
+        `      - name: rustfmt check\n        id: fmt\n        if: ${backendCargoLegIf}\n`,
         `      - name: rustfmt check\n        id: fmt\n        if: \${{ !cancelled() }}\n`,
       ),
       "backend proof run step 3 must preserve",
@@ -2124,7 +2136,7 @@ describe("CI preflight contract", () => {
       + " //backend/app:console-app-itest-openapi_drift\n";
     const step = "      - name: Buck2 console-app OpenAPI drift suite\n"
       + "        id: openapi-drift\n"
-      + `        if: ${backendIndependentIf}\n`
+      + `        if: ${backendBuckAppLegIf}\n`
       + "        working-directory: .\n"
       + run;
     assert.ok(workflow.includes(step), "backend does not run the openapi_drift suite");
@@ -2144,7 +2156,7 @@ describe("CI preflight contract", () => {
     // Dropping the run_heavy half of the guard would let the drift suite run on thin classes.
     expectFailure(
       workflow.replace(
-        `      - name: Buck2 console-app OpenAPI drift suite\n        id: openapi-drift\n        if: ${backendIndependentIf}\n`,
+        `      - name: Buck2 console-app OpenAPI drift suite\n        id: openapi-drift\n        if: ${backendBuckAppLegIf}\n`,
         `      - name: Buck2 console-app OpenAPI drift suite\n        id: openapi-drift\n        if: \${{ !cancelled() }}\n`,
       ),
       "backend must preserve the locked fail-fast step multiset and failure semantics",

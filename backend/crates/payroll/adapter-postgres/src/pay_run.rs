@@ -209,6 +209,36 @@ const INSERT_DRAFT_RUN_GATED_SQL: &str = "INSERT INTO payroll_draft_runs \
 /// a genuinely NEW write ([`INSERT_DRAFT_RUN_GATED_SQL`]); when that gate
 /// refuses, no row comes back and the caller sees [`StageDraftError::PeriodLocked`].
 /// The provenance check runs on every conflict either way.
+/// Materialise the roster for a staged run, in the caller's transaction.
+///
+/// Called from EVERY success path of `stage_draft_run_inner`, including the
+/// idempotent one that returns `created = false`. Gating this on `created` would
+/// mean a run whose header exists but whose roster was never written — because a
+/// previous attempt died between the two — could never acquire one, and after the
+/// close preflight learned to require `roster_total > 0` that run is stuck
+/// forever with no way to repair it.
+///
+/// An empty roster is NOT an error here. The drain leaves a failed event PENDING
+/// without incrementing `attempt_count`, so returning `Err` would be an unbounded
+/// hot retry; `close_preflight` already refuses an empty roster legibly.
+async fn materialise_roster_for(
+    tx: &mut Transaction<'_, Postgres>,
+    org_id: Uuid,
+    id: Uuid,
+    draft: &StagePayrollDraft,
+) -> Result<(), StageDraftError> {
+    // A draft with no declared period has no scope, so there is no set of import
+    // rows it could honestly claim. Writing nothing is the only truthful option:
+    // guessing a period is exactly the fabricated provenance migration 0224 exists
+    // to remove. The run is still created; the close preflight refuses its empty
+    // roster legibly.
+    let (Some(period_start), Some(period_end)) = (draft.period_start, draft.period_end) else {
+        return Ok(());
+    };
+    crate::roster::materialise_roster_in_tx(tx, org_id, id, period_start, period_end).await?;
+    Ok(())
+}
+
 async fn stage_draft_run_inner(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
@@ -247,6 +277,7 @@ async fn stage_draft_run_inner(
             if !provenance_matches(&stored, &requested) {
                 return Err(StageDraftError::ProvenanceMismatch);
             }
+            materialise_roster_for(tx, org_id, id, draft).await?;
             return Ok((id, false));
         }
         // No existing draft: the freeze-window gate applies to this NEW write.
@@ -265,6 +296,7 @@ async fn stage_draft_run_inner(
         if !created && !provenance_matches(&stored, &requested) {
             return Err(StageDraftError::ProvenanceMismatch);
         }
+        materialise_roster_for(tx, org_id, id, draft).await?;
         Ok((id, created))
     } else {
         let row: (Uuid, serde_json::Value, bool) = sqlx::query_as(INSERT_DRAFT_RUN_SQL)
@@ -279,6 +311,7 @@ async fn stage_draft_run_inner(
         if !created && !provenance_matches(&stored, &requested) {
             return Err(StageDraftError::ProvenanceMismatch);
         }
+        materialise_roster_for(tx, org_id, id, draft).await?;
         Ok((id, created))
     }
 }
@@ -648,10 +681,24 @@ impl PgPayRunPort {
         // this port shares with every other receipt owner. `created_at` is
         // supplied rather than defaulted: 0177 declares it `NOT NULL` with NO
         // DEFAULT, so an INSERT that omits it is a `23502`.
+        // Attribute the receipt to the object whose action it records.
+        //
+        // DERIVED from the command's own query, which already implements
+        // `dispatch_target()` -- the same value the projected-dispatch path uses.
+        // NOT from `action_key`: that is "unique only per object type" (a bare
+        // "revise"), so it cannot name a target on its own, and the internal
+        // reassign path carries "internal.reassign_org_unit", which names none at
+        // all. The query knows; the string does not.
+        //
+        // Without this the row takes the `owner` DEFAULT of 'ontology.action',
+        // filing a canonical receipt under the pre-existing instance-action path
+        // -- a wrong attribution recorded as fact.
+        let receipt_target = command.query.dispatch_target();
+        let receipt_owner = ReceiptOwner::Canonical(receipt_target.object());
         let created_at: OffsetDateTime = sqlx::query_scalar(
             "INSERT INTO ont_action_command_receipts \
-             (org_id, command_id, actor_id, payload_digest, receipt, action_key, object_type_id, created_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, now()) RETURNING created_at",
+             (org_id, command_id, actor_id, payload_digest, receipt, action_key, object_type_id, created_at, owner, target) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9) RETURNING created_at",
         )
         .bind(org)
         .bind(command_uuid)
@@ -660,6 +707,8 @@ impl PgPayRunPort {
         .bind(&result)
         .bind(&command.action_key)
         .bind(command.object_type_id)
+        .bind(receipt_owner.as_str())
+        .bind(receipt_target.as_str())
         .fetch_one(&mut *tx)
         .await?;
 
