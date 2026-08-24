@@ -123,6 +123,8 @@ function makeApi() {
   const state = {
     mainTip: BASE,
     releaseTip: OLD_TIP,
+    releaseRefExists: true,
+    matchingReleaseRefs: null,
     created: false,
     labeled: false,
     patPosts: 0,
@@ -203,7 +205,16 @@ function makeApi() {
     if (endpoint === `/repos/${FALLBACK_REPOSITORY}/git/ref/heads/main`) {
       return { ref: 'refs/heads/main', object: { type: 'commit', sha: state.mainTip } };
     }
+    if (endpoint === `/repos/${FALLBACK_REPOSITORY}/git/matching-refs/heads/${encodeURIComponent(FALLBACK_HEAD_REF)}`) {
+      if (state.matchingReleaseRefs !== null) return structuredClone(state.matchingReleaseRefs);
+      if (!state.releaseRefExists) return [];
+      return [{
+        ref: `refs/heads/${FALLBACK_HEAD_REF}`,
+        object: { type: 'commit', sha: state.releaseTip },
+      }];
+    }
     if (endpoint === `/repos/${FALLBACK_REPOSITORY}/git/ref/heads/${encodeURIComponent(FALLBACK_HEAD_REF)}`) {
+      assert.equal(state.releaseRefExists, true);
       return { ref: `refs/heads/${FALLBACK_HEAD_REF}`, object: { type: 'commit', sha: state.releaseTip } };
     }
     if (endpoint.startsWith(`/repos/${FALLBACK_REPOSITORY}/pulls?`)) {
@@ -263,6 +274,38 @@ test('snapshots exact protected coordinates, old ref, active run, and empty PR s
   });
   assert.deepEqual(decodeReleasePleaseSnapshot(encodeReleasePleaseSnapshot(snapshot)), snapshot);
   assert.throws(() => decodeReleasePleaseSnapshot(`${encodeReleasePleaseSnapshot(snapshot)}=`));
+});
+
+test('snapshots a deleted release ref as null and admits one newly created exact ref', async () => {
+  const api = makeApi();
+  api.state.releaseRefExists = false;
+  const snapshot = await snapshotReleasePleaseState({ environment: environment(), request: api.request });
+  assert.equal(snapshot.releaseTip, null);
+  api.state.releaseRefExists = true;
+  api.state.releaseTip = TIP;
+  const result = await createReleasePleaseFallbackPr({
+    environment: environment({ RELEASE_PLEASE_SNAPSHOT: encodeReleasePleaseSnapshot(snapshot) }),
+    request: api.request,
+  });
+  assert.equal(result.headSha, TIP);
+  assert.equal(api.state.patPosts, 1);
+});
+
+test('snapshot rejects prefix or ambiguous matches for the exact release ref', async () => {
+  for (const matchingReleaseRefs of [
+    [{ ref: `refs/heads/${FALLBACK_HEAD_REF}-attacker`, object: { type: 'commit', sha: OLD_TIP } }],
+    [
+      { ref: `refs/heads/${FALLBACK_HEAD_REF}`, object: { type: 'commit', sha: OLD_TIP } },
+      { ref: `refs/heads/${FALLBACK_HEAD_REF}-attacker`, object: { type: 'commit', sha: TIP } },
+    ],
+  ]) {
+    const api = makeApi();
+    api.state.matchingReleaseRefs = matchingReleaseRefs;
+    await assert.rejects(
+      () => snapshotReleasePleaseState({ environment: environment(), request: api.request }),
+      /matching ref inventory/,
+    );
+  }
 });
 
 test('rejects wrong repository, workflow, run, attempt, event, main, or competing active run at snapshot', async () => {

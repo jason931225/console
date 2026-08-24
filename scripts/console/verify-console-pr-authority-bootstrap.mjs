@@ -343,10 +343,12 @@ export function classifyProtectedPrRoute(ops, {
   if (!Array.isArray(changes)) fail('protected base..head diff is unavailable');
 
   const classifiedRelease = classifyReleasePleaseBotTip(ops, H);
+  // The pinned transport principal is also the repository's ordinary human
+  // contributor, so that identity alone cannot reserve the release lane. It is
+  // accepted only after an independent release-shaped signal below. The bot
+  // identity remains a release claim by itself because it has no ordinary lane.
   const creatorClaimsRelease = prAuthorId === RELEASE_PLEASE_BOT_ID
-    || prAuthorLogin === RELEASE_PLEASE_BOT_NAME
-    || prAuthorId === RELEASE_PLEASE_TRANSPORT_ID
-    || prAuthorLogin === RELEASE_PLEASE_TRANSPORT_NAME;
+    || prAuthorLogin === RELEASE_PLEASE_BOT_NAME;
   const refClaimsRelease = prHeadRef.startsWith('release-please');
   const envelopeClaimsRelease = identity.authorName === RELEASE_PLEASE_BOT_NAME
     || identity.authorEmail === RELEASE_PLEASE_BOT_EMAIL

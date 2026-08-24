@@ -217,6 +217,23 @@ async function readRef({ request, token, ref }) {
   return exactSha(response.object.sha, `${ref} tip`);
 }
 
+async function readOptionalRef({ request, token, ref }) {
+  const response = await requestJson(request, {
+    token,
+    method: 'GET',
+    endpoint: `/repos/${FALLBACK_REPOSITORY}/git/matching-refs/heads/${encodeURIComponent(ref)}`,
+    expectedStatus: 200,
+  });
+  if (!Array.isArray(response)) fail(`matching ref inventory for ${ref} is unavailable`);
+  if (response.length === 0) return null;
+  if (response.length !== 1
+    || response[0]?.ref !== `refs/heads/${ref}`
+    || response[0]?.object?.type !== 'commit') {
+    fail(`matching ref inventory for ${ref} is not exact`);
+  }
+  return exactSha(response[0].object.sha, `${ref} tip`);
+}
+
 async function listReleasePulls({ request, token }) {
   const pulls = await requestJson(request, {
     token,
@@ -292,7 +309,10 @@ export async function snapshotReleasePleaseState({
   await assertSoleActiveRun({ request, token, coordinates });
   const mainTip = await readRef({ request, token, ref: 'main' });
   if (mainTip !== coordinates.sha) fail('live main moved before Release Please action execution');
-  const releaseTip = await readRef({ request, token, ref: FALLBACK_HEAD_REF });
+  // GitHub deletes an unprotected release branch when its PR is merged. An
+  // absent exact ref is therefore a valid pre-action state; the post-action
+  // fallback still requires one newly created exact commit ref.
+  const releaseTip = await readOptionalRef({ request, token, ref: FALLBACK_HEAD_REF });
   const pulls = await listReleasePulls({ request, token });
   return canonicalSnapshot({
     version: SNAPSHOT_VERSION,
