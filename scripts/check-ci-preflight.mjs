@@ -1558,13 +1558,30 @@ function parseDomainUnitIntegrationInvocations(commands) {
 
 const cargoPackageNameCache = new Map();
 let regularGitIndexSourcesCache;
+const gitEnvironment = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+);
+gitEnvironment.LC_ALL = "C";
 
 function regularGitIndexSources() {
   if (regularGitIndexSourcesCache !== undefined) return regularGitIndexSourcesCache;
-  const listing = spawnSync("git", ["ls-files", "--cached", "--stage", "--full-name", "-z"], {
+  const tree = spawnSync("git", ["-C", rootDir(), "write-tree"], {
     cwd: rootDir(),
     encoding: "utf8",
+    env: gitEnvironment,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const treeOid = tree.status === 0 ? tree.stdout.trim() : "";
+  if (!/^[0-9a-f]{40,64}$/.test(treeOid)) {
+    regularGitIndexSourcesCache = null;
+    return regularGitIndexSourcesCache;
+  }
+  const listing = spawnSync("git", ["-C", rootDir(), "ls-tree", "-r", "-z", "--full-tree", treeOid], {
+    cwd: rootDir(),
+    encoding: "utf8",
+    env: gitEnvironment,
     maxBuffer: 8 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
   });
   if (listing.status !== 0 || typeof listing.stdout !== "string") {
     regularGitIndexSourcesCache = null;
@@ -1576,7 +1593,7 @@ function regularGitIndexSources() {
     const separator = entry.indexOf("\t");
     if (separator === -1) continue;
     const metadata = entry.slice(0, separator);
-    if (!/^(?:100644|100755) [0-9a-f]+ 0$/.test(metadata)) continue;
+    if (!/^(?:100644|100755) blob [0-9a-f]{40,64}$/.test(metadata)) continue;
     sources.add(entry.slice(separator + 1));
   }
   regularGitIndexSourcesCache = sources;

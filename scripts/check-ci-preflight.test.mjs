@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
 import {
@@ -180,6 +189,61 @@ function swapNamedSteps(source, job, firstName, secondName) {
 }
 
 describe("CI preflight contract", () => {
+  it("cannot be redirected to an attacker-selected Git index", () => {
+    const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "ci-preflight-alternate-index-"));
+    const alternateIndex = join(temporaryRoot, "index");
+    const cleanGitEnvironment = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+    );
+    cleanGitEnvironment.LC_ALL = "C";
+    const runGit = (args, env = cleanGitEnvironment) => {
+      const result = spawnSync("git", ["-C", repositoryRoot, ...args], {
+        encoding: "utf8",
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    const source = "backend/crates/attendance/application/tests/attendance_policy.rs";
+    const wrongCaseSource = "backend/crates/attendance/Application/tests/attendance_policy.rs";
+    const previousIndex = process.env.GIT_INDEX_FILE;
+    try {
+      copyFileSync(
+        runGit(["rev-parse", "--path-format=absolute", "--git-path", "index"]),
+        alternateIndex,
+      );
+      const sourceOid = runGit(["rev-parse", `:${source}`]);
+      runGit(
+        ["update-index", "--add", "--cacheinfo", `100644,${sourceOid},${wrongCaseSource}`],
+        { ...cleanGitEnvironment, GIT_INDEX_FILE: alternateIndex },
+      );
+      process.env.GIT_INDEX_FILE = alternateIndex;
+
+      const alteredBaseline = structuredClone(executedTestsBaseline);
+      const count = alteredBaseline.test_attribute_baseline[source];
+      delete alteredBaseline.test_attribute_baseline[source];
+      alteredBaseline.test_attribute_baseline[wrongCaseSource] = count;
+      const failures = evaluateCiPreflight(
+        workflow,
+        postgresWrapperBuildFile,
+        freeRunnerDiskAction,
+        alteredBaseline,
+      ).failures;
+      assert.ok(
+        failures.some((failure) => failure.includes(
+          "domain-unit integration binary console-attendance-application --test attendance_policy must resolve exactly once through docs/program/executed-tests-baseline.json",
+        )),
+        failures.join("\n"),
+      );
+    } finally {
+      if (previousIndex === undefined) delete process.env.GIT_INDEX_FILE;
+      else process.env.GIT_INDEX_FILE = previousIndex;
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
   it("classifies docs-only narrowly and keeps unmapped or product paths heavy", () => {
     assert.deepEqual(classifyChangedPaths(["docs/program/foo.md"]), {
       pathClass: "docs-only",
