@@ -1562,10 +1562,11 @@ const gitEnvironment = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
 );
 gitEnvironment.LC_ALL = "C";
+gitEnvironment.GIT_NO_REPLACE_OBJECTS = "1";
 
 function regularGitIndexSources() {
   if (regularGitIndexSourcesCache !== undefined) return regularGitIndexSourcesCache;
-  const tree = spawnSync("git", ["-C", rootDir(), "write-tree"], {
+  const tree = spawnSync("git", ["--no-replace-objects", "-C", rootDir(), "write-tree"], {
     cwd: rootDir(),
     encoding: "utf8",
     env: gitEnvironment,
@@ -1576,7 +1577,7 @@ function regularGitIndexSources() {
     regularGitIndexSourcesCache = null;
     return regularGitIndexSourcesCache;
   }
-  const listing = spawnSync("git", ["-C", rootDir(), "ls-tree", "-r", "-z", "--full-tree", treeOid], {
+  const listing = spawnSync("git", ["--no-replace-objects", "-C", rootDir(), "ls-tree", "-r", "-z", "--full-tree", treeOid], {
     cwd: rootDir(),
     encoding: "utf8",
     env: gitEnvironment,

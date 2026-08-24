@@ -189,7 +189,7 @@ function swapNamedSteps(source, job, firstName, secondName) {
 }
 
 describe("CI preflight contract", () => {
-  it("cannot be redirected to an attacker-selected Git index", () => {
+  it("ignores an inherited alternate Git index", () => {
     const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
     const temporaryRoot = mkdtempSync(join(tmpdir(), "ci-preflight-alternate-index-"));
     const alternateIndex = join(temporaryRoot, "index");
@@ -207,39 +207,74 @@ describe("CI preflight contract", () => {
       return result.stdout.trim();
     };
     const source = "backend/crates/attendance/application/tests/attendance_policy.rs";
-    const wrongCaseSource = "backend/crates/attendance/Application/tests/attendance_policy.rs";
-    const previousIndex = process.env.GIT_INDEX_FILE;
     try {
+      const preflightSource = readFileSync(
+        new URL("./check-ci-preflight.mjs", import.meta.url),
+        "utf8",
+      );
+      assert.equal(
+        [...preflightSource.matchAll(
+          /spawnSync\(\s*"git",\s*\[\s*"--no-replace-objects",\s*"-C",\s*rootDir\(\),/g,
+        )].length,
+        2,
+        "both index-tree reads must disable replacement objects explicitly",
+      );
+      assert.match(
+        preflightSource,
+        /gitEnvironment\.GIT_NO_REPLACE_OBJECTS = "1";/,
+        "the sealed Git environment must disable replacement objects",
+      );
+
       copyFileSync(
         runGit(["rev-parse", "--path-format=absolute", "--git-path", "index"]),
         alternateIndex,
       );
-      const sourceOid = runGit(["rev-parse", `:${source}`]);
+      const alternateEnvironment = { ...cleanGitEnvironment, GIT_INDEX_FILE: alternateIndex };
       runGit(
-        ["update-index", "--add", "--cacheinfo", `100644,${sourceOid},${wrongCaseSource}`],
-        { ...cleanGitEnvironment, GIT_INDEX_FILE: alternateIndex },
+        ["update-index", "--force-remove", "--", source],
+        alternateEnvironment,
       );
-      process.env.GIT_INDEX_FILE = alternateIndex;
+      assert.equal(runGit(["ls-files", "--", source], alternateEnvironment), "");
 
-      const alteredBaseline = structuredClone(executedTestsBaseline);
-      const count = alteredBaseline.test_attribute_baseline[source];
-      delete alteredBaseline.test_attribute_baseline[source];
-      alteredBaseline.test_attribute_baseline[wrongCaseSource] = count;
-      const failures = evaluateCiPreflight(
-        workflow,
-        postgresWrapperBuildFile,
-        freeRunnerDiskAction,
-        alteredBaseline,
-      ).failures;
-      assert.ok(
-        failures.some((failure) => failure.includes(
-          "domain-unit integration binary console-attendance-application --test attendance_policy must resolve exactly once through docs/program/executed-tests-baseline.json",
-        )),
-        failures.join("\n"),
+      const childProbe = `
+        import { readFileSync } from "node:fs";
+        const { evaluateCiPreflight } = await import(${JSON.stringify(
+          new URL("./check-ci-preflight.mjs", import.meta.url).href,
+        )});
+        const failures = evaluateCiPreflight(
+          readFileSync(${JSON.stringify(
+            fileURLToPath(new URL("../.github/workflows/ci.yml", import.meta.url)),
+          )}, "utf8"),
+          readFileSync(${JSON.stringify(
+            fileURLToPath(new URL("../tools/buck/BUCK", import.meta.url)),
+          )}, "utf8"),
+          readFileSync(${JSON.stringify(
+            fileURLToPath(new URL("../.github/actions/free-runner-disk/action.yml", import.meta.url)),
+          )}, "utf8"),
+          JSON.parse(readFileSync(${JSON.stringify(
+            fileURLToPath(new URL("../docs/program/executed-tests-baseline.json", import.meta.url)),
+          )}, "utf8")),
+        ).failures;
+        if (failures.length > 0) {
+          process.stderr.write(failures.join("\\n"));
+          process.exitCode = 1;
+        }
+      `;
+      const child = spawnSync(
+        process.execPath,
+        ["--input-type=module", "--eval", childProbe],
+        {
+          cwd: repositoryRoot,
+          encoding: "utf8",
+          env: {
+            ...cleanGitEnvironment,
+            GIT_INDEX_FILE: alternateIndex,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        },
       );
+      assert.equal(child.status, 0, `${child.stdout}\n${child.stderr}`);
     } finally {
-      if (previousIndex === undefined) delete process.env.GIT_INDEX_FILE;
-      else process.env.GIT_INDEX_FILE = previousIndex;
       rmSync(temporaryRoot, { recursive: true, force: true });
     }
   });
