@@ -11,8 +11,11 @@ name: Image Release
 # artifact that gets Trivy-scanned, cosign-signed, and provenance-attested.
 # Completed CI is only a wake-up: ordinary main commits stop after one read-only
 # classification job. Native builders run only for a canonical version-changing
-# bot commit bound to an immutable published GitHub release, its exact lightweight
-# tag, current main, and exact successful CI + Security workflow/job records.
+# signed release squash whose PR creator and author are the exact Release Please
+# bot or pinned fallback transport identity, and whose same-tree bot custody head
+# has native protected Release Please proof. The squash must also bind to an
+# immutable published GitHub release, its exact lightweight tag, current main,
+# and exact successful CI + Security workflow/job records.
 # Updating the prod overlay is a separate, explicit workflow_dispatch action
 # guarded by the protected production environment; a push or merge never
 # mutates production desired state.

@@ -799,6 +799,20 @@ describe("Image Release live admission shell", () => {
         }),
       ],
       [
+        "tree type",
+        (commit) => ({
+          ...commit,
+          commit: { ...commit.commit, tree: { sha: null } },
+        }),
+      ],
+      [
+        "tree syntax",
+        (commit) => ({
+          ...commit,
+          commit: { ...commit.commit, tree: { sha: `${RELEASE_TREE}\n` } },
+        }),
+      ],
+      [
         "commit author name",
         (commit) => ({
           ...commit,
@@ -876,13 +890,29 @@ describe("Image Release live admission shell", () => {
         (commit) => ({ ...commit, committer: { ...commit.committer, login: "github" } }),
       ],
       [
-        "file envelope",
+        "API committer type",
+        (commit) => ({ ...commit, committer: { ...commit.committer, type: "Bot" } }),
+      ],
+      [
+        "extra file",
         (commit) => ({
           ...commit,
           files: [
             ...commit.files,
             { filename: "backend/src/lib.rs", status: "modified" },
           ],
+        }),
+      ],
+      [
+        "missing file",
+        (commit) => ({ ...commit, files: commit.files.slice(0, -1) }),
+      ],
+      [
+        "file status",
+        (commit) => ({
+          ...commit,
+          files: commit.files.map((file, index) =>
+            index === 0 ? { ...file, status: "added" } : file),
         }),
       ],
     ];
@@ -974,35 +1004,56 @@ describe("Image Release live admission shell", () => {
     const mutations = [
       ["number", (pr) => ({ ...pr, number: RELEASE_PR_NUMBER + 1 })],
       ["state", (pr) => ({ ...pr, state: "open" })],
+      ["draft", (pr) => ({ ...pr, draft: true })],
       ["merged bit", (pr) => ({ ...pr, merged: false })],
       ["merged timestamp", (pr) => ({ ...pr, merged_at: null })],
+      ["empty merged timestamp", (pr) => ({ ...pr, merged_at: "" })],
       ["title", (pr) => ({ ...pr, title: "chore(main): release 1.2.4" })],
       ["merge SHA", (pr) => ({ ...pr, merge_commit_sha: OTHER })],
       ["base ref", (pr) => ({ ...pr, base: { ...pr.base, ref: "release" } })],
       ["base SHA", (pr) => ({ ...pr, base: { ...pr.base, sha: OTHER } })],
       [
-        "base repository",
+        "base repository ID",
         (pr) => ({
           ...pr,
-          base: { ...pr.base, repo: { id: 7, full_name: "attacker/console" } },
+          base: { ...pr.base, repo: { ...pr.base.repo, id: 7 } },
+        }),
+      ],
+      [
+        "base repository name",
+        (pr) => ({
+          ...pr,
+          base: { ...pr.base, repo: { ...pr.base.repo, full_name: "attacker/console" } },
         }),
       ],
       ["head SHA", (pr) => ({ ...pr, head: { ...pr.head, sha: OTHER } })],
+      ["head SHA type", (pr) => ({ ...pr, head: { ...pr.head, sha: null } })],
+      [
+        "head SHA syntax",
+        (pr) => ({ ...pr, head: { ...pr.head, sha: `${RELEASE_HEAD}\n` } }),
+      ],
       ["head ref", (pr) => ({ ...pr, head: { ...pr.head, ref: "feature/release" } })],
+      ["head ref type", (pr) => ({ ...pr, head: { ...pr.head, ref: null } })],
       [
-        "head repository",
+        "head repository ID",
         (pr) => ({
           ...pr,
-          head: { ...pr.head, repo: { id: 7, full_name: "attacker/console" } },
+          head: { ...pr.head, repo: { ...pr.head.repo, id: 7 } },
         }),
       ],
       [
-        "creator",
+        "head repository name",
         (pr) => ({
           ...pr,
-          user: { id: 7, login: "attacker", type: "User" },
+          head: { ...pr.head, repo: { ...pr.head.repo, full_name: "attacker/console" } },
         }),
       ],
+      ["bot creator ID", (pr) => ({ ...pr, user: { ...pr.user, id: 7 } })],
+      [
+        "bot creator login",
+        (pr) => ({ ...pr, user: { ...pr.user, login: "github-actions" } }),
+      ],
+      ["bot creator type", (pr) => ({ ...pr, user: { ...pr.user, type: "User" } })],
     ];
     for (const [label, mutate] of mutations) {
       const routes = baseRoutes();
@@ -1022,6 +1073,28 @@ describe("Image Release live admission shell", () => {
           ? /native Release Please authority proof/
           : /release pull request provenance is invalid/,
       );
+      assert.doesNotMatch(result.output, /^eligible=true$/m);
+    }
+
+    const transportCreatorMutations = [
+      ["transport creator ID", (pr) => ({ ...pr, user: { ...pr.user, id: 7 } })],
+      [
+        "transport creator login",
+        (pr) => ({ ...pr, user: { ...pr.user, login: "jason" } }),
+      ],
+      [
+        "transport creator type",
+        (pr) => ({ ...pr, user: { ...pr.user, type: "Bot" } }),
+      ],
+    ];
+    for (const [label, mutate] of transportCreatorMutations) {
+      const routes = transportRoutes();
+      routes[`repos/oyatie/console/pulls/${RELEASE_PR_NUMBER}`] = [
+        mutate(releasePullRequest({ transport: true })),
+      ];
+      const result = runAdmission({ routes });
+      assert.notEqual(result.status, 0, `accepted wrong release PR ${label}`);
+      assert.match(result.stderr, /release pull request provenance is invalid/);
       assert.doesNotMatch(result.output, /^eligible=true$/m);
     }
   });
@@ -1057,7 +1130,7 @@ describe("Image Release live admission shell", () => {
         }),
       ],
       [
-        "Git author",
+        "Git author name",
         (head) => ({
           ...head,
           commit: {
@@ -1066,19 +1139,82 @@ describe("Image Release live admission shell", () => {
           },
         }),
       ],
-      ["API author", (head) => ({ ...head, author: { ...head.author, id: 7 } })],
       [
-        "committer",
+        "Git author email",
+        (head) => ({
+          ...head,
+          commit: {
+            ...head.commit,
+            author: { ...head.commit.author, email: "actions@github.com" },
+          },
+        }),
+      ],
+      [
+        "Git committer name",
+        (head) => ({
+          ...head,
+          commit: {
+            ...head.commit,
+            committer: { ...head.commit.committer, name: "github-actions[bot]" },
+          },
+        }),
+      ],
+      [
+        "Git committer email",
+        (head) => ({
+          ...head,
+          commit: {
+            ...head.commit,
+            committer: { ...head.commit.committer, email: "actions@github.com" },
+          },
+        }),
+      ],
+      ["API author ID", (head) => ({ ...head, author: { ...head.author, id: 7 } })],
+      [
+        "API author login",
+        (head) => ({ ...head, author: { ...head.author, login: "github-actions" } }),
+      ],
+      ["API author type", (head) => ({ ...head, author: { ...head.author, type: "User" } })],
+      [
+        "API committer ID",
+        (head) => ({ ...head, committer: { ...head.committer, id: 7 } }),
+      ],
+      [
+        "API committer login",
         (head) => ({
           ...head,
           committer: { ...head.committer, login: "github" },
         }),
       ],
       [
-        "file envelope",
+        "API committer type",
+        (head) => ({ ...head, committer: { ...head.committer, type: "Bot" } }),
+      ],
+      [
+        "tree",
+        (head) => ({
+          ...head,
+          commit: { ...head.commit, tree: { sha: OTHER } },
+        }),
+      ],
+      [
+        "message type",
+        (head) => ({ ...head, commit: { ...head.commit, message: null } }),
+      ],
+      [
+        "extra file",
         (head) => ({
           ...head,
           files: [...head.files, { filename: "backend/src/lib.rs", status: "modified" }],
+        }),
+      ],
+      ["missing file", (head) => ({ ...head, files: head.files.slice(0, -1) })],
+      [
+        "file status",
+        (head) => ({
+          ...head,
+          files: head.files.map((file, index) =>
+            index === 0 ? { ...file, status: "added" } : file),
         }),
       ],
     ];
@@ -1146,6 +1282,16 @@ describe("Image Release live admission shell", () => {
     const cases = [
       ["missing", { total_count: 0, jobs: [] }],
       ["duplicate", { total_count: 2, jobs: [trusted, { ...trusted, id: RELEASE_PROOF_JOB_ID + 1 }] }],
+      ["count type", { total_count: "1", jobs: [trusted] }],
+      ["negative count", { total_count: -1, jobs: [] }],
+      ["fractional count", { total_count: 1.5, jobs: [trusted] }],
+      [
+        "page overflow",
+        { total_count: 101, jobs: Array.from({ length: 101 }, () => trusted) },
+      ],
+      ["jobs collection type", { total_count: 1, jobs: { 0: trusted } }],
+      ["truncated page", { total_count: 2, jobs: [trusted] }],
+      ["count mismatch", { total_count: 1, jobs: [] }],
       ["job ID", releaseProofJobs({ id: "1702" })],
       ["run ID", releaseProofJobs({ run_id: 7 })],
       ["run attempt", releaseProofJobs({ run_attempt: 2 })],
