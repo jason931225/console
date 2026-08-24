@@ -1926,22 +1926,42 @@ describe("CI preflight contract", () => {
       "domain-unit integration binary console-attendance-application --test phantom_binary must resolve exactly once through docs/program/executed-tests-baseline.json",
     );
 
+    const attendanceSource =
+      "backend/crates/attendance/application/tests/attendance_policy.rs";
+    const expectAttendanceBaselineFailure = (baselineDocument, mutation) => {
+      const baselineFailures = evaluateCiPreflight(
+        workflow,
+        postgresWrapperBuildFile,
+        freeRunnerDiskAction,
+        baselineDocument,
+      ).failures;
+      assert.ok(
+        baselineFailures.some((failure) => failure.includes(
+          "domain-unit integration binary console-attendance-application --test attendance_policy must resolve exactly once through docs/program/executed-tests-baseline.json",
+        )),
+        `${mutation}:\n${baselineFailures.join("\n")}`,
+      );
+    };
+
     const missingBaselineEntry = structuredClone(executedTestsBaseline);
-    delete missingBaselineEntry.test_attribute_baseline[
-      "backend/crates/attendance/application/tests/attendance_policy.rs"
-    ];
-    const baselineFailures = evaluateCiPreflight(
-      workflow,
-      postgresWrapperBuildFile,
-      freeRunnerDiskAction,
-      missingBaselineEntry,
-    ).failures;
-    assert.ok(
-      baselineFailures.some((failure) => failure.includes(
-        "domain-unit integration binary console-attendance-application --test attendance_policy must resolve exactly once through docs/program/executed-tests-baseline.json",
-      )),
-      baselineFailures.join("\n"),
-    );
+    delete missingBaselineEntry.test_attribute_baseline[attendanceSource];
+    expectAttendanceBaselineFailure(missingBaselineEntry, "missing source");
+
+    for (const alias of [
+      "backend/crates/attendance/application/no_such_dir/../tests/attendance_policy.rs",
+      "backend/crates/attendance/application//tests/attendance_policy.rs",
+      "backend/crates/attendance/application/./tests/attendance_policy.rs",
+    ]) {
+      const aliasedBaselineEntry = structuredClone(executedTestsBaseline);
+      const count = aliasedBaselineEntry.test_attribute_baseline[attendanceSource];
+      delete aliasedBaselineEntry.test_attribute_baseline[attendanceSource];
+      aliasedBaselineEntry.test_attribute_baseline[alias] = count;
+      expectAttendanceBaselineFailure(aliasedBaselineEntry, `noncanonical source ${alias}`);
+    }
+
+    const zeroTestBaselineEntry = structuredClone(executedTestsBaseline);
+    zeroTestBaselineEntry.test_attribute_baseline[attendanceSource] = 0;
+    expectAttendanceBaselineFailure(zeroTestBaselineEntry, "zero-test source");
   });
 
   it("preserves fail-fast backend ordering", () => {

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, posix, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import yaml from "js-yaml";
@@ -1558,7 +1558,30 @@ function parseDomainUnitIntegrationInvocations(commands) {
 
 const cargoPackageNameCache = new Map();
 
+function isCanonicalRegularRepositorySource(source) {
+  if (typeof source !== "string"
+    || posix.isAbsolute(source)
+    || source === "."
+    || source === ".."
+    || source.startsWith("../")
+    || source !== posix.normalize(source)) {
+    return false;
+  }
+  try {
+    const repositoryRoot = realpathSync(rootDir());
+    const candidate = resolve(repositoryRoot, ...source.split("/"));
+    if (!lstatSync(candidate).isFile()) return false;
+    const canonicalSource = relative(repositoryRoot, realpathSync(candidate))
+      .split(sep)
+      .join("/");
+    return canonicalSource === source;
+  } catch {
+    return false;
+  }
+}
+
 function cargoPackageNameForTestSource(source) {
+  if (!isCanonicalRegularRepositorySource(source)) return null;
   const packageRoot = source.match(/^(backend\/.+)\/tests\/[^/]+\.rs$/)?.[1];
   if (!packageRoot) return null;
   if (cargoPackageNameCache.has(packageRoot)) return cargoPackageNameCache.get(packageRoot);
@@ -1594,7 +1617,7 @@ function requireDomainUnitExecutedTestsBaseline(
       const sources = Object.entries(baseline)
         .filter(([source, count]) => source.endsWith(`/tests/${test}.rs`)
           && Number.isInteger(count)
-          && count >= 0
+          && count > 0
           && cargoPackageNameForTestSource(source) === packageName)
         .map(([source]) => source);
       if (sources.length !== 1) {
