@@ -21,6 +21,10 @@ const freeRunnerDiskAction = readFileSync(
   new URL("../.github/actions/free-runner-disk/action.yml", import.meta.url),
   "utf8",
 );
+const executedTestsBaseline = JSON.parse(readFileSync(
+  new URL("../docs/program/executed-tests-baseline.json", import.meta.url),
+  "utf8",
+));
 const cargoLockGate = "cargo metadata --manifest-path backend/Cargo.toml --locked --format-version=1 >/dev/null";
 const ciPreflightTests = "node --test scripts/check-ci-preflight.test.mjs";
 const reasoningLensManifestStep = `      - name: Reasoning lens manifest drift
@@ -1880,6 +1884,63 @@ describe("CI preflight contract", () => {
         "      CARGO_PROFILE_TEST_DEBUG: \"0\"\n      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: true\n",
       )),
       "domain-unit must use the default shell with no job or step env/defaults overrides",
+    );
+  });
+
+  it("derives the ordered domain-unit integration inventory and checks its baseline", () => {
+    const attendance = `          SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \\
+            -p console-attendance-application --test attendance_policy
+          check_status "attendance_policy"
+`;
+    const compliance = `          SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \\
+            -p console-compliance-domain --test location_consent_fsm --test location_ping_policy
+          check_status "location_consent_fsm + location_ping_policy"
+`;
+    assert.ok(workflow.includes(attendance));
+    assert.ok(workflow.includes(compliance));
+
+    const omit = mutateNamedStep(workflow, "domain-unit", "Domain crate unit tests", (step) =>
+      step.replace(attendance, ""));
+    expectFailure(omit, "domain-unit must execute the locked Cargo test commands directly when run_heavy");
+
+    const insert = mutateNamedStep(workflow, "domain-unit", "Domain crate unit tests", (step) =>
+      step.replace(attendance, `${attendance}          SQLX_OFFLINE=true cargo test --locked --manifest-path backend/Cargo.toml \\
+            -p console-attendance-application --test phantom_binary
+          check_status "phantom_binary"
+`));
+    expectFailure(
+      insert,
+      "domain-unit integration binary console-attendance-application --test phantom_binary must resolve exactly once through docs/program/executed-tests-baseline.json",
+    );
+
+    const reordered = mutateNamedStep(workflow, "domain-unit", "Domain crate unit tests", (step) =>
+      step.replace(attendance, "<attendance-invocation>")
+        .replace(compliance, attendance)
+        .replace("<attendance-invocation>", compliance));
+    expectFailure(reordered, "domain-unit must execute the locked Cargo test commands directly when run_heavy");
+
+    const changedToken = mutateNamedStep(workflow, "domain-unit", "Domain crate unit tests", (step) =>
+      step.replace("--test attendance_policy", "--test phantom_binary"));
+    expectFailure(
+      changedToken,
+      "domain-unit integration binary console-attendance-application --test phantom_binary must resolve exactly once through docs/program/executed-tests-baseline.json",
+    );
+
+    const missingBaselineEntry = structuredClone(executedTestsBaseline);
+    delete missingBaselineEntry.test_attribute_baseline[
+      "backend/crates/attendance/application/tests/attendance_policy.rs"
+    ];
+    const baselineFailures = evaluateCiPreflight(
+      workflow,
+      postgresWrapperBuildFile,
+      freeRunnerDiskAction,
+      missingBaselineEntry,
+    ).failures;
+    assert.ok(
+      baselineFailures.some((failure) => failure.includes(
+        "domain-unit integration binary console-attendance-application --test attendance_policy must resolve exactly once through docs/program/executed-tests-baseline.json",
+      )),
+      baselineFailures.join("\n"),
     );
   });
 
