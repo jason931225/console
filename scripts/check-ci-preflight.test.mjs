@@ -1951,6 +1951,7 @@ describe("CI preflight contract", () => {
       "backend/crates/attendance/application/no_such_dir/../tests/attendance_policy.rs",
       "backend/crates/attendance/application//tests/attendance_policy.rs",
       "backend/crates/attendance/application/./tests/attendance_policy.rs",
+      "backend/crates/attendance/Application/tests/attendance_policy.rs",
     ]) {
       const aliasedBaselineEntry = structuredClone(executedTestsBaseline);
       const count = aliasedBaselineEntry.test_attribute_baseline[attendanceSource];

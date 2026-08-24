@@ -1557,6 +1557,31 @@ function parseDomainUnitIntegrationInvocations(commands) {
 }
 
 const cargoPackageNameCache = new Map();
+let regularGitIndexSourcesCache;
+
+function regularGitIndexSources() {
+  if (regularGitIndexSourcesCache !== undefined) return regularGitIndexSourcesCache;
+  const listing = spawnSync("git", ["ls-files", "--cached", "--stage", "--full-name", "-z"], {
+    cwd: rootDir(),
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (listing.status !== 0 || typeof listing.stdout !== "string") {
+    regularGitIndexSourcesCache = null;
+    return regularGitIndexSourcesCache;
+  }
+  const sources = new Set();
+  for (const entry of listing.stdout.split("\0")) {
+    if (!entry) continue;
+    const separator = entry.indexOf("\t");
+    if (separator === -1) continue;
+    const metadata = entry.slice(0, separator);
+    if (!/^(?:100644|100755) [0-9a-f]+ 0$/.test(metadata)) continue;
+    sources.add(entry.slice(separator + 1));
+  }
+  regularGitIndexSourcesCache = sources;
+  return regularGitIndexSourcesCache;
+}
 
 function isCanonicalRegularRepositorySource(source) {
   if (typeof source !== "string"
@@ -1564,7 +1589,8 @@ function isCanonicalRegularRepositorySource(source) {
     || source === "."
     || source === ".."
     || source.startsWith("../")
-    || source !== posix.normalize(source)) {
+    || source !== posix.normalize(source)
+    || !regularGitIndexSources()?.has(source)) {
     return false;
   }
   try {
