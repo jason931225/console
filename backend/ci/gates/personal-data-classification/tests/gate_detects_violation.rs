@@ -800,8 +800,20 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
             "ENABLE ROW LEVEL SECURITY, DROP COLUMN id",
         ),
         (
+            "nested-dollar-later-implicit-add",
+            "ENABLE ROW LEVEL SECURITY, ADD medical_certificate_no TEXT",
+        ),
+        (
             "nested-dollar-later-rename",
             "ENABLE ROW LEVEL SECURITY, RENAME COLUMN id TO staff_id",
+        ),
+        (
+            "nested-dollar-later-unknown",
+            "ENABLE ROW LEVEL SECURITY, ATTACH PARTITION staff_archive",
+        ),
+        (
+            "nested-dollar-later-malformed",
+            "ENABLE ROW LEVEL SECURITY, , FORCE ROW LEVEL SECURITY",
         ),
     ];
     for (name, actions) in nested_dollar_hostile_actions {
@@ -831,6 +843,74 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
             result.violations
         );
     }
+
+    let comment_separated_signals = [
+        (
+            "nested-dollar-comment-separated-alter",
+            "ALTER /* signal words inside this comment do not count */ TABLE staff ENABLE ROW \
+             LEVEL SECURITY, ADD COLUMN medical_certificate_no TEXT",
+            "alter table",
+        ),
+        (
+            "nested-dollar-comment-separated-create",
+            "CREATE /* signal words inside this comment do not count */ TABLE shadow_staff \
+             (medical_certificate_no TEXT)",
+            "create table",
+        ),
+    ];
+    for (name, command, construct) in comment_separated_signals {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $outer$ BEGIN
+                     EXECUTE $ddl${command}$ddl$;
+                 END $outer$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "comment-separated nested-dollar DDL '{name}' must remain visible to the signal and \
+             classifier"
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains(&format!("body builds `{construct}`"))),
+            "'{name}' must be UnsupportedDdl naming the nested command, got {:#?}",
+            result.violations
+        );
+    }
+
+    let multiply_nested = tree(
+        "opaque-multiple-complete-dollar-tags",
+        "CREATE TABLE staff(id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         DO $outer$ BEGIN
+             EXECUTE $command$DO $middle$ BEGIN
+                 EXECUTE $ddl$ALTER TABLE staff ENABLE ROW LEVEL SECURITY,
+                     ADD COLUMN medical_certificate_no TEXT$ddl$;
+             END $middle$;$command$;
+         END $outer$;",
+    )?;
+    let result = check_tree(&multiply_nested, &empty_baseline())?;
+    assert!(
+        !result.passed(),
+        "complete multiply nested dollar tags must not hide their inner DDL"
+    );
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                && v.detail.contains("body builds `alter table`")),
+        "multiply nested DDL must retain the every-action classifier, got {:#?}",
+        result.violations
+    );
 
     let neutral_actions = [
         "ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY",
@@ -873,6 +953,80 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
         result.violations
     );
 
+    let nested_dollar_neutral_literal_data = [
+        (
+            "opaque-nested-dollar-neutral-escaped-quote-data",
+            "ADD CONSTRAINT staff_quote_check CHECK ('O''Reilly' = 'O''Reilly'), DROP \
+             CONSTRAINT staff_quote_check",
+        ),
+        (
+            "opaque-nested-dollar-neutral-comment-looking-data",
+            "ADD CONSTRAINT staff_comment_check CHECK ('/* not a comment' = '/* not a comment'), \
+             DROP CONSTRAINT staff_comment_check",
+        ),
+        (
+            "opaque-nested-dollar-neutral-tag-looking-data",
+            "ADD CONSTRAINT staff_tag_check CHECK ('$dangling$' = '$dangling$'), DROP CONSTRAINT \
+             staff_tag_check",
+        ),
+    ];
+    for (name, actions) in nested_dollar_neutral_literal_data {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $outer$ BEGIN
+                     EXECUTE $ddl$ALTER TABLE staff {actions}$ddl$;
+                 END $outer$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            result.passed(),
+            "neutral literal data in nested-dollar ALTER '{name}' must not be recursively \
+             reinterpreted as malformed SQL, got {:#?}",
+            result.violations
+        );
+    }
+
+    let signaled_incomplete_fragments = [
+        (
+            "opaque-signaled-incomplete-quote",
+            "ALTER TABLE staff ADD CONSTRAINT staff_bad_check CHECK ('unterminated)",
+        ),
+        (
+            "opaque-signaled-incomplete-comment",
+            "ALTER TABLE staff ENABLE ROW LEVEL SECURITY /* unterminated",
+        ),
+    ];
+    for (name, command) in signaled_incomplete_fragments {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $outer$ BEGIN
+                     EXECUTE $ddl${command}$ddl$;
+                 END $outer$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "a DDL-signaled fragment with incomplete quoting must fail closed"
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("cannot be inspected safely")),
+            "'{name}' must be reported as unreadable opaque DDL, got {:#?}",
+            result.violations
+        );
+    }
+
     let adjacent_split = tree(
         "opaque-adjacent-split-remains-registered",
         "CREATE TABLE staff(id UUID PRIMARY KEY);
@@ -894,7 +1048,7 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
         "CREATE TABLE staff(id UUID PRIMARY KEY);
          COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
          DO $outer$ BEGIN
-             EXECUTE $ddl$SELECT 1;
+             EXECUTE $ddl$ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
          END $outer$;",
     )?;
     let result = check_tree(&malformed_nested_dollar, &empty_baseline())?;

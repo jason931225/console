@@ -1005,10 +1005,14 @@ fn select_into_target(statement: &[Tok]) -> Option<String> {
 /// is refuse to call a body harmless. The scan runs over the body's whole text,
 /// code and string literals alike, because this repo builds DDL by string —
 /// `EXECUTE format('CREATE TABLE %I …')` — so the DDL is inside a literal and a
-/// scan that skipped literals would see nothing. Every complete single- or
-/// dollar-quoted fragment found inside that body is inspected independently;
-/// adjacent fragments are never joined, preserving the registered
-/// concatenation-split ceiling.
+/// scan that skipped literals would see nothing. Every single- or dollar-quoted
+/// fragment carrying its own unsplit `CREATE … TABLE` or `ALTER … TABLE` signal
+/// is inspected independently; adjacent fragments are never joined, preserving
+/// the registered concatenation-split ceiling. A fragment with no such signal
+/// is literal data, not another level of SQL to parse. That distinction matters
+/// for decoded data such as `O'Reilly`, `/* not a comment`, or `$tag$`: lexing
+/// those bytes again would manufacture an incomplete SQL construct that was
+/// never incomplete in the containing command.
 ///
 /// A leading `DROP … TABLE` is deliberately not flagged. A body that drops a
 /// table leaves the parser believing in a table that is gone, so the gate
@@ -1042,6 +1046,9 @@ fn body_builds_table_ddl(body: &str) -> Result<Option<String>, &'static str> {
         if parent_size.is_some_and(|size| fragment.len() >= size) {
             return Err("a nested quoted fragment did not strictly shrink");
         }
+        if !has_table_ddl_signal(&fragment) {
+            continue;
+        }
 
         let fragment_size = fragment.len();
         let (tokens, complete) = lex_with_completeness(&fragment);
@@ -1068,6 +1075,118 @@ fn body_builds_table_ddl(body: &str) -> Result<Option<String>, &'static str> {
         }
     }
     Ok(None)
+}
+
+/// Cheap admission for interpreting an opaque fragment as possible table DDL.
+///
+/// This is deliberately a permissive signal, not the classifier: it finds an
+/// unsplit whole-word `CREATE` or `ALTER` followed by `TABLE` in the same
+/// three-word window used by `token_stream_builds_table_ddl`. SQL comments are
+/// separators and do not spend that window, so `ALTER /* why */ TABLE` remains
+/// visible. The later lexer and every-action classifier still decide whether
+/// the signalled fragment is complete and safe.
+///
+/// The function receives exactly one fragment and returns one boolean. It
+/// never receives or joins neighboring `Tok::Str`/`Tok::Body` values, which is
+/// the boundary that keeps the documented concatenation-split ceiling intact.
+fn has_table_ddl_signal(fragment: &str) -> bool {
+    let bytes = fragment.as_bytes();
+    let mut cursor = 0usize;
+    while cursor < bytes.len() {
+        // A dollar tag is a quote boundary, not part of the word immediately
+        // after it. Skip only the tag: its body remains in this same fragment
+        // and is intentionally searched for a permissive signal.
+        if bytes[cursor] == b'$'
+            && let Some(tag_end) = dollar_tag_end(bytes, cursor)
+        {
+            cursor = tag_end;
+            continue;
+        }
+        let Some(end) = signal_word_end(bytes, cursor) else {
+            cursor += 1;
+            continue;
+        };
+        let word = &fragment[cursor..end];
+        if (word.eq_ignore_ascii_case("create") || word.eq_ignore_ascii_case("alter"))
+            && table_follows_signal(bytes, fragment, end)
+        {
+            return true;
+        }
+        cursor = end;
+    }
+    false
+}
+
+/// Return the end of the lexer-shaped ASCII word beginning at `start`.
+fn signal_word_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if !bytes
+        .get(start)
+        .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+    {
+        return None;
+    }
+    let mut end = start + 1;
+    while end < bytes.len()
+        && (bytes[end].is_ascii_alphanumeric() || matches!(bytes[end], b'_' | b'$'))
+    {
+        end += 1;
+    }
+    Some(end)
+}
+
+/// Search the existing three-word modifier window after a CREATE/ALTER signal.
+fn table_follows_signal(bytes: &[u8], fragment: &str, mut cursor: usize) -> bool {
+    let mut words_seen = 0usize;
+    while cursor < bytes.len() && words_seen < 3 {
+        cursor = skip_signal_separators(bytes, cursor);
+        if cursor >= bytes.len() {
+            break;
+        }
+        let Some(end) = signal_word_end(bytes, cursor) else {
+            cursor += 1;
+            continue;
+        };
+        words_seen += 1;
+        if fragment[cursor..end].eq_ignore_ascii_case("table") {
+            return true;
+        }
+        cursor = end;
+    }
+    false
+}
+
+/// Skip punctuation, whitespace, and SQL comments between signal words.
+fn skip_signal_separators(bytes: &[u8], mut cursor: usize) -> usize {
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'-' && bytes.get(cursor + 1) == Some(&b'-') {
+            cursor += 2;
+            while cursor < bytes.len() && bytes[cursor] != b'\n' {
+                cursor += 1;
+            }
+            continue;
+        }
+        if bytes[cursor] == b'/' && bytes.get(cursor + 1) == Some(&b'*') {
+            let mut depth = 1usize;
+            cursor += 2;
+            while cursor < bytes.len() && depth > 0 {
+                if bytes[cursor] == b'/' && bytes.get(cursor + 1) == Some(&b'*') {
+                    depth = depth.saturating_add(1);
+                    cursor += 2;
+                } else if bytes[cursor] == b'*' && bytes.get(cursor + 1) == Some(&b'/') {
+                    depth -= 1;
+                    cursor += 2;
+                } else {
+                    cursor += 1;
+                }
+            }
+            continue;
+        }
+        if signal_word_end(bytes, cursor).is_some() {
+            break;
+        }
+        cursor += 1;
+    }
+    cursor
 }
 
 fn token_stream_builds_table_ddl(tokens: &[Tok]) -> Option<String> {
