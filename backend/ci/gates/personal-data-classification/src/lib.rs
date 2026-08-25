@@ -1093,7 +1093,7 @@ fn body_builds_table_ddl(body: &str) -> Result<Option<String>, &'static str> {
         let mut local_signal = false;
         let mut unsafe_construct = None;
         for statement in statements(&tokens) {
-            let inspection = inspect_token_stream_table_ddl(statement);
+            let inspection = inspect_token_stream_table_ddl(statement)?;
             local_signal |= inspection.signaled;
             if unsafe_construct.is_none() {
                 unsafe_construct = inspection.unsafe_construct;
@@ -1137,16 +1137,25 @@ struct TableDdlLocation {
     phrase: String,
 }
 
-/// Locate every local CREATE/ALTER-to-TABLE phrase from one exact token
-/// projection. Both signal admission and classification consume these same
-/// locations, so neither can have a wider word vocabulary or modifier window.
-fn locate_table_ddl(tokens: &[Tok]) -> Vec<TableDdlLocation> {
+enum TableDdlLocations {
+    None,
+    One(TableDdlLocation),
+    Multiple,
+}
+
+/// Locate zero or one local CREATE/ALTER-to-TABLE phrase from one exact token
+/// projection. A second location stops the scan immediately: one statement
+/// slice cannot safely assign the first phrase's action tail when another table
+/// command follows without a semicolon. Signal admission and classification
+/// consume this same result, so neither can have a wider word vocabulary or
+/// modifier window.
+fn locate_table_ddl(tokens: &[Tok]) -> TableDdlLocations {
     let words: Vec<(usize, &str)> = tokens
         .iter()
         .enumerate()
         .filter_map(|(index, token)| token.word().map(|word| (index, word)))
         .collect();
-    let mut locations = Vec::new();
+    let mut location = None;
     for (index, (_, word)) in words.iter().enumerate() {
         let creates = word.eq_ignore_ascii_case("create");
         if !creates && !word.eq_ignore_ascii_case("alter") {
@@ -1162,39 +1171,54 @@ fn locate_table_ddl(tokens: &[Tok]) -> Vec<TableDdlLocation> {
             continue;
         };
         let table_word = index + 1 + offset;
+        if location.is_some() {
+            return TableDdlLocations::Multiple;
+        }
         let phrase = words[index..=table_word]
             .iter()
             .map(|(_, word)| *word)
             .collect::<Vec<_>>()
             .join(" ")
             .to_lowercase();
-        locations.push(TableDdlLocation {
+        location = Some(TableDdlLocation {
             creates,
             after_table: words[table_word].0 + 1,
             phrase,
         });
     }
-    locations
+    match location {
+        Some(location) => TableDdlLocations::One(location),
+        None => TableDdlLocations::None,
+    }
 }
 
-fn inspect_token_stream_table_ddl(tokens: &[Tok]) -> TableDdlInspection {
-    let locations = locate_table_ddl(tokens);
-    let signaled = !locations.is_empty();
-    let unsafe_construct = locations.into_iter().find_map(|location| {
-        // Any `CREATE … TABLE` makes a relation whose name this parser never
-        // learns — 0005 computes a partition name per day.
-        if location.creates
-            || !opaque_alter_actions_are_column_neutral(&tokens[location.after_table..])
-        {
-            Some(location.phrase)
-        } else {
-            None
+fn inspect_token_stream_table_ddl(tokens: &[Tok]) -> Result<TableDdlInspection, &'static str> {
+    let location = match locate_table_ddl(tokens) {
+        TableDdlLocations::None => {
+            return Ok(TableDdlInspection {
+                signaled: false,
+                unsafe_construct: None,
+            });
         }
-    });
-    TableDdlInspection {
-        signaled,
+        TableDdlLocations::One(location) => location,
+        TableDdlLocations::Multiple => {
+            return Err("an opaque statement contains multiple table DDL locations");
+        }
+    };
+    // Any `CREATE … TABLE` makes a relation whose name this parser never
+    // learns — 0005 computes a partition name per day. The sole ALTER location
+    // is classified once through the end of this semicolon-delimited slice.
+    let unsafe_construct = if location.creates
+        || !opaque_alter_actions_are_column_neutral(&tokens[location.after_table..])
+    {
+        Some(location.phrase)
+    } else {
+        None
+    };
+    Ok(TableDdlInspection {
+        signaled: true,
         unsafe_construct,
-    }
+    })
 }
 
 /// `tokens` begins just past `ALTER … TABLE`. The table name is one to three

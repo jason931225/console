@@ -900,6 +900,99 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
         );
     }
 
+    // One semicolon-delimited command slice may carry at most one table-DDL
+    // location. Otherwise the action tail of one phrase can swallow a later
+    // phrase and make a neutral head buy a pass for unparsed trailing SQL.
+    let ambiguous_same_statement_commands = [
+        (
+            "opaque-repeated-neutral-alter-without-semicolon",
+            "ALTER TABLE staff ENABLE ROW LEVEL SECURITY ALTER TABLE staff FORCE ROW LEVEL \
+             SECURITY",
+        ),
+        (
+            "opaque-first-neutral-later-hostile-without-semicolon",
+            "ALTER TABLE staff ENABLE ROW LEVEL SECURITY ALTER TABLE staff ADD COLUMN secret \
+             TEXT",
+        ),
+        (
+            "opaque-overlapping-alter-create-table-locations",
+            "ALTER CREATE TABLE shadow_staff (secret TEXT)",
+        ),
+    ];
+    for (name, command) in ambiguous_same_statement_commands {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $outer$ BEGIN
+                     EXECUTE $ddl${command}$ddl$;
+                 END $outer$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "multiple local table-DDL locations in one statement must fail closed for '{name}'"
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("cannot be inspected safely")),
+            "'{name}' must be reported as ambiguous opaque DDL before action classification, got \
+             {:#?}",
+            result.violations
+        );
+    }
+
+    let repeated_neutral = (0..8192)
+        .map(|_| "ALTER TABLE staff ENABLE ROW LEVEL SECURITY")
+        .collect::<Vec<_>>()
+        .join(" ");
+    let large_repeated_locations = tree(
+        "opaque-8192-repeated-table-ddl-locations",
+        &format!(
+            "CREATE TABLE staff(id UUID PRIMARY KEY);
+             COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+             DO $outer$ BEGIN
+                 EXECUTE $ddl${repeated_neutral}$ddl$;
+             END $outer$;"
+        ),
+    )?;
+    let result = check_tree(&large_repeated_locations, &empty_baseline())?;
+    assert!(
+        !result.passed(),
+        "8192 repeated locations must be rejected without classifying 8192 overlapping tails"
+    );
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                && v.detail.contains("cannot be inspected safely")),
+        "large repeated locations must report bounded ambiguity, got {:#?}",
+        result.violations
+    );
+
+    let semicolon_separated_neutral = tree(
+        "opaque-semicolon-separated-neutral-table-ddl",
+        "CREATE TABLE staff(id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         DO $outer$ BEGIN
+             EXECUTE $ddl$ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
+                 ALTER TABLE staff FORCE ROW LEVEL SECURITY$ddl$;
+         END $outer$;",
+    )?;
+    let result = check_tree(&semicolon_separated_neutral, &empty_baseline())?;
+    assert!(
+        result.passed(),
+        "separate neutral statements must each retain their one-location classification, got \
+         {:#?}",
+        result.violations
+    );
+
     let quoted_window_malformed_hostiles = [
         (
             "opaque-dollar-window-signaled-incomplete-comment",
