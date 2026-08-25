@@ -93,6 +93,23 @@ function liveCycleKindBoundaryFixture(discriminant) {
   return root;
 }
 
+function liveCycleKindScopeDecoyFixture(decoy) {
+  const root = liveSourceFixture();
+  const rustPath = join(root, "backend/crates/evaluation/rest/src/lib.rs");
+  const rustSource = readFileSync(rustPath, "utf8");
+  writeFileSync(rustPath, `${rustSource}\n${decoy}\n`);
+
+  const openapiPath = join(root, "backend/openapi/openapi.yaml");
+  const openapi = readFileSync(openapiPath, "utf8");
+  const narrowedOpenapi = openapi.replace(
+    "    EvaluationCycleKind:\n      type: string\n      enum: [REGULAR, PROBATION]",
+    "    EvaluationCycleKind:\n      type: string\n      enum: [REGULAR]",
+  );
+  assert.notEqual(narrowedOpenapi, openapi, "EvaluationCycleKind fixture no longer matches OpenAPI");
+  writeFileSync(openapiPath, narrowedOpenapi);
+  return root;
+}
+
 function assertLiveCycleKindProbationFinding(root) {
   const report = evaluateRequestBodyContract({ repoRoot: root });
 
@@ -115,15 +132,15 @@ function assertLiveCycleKindProbationFinding(root) {
     },
   );
   assert.deepEqual(report.registerFindings, []);
+
+  const result = spawnSync(process.execPath, [cli, root], { encoding: "utf8" });
+
+  assert.equal(result.status, 1, `${result.stdout}${result.stderr}\n${JSON.stringify(report, null, 2)}`);
+  assert.match(result.stderr, /Rust-only enum variant "PROBATION" for kind/);
   assert.deepEqual(report.findings, [{
     operation: "POST /api/v1/evaluation/cycles",
     message: 'Rust-only enum variant "PROBATION" for kind',
   }]);
-
-  const result = spawnSync(process.execPath, [cli, root], { encoding: "utf8" });
-
-  assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
-  assert.match(result.stderr, /Rust-only enum variant "PROBATION" for kind/);
 }
 
 // Both wrapped-const and multi-method route forms, because both appear in the real surface and
@@ -633,6 +650,44 @@ struct ConsumeWidgetBody {
       'spec property "quantity_consumed_milli" is not a field of ConsumeWidgetBody (deny_unknown_fields => 422)',
     ]);
   });
+
+  it("fails closed when a request struct exists only inside an unexpanded macro", () => {
+    const authored = `#[derive(Debug, Deserialize)]
+${camelDeny}
+struct ConsumeWidgetBody {
+    quantity_consumed_milli: i64,
+}
+`;
+    const source = widgetCrate({
+      derive: camelDeny,
+      fields: "    quantity_consumed_milli: i64,",
+    });
+    assert.ok(source.includes(authored), "macro fixture no longer matches the request struct");
+    const macroDefined = source.replace(authored, `macro_rules! define_consume_widget_body {
+    () => {
+        #[derive(Debug, Deserialize)]
+        ${camelDeny}
+        struct ConsumeWidgetBody {
+            quantity_consumed_milli: i64,
+        }
+    };
+}
+define_consume_widget_body!();
+`);
+    const root = fixture({
+      "backend/crates/widget/rest/src/lib.rs": macroDefined,
+      "backend/openapi/openapi.yaml": widgetSpec({
+        required: ["quantityConsumedMilli"],
+        properties: "quantityConsumedMilli: { type: integer }",
+      }),
+    });
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.resolved, 0);
+    assert.equal(report.skipped, 1);
+    assert.equal(report.observedRegister.body[0].reason, "rust_struct_not_strict");
+  });
 });
 
 // Shared regression fixture pattern for the prototype-chain false-resolve class (console-i91 /
@@ -860,6 +915,243 @@ describe("request body enum-variant contract", () => {
 
   it("does not let a byte-char literal close an outer Rust enum body", () => {
     assertLiveCycleKindProbationFinding(liveCycleKindBoundaryFixture("b'}'"));
+  });
+
+  it("discovers no enum from an unexpanded macro_rules token tree at module scope", () => {
+    assertLiveCycleKindProbationFinding(liveCycleKindScopeDecoyFixture(`macro_rules! cycle_kind_decoy {
+    () => {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+        enum CycleKind { Regular }
+    };
+}`));
+  });
+
+  it("discovers no cfg-disabled enum nested in a function body", () => {
+    assertLiveCycleKindProbationFinding(liveCycleKindScopeDecoyFixture(`fn cycle_kind_decoy() {
+    #[cfg(any())]
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    enum CycleKind { Regular }
+}`));
+  });
+
+  it("discovers no cfg-disabled enum nested in a const initializer block", () => {
+    assertLiveCycleKindProbationFinding(liveCycleKindScopeDecoyFixture(`const CYCLE_KIND_DECOY: () = {
+    #[cfg(any())]
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    enum CycleKind { Regular }
+};`));
+  });
+
+  it("discovers no cfg-disabled enum nested in an impl method body", () => {
+    assertLiveCycleKindProbationFinding(liveCycleKindScopeDecoyFixture(`struct CycleKindDecoy;
+impl CycleKindDecoy {
+    fn decoy() {
+        #[cfg(any())]
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+        enum CycleKind { Regular }
+    }
+}`));
+  });
+
+  it("discovers no enum from async, closure, trait, or static initializer bodies", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode { FastMode, SafeMode }
+
+fn nested_decoys() {
+    let _future = async {
+        #[cfg(any())]
+        enum WidgetMode { FastMode }
+    };
+    let _closure = || {
+        #[cfg(any())]
+        enum WidgetMode { FastMode }
+    };
+}
+
+trait DecoyTrait {
+    fn defaulted() {
+        #[cfg(any())]
+        enum WidgetMode { FastMode }
+    }
+}
+
+static DECOY: () = {
+    #[cfg(any())]
+    enum WidgetMode { FastMode }
+};
+`,
+        property: "{ type: string, enum: [fast_mode] }",
+      }),
+    });
+
+    assert.equal(report.enumResolved, 1);
+    assert.deepEqual(report.findings, [{
+      operation: widgetOperation,
+      message: 'Rust-only enum variant "safe_mode" for mode',
+    }]);
+  });
+
+  it("resolves an enum through its explicit inline-module path", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        fieldType: "modes::WidgetMode",
+        enumSource: `mod modes {
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, SafeMode }
+}
+
+mod decoy {
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, OtherMode }
+}
+`,
+      }),
+    });
+
+    assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
+    assert.deepEqual(report.findings, []);
+  });
+
+  it("resolves a grouped import from an inline module without guessing another module", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `mod modes {
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, SafeMode }
+}
+
+mod decoy {
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, OtherMode }
+}
+
+use decoy::WidgetMode as DecoyMode;
+use modes::{WidgetMode};
+`,
+      }),
+    });
+
+    assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
+    assert.deepEqual(report.findings, []);
+  });
+
+  it("resolves a qualified enum declared in a file-backed module", () => {
+    const root = enumFixture({
+      fieldType: "modes::WidgetMode",
+      enumSource: "mod modes;\n",
+    });
+    writeFileSync(join(root, "backend/crates/widget/rest/src/modes.rs"), `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { FastMode, SafeMode }
+`);
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
+    assert.deepEqual(report.findings, []);
+  });
+
+  it("resolves a qualified enum through an imported module alias", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        fieldType: "selected_modes::WidgetMode",
+        enumSource: `mod modes {
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, SafeMode }
+}
+use modes as selected_modes;
+`,
+      }),
+    });
+
+    assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
+    assert.deepEqual(report.findings, []);
+  });
+
+  it("does not resolve an unknown qualified path by bare-name fallback", () => {
+    const root = enumFixture({
+      fieldType: "unknown_crate::WidgetMode",
+      enumSource: "",
+    });
+    const external = join(root, "backend/crates/other/domain/src/lib.rs");
+    mkdirSync(dirname(external), { recursive: true });
+    writeFileSync(external, `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { FastMode, SafeMode }
+`);
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumResolved, 0);
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_unresolved");
+  });
+
+  it("fails closed on a cfg-conditional module-scope enum", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `#[cfg(any())]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode { FastMode, SafeMode }
+`,
+      }),
+    });
+
+    assert.equal(report.enumResolved, 0);
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous");
+  });
+
+  it("propagates cfg uncertainty from an inline module to its enum", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        fieldType: "modes::WidgetMode",
+        enumSource: `#[cfg(any())]
+mod modes {
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, SafeMode }
+}
+`,
+      }),
+    });
+
+    assert.equal(report.enumResolved, 0);
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous");
+  });
+
+  it("fails closed when a field enum exists only inside an unexpanded macro", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `macro_rules! define_widget_mode {
+    () => {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        enum WidgetMode { FastMode, SafeMode }
+    };
+}
+define_widget_mode!();
+`,
+      }),
+    });
+
+    assert.equal(report.enumResolved, 0);
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_unresolved");
   });
 
   it("keeps the outer enum boundary across every supported Rust lexical form", () => {

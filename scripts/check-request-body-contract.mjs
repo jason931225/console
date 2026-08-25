@@ -62,6 +62,7 @@ const METHOD = /\b(get|post|put|patch|delete)\(\s*([a-z0-9_]+)/g;
 const HANDLER = /async fn ([a-z0-9_]+)\s*\(([\s\S]*?)\)\s*->/g;
 const JSON_BODY = /Json\(\s*\w+\s*\)\s*:\s*Json<\s*((?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*)\s*>/;
 const ITEM = /((?:#\[[^\]]*\]\s*)*)(?:pub(?:\([^)]*\))?\s+)?(struct|enum)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*<[^>{;]*>)?\s*\{/g;
+const USE = /\b(?:pub(?:\([^)]*\))?\s+)?use\s+([\s\S]*?);/g;
 const RENAME_ALL = /rename_all\s*=\s*"([A-Za-z_-]+)"/;
 
 function compareText(left, right) {
@@ -154,10 +155,10 @@ function parseStructFields(body) {
   return fields;
 }
 
-// This deliberately small lexical scanner is shared by item-body discovery and enum-variant
+// This deliberately small lexical scanner is shared by module/item discovery and enum-variant
 // splitting. Rust comments are whitespace, block comments nest, literals are indivisible, and
-// (), [], and {} must balance. Keeping those rules in one place prevents either caller from
-// interpreting braces or commas that the other caller correctly knows are literal bytes.
+// (), [], and {} must balance. Keeping those rules in one place prevents one caller from
+// interpreting braces or commas that another caller correctly knows are literal bytes.
 function codePointBefore(source, index) {
   if (index <= 0) return null;
   let start = index - 1;
@@ -364,6 +365,120 @@ function topLevelSegments(body) {
   return scanRustSyntax(body, { splitTopLevel: true });
 }
 
+function rustName(name) {
+  return name.replace(/^r#/, "");
+}
+
+function rustPath(path) {
+  const trimmed = path.trim().replace(/^::\s*/, "");
+  if (!trimmed) return null;
+  const pieces = trimmed.split(/\s*::\s*/).map(rustName);
+  return pieces.every((piece) => /^(?:[A-Za-z_][A-Za-z0-9_]*|crate|self|super)$/.test(piece))
+    ? pieces
+    : null;
+}
+
+function parseUseTree(tree, prefix = []) {
+  const parsed = topLevelSegments(tree);
+  if (!parsed.valid) return [];
+  const bindings = [];
+  for (const rawSegment of parsed.segments) {
+    const segment = rawSegment.trim();
+    if (!segment) continue;
+    const groupOpening = segment.indexOf("{");
+    if (groupOpening >= 0) {
+      const group = scanRustSyntax(segment, { start: groupOpening, rootDelimiter: "{" });
+      const before = segment.slice(0, groupOpening).trim().replace(/::\s*$/, "");
+      const beforePath = before ? rustPath(before) : [];
+      if (!group.valid || group.closing !== segment.length - 1 || beforePath === null) continue;
+      bindings.push(...parseUseTree(
+        segment.slice(groupOpening + 1, group.closing),
+        [...prefix, ...beforePath],
+      ));
+      continue;
+    }
+    const aliasMatch = segment.match(/^([\s\S]*?)\s+as\s+((?:r#)?[A-Za-z_][A-Za-z0-9_]*)$/);
+    const path = rustPath(aliasMatch?.[1] ?? segment);
+    if (!path || path.at(-1) === "*") continue;
+    const combined = [...prefix, ...path];
+    const selfImport = combined.at(-1) === "self";
+    const target = selfImport ? combined.slice(0, -1) : combined;
+    const name = rustName(aliasMatch?.[2] ?? target.at(-1) ?? "");
+    if (name && target.length > 0) bindings.push({ name, path: target });
+  }
+  return bindings;
+}
+
+function moduleScopes(source, projection, file, rootModulePath) {
+  const scopes = [];
+  const visit = (start, end, modulePath, conditional) => {
+    const surface = Array(end - start).fill(" ");
+    let itemStart = start;
+    for (let index = start; index < end;) {
+      const character = projection[index];
+      if (character === "(" || character === "[" || character === "{") {
+        const group = scanRustSyntax(projection, { start: index, rootDelimiter: character });
+        if (!group.valid || group.closing >= end) {
+          throw new Error(`cannot scan Rust module scope ${file}: ${group.error ?? "delimiter escapes module"}`);
+        }
+        surface[index - start] = character;
+        surface[group.closing - start] = projection[group.closing];
+        if (character === "{") {
+          const head = surface.slice(itemStart - start, index - start).join("");
+          const inlineModule = head.match(
+            /^\s*(?:#\[[\s\S]*?\]\s*)*(?:pub(?:\s*\([^)]*\))?\s+)?(?:unsafe\s+)?mod\s+((?:r#)?[A-Za-z_][A-Za-z0-9_]*)\s*$/,
+          );
+          const useGroup = /^\s*(?:#\[[\s\S]*?\]\s*)*(?:pub(?:\s*\([^)]*\))?\s+)?use\s+(?:(?:(?:r#)?[A-Za-z_][A-Za-z0-9_]*)\s*::\s*)*$/.test(head);
+          if (inlineModule) {
+            const authoredHead = source.slice(itemStart, index);
+            visit(
+              index + 1,
+              group.closing,
+              [...modulePath, rustName(inlineModule[1])],
+              conditional || /#\s*\[\s*cfg\s*\(/.test(authoredHead),
+            );
+          } else if (useGroup) {
+            const contents = projection.slice(index + 1, group.closing);
+            for (let offset = 0; offset < contents.length; offset += 1) {
+              surface[index + 1 - start + offset] = contents[offset];
+            }
+          }
+          if (!useGroup) itemStart = group.closing + 1;
+        }
+        index = group.closing + 1;
+        continue;
+      }
+      surface[index - start] = character;
+      if (character === ";") itemStart = index + 1;
+      index += 1;
+    }
+    const joined = surface.join("");
+    const imports = [];
+    USE.lastIndex = 0;
+    let useMatch;
+    while ((useMatch = USE.exec(joined)) !== null) imports.push(...parseUseTree(useMatch[1]));
+    scopes.push({ start, end, modulePath, surface: joined, imports, conditional });
+  };
+  visit(0, source.length, rootModulePath, false);
+  return scopes;
+}
+
+function crateQualifier(file) {
+  const crate = file.match(/^backend\/crates\/([^/]+)\/([^/]+)\//);
+  if (crate) return `console_${crate[1].replaceAll("-", "_")}_${crate[2].replaceAll("-", "_")}`;
+  const sourceRoot = file.match(/^(.+)\/src\//)?.[1] ?? file;
+  return sourceRoot.replace(/[^A-Za-z0-9_]/g, "_");
+}
+
+function sourceModulePath(file) {
+  const source = file.match(/\/src\/(.+)\.rs$/);
+  if (!source) return [`<file:${file}>`];
+  const path = source[1].split("/");
+  if (path.length === 1 && (path[0] === "lib" || path[0] === "main")) return [];
+  if (path.at(-1) === "mod") path.pop();
+  return path;
+}
+
 function serdeAttributes(attributes) {
   return [...attributes.matchAll(/#\[serde\(([^\]]*)\)\]/g)].map((match) => match[1]).join(",");
 }
@@ -420,32 +535,43 @@ function parseItems(source, file) {
   if (!projected.valid) {
     throw new Error(`cannot scan Rust source ${file}: ${projected.error}`);
   }
-  ITEM.lastIndex = 0;
-  let match;
-  while ((match = ITEM.exec(projected.projection)) !== null) {
-    const opening = ITEM.lastIndex - 1;
-    const scan = scanRustSyntax(source, { start: opening, rootDelimiter: "{" });
-    if (!scan.valid) {
-      throw new Error(`cannot scan Rust item body ${file}::${match[3]}: ${scan.error}`);
-    }
-    const closing = scan.closing;
-    const attributes = source.slice(match.index, match.index + match[1].length);
-    const body = source.slice(opening + 1, closing);
-    if (match[2] === "struct") {
-      const serde = serdeAttributes(attributes);
-      structs.push({
+  const rootModulePath = sourceModulePath(file);
+  const scopes = moduleScopes(source, projected.projection, file, rootModulePath);
+  for (const scope of scopes) {
+    ITEM.lastIndex = 0;
+    let match;
+    while ((match = ITEM.exec(scope.surface)) !== null) {
+      const opening = scope.start + ITEM.lastIndex - 1;
+      const scan = scanRustSyntax(source, { start: opening, rootDelimiter: "{" });
+      if (!scan.valid || scan.closing > scope.end) {
+        throw new Error(`cannot scan Rust item body ${file}::${match[3]}: ${scan.error ?? "body escapes module"}`);
+      }
+      const itemStart = scope.start + match.index;
+      const attributes = source.slice(itemStart, itemStart + match[1].length);
+      const body = source.slice(opening + 1, scan.closing);
+      const common = {
         file,
+        modulePath: scope.modulePath,
+        imports: scope.imports,
+        crateQualifier: crateQualifier(file),
+        conditional: scope.conditional || /#\s*\[\s*cfg\s*\(/.test(attributes),
         name: match[3],
-        denyUnknown: /\bdeny_unknown_fields\b/.test(serde),
-        renameAll: serde.match(RENAME_ALL)?.[1] ?? null,
-        fields: parseStructFields(body),
-      });
-    } else {
-      enums.push({ file, name: match[3], ...parseEnum(attributes, body) });
+      };
+      if (match[2] === "struct") {
+        const serde = serdeAttributes(attributes);
+        structs.push({
+          ...common,
+          denyUnknown: /\bdeny_unknown_fields\b/.test(serde),
+          renameAll: serde.match(RENAME_ALL)?.[1] ?? null,
+          fields: parseStructFields(body),
+        });
+      } else {
+        enums.push({ ...common, ...parseEnum(attributes, body) });
+      }
     }
-    ITEM.lastIndex = closing + 1;
   }
-  return { structs, enums };
+  const rootImports = scopes.find((scope) => sameModule(scope.modulePath, rootModulePath))?.imports ?? [];
+  return { structs, enums, rootImports };
 }
 
 function collectSources(repoRoot) {
@@ -454,6 +580,7 @@ function collectSources(repoRoot) {
   const enums = [];
   const handlers = new Map();
   const rawRoutes = [];
+  const importsByFile = new Map();
 
   for (const absolute of rustFiles(join(repoRoot, "backend"))) {
     const source = readFileSync(absolute, "utf8");
@@ -466,6 +593,7 @@ function collectSources(repoRoot) {
     const items = parseItems(source, file);
     structs.push(...items.structs);
     enums.push(...items.enums);
+    importsByFile.set(file, items.rootImports);
     for (const match of source.matchAll(HANDLER)) {
       handlers.set(`${file}::${match[1]}`, match[2].match(JSON_BODY)?.[1] ?? null);
     }
@@ -486,7 +614,7 @@ function collectSources(repoRoot) {
       bodyType: handlers.get(`${route.file}::${route.handler}`) ?? null,
     };
   });
-  return { structs, enums, routes };
+  return { structs, enums, routes, importsByFile };
 }
 
 function canonicalPath(path) {
@@ -507,16 +635,103 @@ function namedType(type) {
   if (option) remaining = option[1].trim();
   if (!/^(?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*$/.test(remaining)) return null;
   const pieces = remaining.split("::");
-  return { qualified: remaining, name: pieces.at(-1) };
+  return { qualified: remaining, pieces, name: pieces.at(-1) };
 }
 
-function resolveNamed(items, file, name) {
-  const candidates = items.filter((candidate) => candidate.name === name);
-  const local = candidates.filter((candidate) => candidate.file === file);
-  if (local.length === 1) return { value: local[0], status: "resolved" };
-  if (local.length > 1 || candidates.length > 1) return { value: null, status: "ambiguous" };
+function sameModule(left, right) {
+  return left.length === right.length && left.every((piece, index) => piece === right[index]);
+}
+
+function decideResolution(candidates) {
+  if (candidates.some((candidate) => candidate.conditional)) {
+    return { value: null, status: "ambiguous" };
+  }
   if (candidates.length === 1) return { value: candidates[0], status: "resolved" };
+  if (candidates.length > 1) return { value: null, status: "ambiguous" };
   return { value: null, status: "missing" };
+}
+
+function localModulePath(contextPath, path) {
+  const remaining = [...path];
+  let base = [...contextPath];
+  if (remaining[0] === "crate") {
+    base = [];
+    remaining.shift();
+  } else if (remaining[0] === "self") {
+    remaining.shift();
+  } else {
+    while (remaining[0] === "super") {
+      if (base.length === 0) return null;
+      base.pop();
+      remaining.shift();
+    }
+  }
+  return [...base, ...remaining];
+}
+
+function resolvePath(items, context, path) {
+  const name = path.at(-1);
+  const prefix = path.slice(0, -1);
+  if (!name) return { value: null, status: "missing" };
+
+  const explicitLocal = ["crate", "self", "super"].includes(prefix[0]);
+  const relativePath = localModulePath(context.modulePath, prefix);
+  const local = relativePath === null ? [] : items.filter((candidate) => (
+    candidate.crateQualifier === context.crateQualifier
+    && candidate.name === name
+    && sameModule(candidate.modulePath, relativePath)
+  ));
+  if (explicitLocal || local.length > 0) return decideResolution(local);
+
+  const qualifier = prefix[0];
+  const qualified = qualifier
+    ? items.filter((candidate) => (
+      candidate.name === name
+      && candidate.crateQualifier === qualifier
+      && sameModule(candidate.modulePath, prefix.slice(1))
+    ))
+    : [];
+  if (qualified.length > 0) return decideResolution(qualified);
+
+  if (prefix.length > 0) return { value: null, status: "missing" };
+
+  return decideResolution(items.filter((candidate) => (
+    (
+      candidate.crateQualifier !== context.crateQualifier
+      || !sameModule(candidate.modulePath, context.modulePath)
+    )
+    && candidate.name === name
+  )));
+}
+
+function resolveNamed(items, context, named) {
+  if (named.pieces.length > 1) {
+    const aliases = context.imports.filter((binding) => binding.name === named.pieces[0]);
+    if (aliases.length > 1) return { value: null, status: "ambiguous" };
+    if (aliases.length === 1) {
+      return resolvePath(items, context, [...aliases[0].path, ...named.pieces.slice(1)]);
+    }
+    return resolvePath(items, context, named.pieces);
+  }
+
+  const local = items.filter((candidate) => (
+    candidate.crateQualifier === context.crateQualifier
+    && candidate.name === named.name
+    && sameModule(candidate.modulePath, context.modulePath)
+  ));
+  const imports = context.imports.filter((binding) => binding.name === named.name);
+  if (local.length > 0 && imports.length > 0) return { value: null, status: "ambiguous" };
+  if (local.length > 0) return decideResolution(local);
+  if (imports.length > 1) return { value: null, status: "ambiguous" };
+  if (imports.length === 1) return resolvePath(items, context, imports[0].path);
+
+  return decideResolution(items.filter((candidate) => (
+    (
+      candidate.crateQualifier !== context.crateQualifier
+      || !sameModule(candidate.modulePath, context.modulePath)
+    )
+    && candidate.name === named.name
+  )));
 }
 
 function schemaReference(document, reference) {
@@ -753,7 +968,7 @@ function compareEnums({ document, operation, schema, struct, enums, findings, en
     let rust = { kind: "none" };
     if (type?.name === "String") rust = { kind: "string" };
     else if (type) {
-      const resolution = resolveNamed(enums, struct.file, type.name);
+      const resolution = resolveNamed(enums, struct, type);
       if (resolution.status === "ambiguous") rust = { kind: "ambiguous" };
       else if (resolution.status === "resolved") rust = { kind: "enum", value: resolution.value };
     }
@@ -811,7 +1026,7 @@ function compareEnums({ document, operation, schema, struct, enums, findings, en
  */
 export function evaluateRequestBodyContract({ repoRoot }) {
   const document = yaml.load(readFileSync(join(repoRoot, "backend/openapi/openapi.yaml"), "utf8"));
-  const { structs, enums, routes } = collectSources(repoRoot);
+  const { structs, enums, routes, importsByFile } = collectSources(repoRoot);
   const findings = [];
   const bodyUndecidable = [];
   const enumUndecidable = [];
@@ -864,7 +1079,12 @@ export function evaluateRequestBodyContract({ repoRoot }) {
     }
     const bodyNamed = namedType(route.bodyType);
     const structResolution = bodyNamed
-      ? resolveNamed(structs, route.file, bodyNamed.name)
+      ? resolveNamed(structs, {
+        file: route.file,
+        modulePath: sourceModulePath(route.file),
+        crateQualifier: crateQualifier(route.file),
+        imports: importsByFile.get(route.file) ?? [],
+      }, bodyNamed)
       : { value: null, status: "missing" };
     const struct = structResolution.value;
     if (!struct || !struct.denyUnknown || !compareBody({
