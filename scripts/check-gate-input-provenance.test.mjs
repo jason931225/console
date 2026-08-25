@@ -283,6 +283,133 @@ test("G005 goal identity is controlled by the matrix, not the historical ledger"
   if (testFailure) throw testFailure;
 });
 
+test("G005 workflow and scoped approval-feed controls come from executable source, not foundation prose", () => {
+  const foundationPath = join(root, "docs/specs/foundation-gates.md");
+  const workflowPath = join(
+    root,
+    "backend/crates/workorder/domain/src/lib.rs",
+  );
+  const approvalFeedPath = join(
+    root,
+    "backend/crates/workorder/rest/src/lib.rs",
+  );
+  const originalFoundation = readFileSync(foundationPath);
+  const originalWorkflow = readFileSync(workflowPath);
+  const originalApprovalFeed = readFileSync(approvalFeedPath);
+  const runG005 = () =>
+    spawnSync(process.execPath, ["scripts/check-g005-workflow-lifecycle.mjs"], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  let testFailure;
+
+  try {
+    const foundationText = originalFoundation.toString("utf8");
+    const historicalPhrases = [
+      "workflow/approval/action lifecycle",
+      "Work Hub",
+    ];
+    for (const phrase of historicalPhrases) {
+      assert.equal(
+        foundationText.split(phrase).length - 1,
+        1,
+        `fixture must mutate exactly one historical phrase: ${phrase}`,
+      );
+    }
+    writeFileSync(
+      foundationPath,
+      foundationText
+        .replace(
+          historicalPhrases[0],
+          "hostile historical workflow prose",
+        )
+        .replace(historicalPhrases[1], "Hostile Historical Hub"),
+    );
+    const historicalMutation = runG005();
+    assert.equal(
+      historicalMutation.status,
+      0,
+      historicalMutation.stderr || historicalMutation.stdout,
+    );
+
+    const workflowText = originalWorkflow.toString("utf8");
+    const workflowAnchor =
+      "        let transition = self.apply_transition(to, at, context)?;";
+    assert.equal(
+      workflowText.split(workflowAnchor).length - 1,
+      1,
+      "fixture must mutate exactly one guarded workflow transition",
+    );
+    writeFileSync(
+      workflowPath,
+      workflowText.replace(
+        workflowAnchor,
+        [
+          '        let _workflow_gate_string_decoy = "let transition = self.apply_transition(to, at, context)?;";',
+          "        // let transition = self.apply_transition(to, at, context)?;",
+          "        let transition =",
+          "            self.apply_transition(to, at, TransitionGuardContext::admin())?;",
+        ].join("\n"),
+      ),
+    );
+    const workflowMutation = runG005();
+    const workflowOutput = `${workflowMutation.stdout}\n${workflowMutation.stderr}`;
+    assert.equal(workflowMutation.status, 1, workflowOutput);
+    assert.ok(
+      workflowOutput.includes(
+        "G005 executable workflow/approval lifecycle must preserve ordered approval and guarded transition application",
+      ),
+      workflowOutput,
+    );
+    writeFileSync(workflowPath, originalWorkflow);
+
+    const approvalFeedText = originalApprovalFeed.toString("utf8");
+    const approvalFeedAnchor =
+      "    let visibility = approval_source_visibility(&principal)?;";
+    assert.equal(
+      approvalFeedText.split(approvalFeedAnchor).length - 1,
+      1,
+      "fixture must mutate exactly one principal-derived approval visibility binding",
+    );
+    writeFileSync(
+      approvalFeedPath,
+      approvalFeedText.replace(
+        approvalFeedAnchor,
+        [
+          '    let _approval_feed_string_decoy = "let visibility = approval_source_visibility(&principal)?;";',
+          "    // let visibility = approval_source_visibility(&principal)?;",
+          "    let visibility = ApprovalSourceVisibility {",
+          "        work_orders: true,",
+          "        daily_plans: true,",
+          "        target_changes: true,",
+          "    };",
+        ].join("\n"),
+      ),
+    );
+    const approvalFeedMutation = runG005();
+    const approvalFeedOutput = `${approvalFeedMutation.stdout}\n${approvalFeedMutation.stderr}`;
+    assert.equal(approvalFeedMutation.status, 1, approvalFeedOutput);
+    assert.ok(
+      approvalFeedOutput.includes(
+        "G005 server-owned approval feed must derive visibility from the principal and preserve branch-scoped queries",
+      ),
+      approvalFeedOutput,
+    );
+  } catch (error) {
+    testFailure = error;
+  } finally {
+    writeFileSync(foundationPath, originalFoundation);
+    writeFileSync(workflowPath, originalWorkflow);
+    writeFileSync(approvalFeedPath, originalApprovalFeed);
+  }
+
+  assert.deepEqual(readFileSync(foundationPath), originalFoundation);
+  assert.deepEqual(readFileSync(workflowPath), originalWorkflow);
+  assert.deepEqual(readFileSync(approvalFeedPath), originalApprovalFeed);
+  if (testFailure) throw testFailure;
+});
+
 test("G004 machine-readable passkey and policy controls fail under hostile matrix mutations", async () => {
   const { hasPasskeyContract, hasPolicyContract } = await import(
     "./check-g004-identity-foundation.mjs"
