@@ -110,21 +110,31 @@ function hasWorkflowApprovalLifecycle(source) {
     guardedTransition,
     approvalCommit,
   ];
-  let cursor = 0;
-  const lifecycleIsOrdered = [
+  const orderedPredicates = [
     roleSelection,
     approvalClone,
     approval,
     context,
     guardedTransition,
     approvalCommit,
-  ].every((predicate) => {
+  ];
+  const hasPresenceAffectingCfg = /#!?\[cfg(?:_attr)?\(/.test(body);
+  const criticalAnchorsAreUnique = orderedPredicates.every(
+    (predicate) => body.split(predicate).length === 2,
+  );
+  let cursor = 0;
+  const lifecycleIsOrdered = orderedPredicates.every((predicate) => {
     const index = body.indexOf(predicate, cursor);
     if (index === -1) return false;
     cursor = index + predicate.length;
     return true;
   });
-  return requiredPredicates.every((predicate) => body.includes(predicate)) && lifecycleIsOrdered;
+  return (
+    !hasPresenceAffectingCfg &&
+    requiredPredicates.every((predicate) => body.includes(predicate)) &&
+    criticalAnchorsAreUnique &&
+    lifecycleIsOrdered
+  );
 }
 
 function hasServerOwnedScopedApprovalFeed(source) {

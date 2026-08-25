@@ -398,6 +398,101 @@ test("G005 workflow and scoped approval-feed controls come from executable sourc
     );
     writeFileSync(workflowPath, originalWorkflow);
 
+    const workflowCfgDecoyText = workflowText.replace(
+      workflowOrderAnchor,
+      [
+        "        #[cfg(any())]",
+        "        {",
+        "            let transition = self.apply_transition(to, at, context)?;",
+        "        }",
+        "        self.approval_line = next_line;",
+        "        let transition = self.apply_transition(to, at, context)?;",
+      ].join("\n"),
+    );
+    assert.equal(
+      workflowCfgDecoyText.split(workflowAnchor).length - 1,
+      2,
+      "G005-ADV-02 fixture must retain the real guarded apply and add exactly one cfg-disabled decoy",
+    );
+    writeFileSync(workflowPath, workflowCfgDecoyText);
+    const workflowCfgDecoyMutation = runG005();
+    const workflowCfgDecoyOutput = `${workflowCfgDecoyMutation.stdout}\n${workflowCfgDecoyMutation.stderr}`;
+    assert.equal(
+      workflowCfgDecoyMutation.status,
+      1,
+      `G005-ADV-02 must reject cfg-disabled ordering evidence while the compiled approval commit precedes the real guarded transition\n${workflowCfgDecoyOutput}`,
+    );
+    assert.ok(
+      workflowCfgDecoyOutput.includes(
+        "G005 executable workflow/approval lifecycle must preserve ordered approval and guarded transition application",
+      ),
+      workflowCfgDecoyOutput,
+    );
+    writeFileSync(workflowPath, originalWorkflow);
+
+    const workflowCfgAttrAnchor =
+      "            approval_line_complete: next_line.is_complete(),";
+    assert.equal(
+      workflowText.split(workflowCfgAttrAnchor).length - 1,
+      1,
+      "G005-ADV-03 fixture must annotate exactly one bounded lifecycle statement with cfg_attr",
+    );
+    writeFileSync(
+      workflowPath,
+      workflowText.replace(
+        workflowCfgAttrAnchor,
+        [
+          "            #[cfg_attr(any(), cfg(any()))]",
+          workflowCfgAttrAnchor,
+        ].join("\n"),
+      ),
+    );
+    const workflowCfgAttrMutation = runG005();
+    const workflowCfgAttrOutput = `${workflowCfgAttrMutation.stdout}\n${workflowCfgAttrMutation.stderr}`;
+    assert.equal(
+      workflowCfgAttrMutation.status,
+      1,
+      `G005-ADV-03 must reject cfg_attr presence control within bounded lifecycle evidence\n${workflowCfgAttrOutput}`,
+    );
+    assert.ok(
+      workflowCfgAttrOutput.includes(
+        "G005 executable workflow/approval lifecycle must preserve ordered approval and guarded transition application",
+      ),
+      workflowCfgAttrOutput,
+    );
+    writeFileSync(workflowPath, originalWorkflow);
+
+    const workflowDuplicateDecoyText = workflowText.replace(
+      workflowOrderAnchor,
+      [
+        "        if false {",
+        "            let transition = self.apply_transition(to, at, context)?;",
+        "        }",
+        "        let transition = self.apply_transition(to, at, context)?;",
+        "        self.approval_line = next_line;",
+      ].join("\n"),
+    );
+    assert.equal(
+      workflowDuplicateDecoyText.split(workflowAnchor).length - 1,
+      2,
+      "G005-ADV-04 fixture must retain the real guarded apply and add exactly one unreachable duplicate",
+    );
+    writeFileSync(workflowPath, workflowDuplicateDecoyText);
+    const workflowDuplicateDecoyMutation = runG005();
+    const workflowDuplicateDecoyOutput = `${workflowDuplicateDecoyMutation.stdout}\n${workflowDuplicateDecoyMutation.stderr}`;
+    assert.equal(
+      workflowDuplicateDecoyMutation.status,
+      1,
+      `G005-ADV-04 must reject duplicate critical ordering evidence even when one copy is unreachable\n${workflowDuplicateDecoyOutput}`,
+    );
+    assert.ok(
+      workflowDuplicateDecoyOutput.includes(
+        "G005 executable workflow/approval lifecycle must preserve ordered approval and guarded transition application",
+      ),
+      workflowDuplicateDecoyOutput,
+    );
+    writeFileSync(workflowPath, originalWorkflow);
+
     const approvalFeedText = originalApprovalFeed.toString("utf8");
     const approvalFeedAnchor =
       "    let visibility = approval_source_visibility(&principal)?;";
