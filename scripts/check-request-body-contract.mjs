@@ -4,7 +4,16 @@
 // operation, binding metadata, and reason byte-for-byte.
 
 import { readFileSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 
 import yaml from "js-yaml";
@@ -52,6 +61,17 @@ const ENUM_REASONS = new Set([
   "rust_enum_ambiguous",
   "rust_enum_unresolved",
   "openapi_enum_schema_unsupported",
+]);
+const INERT_MODULE_ATTRIBUTES = new Set([
+  "allow",
+  "deprecated",
+  "deny",
+  "doc",
+  "expect",
+  "forbid",
+  "macro_use",
+  "no_implicit_prelude",
+  "warn",
 ]);
 
 // These expressions intentionally cover the concrete first-party route and handler forms. Any
@@ -409,9 +429,94 @@ function parseUseTree(tree, prefix = []) {
   return bindings;
 }
 
-function moduleScopes(source, projection, file, rootModulePath) {
+function skipProjectedWhitespace(projection, start) {
+  let cursor = start;
+  while (/\s/.test(projection[cursor] ?? "")) cursor += 1;
+  return cursor;
+}
+
+function moduleAttributeInfo(attributes, file, moduleName) {
+  let conditional = false;
+  let path = null;
+  for (const attribute of attributes) {
+    const projected = scanRustSyntax(attribute, { projectCode: true });
+    if (!projected.valid) {
+      throw new Error(`cannot scan module attribute ${file}::${moduleName}: ${projected.error}`);
+    }
+    const name = projected.projection.match(/^#\[\s*([A-Za-z_][A-Za-z0-9_]*)\b/)?.[1];
+    if (name === "cfg" || name === "cfg_attr") {
+      conditional = true;
+      if (name === "cfg_attr" && /\bpath\b/.test(projected.projection)) {
+        throw new Error(
+          `conditional path attribute for ${file}::${moduleName} has no single source identity`,
+        );
+      }
+      continue;
+    }
+    if (name !== "path") {
+      if (!INERT_MODULE_ATTRIBUTES.has(name)) {
+        throw new Error(`unsupported module attribute for ${file}::${moduleName}`);
+      }
+      continue;
+    }
+    if (path !== null) {
+      throw new Error(`duplicate path attributes for ${file}::${moduleName}`);
+    }
+    const cooked = attribute.match(/^#\[\s*path\s*=\s*"([^"\\\r\n]*)"\s*\]$/);
+    const raw = attribute.match(/^#\[\s*path\s*=\s*r(#{0,255})"([\s\S]*?)"\1\s*\]$/);
+    path = cooked?.[1] ?? raw?.[2] ?? null;
+    if (path === null || path === "" || /[\r\n]/.test(path) || isAbsolute(path)) {
+      throw new Error(`malformed or non-relative path attribute for ${file}::${moduleName}`);
+    }
+  }
+  return { conditional, path };
+}
+
+function moduleHead(authored, projection, file, terminator) {
+  let cursor = skipProjectedWhitespace(projection, 0);
+  const attributes = [];
+  while (projection.startsWith("#[", cursor) || projection.startsWith("#![", cursor)) {
+    const inner = projection.startsWith("#![", cursor);
+    const bracket = cursor + (inner ? 2 : 1);
+    const group = scanRustSyntax(projection, { start: bracket, rootDelimiter: "[" });
+    if (!group.valid) {
+      throw new Error(`cannot scan Rust module attributes ${file}: ${group.error}`);
+    }
+    if (!inner) attributes.push(authored.slice(cursor, group.closing + 1));
+    cursor = skipProjectedWhitespace(projection, group.closing + 1);
+  }
+  const ending = terminator === ";" ? ";" : "";
+  const declaration = projection.slice(cursor).match(new RegExp(
+    `^(?:pub(?:\\s*\\([^)]*\\))?\\s+)?(?:unsafe\\s+)?mod\\s+((?:r#)?[A-Za-z_][A-Za-z0-9_]*)\\s*${ending}\\s*$`,
+  ));
+  if (!declaration) return null;
+  const name = rustName(declaration[1]);
+  return { name, ...moduleAttributeInfo(attributes, file, name) };
+}
+
+function pathIsWithin(root, candidate) {
+  const path = relative(root, candidate);
+  return path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`));
+}
+
+function moduleScopes(
+  source,
+  projection,
+  file,
+  absoluteFile,
+  backendRoot,
+  rootModulePath,
+  rootConditional,
+  rootPathRemapped,
+) {
   const scopes = [];
-  const visit = (start, end, modulePath, conditional) => {
+  const outlined = [];
+  const modRs = ["lib.rs", "main.rs", "mod.rs"].includes(basename(absoluteFile));
+  const fileStem = basename(absoluteFile, extname(absoluteFile));
+  const rootModuleDirectory = modRs || rootPathRemapped
+    ? dirname(absoluteFile)
+    : join(dirname(absoluteFile), fileStem);
+  const visit = (start, end, modulePath, conditional, moduleDirectory, insideInline) => {
     const surface = Array(end - start).fill(" ");
     let itemStart = start;
     for (let index = start; index < end;) {
@@ -425,17 +530,24 @@ function moduleScopes(source, projection, file, rootModulePath) {
         surface[group.closing - start] = projection[group.closing];
         if (character === "{") {
           const head = surface.slice(itemStart - start, index - start).join("");
-          const inlineModule = head.match(
-            /^\s*(?:#\[[\s\S]*?\]\s*)*(?:pub(?:\s*\([^)]*\))?\s+)?(?:unsafe\s+)?mod\s+((?:r#)?[A-Za-z_][A-Za-z0-9_]*)\s*$/,
-          );
+          const authoredHead = source.slice(itemStart, index);
+          const inlineModule = moduleHead(authoredHead, head, file, "{");
           const useGroup = /^\s*(?:#\[[\s\S]*?\]\s*)*(?:pub(?:\s*\([^)]*\))?\s+)?use\s+(?:(?:(?:r#)?[A-Za-z_][A-Za-z0-9_]*)\s*::\s*)*$/.test(head);
           if (inlineModule) {
-            const authoredHead = source.slice(itemStart, index);
+            const pathBase = insideInline ? moduleDirectory : dirname(absoluteFile);
+            const childDirectory = inlineModule.path === null
+              ? join(moduleDirectory, inlineModule.name)
+              : resolve(pathBase, inlineModule.path);
+            if (!pathIsWithin(backendRoot, childDirectory)) {
+              throw new Error(`module path for ${file}::${inlineModule.name} escapes backend`);
+            }
             visit(
               index + 1,
               group.closing,
-              [...modulePath, rustName(inlineModule[1])],
-              conditional || /#\s*\[\s*cfg\s*\(/.test(authoredHead),
+              [...modulePath, inlineModule.name],
+              conditional || inlineModule.conditional,
+              childDirectory,
+              true,
             );
           } else if (useGroup) {
             const contents = projection.slice(index + 1, group.closing);
@@ -449,7 +561,21 @@ function moduleScopes(source, projection, file, rootModulePath) {
         continue;
       }
       surface[index - start] = character;
-      if (character === ";") itemStart = index + 1;
+      if (character === ";") {
+        const projectedHead = surface.slice(itemStart - start, index + 1 - start).join("");
+        const authoredHead = source.slice(itemStart, index + 1);
+        const declaration = moduleHead(authoredHead, projectedHead, file, ";");
+        if (declaration) {
+          outlined.push({
+            ...declaration,
+            modulePath,
+            conditional: conditional || declaration.conditional,
+            moduleDirectory,
+            pathBase: insideInline ? moduleDirectory : dirname(absoluteFile),
+          });
+        }
+        itemStart = index + 1;
+      }
       index += 1;
     }
     const joined = surface.join("");
@@ -459,8 +585,8 @@ function moduleScopes(source, projection, file, rootModulePath) {
     while ((useMatch = USE.exec(joined)) !== null) imports.push(...parseUseTree(useMatch[1]));
     scopes.push({ start, end, modulePath, surface: joined, imports, conditional });
   };
-  visit(0, source.length, rootModulePath, false);
-  return scopes;
+  visit(0, source.length, rootModulePath, rootConditional, rootModuleDirectory, false);
+  return { scopes, outlined };
 }
 
 function crateQualifier(file) {
@@ -528,15 +654,23 @@ function parseEnum(attributes, body) {
   };
 }
 
-function parseItems(source, file) {
+function parseItems(source, file, absoluteFile, backendRoot, identity) {
   const structs = [];
   const enums = [];
   const projected = scanRustSyntax(source, { projectCode: true });
   if (!projected.valid) {
     throw new Error(`cannot scan Rust source ${file}: ${projected.error}`);
   }
-  const rootModulePath = sourceModulePath(file);
-  const scopes = moduleScopes(source, projected.projection, file, rootModulePath);
+  const { scopes, outlined } = moduleScopes(
+    source,
+    projected.projection,
+    file,
+    absoluteFile,
+    backendRoot,
+    identity.modulePath,
+    identity.conditional,
+    identity.pathRemapped,
+  );
   for (const scope of scopes) {
     ITEM.lastIndex = 0;
     let match;
@@ -553,8 +687,8 @@ function parseItems(source, file) {
         file,
         modulePath: scope.modulePath,
         imports: scope.imports,
-        crateQualifier: crateQualifier(file),
-        conditional: scope.conditional || /#\s*\[\s*cfg\s*\(/.test(attributes),
+        crateQualifier: identity.crateQualifier,
+        conditional: scope.conditional || /#\s*\[\s*cfg(?:_attr)?\s*\(/.test(attributes),
         name: match[3],
       };
       if (match[2] === "struct") {
@@ -570,8 +704,127 @@ function parseItems(source, file) {
       }
     }
   }
-  const rootImports = scopes.find((scope) => sameModule(scope.modulePath, rootModulePath))?.imports ?? [];
-  return { structs, enums, rootImports };
+  const rootImports = scopes.find((scope) => sameModule(scope.modulePath, identity.modulePath))?.imports ?? [];
+  return { structs, enums, rootImports, outlined };
+}
+
+function rustCrateRoot(file) {
+  const normalized = file.split(sep).join("/");
+  return /\/src\/(?:lib|main)\.rs$/.test(normalized)
+    || /\/src\/bin\/(?:[^/]+\.rs|[^/]+\/main\.rs)$/.test(normalized)
+    || /\/(?:tests|benches|examples)\/[^/]+\.rs$/.test(normalized)
+    || /\/build\.rs$/.test(normalized);
+}
+
+function logicalModuleKey(crate, modulePath) {
+  return `${crate}\0${modulePath.join("\0")}`;
+}
+
+function sourceIdentityKey(identity) {
+  return `${identity.graphRoot}\0${identity.absolute}\0${logicalModuleKey(
+    identity.crateQualifier,
+    identity.modulePath,
+  )}`;
+}
+
+function resolveOutlinedSource(declaration, fileSet, backendRoot, file) {
+  const childModulePath = [...declaration.modulePath, declaration.name];
+  const defaults = [
+    resolve(declaration.moduleDirectory, `${declaration.name}.rs`),
+    resolve(declaration.moduleDirectory, declaration.name, "mod.rs"),
+  ];
+  if (declaration.path !== null) {
+    if (extname(declaration.path) !== ".rs") {
+      return { childModulePath, target: null, unavailable: "non-Rust module target" };
+    }
+    const target = resolve(declaration.pathBase, declaration.path);
+    if (!pathIsWithin(backendRoot, target)) {
+      throw new Error(`module target for ${file}::${childModulePath.join("::")} escapes backend`);
+    }
+    if (!fileSet.has(target)) {
+      return { childModulePath, target: null, unavailable: "missing module target" };
+    }
+    return { childModulePath, target, pathRemapped: true };
+  }
+  const matches = defaults.filter((candidate) => fileSet.has(candidate));
+  if (matches.length !== 1) {
+    const reason = matches.length === 0 ? "missing" : "ambiguous";
+    return { childModulePath, target: null, unavailable: `${reason} ordinary module target` };
+  }
+  return { childModulePath, target: matches[0], pathRemapped: false };
+}
+
+// A Rust file has no module identity of its own: an enclosing `mod` declaration supplies it.
+// Walk conventional crate roots so ordinary and `#[path]` modules receive their declared logical
+// paths. Files outside those graphs are not Rust modules merely because their names look like a
+// logical path. Missing/ambiguous targets therefore resolve nothing; they never reactivate a
+// filename decoy.
+function collectRustSourceIdentities(repoRoot) {
+  const backendRoot = resolve(repoRoot, "backend");
+  const absoluteFiles = rustFiles(backendRoot).map((file) => resolve(file));
+  const fileSet = new Set(absoluteFiles);
+  const sources = new Map(absoluteFiles.map((absolute) => [absolute, readFileSync(absolute, "utf8")]));
+  const roots = new Set(absoluteFiles.filter((absolute) => rustCrateRoot(relative(repoRoot, absolute))));
+  const mappings = new Map();
+  const queued = new Set();
+  const queue = [];
+  const results = [];
+
+  const enqueue = (identity) => {
+    const key = sourceIdentityKey(identity);
+    if (queued.has(key)) return;
+    queued.add(key);
+    queue.push(identity);
+  };
+  for (const absolute of roots) {
+    const file = relative(repoRoot, absolute);
+    enqueue({
+      absolute,
+      file,
+      modulePath: sourceModulePath(file),
+      crateQualifier: crateQualifier(file),
+      conditional: false,
+      pathRemapped: false,
+      graphRoot: absolute,
+      ancestors: [absolute],
+    });
+  }
+
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const identity = queue[cursor];
+    const source = sources.get(identity.absolute);
+    const items = parseItems(source, identity.file, identity.absolute, backendRoot, identity);
+    results.push({ identity, source, items });
+    for (const declaration of items.outlined) {
+      const resolved = resolveOutlinedSource(declaration, fileSet, backendRoot, identity.file);
+      const mappingKey = `${identity.graphRoot}\0${logicalModuleKey(
+        identity.crateQualifier,
+        resolved.childModulePath,
+      )}`;
+      if (mappings.has(mappingKey)) {
+        throw new Error(
+          `duplicate or conflicting module declarations for ${identity.file}::${resolved.childModulePath.join("::")}`,
+        );
+      }
+      mappings.set(mappingKey, resolved.target ?? resolved.unavailable);
+      if (resolved.target === null) continue;
+      if (identity.ancestors.includes(resolved.target)) {
+        throw new Error(`cyclic module mapping through ${identity.file}::${resolved.childModulePath.join("::")}`);
+      }
+      enqueue({
+        absolute: resolved.target,
+        file: relative(repoRoot, resolved.target),
+        modulePath: resolved.childModulePath,
+        crateQualifier: identity.crateQualifier,
+        conditional: declaration.conditional,
+        pathRemapped: resolved.pathRemapped,
+        graphRoot: identity.graphRoot,
+        ancestors: [...identity.ancestors, resolved.target],
+      });
+    }
+  }
+
+  return results;
 }
 
 function collectSources(repoRoot) {
@@ -580,41 +833,48 @@ function collectSources(repoRoot) {
   const enums = [];
   const handlers = new Map();
   const rawRoutes = [];
-  const importsByFile = new Map();
+  const sourceIdentities = collectRustSourceIdentities(repoRoot);
 
-  for (const absolute of rustFiles(join(repoRoot, "backend"))) {
-    const source = readFileSync(absolute, "utf8");
-    const file = relative(repoRoot, absolute);
+  for (const { identity, source, items } of sourceIdentities) {
+    const { file } = identity;
+    const identityKey = sourceIdentityKey(identity);
     for (const match of source.matchAll(CONST_PATH)) {
       const candidates = consts.get(match[1]) ?? [];
-      candidates.push({ file, path: match[2] });
+      candidates.push({ file, identityKey, path: match[2] });
       consts.set(match[1], candidates);
     }
-    const items = parseItems(source, file);
     structs.push(...items.structs);
     enums.push(...items.enums);
-    importsByFile.set(file, items.rootImports);
     for (const match of source.matchAll(HANDLER)) {
-      handlers.set(`${file}::${match[1]}`, match[2].match(JSON_BODY)?.[1] ?? null);
+      handlers.set(`${identityKey}::${match[1]}`, match[2].match(JSON_BODY)?.[1] ?? null);
     }
     for (const match of source.matchAll(ROUTE)) {
       for (const method of match[2].matchAll(METHOD)) {
-        rawRoutes.push({ file, constName: match[1], method: method[1], handler: method[2] });
+        rawRoutes.push({
+          file,
+          identityKey,
+          modulePath: identity.modulePath,
+          crateQualifier: identity.crateQualifier,
+          imports: items.rootImports,
+          constName: match[1],
+          method: method[1],
+          handler: method[2],
+        });
       }
     }
   }
 
   const routes = rawRoutes.map((route) => {
     const candidates = consts.get(route.constName) ?? [];
-    const local = candidates.filter((candidate) => candidate.file === route.file);
+    const local = candidates.filter((candidate) => candidate.identityKey === route.identityKey);
     const path = local.length === 1 ? local[0].path : candidates.length === 1 ? candidates[0].path : null;
     return {
       ...route,
       path,
-      bodyType: handlers.get(`${route.file}::${route.handler}`) ?? null,
+      bodyType: handlers.get(`${route.identityKey}::${route.handler}`) ?? null,
     };
   });
-  return { structs, enums, routes, importsByFile };
+  return { structs, enums, routes };
 }
 
 function canonicalPath(path) {
@@ -1026,7 +1286,7 @@ function compareEnums({ document, operation, schema, struct, enums, findings, en
  */
 export function evaluateRequestBodyContract({ repoRoot }) {
   const document = yaml.load(readFileSync(join(repoRoot, "backend/openapi/openapi.yaml"), "utf8"));
-  const { structs, enums, routes, importsByFile } = collectSources(repoRoot);
+  const { structs, enums, routes } = collectSources(repoRoot);
   const findings = [];
   const bodyUndecidable = [];
   const enumUndecidable = [];
@@ -1041,7 +1301,9 @@ export function evaluateRequestBodyContract({ repoRoot }) {
     const key = operationKey(route.method, route.path);
     if (!key) continue;
     const candidates = routeIndex.get(key) ?? [];
-    if (!candidates.some((candidate) => candidate.file === route.file && candidate.handler === route.handler)) {
+    if (!candidates.some((candidate) => (
+      candidate.identityKey === route.identityKey && candidate.handler === route.handler
+    ))) {
       candidates.push(route);
     }
     routeIndex.set(key, candidates);
@@ -1081,9 +1343,9 @@ export function evaluateRequestBodyContract({ repoRoot }) {
     const structResolution = bodyNamed
       ? resolveNamed(structs, {
         file: route.file,
-        modulePath: sourceModulePath(route.file),
-        crateQualifier: crateQualifier(route.file),
-        imports: importsByFile.get(route.file) ?? [],
+        modulePath: route.modulePath,
+        crateQualifier: route.crateQualifier,
+        imports: route.imports,
       }, bodyNamed)
       : { value: null, status: "missing" };
     const struct = structResolution.value;

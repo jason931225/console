@@ -243,6 +243,15 @@ enum WidgetMode {
   });
 }
 
+function writeWidgetModeModule(root, path, variants = "FastMode, SafeMode") {
+  const absolute = join(root, `backend/crates/widget/rest/src/${path}`);
+  mkdirSync(dirname(absolute), { recursive: true });
+  writeFileSync(absolute, `#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { ${variants} }
+`);
+}
+
 function writeObservedRegister(root, report = evaluateRequestBodyContract({ repoRoot: root })) {
   const registerPath = join(root, "scripts/request-body-contract-undecidable.json");
   mkdirSync(dirname(registerPath), { recursive: true });
@@ -618,8 +627,10 @@ struct ConsumeWidgetBody {
 }
 `;
     // The handler's file declares neither struct, so only the bare name can resolve it.
-    const handlerFile = widgetCrate({ derive: camelDeny, fields: "    quantity_consumed_milli: i64," })
-      .replace(`#[derive(Debug, Deserialize)]\n${camelDeny}\nstruct ConsumeWidgetBody {\n    quantity_consumed_milli: i64,\n}\n`, "");
+    const handlerFile = `${widgetCrate({ derive: camelDeny, fields: "    quantity_consumed_milli: i64," })
+      .replace(`#[derive(Debug, Deserialize)]\n${camelDeny}\nstruct ConsumeWidgetBody {\n    quantity_consumed_milli: i64,\n}\n`, "")}
+mod body;
+`;
     assert.ok(!handlerFile.includes("struct ConsumeWidgetBody"), "the handler's file must not declare the struct");
 
     const files = {
@@ -996,6 +1007,7 @@ static DECOY: () = {
       operation: widgetOperation,
       message: 'Rust-only enum variant "safe_mode" for mode',
     }]);
+
   });
 
   it("resolves an enum through its explicit inline-module path", () => {
@@ -1060,6 +1072,238 @@ pub enum WidgetMode { FastMode, SafeMode }
 
     assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
     assert.deepEqual(report.findings, []);
+  });
+
+  it("follows a file-backed module's path attribute instead of its physical-name decoy", () => {
+    const root = enumFixture({
+      fieldType: "modes::WidgetMode",
+      enumSource: `#[path = "actual.rs"]
+mod modes;
+`,
+      property: "{ type: string, enum: [fast_mode] }",
+    });
+    writeFileSync(join(root, "backend/crates/widget/rest/src/actual.rs"), `#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { FastMode, SafeMode }
+`);
+    writeFileSync(join(root, "backend/crates/widget/rest/src/modes.rs"), `#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { FastMode }
+`);
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
+    assert.deepEqual(report.findings, [{
+      operation: widgetOperation,
+      message: 'Rust-only enum variant "safe_mode" for mode',
+    }]);
+
+    const innerAttributeRoot = enumFixture({
+      fieldType: "modes::WidgetMode",
+      enumSource: `#[path = "actual.rs"]\nmod modes;\n`,
+      property: "{ type: string, enum: [fast_mode] }",
+    });
+    const lib = join(innerAttributeRoot, "backend/crates/widget/rest/src/lib.rs");
+    writeFileSync(lib, `#![allow(dead_code)]\n${readFileSync(lib, "utf8")}`);
+    writeWidgetModeModule(innerAttributeRoot, "actual.rs");
+    writeWidgetModeModule(innerAttributeRoot, "modes.rs", "FastMode");
+    const innerAttributeReport = evaluateRequestBodyContract({ repoRoot: innerAttributeRoot });
+    assert.equal(innerAttributeReport.enumResolved, 1, JSON.stringify(innerAttributeReport, null, 2));
+    assert.deepEqual(innerAttributeReport.findings, [{
+      operation: widgetOperation,
+      message: 'Rust-only enum variant "safe_mode" for mode',
+    }]);
+
+    const orphanRoot = enumFixture({ fieldType: "modes::WidgetMode", enumSource: "" });
+    writeWidgetModeModule(orphanRoot, "modes.rs");
+    const orphanReport = evaluateRequestBodyContract({ repoRoot: orphanRoot });
+    assert.equal(orphanReport.enumResolved, 0, JSON.stringify(orphanReport, null, 2));
+    assert.equal(orphanReport.enumSkipped, 1);
+    assert.equal(orphanReport.observedRegister.enum[0].reason, "rust_enum_unresolved");
+  });
+
+  it("uses Rust's relative path rules in file modules and inline modules", () => {
+    const cases = [
+      {
+        name: "file-module",
+        enumSource: "mod outer;\n",
+        declarations: [["outer.rs", `#[path = "actual.rs"]\npub mod modes;\n`]],
+        actual: "actual.rs",
+        decoy: "outer/modes.rs",
+      },
+      {
+        name: "path-remapped-file-with-ordinary-child",
+        enumSource: `#[path = "actual.rs"]\nmod outer;\n`,
+        declarations: [["actual.rs", "pub mod modes;\n"]],
+        actual: "modes.rs",
+        decoy: "outer/modes.rs",
+      },
+      {
+        name: "inline-module-inside-path-remapped-file",
+        fieldType: "outer::inline::modes::WidgetMode",
+        enumSource: `#[path = "actual.rs"]\nmod outer;\n`,
+        declarations: [["actual.rs", `pub mod inline {
+    #[path = "mode.rs"]
+    pub mod modes;
+}
+`]],
+        actual: "inline/mode.rs",
+        decoy: "actual/inline/mode.rs",
+      },
+      {
+        name: "inline-module",
+        enumSource: `mod outer {
+    #[path = "actual.rs"]
+    pub mod modes;
+}
+`,
+        declarations: [],
+        actual: "outer/actual.rs",
+        decoy: "outer/modes.rs",
+      },
+      {
+        name: "path-remapped-inline-module",
+        enumSource: `#[path = "thread_files"]
+mod outer {
+    #[path = "actual.rs"]
+    pub mod modes;
+}
+`,
+        declarations: [],
+        actual: "thread_files/actual.rs",
+        decoy: "outer/modes.rs",
+      },
+    ];
+
+    for (const sample of cases) {
+      const root = enumFixture({
+        fieldType: sample.fieldType ?? "outer::modes::WidgetMode",
+        enumSource: sample.enumSource,
+        property: "{ type: string, enum: [fast_mode] }",
+      });
+      for (const [path, source] of sample.declarations) {
+        const absolute = join(root, `backend/crates/widget/rest/src/${path}`);
+        mkdirSync(dirname(absolute), { recursive: true });
+        writeFileSync(absolute, source);
+      }
+      writeWidgetModeModule(root, sample.actual);
+      writeWidgetModeModule(root, sample.decoy, "FastMode");
+
+      const report = evaluateRequestBodyContract({ repoRoot: root });
+
+      assert.equal(report.enumResolved, 1, `${sample.name}: ${JSON.stringify(report, null, 2)}`);
+      assert.deepEqual(report.findings, [{
+        operation: widgetOperation,
+        message: 'Rust-only enum variant "safe_mode" for mode',
+      }], sample.name);
+    }
+  });
+
+  it("ignores path-shaped comments, strings, and unrelated attributes", () => {
+    const root = enumFixture({
+      fieldType: "modes::WidgetMode",
+      enumSource: `// #[path = "modes.rs"] mod modes;
+const PATH_DECOY: &str = "#[path = \\"modes.rs\\"] mod modes;";
+#[doc = "#[path = \\"modes.rs\\"]"]
+#[path = "actual.rs"]
+mod modes;
+`,
+      property: "{ type: string, enum: [fast_mode] }",
+    });
+    writeWidgetModeModule(root, "actual.rs");
+    writeWidgetModeModule(root, "modes.rs", "FastMode");
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
+    assert.deepEqual(report.findings, [{
+      operation: widgetOperation,
+      message: 'Rust-only enum variant "safe_mode" for mode',
+    }]);
+  });
+
+  it("propagates cfg uncertainty through a path-remapped file module", () => {
+    const root = enumFixture({
+      fieldType: "modes::WidgetMode",
+      enumSource: `#[cfg(any())]
+#[path = "actual.rs"]
+mod modes;
+`,
+    });
+    writeWidgetModeModule(root, "actual.rs");
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumResolved, 0, JSON.stringify(report, null, 2));
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous");
+  });
+
+  it("fails closed on unknown, duplicate, conflicting, conditional, or malformed path mappings", () => {
+    const cases = [
+      `#[request_body_transform]
+#[path = "actual.rs"]
+mod modes;
+`,
+      `#[path = "actual.rs"]
+#[path = "other.rs"]
+mod modes;
+`,
+      `#[path = "actual.rs"]
+mod modes;
+#[path = "other.rs"]
+mod modes;
+`,
+      `#[cfg_attr(any(), path = "actual.rs")]
+mod modes;
+`,
+      `#[path = concat!("actual", ".rs")]
+mod modes;
+`,
+    ];
+
+    for (const enumSource of cases) {
+      const root = enumFixture({ fieldType: "modes::WidgetMode", enumSource });
+      writeWidgetModeModule(root, "actual.rs");
+      writeWidgetModeModule(root, "other.rs");
+      assert.throws(
+        () => evaluateRequestBodyContract({ repoRoot: root }),
+        /path|module (?:attribute|declarations)/,
+        enumSource,
+      );
+    }
+  });
+
+  it("leaves missing, non-Rust, and ambiguous ordinary module targets unresolved", () => {
+    const cases = [
+      {
+        enumSource: `#[path = "missing.rs"]\nmod modes;\n`,
+        prepare() {},
+      },
+      {
+        enumSource: `#[path = "actual.txt"]\nmod modes;\n`,
+        prepare(root) {
+          writeFileSync(join(root, "backend/crates/widget/rest/src/actual.txt"), "pub enum WidgetMode { FastMode }");
+        },
+      },
+      {
+        enumSource: "mod modes;\n",
+        prepare(root) {
+          writeWidgetModeModule(root, "modes.rs");
+          writeWidgetModeModule(root, "modes/mod.rs");
+        },
+      },
+    ];
+
+    for (const sample of cases) {
+      const root = enumFixture({ fieldType: "modes::WidgetMode", enumSource: sample.enumSource });
+      sample.prepare(root);
+      const report = evaluateRequestBodyContract({ repoRoot: root });
+      assert.equal(report.enumResolved, 0, JSON.stringify(report, null, 2));
+      assert.equal(report.enumSkipped, 1);
+      assert.equal(report.observedRegister.enum[0].reason, "rust_enum_unresolved");
+    }
   });
 
   it("resolves a qualified enum through an imported module alias", () => {
@@ -1404,7 +1648,7 @@ enum WidgetMode {
   });
 
   it("refuses an ambiguous bare enum name", () => {
-    const root = enumFixture({ enumSource: "" });
+    const root = enumFixture({ enumSource: "mod a;\nmod b;\n" });
     writeFileSync(join(root, "backend/crates/widget/rest/src/a.rs"), `#[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum WidgetMode { FastMode, SafeMode }
