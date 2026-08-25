@@ -93,17 +93,38 @@ function compactRustFunction(source, name) {
 
 function hasWorkflowApprovalLifecycle(source) {
   const body = compactRustFunction(source, "approve_next");
-  return [
-    "letrole=self.approval_line.next_pending_non_mechanic_role()",
-    "letmutnext_line=self.approval_line.clone();",
-    "next_line.approve(role,actor_id,at)?;",
+  const roleSelection = "letrole=self.approval_line.next_pending_non_mechanic_role()";
+  const approvalClone = "letmutnext_line=self.approval_line.clone();";
+  const approval = "next_line.approve(role,actor_id,at)?;";
+  const context = "letcontext=TransitionGuardContext{actor:TransitionActor::Admin,approval_line_complete:next_line.is_complete(),completion_evidence_verified,};";
+  const guardedTransition = "lettransition=self.apply_transition(to,at,context)?;";
+  const approvalCommit = "self.approval_line=next_line;";
+  const requiredPredicates = [
+    roleSelection,
+    approvalClone,
+    approval,
     "ApprovalRole::Admin=>WorkOrderStatus::AdminReview",
     "ApprovalRole::Executiveifself.result_type==WorkResultType::Completed=>{WorkOrderStatus::FinalCompleted}",
     "letcompletion_evidence_verified=ifto==WorkOrderStatus::FinalCompleted{evidence.final_completion_evidence_verified(self.id)?}else{true};",
     "approval_line_complete:next_line.is_complete(),completion_evidence_verified,",
-    "lettransition=self.apply_transition(to,at,context)?;",
-    "self.approval_line=next_line;",
-  ].every((predicate) => body.includes(predicate));
+    guardedTransition,
+    approvalCommit,
+  ];
+  let cursor = 0;
+  const lifecycleIsOrdered = [
+    roleSelection,
+    approvalClone,
+    approval,
+    context,
+    guardedTransition,
+    approvalCommit,
+  ].every((predicate) => {
+    const index = body.indexOf(predicate, cursor);
+    if (index === -1) return false;
+    cursor = index + predicate.length;
+    return true;
+  });
+  return requiredPredicates.every((predicate) => body.includes(predicate)) && lifecycleIsOrdered;
 }
 
 function hasServerOwnedScopedApprovalFeed(source) {

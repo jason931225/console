@@ -364,6 +364,40 @@ test("G005 workflow and scoped approval-feed controls come from executable sourc
     );
     writeFileSync(workflowPath, originalWorkflow);
 
+    const workflowOrderAnchor = [
+      "        let transition = self.apply_transition(to, at, context)?;",
+      "        self.approval_line = next_line;",
+    ].join("\n");
+    assert.equal(
+      workflowText.split(workflowOrderAnchor).length - 1,
+      1,
+      "G005-ADV-01 fixture must mutate exactly one transition/approval-line ordering boundary",
+    );
+    writeFileSync(
+      workflowPath,
+      workflowText.replace(
+        workflowOrderAnchor,
+        [
+          "        self.approval_line = next_line;",
+          "        let transition = self.apply_transition(to, at, context)?;",
+        ].join("\n"),
+      ),
+    );
+    const workflowOrderMutation = runG005();
+    const workflowOrderOutput = `${workflowOrderMutation.stdout}\n${workflowOrderMutation.stderr}`;
+    assert.equal(
+      workflowOrderMutation.status,
+      1,
+      `G005-ADV-01 must reject committing the approval line before the guarded transition\n${workflowOrderOutput}`,
+    );
+    assert.ok(
+      workflowOrderOutput.includes(
+        "G005 executable workflow/approval lifecycle must preserve ordered approval and guarded transition application",
+      ),
+      workflowOrderOutput,
+    );
+    writeFileSync(workflowPath, originalWorkflow);
+
     const approvalFeedText = originalApprovalFeed.toString("utf8");
     const approvalFeedAnchor =
       "    let visibility = approval_source_visibility(&principal)?;";
