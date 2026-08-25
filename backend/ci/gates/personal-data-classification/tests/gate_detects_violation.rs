@@ -844,6 +844,100 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
         );
     }
 
+    // Signal admission and classification must project the same lexer tokens.
+    // The discarded contents of a quoted token cannot spend the modifier
+    // window for one while being absent from the other.
+    let shared_token_projection_hostiles = [
+        (
+            "opaque-dollar-token-cannot-spend-alter-window",
+            "ALTER $noise$one two three$noise$ TABLE staff ENABLE ROW LEVEL SECURITY, ADD COLUMN \
+             medical_certificate_no TEXT",
+            "alter table",
+        ),
+        (
+            "opaque-string-token-cannot-spend-alter-window",
+            "ALTER 'one two three' TABLE staff ENABLE ROW LEVEL SECURITY, ADD COLUMN \
+             medical_certificate_no TEXT",
+            "alter table",
+        ),
+        (
+            "opaque-dollar-token-cannot-spend-create-window",
+            "CREATE $noise$one two three$noise$ TABLE shadow_staff (medical_certificate_no TEXT)",
+            "create table",
+        ),
+        (
+            "opaque-comments-do-not-spend-modifier-window",
+            "CREATE GLOBAL /* one two three four */ TEMPORARY TABLE shadow_staff \
+             (medical_certificate_no TEXT)",
+            "create global temporary table",
+        ),
+    ];
+    for (name, command, construct) in shared_token_projection_hostiles {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $outer$ BEGIN
+                     EXECUTE $ddl${command}$ddl$;
+                 END $outer$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "quoted/comment tokens must not make the admission signal narrower than the DDL \
+             classifier for '{name}'"
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains(&format!("body builds `{construct}`"))),
+            "'{name}' must be UnsupportedDdl naming the shared token projection, got {:#?}",
+            result.violations
+        );
+    }
+
+    let quoted_window_malformed_hostiles = [
+        (
+            "opaque-dollar-window-signaled-incomplete-comment",
+            "ALTER $noise$one two three$noise$ TABLE staff ADD COLUMN secret TEXT /* \
+             unterminated",
+        ),
+        (
+            "opaque-string-window-signaled-incomplete-quote",
+            "ALTER 'one two three' TABLE staff ADD COLUMN secret TEXT 'unterminated",
+        ),
+    ];
+    for (name, command) in quoted_window_malformed_hostiles {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $outer$ BEGIN
+                     EXECUTE $ddl${command}$ddl$;
+                 END $outer$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "quoted-window DDL with an incomplete child construct must fail closed for '{name}'"
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("cannot be inspected safely")),
+            "'{name}' must report unreadable opaque DDL, got {:#?}",
+            result.violations
+        );
+    }
+
     let comment_separated_signals = [
         (
             "nested-dollar-comment-separated-alter",
@@ -1026,6 +1120,60 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
             result.violations
         );
     }
+
+    // The scanner is iterative and bounded even when hostile input is nested
+    // far beyond the process stack. Exercise both a signal-free leaf and DDL at
+    // depth so skipping the outer fragments cannot hide the inner command.
+    let nest_fragment = |leaf: &str| {
+        let mut fragment = leaf.to_owned();
+        for depth in 0..4096 {
+            fragment = format!("$deep_{depth}${fragment}$deep_{depth}$");
+        }
+        fragment
+    };
+    let deeply_nested_neutral = tree(
+        "opaque-4096-level-neutral-fragments",
+        &format!(
+            "CREATE TABLE staff(id UUID PRIMARY KEY);
+             COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+             DO $outer$ BEGIN
+                 PERFORM {};
+             END $outer$;",
+            nest_fragment("literal data")
+        ),
+    )?;
+    let result = check_tree(&deeply_nested_neutral, &empty_baseline())?;
+    assert!(
+        result.passed(),
+        "4096 complete signal-free nested fragments must remain bounded and neutral, got {:#?}",
+        result.violations
+    );
+
+    let deeply_nested_hostile = tree(
+        "opaque-4096-level-hostile-fragments",
+        &format!(
+            "CREATE TABLE staff(id UUID PRIMARY KEY);
+             COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+             DO $outer$ BEGIN
+                 EXECUTE {};
+             END $outer$;",
+            nest_fragment("ALTER TABLE staff ENABLE ROW LEVEL SECURITY, ADD COLUMN secret TEXT")
+        ),
+    )?;
+    let result = check_tree(&deeply_nested_hostile, &empty_baseline())?;
+    assert!(
+        !result.passed(),
+        "4096 complete nested fragments must not hide their hostile DDL leaf"
+    );
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                && v.detail.contains("body builds `alter table`")),
+        "deep hostile DDL must retain the shared classifier, got {:#?}",
+        result.violations
+    );
 
     let adjacent_split = tree(
         "opaque-adjacent-split-remains-registered",
