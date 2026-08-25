@@ -1,18 +1,7 @@
-// H-1 gate: an operation's requestBody must match the deny_unknown_fields struct its handler binds.
-//
-// The hole this closes: backend/app/tests/openapi_drift.rs compares PATH INVENTORIES. It contains
-// zero occurrences of `requestBody` and zero of `deny_unknown_fields`, so a path can be present in
-// both the spec and the router while every field name inside its body disagrees — and with
-// `deny_unknown_fields` that disagreement is a guaranteed 422, not a maybe.
-//
-// SCOPE, stated so it is never read as more than it is: this compares the subset of operations
-// whose handler binds a `Json<T>` where T carries `deny_unknown_fields`. Everything else is
-// undecidable in this direction and lands in `skipped`. This is a FLOOR on correctness coverage.
-// It is NOT "request bodies are checked".
-//
-// The invariant is the NAMED ANCHORS, not the count. Five separate resolver bugs during this
-// gate's construction each exited 0 with `findings: 0` while comparing less and less; a count
-// floor cannot catch a single-operation drop, so each anchor must resolve or the gate hard-fails.
+// H-1 gate: prove the request bodies that can be resolved mechanically, and name every body or
+// enum direction that cannot. The register is an exact snapshot, not a suppression list: live
+// mismatches are always findings, while every undecidable entry must match its source-derived
+// operation, binding metadata, and reason byte-for-byte.
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -22,37 +11,63 @@ import yaml from "js-yaml";
 
 import { hasOwnKey, own } from "./own-property.mjs";
 
-// Each anchor exercises a route form that has already broken a resolver silently.
 const ANCHORS = [
-  "POST /api/v1/equipment-3r/rental-cases/{case_id}/handover", // rustfmt-wrapped path const
-  "POST /api/v1/inventory/items/{item_id}/consumptions", // wrapped route, two methods on one line
-  "POST /api/v1/inventory/items/{item_id}/receipts", // single-line route
+  "POST /api/v1/equipment-3r/rental-cases/{case_id}/handover",
+  "POST /api/v1/inventory/items/{item_id}/consumptions",
+  "POST /api/v1/inventory/items/{item_id}/receipts",
 ];
 
-// Measured 50 against the inspected route list, not against a first run.
-const RESOLVED_FLOOR = 45;
+const ENUM_ANCHORS = [
+  "POST /api/v1/benefit-catalog/items#category",
+  "PATCH /api/v1/benefit-catalog/items/{benefit_id}#category",
+  "POST /api/v1/evaluation/cycles#kind",
+  "PUT /api/v1/evaluation/subjects/{subject_id}/reviews/{kind}#grade",
+  "POST /api/v1/evaluation/subjects/{subject_id}/calibrate#final_grade",
+  "POST /api/v1/inventory/cycle-counts/{count_id}/lines#reason",
+  "POST /api/v1/inventory/cycle-counts/{count_id}/decision#decision",
+];
 
-// The `\s*` after `=` is load-bearing: rustfmt wraps long path consts onto the next line, and a
-// single-line-only regex silently dropped equipment's handover anchor.
+const RESOLVED_FLOOR = 45;
+const CENSUS_FLOOR = 291;
+const ENUM_RESOLVED_FLOOR = 7;
+const BODY_UNDECIDABLE_MAX = 238;
+const ENUM_UNDECIDABLE_MAX = 15;
+const REGISTER_VERSION = 1;
+const REGISTER_PATH = "scripts/request-body-contract-undecidable.json";
+const HTTP_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
+
+const BODY_REASONS = new Set([
+  "non_json_request_body",
+  "route_parser_unresolved",
+  "no_direct_json_binding",
+  "openapi_schema_ref_chain_unsupported",
+  "openapi_schema_composition_unsupported",
+  "rust_struct_not_strict",
+  "no_openapi_request_body",
+]);
+const ENUM_REASONS = new Set([
+  "string_backed_spec_enum",
+  "tagged_or_data_enum",
+  "rust_enum_unsupported",
+  "rust_enum_ambiguous",
+  "rust_enum_unresolved",
+  "openapi_enum_schema_unsupported",
+]);
+
+// These expressions intentionally cover the concrete first-party route and handler forms. Any
+// new syntax falls into the exact undecidable register instead of being guessed.
 const CONST_PATH = /pub const ([A-Z0-9_]+): &str =\s*"([^"]+)"/g;
-// `\)\s*,?\s*\)` closes the route call; an earlier `[^)]*` form consumed the FOLLOWING `.route`'s
-// leading dot and lost 258 of 525 routes.
 const ROUTE = /\.route\(\s*([A-Z0-9_]+)\s*,([\s\S]*?)\)\s*,?\s*\)/g;
-// Over the route's method group. Stopping at the first `)` lost `.post(consume_item)` entirely.
 const METHOD = /\b(get|post|put|patch|delete)\(\s*([a-z0-9_]+)/g;
 const HANDLER = /async fn ([a-z0-9_]+)\s*\(([\s\S]*?)\)\s*->/g;
-const JSON_BODY = /Json\(\s*\w+\s*\)\s*:\s*Json<\s*([A-Za-z0-9_]+)\s*>/;
-const STRUCT = /#\[serde\(([^\]]*)\)\]\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+([A-Za-z0-9_]+)\s*\{([\s\S]*?)\n\}/g;
-// `[a-z]+` cannot match `camelCase`. The capital-letter class is mandatory; `_-` is here so
-// snake_case and kebab-case are handled rather than silently read as "no rename".
+const JSON_BODY = /Json\(\s*\w+\s*\)\s*:\s*Json<\s*((?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*)\s*>/;
+const ITEM = /((?:#\[[^\]]*\]\s*)*)(?:pub(?:\([^)]*\))?\s+)?(struct|enum)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*<[^>{;]*>)?\s*\{/g;
 const RENAME_ALL = /rename_all\s*=\s*"([A-Za-z_-]+)"/;
 
-// Mirrors `RenameRule::apply_to_field` in serde_derive_internals-0.29.1 src/case.rs, which is the
-// function that decides what the server actually accepts. Two rules were guessed rather than read:
-// serde's `LowerCase` is `field.to_owned()` and its `UpperCase` is `field.to_ascii_uppercase()` —
-// both keep the underscores. A `words.join("")` form dropped them, which reads a spec publishing
-// `very_tasty` as a mismatch and a spec publishing `verytasty` — a guaranteed 422 under
-// deny_unknown_fields — as correct. `lowercase` and `snake_case` are identity and fall to default.
+function compareText(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function renameField(name, style) {
   const pascal = () => name.split("_").filter(Boolean)
     .map((word) => word[0].toUpperCase() + word.slice(1)).join("");
@@ -73,10 +88,38 @@ export function renameField(name, style) {
   }
 }
 
+// Mirrors serde_derive_internals::case::RenameRule::apply_to_variant. Variant names begin in
+// PascalCase, so these rules are deliberately not implemented through renameField.
+export function renameVariant(name, style) {
+  const snake = () => [...name].map((character, index) => {
+    const separator = index > 0 && character >= "A" && character <= "Z" ? "_" : "";
+    return `${separator}${character.toLowerCase()}`;
+  }).join("");
+  switch (style) {
+    case "lowercase":
+      return name.toLowerCase();
+    case "UPPERCASE":
+      return name.toUpperCase();
+    case "camelCase":
+      return name.replace(/^./, (first) => first.toLowerCase());
+    case "snake_case":
+      return snake();
+    case "SCREAMING_SNAKE_CASE":
+      return snake().toUpperCase();
+    case "kebab-case":
+      return snake().replaceAll("_", "-");
+    case "SCREAMING-KEBAB-CASE":
+      return snake().replaceAll("_", "-").toUpperCase();
+    default:
+      return name;
+  }
+}
+
 function rustFiles(directory, collected = []) {
   let entries;
   try {
-    entries = readdirSync(directory, { withFileTypes: true });
+    entries = readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => compareText(left.name, right.name));
   } catch {
     return collected;
   }
@@ -87,6 +130,51 @@ function rustFiles(directory, collected = []) {
     else if (entry.name.endsWith(".rs")) collected.push(path);
   }
   return collected;
+}
+
+function closingBrace(source, opening) {
+  let depth = 0;
+  let string = false;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = 0;
+  for (let index = opening; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === "\n") lineComment = false;
+      continue;
+    }
+    if (blockComment > 0) {
+      if (character === "/" && next === "*") {
+        blockComment += 1;
+        index += 1;
+      } else if (character === "*" && next === "/") {
+        blockComment -= 1;
+        index += 1;
+      }
+      continue;
+    }
+    if (string) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') string = false;
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+    } else if (character === "/" && next === "*") {
+      blockComment = 1;
+      index += 1;
+    } else if (character === '"') string = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
 }
 
 function parseStructFields(body) {
@@ -101,9 +189,6 @@ function parseStructFields(body) {
       continue;
     }
     if (line.startsWith("//") || line === "") continue;
-    // `r#` is not decoration: attendance's AmendCloseBody declares `r#ref`, and serde publishes
-    // it as `ref`. Dropping the field made the gate report `ref` as absent from the struct — a
-    // false finding, which is the loud direction of the same degradation the anchors guard.
     const field = line.match(/^(?:pub(?:\([^)]*\))?\s+)?(?:r#)?([a-z0-9_]+)\s*:\s*(.+?),?$/);
     if (field) {
       fields.push({ name: field[1], type: field[2], rename: pendingRename, hasDefault: pendingDefault });
@@ -114,168 +199,651 @@ function parseStructFields(body) {
   return fields;
 }
 
+function topLevelSegments(body) {
+  const segments = [];
+  let start = 0;
+  let round = 0;
+  let square = 0;
+  let curly = 0;
+  let string = false;
+  let escaped = false;
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index];
+    if (string) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') string = false;
+      continue;
+    }
+    if (character === '"') string = true;
+    else if (character === "(") round += 1;
+    else if (character === ")") round -= 1;
+    else if (character === "[") square += 1;
+    else if (character === "]") square -= 1;
+    else if (character === "{") curly += 1;
+    else if (character === "}") curly -= 1;
+    else if (character === "," && round === 0 && square === 0 && curly === 0) {
+      segments.push(body.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  const tail = body.slice(start).trim();
+  if (tail) segments.push(tail);
+  return segments;
+}
+
+function serdeAttributes(attributes) {
+  return [...attributes.matchAll(/#\[serde\(([^\]]*)\)\]/g)].map((match) => match[1]).join(",");
+}
+
+function parseEnum(attributes, body) {
+  const serde = serdeAttributes(attributes);
+  const derivesDeserialize = [...attributes.matchAll(/#\[derive\(([^\]]*)\)\]/g)]
+    .some((match) => /(?:^|[,:\s])(?:serde::)?Deserialize(?:$|[,:\s])/.test(match[1]));
+  const segments = topLevelSegments(body).filter((segment) => segment && !segment.startsWith("//"));
+  const variants = [];
+  let hasVariantAttribute = false;
+  let hasData = false;
+  for (const segment of segments) {
+    const cleaned = segment.replace(/^(?:\s*#\[[^\]]*\]\s*)+/, (attributesText) => {
+      hasVariantAttribute = true;
+      return "";
+    }).trim();
+    const variant = cleaned.match(/^([A-Za-z_][A-Za-z0-9_]*)/);
+    if (!variant) continue;
+    variants.push(variant[1]);
+    const suffix = cleaned.slice(variant[0].length).trim();
+    if (suffix.startsWith("(") || suffix.startsWith("{")) hasData = true;
+  }
+  let reason = null;
+  if (hasData || /(?:^|,)\s*(?:tag|content|untagged)\b/.test(serde)) {
+    reason = "tagged_or_data_enum";
+  } else if (
+    !derivesDeserialize
+    || hasVariantAttribute
+    || /(?:^|,)\s*(?:remote|from|try_from)\b/.test(serde)
+    || variants.length === 0
+  ) {
+    reason = "rust_enum_unsupported";
+  }
+  return {
+    renameAll: serde.match(RENAME_ALL)?.[1] ?? null,
+    variants,
+    reason,
+  };
+}
+
+function parseItems(source, file) {
+  const structs = [];
+  const enums = [];
+  ITEM.lastIndex = 0;
+  let match;
+  while ((match = ITEM.exec(source)) !== null) {
+    const opening = ITEM.lastIndex - 1;
+    const closing = closingBrace(source, opening);
+    if (closing < 0) break;
+    const attributes = match[1];
+    const body = source.slice(opening + 1, closing);
+    if (match[2] === "struct") {
+      const serde = serdeAttributes(attributes);
+      structs.push({
+        file,
+        name: match[3],
+        denyUnknown: /\bdeny_unknown_fields\b/.test(serde),
+        renameAll: serde.match(RENAME_ALL)?.[1] ?? null,
+        fields: parseStructFields(body),
+      });
+    } else {
+      enums.push({ file, name: match[3], ...parseEnum(attributes, body) });
+    }
+    ITEM.lastIndex = closing + 1;
+  }
+  return { structs, enums };
+}
+
 function collectSources(repoRoot) {
   const consts = new Map();
-  const structs = new Map();
+  const structs = [];
+  const enums = [];
   const handlers = new Map();
-  const routes = [];
+  const rawRoutes = [];
 
-  for (const file of rustFiles(join(repoRoot, "backend"))) {
-    const source = readFileSync(file, "utf8");
-    const key = relative(repoRoot, file);
-
-    for (const match of source.matchAll(CONST_PATH)) consts.set(match[1], match[2]);
-
-    for (const match of source.matchAll(STRUCT)) {
-      const attrs = match[1];
-      structs.set(`${key}::${match[2]}`, {
-        name: match[2],
-        denyUnknown: /\bdeny_unknown_fields\b/.test(attrs),
-        renameAll: attrs.match(RENAME_ALL)?.[1] ?? null,
-        fields: parseStructFields(match[3]),
-      });
+  for (const absolute of rustFiles(join(repoRoot, "backend"))) {
+    const source = readFileSync(absolute, "utf8");
+    const file = relative(repoRoot, absolute);
+    for (const match of source.matchAll(CONST_PATH)) {
+      const candidates = consts.get(match[1]) ?? [];
+      candidates.push({ file, path: match[2] });
+      consts.set(match[1], candidates);
     }
-
+    const items = parseItems(source, file);
+    structs.push(...items.structs);
+    enums.push(...items.enums);
     for (const match of source.matchAll(HANDLER)) {
-      handlers.set(`${key}::${match[1]}`, match[2].match(JSON_BODY)?.[1] ?? null);
+      handlers.set(`${file}::${match[1]}`, match[2].match(JSON_BODY)?.[1] ?? null);
     }
-
     for (const match of source.matchAll(ROUTE)) {
       for (const method of match[2].matchAll(METHOD)) {
-        routes.push({ file: key, constName: match[1], method: method[1], handler: method[2] });
+        rawRoutes.push({ file, constName: match[1], method: method[1], handler: method[2] });
       }
     }
   }
-  return { consts, structs, handlers, routes };
+
+  const routes = rawRoutes.map((route) => {
+    const candidates = consts.get(route.constName) ?? [];
+    const local = candidates.filter((candidate) => candidate.file === route.file);
+    const path = local.length === 1 ? local[0].path : candidates.length === 1 ? candidates[0].path : null;
+    return {
+      ...route,
+      path,
+      bodyType: handlers.get(`${route.file}::${route.handler}`) ?? null,
+    };
+  });
+  return { structs, enums, routes };
 }
 
-/**
- * Resolve the application/json requestBody schema for an operation.
- * Component lookups are own-property only — js-yaml maps inherit Object.prototype,
- * so `schemas?.[name]` false-resolved `constructor` / `toString` / `__proto__`.
- *
- * @param {unknown} document
- * @param {string} path
- * @param {string} method
- * @returns {Record<string, unknown> | null}
- */
+function canonicalPath(path) {
+  if (typeof path !== "string") return null;
+  const placeholder = /\{[^/{}}]+\}/g;
+  if (/[{}]/.test(path.replace(placeholder, ""))) return null;
+  return path.replace(placeholder, "{}");
+}
+
+function operationKey(method, path) {
+  const canonical = canonicalPath(path);
+  return canonical ? `${method.toLowerCase()} ${canonical}` : null;
+}
+
+function namedType(type) {
+  let remaining = type.trim();
+  const option = remaining.match(/^Option\s*<\s*([\s\S]+)\s*>$/);
+  if (option) remaining = option[1].trim();
+  if (!/^(?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*$/.test(remaining)) return null;
+  const pieces = remaining.split("::");
+  return { qualified: remaining, name: pieces.at(-1) };
+}
+
+function resolveNamed(items, file, name) {
+  const candidates = items.filter((candidate) => candidate.name === name);
+  const local = candidates.filter((candidate) => candidate.file === file);
+  if (local.length === 1) return { value: local[0], status: "resolved" };
+  if (local.length > 1 || candidates.length > 1) return { value: null, status: "ambiguous" };
+  if (candidates.length === 1) return { value: candidates[0], status: "resolved" };
+  return { value: null, status: "missing" };
+}
+
+function schemaReference(document, reference) {
+  if (typeof reference !== "string" || !reference.startsWith("#/components/schemas/")) return null;
+  const name = reference.slice("#/components/schemas/".length);
+  if (!name || name.includes("/")) return null;
+  const schema = own(own(own(document, "components"), "schemas"), name);
+  return schema && typeof schema === "object" ? schema : null;
+}
+
+function requestBodySchema(document, path, method) {
+  const requestBody = own(own(own(document, "paths"), path), method)?.requestBody;
+  if (!requestBody || typeof requestBody !== "object") return { reason: "non_json_request_body" };
+  const media = own(own(requestBody, "content"), "application/json");
+  if (!media || typeof media !== "object") return { reason: "non_json_request_body" };
+  const raw = own(media, "schema");
+  if (!raw || typeof raw !== "object") return { reason: "openapi_schema_composition_unsupported" };
+  let schema = raw;
+  const reference = own(schema, "$ref");
+  if (typeof reference === "string") {
+    schema = schemaReference(document, reference);
+    if (!schema || typeof own(schema, "$ref") === "string") {
+      return { reason: "openapi_schema_ref_chain_unsupported" };
+    }
+  }
+  if (own(schema, "oneOf") || own(schema, "allOf") || own(schema, "anyOf")) {
+    return { reason: "openapi_schema_composition_unsupported" };
+  }
+  return { schema };
+}
+
 export function jsonRequestSchema(document, path, method) {
-  const schema = own(
-    own(own(own(own(own(document, "paths"), path), method), "requestBody"), "content"),
-    "application/json",
-  );
-  const bodySchema = own(schema, "schema");
-  if (!bodySchema || typeof bodySchema !== "object") return null;
-  const ref = own(bodySchema, "$ref");
-  if (typeof ref !== "string") return bodySchema;
-  const name = ref.replace("#/components/schemas/", "");
-  const resolved = own(own(own(document, "components"), "schemas"), name);
-  return resolved && typeof resolved === "object" ? resolved : null;
+  return requestBodySchema(document, path, method).schema ?? null;
+}
+
+function schemaEnum(document, original, seen = new Set()) {
+  if (!original || typeof original !== "object") return { kind: "none" };
+  const reference = own(original, "$ref");
+  if (typeof reference === "string") {
+    if (seen.has(reference)) return { kind: "unsupported" };
+    const resolved = schemaReference(document, reference);
+    if (!resolved) return { kind: "unsupported" };
+    return schemaEnum(document, resolved, new Set([...seen, reference]));
+  }
+  const oneOf = own(original, "oneOf");
+  if (Array.isArray(oneOf)) {
+    const nonNull = oneOf.filter((member) => own(member, "type") !== "null");
+    const nulls = oneOf.length - nonNull.length;
+    if (nonNull.length === 1 && nulls >= 1) return schemaEnum(document, nonNull[0], seen);
+    return { kind: "unsupported" };
+  }
+  if (own(original, "allOf") || own(original, "anyOf")) return { kind: "unsupported" };
+  const values = own(original, "enum");
+  if (Array.isArray(values)) {
+    return values.every((value) => typeof value === "string")
+      ? { kind: "enum", values: [...new Set(values)].sort() }
+      : { kind: "unsupported" };
+  }
+  if (own(original, "type") === "string") return { kind: "string" };
+  return { kind: "none" };
+}
+
+function bodyEntry(operation, route, reason) {
+  return {
+    operation,
+    rust_file: route?.file ?? null,
+    handler: route?.handler ?? null,
+    body_type: route?.bodyType ?? null,
+    reason,
+  };
+}
+
+function enumEntry(operation, wireField, rustFile, bodyType, rustType, reason) {
+  return {
+    operation,
+    wire_field: wireField,
+    rust_file: rustFile,
+    body_type: bodyType,
+    rust_type: rustType,
+    reason,
+  };
+}
+
+function bodyId(entry) {
+  return entry.operation;
+}
+
+function enumId(entry) {
+  return `${entry.operation}#${entry.wire_field}`;
+}
+
+function sortRegister(register) {
+  register.body.sort((left, right) => compareText(bodyId(left), bodyId(right)));
+  register.enum.sort((left, right) => compareText(enumId(left), enumId(right)));
+  return register;
+}
+
+function validateEntryShape(entry, keys, nullableKeys) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+  const actualKeys = Object.keys(entry).sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify([...keys].sort())) return false;
+  return keys.every((key) => {
+    if (nullableKeys.has(key)) return entry[key] === null || typeof entry[key] === "string";
+    return typeof entry[key] === "string" && entry[key].length > 0;
+  });
+}
+
+function compareRegisterKind(kind, registered, observed, idFor) {
+  const findings = [];
+  const registeredById = new Map(registered.map((entry) => [idFor(entry), entry]));
+  const observedById = new Map(observed.map((entry) => [idFor(entry), entry]));
+  for (const [id, entry] of observedById) {
+    const recorded = registeredById.get(id);
+    if (!recorded) findings.push(`unregistered ${kind} undecidable: ${id}`);
+    else if (JSON.stringify(recorded) !== JSON.stringify(entry)) {
+      findings.push(`${kind} register metadata drift: ${id}`);
+    }
+  }
+  for (const id of registeredById.keys()) {
+    if (!observedById.has(id)) findings.push(`stale ${kind} register entry: ${id}`);
+  }
+  return findings;
+}
+
+function inspectRegister(repoRoot, observedRegister) {
+  let registered;
+  try {
+    registered = JSON.parse(readFileSync(join(repoRoot, REGISTER_PATH), "utf8"));
+  } catch (error) {
+    return [error?.code === "ENOENT"
+      ? `missing undecidable register: ${REGISTER_PATH}`
+      : `malformed undecidable register: ${REGISTER_PATH}`];
+  }
+  if (
+    !registered
+    || typeof registered !== "object"
+    || Array.isArray(registered)
+    || JSON.stringify(Object.keys(registered).sort()) !== JSON.stringify(["body", "enum", "version"])
+    || registered.version !== REGISTER_VERSION
+    || !Array.isArray(registered.body)
+    || !Array.isArray(registered.enum)
+  ) {
+    return [`malformed undecidable register: ${REGISTER_PATH}`];
+  }
+
+  const findings = [];
+  const bodyKeys = ["operation", "rust_file", "handler", "body_type", "reason"];
+  const enumKeys = ["operation", "wire_field", "rust_file", "body_type", "rust_type", "reason"];
+  for (const entry of registered.body) {
+    if (!validateEntryShape(entry, bodyKeys, new Set(["rust_file", "handler", "body_type"]))) {
+      findings.push("malformed body register entry");
+    } else if (!BODY_REASONS.has(entry.reason)) {
+      findings.push(`unknown body undecidable reason: ${entry.reason}`);
+    }
+  }
+  for (const entry of registered.enum) {
+    if (!validateEntryShape(entry, enumKeys, new Set())) findings.push("malformed enum register entry");
+    else if (!ENUM_REASONS.has(entry.reason)) findings.push(`unknown enum undecidable reason: ${entry.reason}`);
+  }
+
+  for (const [kind, entries, idFor] of [
+    ["body", registered.body, bodyId],
+    ["enum", registered.enum, enumId],
+  ]) {
+    const ids = entries.map(idFor);
+    for (let index = 1; index < ids.length; index += 1) {
+      if (ids[index] === ids[index - 1]) findings.push(`duplicate ${kind} register entry: ${ids[index]}`);
+      else if (compareText(ids[index], ids[index - 1]) < 0) findings.push(`${kind} register is not sorted`);
+    }
+  }
+  if (findings.length > 0) return [...new Set(findings)];
+  return [
+    ...compareRegisterKind("body", registered.body, observedRegister.body, bodyId),
+    ...compareRegisterKind("enum", registered.enum, observedRegister.enum, enumId),
+  ].sort();
+}
+
+function specOperations(document) {
+  const operations = [];
+  const paths = own(document, "paths");
+  if (!paths || typeof paths !== "object") return operations;
+  for (const [path, pathItem] of Object.entries(paths)) {
+    if (!pathItem || typeof pathItem !== "object") continue;
+    for (const method of HTTP_METHODS) {
+      const operation = own(pathItem, method);
+      if (!operation || typeof operation !== "object" || !hasOwnKey(operation, "requestBody")) continue;
+      operations.push({ path, method, operation: `${method.toUpperCase()} ${path}` });
+    }
+  }
+  return operations.sort((left, right) => compareText(left.operation, right.operation));
+}
+
+function compareBody({ operation, schema, struct, findings }) {
+  const properties = own(schema, "properties");
+  if (!properties || typeof properties !== "object") return false;
+  const wireName = (field) => field.rename ?? renameField(field.name, struct.renameAll);
+  const wireNames = new Set(struct.fields.map(wireName));
+  const required = own(schema, "required");
+  const specRequired = new Set(Array.isArray(required) ? required : []);
+
+  for (const property of Object.keys(properties)) {
+    if (!wireNames.has(property)) {
+      findings.push({
+        operation,
+        message: `spec property "${property}" is not a field of ${struct.name} (deny_unknown_fields => 422)`,
+      });
+    }
+  }
+  for (const field of struct.fields) {
+    if (/^Option\s*</.test(field.type) || field.hasDefault) continue;
+    if (specRequired.has(wireName(field))) continue;
+    if (wireName(field) !== field.name && hasOwnKey(properties, field.name)) continue;
+    findings.push({
+      operation,
+      message: `${struct.name}.${field.name} is required by the handler but not in spec required[]`,
+    });
+  }
+  return true;
+}
+
+function compareEnums({ document, operation, schema, struct, enums, findings, enumUndecidable }) {
+  const properties = own(schema, "properties");
+  if (!properties || typeof properties !== "object") return { candidates: 0, resolved: 0, ids: [] };
+  let candidates = 0;
+  let resolved = 0;
+  const ids = [];
+  for (const field of struct.fields) {
+    const wireField = field.rename ?? renameField(field.name, struct.renameAll);
+    const property = own(properties, wireField);
+    if (!property || typeof property !== "object") continue;
+    const spec = schemaEnum(document, property);
+    const type = namedType(field.type);
+    const rustName = type?.name ?? field.type.trim();
+    let rust = { kind: "none" };
+    if (type?.name === "String") rust = { kind: "string" };
+    else if (type) {
+      const resolution = resolveNamed(enums, struct.file, type.name);
+      if (resolution.status === "ambiguous") rust = { kind: "ambiguous" };
+      else if (resolution.status === "resolved") rust = { kind: "enum", value: resolution.value };
+    }
+    if (spec.kind !== "enum" && rust.kind !== "enum" && rust.kind !== "ambiguous") continue;
+    candidates += 1;
+    const id = `${operation}#${wireField}`;
+
+    let reason = null;
+    if (rust.kind === "string" && spec.kind === "enum") reason = "string_backed_spec_enum";
+    else if (rust.kind === "ambiguous") reason = "rust_enum_ambiguous";
+    else if (rust.kind === "none" && spec.kind === "enum") reason = "rust_enum_unresolved";
+    else if (rust.kind === "enum" && rust.value.reason) reason = rust.value.reason;
+    else if (rust.kind === "enum" && spec.kind === "unsupported") reason = "openapi_enum_schema_unsupported";
+    else if (rust.kind === "enum" && spec.kind === "none") reason = "openapi_enum_schema_unsupported";
+
+    if (reason) {
+      enumUndecidable.push(enumEntry(
+        operation,
+        wireField,
+        struct.file,
+        struct.name,
+        rustName,
+        reason,
+      ));
+      continue;
+    }
+    if (rust.kind !== "enum") continue;
+    resolved += 1;
+    ids.push(id);
+    const rustValues = rust.value.variants
+      .map((variant) => renameVariant(variant, rust.value.renameAll))
+      .sort(compareText);
+    if (spec.kind === "string") {
+      findings.push({
+        operation,
+        message: `spec property "${wireField}" does not constrain serde enum ${rust.value.name}`,
+      });
+      continue;
+    }
+    const specValues = spec.values;
+    for (const value of specValues.filter((value) => !rustValues.includes(value))) {
+      findings.push({ operation, message: `spec-only enum variant "${value}" for ${wireField}` });
+    }
+    for (const value of rustValues.filter((value) => !specValues.includes(value))) {
+      findings.push({ operation, message: `Rust-only enum variant "${value}" for ${wireField}` });
+    }
+  }
+  return { candidates, resolved, ids };
 }
 
 /**
+ * Evaluate the source-first request-body and enum contract.
+ *
  * @param {{ repoRoot: string }} options
- * @returns {{
- *   resolved: number,
- *   skipped: number,
- *   findings: { operation: string, message: string }[],
- *   unresolvedAnchors: string[],
- * }}
  */
 export function evaluateRequestBodyContract({ repoRoot }) {
   const document = yaml.load(readFileSync(join(repoRoot, "backend/openapi/openapi.yaml"), "utf8"));
-  const { consts, structs, handlers, routes } = collectSources(repoRoot);
+  const { structs, enums, routes } = collectSources(repoRoot);
   const findings = [];
+  const bodyUndecidable = [];
+  const enumUndecidable = [];
   const resolvedOperations = new Set();
-  let skipped = 0;
+  const resolvedEnumIds = new Set();
+  let enumCandidates = 0;
+  let enumResolved = 0;
 
+  const routeIndex = new Map();
   for (const route of routes) {
-    const path = consts.get(route.constName);
-    if (!path) continue;
-    const bodyType = handlers.get(`${route.file}::${route.handler}`);
-    if (!bodyType) continue;
-    const operation = `${route.method.toUpperCase()} ${path}`;
-    const schema = jsonRequestSchema(document, path, route.method);
-    const properties = own(schema, "properties");
-    if (!properties || typeof properties !== "object") {
-      skipped += 1;
-      continue;
+    if (!route.path) continue;
+    const key = operationKey(route.method, route.path);
+    if (!key) continue;
+    const candidates = routeIndex.get(key) ?? [];
+    if (!candidates.some((candidate) => candidate.file === route.file && candidate.handler === route.handler)) {
+      candidates.push(route);
     }
-    // `AssignBody` exists in two crates; the handler's own file decides which one it binds.
-    // When the handler's file does NOT declare it, the bare name must be UNIQUE repo-wide or the
-    // operation is undecidable. Taking the first same-named struct was a false green of exactly
-    // the class this gate exists to catch: `AssignBody` and `ListQuery` each have two definitions
-    // with divergent `rename_all`, so the arbitrary pick compares a real request body against an
-    // unrelated struct, counts the operation toward `resolved` and the anchors, and prints no
-    // finding for a body that 422s every conformant caller. Undecidable now lands in `skipped`,
-    // where the floor and the named anchors are watching.
-    const candidates = [...structs.values()].filter((candidate) => candidate.name === bodyType);
-    const struct = structs.get(`${route.file}::${bodyType}`)
-      ?? (candidates.length === 1 ? candidates[0] : undefined);
-    if (!struct || !struct.denyUnknown) {
-      skipped += 1;
-      continue;
-    }
-    resolvedOperations.add(operation);
-
-    const wireName = (field) => field.rename ?? renameField(field.name, struct.renameAll);
-    const wireNames = new Set(struct.fields.map(wireName));
-    const required = own(schema, "required");
-    const specRequired = new Set(Array.isArray(required) ? required : []);
-
-    for (const property of Object.keys(properties)) {
-      if (!wireNames.has(property)) {
-        findings.push({
-          operation,
-          message: `spec property "${property}" is not a field of ${struct.name} (deny_unknown_fields => 422)`,
-        });
-      }
-    }
-    for (const field of struct.fields) {
-      if (field.type.startsWith("Option<") || field.hasDefault) continue;
-      if (specRequired.has(wireName(field))) continue;
-      // Suppresses one genuine double-report and nothing else. When the wire name DIFFERS from
-      // the rust name and the spec publishes the rust name, the loop above already reported that
-      // the spec names a field the struct rejects; the absent `required[]` entry is that same
-      // defect from the other side. The `wireName !== name` condition is load-bearing: when the
-      // two are equal — every field of a struct with no `rename_all`, and every single-word field
-      // under any rule — the loop above reported NOTHING, so an unconditional skip here disarmed
-      // this entire direction for those fields. A handler-required field the spec published as
-      // optional went unreported, and omitting it is a deserialization failure, not a default.
-      // Own-property only: `properties[field.name] !== undefined` answered true for every
-      // Object.prototype name (constructor/toString/…) and silenced the required[] finding.
-      if (wireName(field) !== field.name && hasOwnKey(properties, field.name)) continue;
-      findings.push({
-        operation,
-        message: `${struct.name}.${field.name} is required by the handler but not in spec required[]`,
-      });
-    }
+    routeIndex.set(key, candidates);
   }
 
+  const operations = specOperations(document);
+  const specKeys = new Set();
+  for (const candidate of operations) {
+    const key = operationKey(candidate.method, candidate.path);
+    if (!key || specKeys.has(key)) {
+      findings.push({ operation: candidate.operation, message: "normalized OpenAPI operation collision" });
+    } else specKeys.add(key);
+  }
+
+  for (const candidate of operations) {
+    const key = operationKey(candidate.method, candidate.path);
+    const matchingRoutes = key ? routeIndex.get(key) ?? [] : [];
+    const route = matchingRoutes.length === 1 ? matchingRoutes[0] : null;
+    const schemaResult = requestBodySchema(document, candidate.path, candidate.method);
+    if (schemaResult.reason === "non_json_request_body") {
+      bodyUndecidable.push(bodyEntry(candidate.operation, route, schemaResult.reason));
+      continue;
+    }
+    if (!route) {
+      bodyUndecidable.push(bodyEntry(candidate.operation, null, "route_parser_unresolved"));
+      continue;
+    }
+    if (!route.bodyType) {
+      bodyUndecidable.push(bodyEntry(candidate.operation, route, "no_direct_json_binding"));
+      continue;
+    }
+    if (schemaResult.reason) {
+      bodyUndecidable.push(bodyEntry(candidate.operation, route, schemaResult.reason));
+      continue;
+    }
+    const bodyNamed = namedType(route.bodyType);
+    const structResolution = bodyNamed
+      ? resolveNamed(structs, route.file, bodyNamed.name)
+      : { value: null, status: "missing" };
+    const struct = structResolution.value;
+    if (!struct || !struct.denyUnknown || !compareBody({
+      operation: candidate.operation,
+      schema: schemaResult.schema,
+      struct,
+      findings,
+    })) {
+      bodyUndecidable.push(bodyEntry(candidate.operation, route, "rust_struct_not_strict"));
+      continue;
+    }
+    resolvedOperations.add(candidate.operation);
+    const enumReport = compareEnums({
+      document,
+      operation: candidate.operation,
+      schema: schemaResult.schema,
+      struct,
+      enums,
+      findings,
+      enumUndecidable,
+    });
+    enumCandidates += enumReport.candidates;
+    enumResolved += enumReport.resolved;
+    for (const id of enumReport.ids) resolvedEnumIds.add(id);
+  }
+
+  const routeOnly = new Map();
+  for (const route of routes) {
+    if (!route.path || !route.bodyType) continue;
+    const key = operationKey(route.method, route.path);
+    if (!key || specKeys.has(key)) continue;
+    const operation = `${route.method.toUpperCase()} ${route.path}`;
+    const existing = routeOnly.get(key);
+    if (existing && (existing.file !== route.file || existing.handler !== route.handler)) {
+      findings.push({ operation, message: "normalized Rust route operation collision" });
+      continue;
+    }
+    routeOnly.set(key, route);
+  }
+  for (const route of routeOnly.values()) {
+    bodyUndecidable.push(bodyEntry(
+      `${route.method.toUpperCase()} ${route.path}`,
+      route,
+      "no_openapi_request_body",
+    ));
+  }
+
+  const observedRegister = sortRegister({
+    version: REGISTER_VERSION,
+    body: bodyUndecidable,
+    enum: enumUndecidable,
+  });
+  const registerFindings = inspectRegister(repoRoot, observedRegister);
+  findings.sort((left, right) => {
+    const operationOrder = compareText(left.operation, right.operation);
+    return operationOrder || compareText(left.message, right.message);
+  });
+
   return {
+    population: operations.length + routeOnly.size,
     resolved: resolvedOperations.size,
-    skipped,
+    skipped: bodyUndecidable.length,
     findings,
     unresolvedAnchors: ANCHORS.filter((anchor) => !resolvedOperations.has(anchor)),
+    enumCandidates,
+    enumResolved,
+    enumSkipped: enumUndecidable.length,
+    unresolvedEnumAnchors: ENUM_ANCHORS.filter((anchor) => !resolvedEnumIds.has(anchor)),
+    observedRegister,
+    registerFindings,
   };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const repoRoot = process.argv[2] ?? fileURLToPath(new URL("..", import.meta.url));
-  const { resolved, skipped, findings, unresolvedAnchors } = evaluateRequestBodyContract({ repoRoot });
-  for (const finding of findings) console.error(`${finding.operation}: ${finding.message}`);
-  for (const anchor of unresolvedAnchors) {
+  const json = process.argv.includes("--json");
+  const rootArgument = process.argv.slice(2).find((argument) => argument !== "--json");
+  const repoRoot = rootArgument ?? fileURLToPath(new URL("..", import.meta.url));
+  const report = evaluateRequestBodyContract({ repoRoot });
+  if (json) console.log(JSON.stringify(report, null, 2));
+  for (const finding of report.findings) console.error(`${finding.operation}: ${finding.message}`);
+  for (const finding of report.registerFindings) console.error(finding);
+  for (const anchor of report.unresolvedAnchors) {
     console.error(`anchor operation ${anchor} no longer resolves — the resolver has silently degraded`);
   }
-  const belowFloor = resolved < RESOLVED_FLOOR;
+  for (const anchor of report.unresolvedEnumAnchors) {
+    console.error(`enum anchor ${anchor} no longer resolves — enum coverage has silently degraded`);
+  }
+  const belowFloor = report.resolved < RESOLVED_FLOOR;
+  const belowCensus = report.population < CENSUS_FLOOR;
+  const belowEnumFloor = report.enumResolved < ENUM_RESOLVED_FLOOR;
+  const aboveBodyMaximum = report.skipped > BODY_UNDECIDABLE_MAX;
+  const aboveEnumMaximum = report.enumSkipped > ENUM_UNDECIDABLE_MAX;
   if (belowFloor) {
-    console.error(`resolved ${resolved} operations, below the floor of ${RESOLVED_FLOOR} — `
+    console.error(`resolved ${report.resolved} operations, below the floor of ${RESOLVED_FLOOR} — `
       + "the resolver compared less of the surface than it was built to compare");
   }
-  if (findings.length > 0 || unresolvedAnchors.length > 0 || belowFloor) {
-    console.error(`request body contract gate FAILED: ${findings.length} finding(s), `
-      + `resolved ${resolved}, skipped ${skipped}`);
+  if (belowCensus) {
+    console.error(`request-body population ${report.population}, below the census floor of ${CENSUS_FLOOR}`);
+  }
+  if (belowEnumFloor) {
+    console.error(`enum-resolved ${report.enumResolved}, below the floor of ${ENUM_RESOLVED_FLOOR}`);
+  }
+  if (aboveBodyMaximum) {
+    console.error(`body-undecidable ${report.skipped}, above the maximum of ${BODY_UNDECIDABLE_MAX}`);
+  }
+  if (aboveEnumMaximum) {
+    console.error(`enum-undecidable ${report.enumSkipped}, above the maximum of ${ENUM_UNDECIDABLE_MAX}`);
+  }
+  const failed = report.findings.length > 0
+    || report.registerFindings.length > 0
+    || report.unresolvedAnchors.length > 0
+    || report.unresolvedEnumAnchors.length > 0
+    || belowFloor
+    || belowCensus
+    || belowEnumFloor
+    || aboveBodyMaximum
+    || aboveEnumMaximum;
+  if (failed) {
+    console.error(`request body contract gate FAILED: ${report.findings.length} finding(s), `
+      + `resolved ${report.resolved}, skipped ${report.skipped}, enum-resolved ${report.enumResolved}, `
+      + `enum-skipped ${report.enumSkipped}`);
     process.exit(1);
   }
-  console.log(`request body contract gate passed (resolved ${resolved}, skipped ${skipped})`);
+  if (!json) {
+    console.log(`request body contract gate passed (resolved ${report.resolved}, skipped ${report.skipped})`);
+    console.log(`request body census ${report.population}; enum candidates ${report.enumCandidates}, `
+      + `resolved ${report.enumResolved}, skipped ${report.enumSkipped}`);
+  }
 }

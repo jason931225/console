@@ -10,6 +10,7 @@ import {
   evaluateRequestBodyContract,
   jsonRequestSchema,
   renameField,
+  renameVariant,
 } from "./check-request-body-contract.mjs";
 import {
   hasOwnKey,
@@ -80,7 +81,7 @@ async fn consume_widget(
 `;
 }
 
-function widgetSpec({ required, properties }) {
+function widgetSpec({ required, properties, extraSchemas = "" }) {
   return `openapi: 3.1.0
 info:
   title: Fixture
@@ -105,14 +106,47 @@ components:
       additionalProperties: false
       required: [${required.join(", ")}]
       properties: { ${properties} }
+${extraSchemas}
 `;
 }
 
-function widgetFixture({ derive, fields, required, properties }) {
+function widgetFixture({ derive, fields, required, properties, extraSchemas = "" }) {
   return fixture({
     "backend/crates/widget/rest/src/lib.rs": widgetCrate({ derive, fields }),
-    "backend/openapi/openapi.yaml": widgetSpec({ required, properties }),
+    "backend/openapi/openapi.yaml": widgetSpec({ required, properties, extraSchemas }),
   });
+}
+
+function enumFixture({
+  fieldType = "WidgetMode",
+  enumSource = `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+    FastMode,
+    SafeMode,
+}
+`,
+  property = "{ type: string, enum: [fast_mode, safe_mode] }",
+  extraSchemas = "",
+} = {}) {
+  return fixture({
+    "backend/crates/widget/rest/src/lib.rs": `${widgetCrate({
+      derive: camelDeny,
+      fields: `    quantity_consumed_milli: i64,\n    mode: ${fieldType},`,
+    })}\n${enumSource}`,
+    "backend/openapi/openapi.yaml": widgetSpec({
+      required: ["quantityConsumedMilli", "mode"],
+      properties: `quantityConsumedMilli: { type: integer }, mode: ${property}`,
+      extraSchemas,
+    }),
+  });
+}
+
+function writeObservedRegister(root, report = evaluateRequestBodyContract({ repoRoot: root })) {
+  const registerPath = join(root, "scripts/request-body-contract-undecidable.json");
+  mkdirSync(dirname(registerPath), { recursive: true });
+  writeFileSync(registerPath, `${JSON.stringify(report.observedRegister, null, 2)}\n`);
+  return registerPath;
 }
 
 const camelDeny = '#[serde(rename_all = "camelCase", deny_unknown_fields)]';
@@ -620,4 +654,294 @@ describe("serde rename_all reproduction", () => {
       assert.equal(renameField(field, "SCREAMING-KEBAB-CASE"), screamingKebab);
     });
   }
+});
+
+describe("serde enum-variant reproduction", () => {
+  const cases = [
+    ["HttpRequest", null, "HttpRequest"],
+    ["HttpRequest", "PascalCase", "HttpRequest"],
+    ["HttpRequest", "camelCase", "httpRequest"],
+    ["HttpRequest", "snake_case", "http_request"],
+    ["HttpRequest", "SCREAMING_SNAKE_CASE", "HTTP_REQUEST"],
+    ["HttpRequest", "kebab-case", "http-request"],
+    ["HttpRequest", "SCREAMING-KEBAB-CASE", "HTTP-REQUEST"],
+    ["HttpRequest", "lowercase", "httprequest"],
+    ["HttpRequest", "UPPERCASE", "HTTPREQUEST"],
+  ];
+
+  it("uses serde's variant rules rather than its different field rules", () => {
+    for (const [variant, style, expected] of cases) {
+      assert.equal(renameVariant(variant, style), expected, `${variant} under ${style}`);
+    }
+    assert.equal(renameVariant("HTTPServer", "snake_case"), "h_t_t_p_server");
+  });
+});
+
+describe("request body enum-variant contract", () => {
+  it("compares a qualified Option enum through a nullable oneOf $ref", () => {
+    const root = enumFixture({
+      fieldType: "Option<crate::WidgetMode>",
+      property: `{ oneOf: [
+          { $ref: '#/components/schemas/WidgetMode' },
+          { type: 'null' }
+        ] }`,
+      extraSchemas: `    WidgetMode:
+      type: string
+      enum: [fast_mode, safe_mode]`,
+    });
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumCandidates, 1);
+    assert.equal(report.enumResolved, 1);
+    assert.equal(report.enumSkipped, 0);
+    assert.deepEqual(report.findings, []);
+  });
+
+  it("reports a variant the spec advertises but serde rejects", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({ property: "{ type: string, enum: [fast_mode, safe_mode, turbo_mode] }" }),
+    });
+
+    assert.equal(report.enumResolved, 1);
+    assert.equal(report.findings.length, 1, JSON.stringify(report.findings, null, 2));
+    assert.match(report.findings[0].message, /spec-only enum variant.*turbo_mode/);
+  });
+
+  it("reports a variant serde accepts but the spec omits", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({ property: "{ type: string, enum: [fast_mode] }" }),
+    });
+
+    assert.equal(report.enumResolved, 1);
+    assert.equal(report.findings.length, 1, JSON.stringify(report.findings, null, 2));
+    assert.match(report.findings[0].message, /Rust-only enum variant.*safe_mode/);
+  });
+
+  it("reports a serde enum when OpenAPI leaves the string unrestricted", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({ property: "{ type: string }" }),
+    });
+
+    assert.equal(report.enumResolved, 1);
+    assert.equal(report.findings.length, 1, JSON.stringify(report.findings, null, 2));
+    assert.match(report.findings[0].message, /does not constrain.*WidgetMode/);
+  });
+
+  it("registers a String-backed spec enum instead of pretending to compare it", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({ fieldType: "String", enumSource: "" }),
+    });
+
+    assert.equal(report.enumCandidates, 1);
+    assert.equal(report.enumResolved, 0);
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "string_backed_spec_enum");
+  });
+
+  it("registers tagged/data enums and unsupported variant attributes instead of guessing", () => {
+    const tagged = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum WidgetMode {
+    FastMode { limit: i64 },
+    SafeMode,
+}
+`,
+      }),
+    });
+    assert.equal(tagged.observedRegister.enum[0].reason, "tagged_or_data_enum");
+
+    const attributed = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+    #[serde(alias = "quick")]
+    FastMode,
+    SafeMode,
+}
+`,
+      }),
+    });
+    assert.equal(attributed.observedRegister.enum[0].reason, "rust_enum_unsupported");
+  });
+
+  it("refuses an ambiguous bare enum name", () => {
+    const root = enumFixture({ enumSource: "" });
+    writeFileSync(join(root, "backend/crates/widget/rest/src/a.rs"), `#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode { FastMode, SafeMode }
+`);
+    writeFileSync(join(root, "backend/crates/widget/rest/src/b.rs"), `#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode { FastMode, OtherMode }
+`);
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumResolved, 0);
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous");
+  });
+
+  it("normalizes placeholder names without normalizing literal path bytes", () => {
+    const root = enumFixture();
+    const specPath = join(root, "backend/openapi/openapi.yaml");
+    writeFileSync(
+      specPath,
+      readFileSync(specPath, "utf8").replaceAll("{widget_id}", "{widgetId}"),
+    );
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.population, 1);
+    assert.equal(report.resolved, 1);
+    assert.equal(report.enumResolved, 1);
+  });
+
+  it("fails closed when placeholder normalization makes two operations collide", () => {
+    const root = enumFixture();
+    const specPath = join(root, "backend/openapi/openapi.yaml");
+    const duplicate = `  /api/v1/widgets/{other_id}/consumptions:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumeWidgetRequest'
+      responses:
+        '200': { description: ok }
+`;
+    writeFileSync(
+      specPath,
+      readFileSync(specPath, "utf8").replace("paths:\n", `paths:\n${duplicate}`),
+    );
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.population, 2);
+    assert.ok(report.findings.some((finding) => /normalized OpenAPI operation collision/.test(finding.message)));
+  });
+
+  it("makes enum findings fatal in the CLI", () => {
+    const root = enumFixture({ property: "{ type: string, enum: [fast_mode, turbo_mode] }" });
+    writeObservedRegister(root);
+
+    const result = spawnSync(process.execPath, [cli, root], { encoding: "utf8" });
+
+    assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+    assert.match(result.stderr, /spec-only enum variant.*turbo_mode/);
+    assert.match(result.stderr, /Rust-only enum variant.*safe_mode/);
+  });
+
+  it("enforces the enum floor independently of body resolution", () => {
+    const root = widgetFixture({
+      derive: camelDeny,
+      fields: "    quantity_consumed_milli: i64,",
+      required: ["quantityConsumedMilli"],
+      properties: "quantityConsumedMilli: { type: integer }",
+    });
+    writeObservedRegister(root);
+
+    const result = spawnSync(process.execPath, [cli, root], { encoding: "utf8" });
+
+    assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+    assert.match(result.stderr, /enum-resolved 0.*below the floor of 7/);
+  });
+});
+
+describe("undecidable register is exact and fail-closed", () => {
+  function undecidableFixture() {
+    return widgetFixture({
+      derive: '#[serde(rename_all = "camelCase")]',
+      fields: "    quantity_consumed_milli: i64,",
+      required: ["quantityConsumedMilli"],
+      properties: "quantityConsumedMilli: { type: integer }",
+    });
+  }
+
+  it("rejects a missing, malformed, or duplicate register", () => {
+    const missingRoot = undecidableFixture();
+    assert.match(
+      evaluateRequestBodyContract({ repoRoot: missingRoot }).registerFindings.join("\n"),
+      /missing undecidable register/,
+    );
+
+    const malformedRoot = undecidableFixture();
+    const malformedPath = join(malformedRoot, "scripts/request-body-contract-undecidable.json");
+    mkdirSync(dirname(malformedPath), { recursive: true });
+    writeFileSync(malformedPath, "{not json\n");
+    assert.match(
+      evaluateRequestBodyContract({ repoRoot: malformedRoot }).registerFindings.join("\n"),
+      /malformed undecidable register/,
+    );
+
+    const duplicateRoot = undecidableFixture();
+    const duplicateReport = evaluateRequestBodyContract({ repoRoot: duplicateRoot });
+    duplicateReport.observedRegister.body.push({ ...duplicateReport.observedRegister.body[0] });
+    const duplicatePath = join(duplicateRoot, "scripts/request-body-contract-undecidable.json");
+    mkdirSync(dirname(duplicatePath), { recursive: true });
+    writeFileSync(duplicatePath, JSON.stringify(duplicateReport.observedRegister));
+    assert.match(
+      evaluateRequestBodyContract({ repoRoot: duplicateRoot }).registerFindings.join("\n"),
+      /duplicate body register entry/,
+    );
+  });
+
+  it("rejects unknown reasons, reason drift, stale entries, and equal-count substitution", () => {
+    const root = undecidableFixture();
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+    const register = structuredClone(report.observedRegister);
+    register.body[0].reason = "invented_reason";
+    const registerPath = join(root, "scripts/request-body-contract-undecidable.json");
+    mkdirSync(dirname(registerPath), { recursive: true });
+    writeFileSync(registerPath, JSON.stringify(register));
+    assert.match(
+      evaluateRequestBodyContract({ repoRoot: root }).registerFindings.join("\n"),
+      /unknown body undecidable reason/,
+    );
+
+    register.body[0] = {
+      ...report.observedRegister.body[0],
+      operation: "POST /api/v1/widgets/{widget_id}/substituted",
+    };
+    writeFileSync(registerPath, JSON.stringify(register));
+    const substitution = evaluateRequestBodyContract({ repoRoot: root }).registerFindings.join("\n");
+    assert.match(substitution, /unregistered body undecidable/);
+    assert.match(substitution, /stale body register entry/);
+
+    register.body[0] = { ...report.observedRegister.body[0], handler: "wrong_handler" };
+    writeFileSync(registerPath, JSON.stringify(register));
+    assert.match(
+      evaluateRequestBodyContract({ repoRoot: root }).registerFindings.join("\n"),
+      /body register metadata drift/,
+    );
+  });
+
+  it("makes register drift fatal in the CLI", () => {
+    const root = undecidableFixture();
+    const result = spawnSync(process.execPath, [cli, root], { encoding: "utf8" });
+
+    assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+    assert.match(result.stderr, /missing undecidable register/);
+  });
+});
+
+describe("live request body census", () => {
+  it("binds the exact source-first body and enum populations to the reviewed register", () => {
+    const report = evaluateRequestBodyContract({ repoRoot });
+
+    assert.equal(report.population, 291);
+    assert.equal(report.resolved, 53);
+    assert.equal(report.skipped, 238);
+    assert.equal(report.enumCandidates, 22);
+    assert.equal(report.enumResolved, 7);
+    assert.equal(report.enumSkipped, 15);
+    assert.deepEqual(report.findings, []);
+    assert.deepEqual(report.unresolvedAnchors, []);
+    assert.deepEqual(report.unresolvedEnumAnchors, []);
+    assert.deepEqual(report.registerFindings, []);
+  });
 });
