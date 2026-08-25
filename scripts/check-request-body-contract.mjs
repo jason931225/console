@@ -254,6 +254,19 @@ function commentWhitespace(comment) {
   return comment.replace(/[^\r\n]/g, " ");
 }
 
+function rustFilePrelude(source) {
+  let cursor = 0;
+  if (source.startsWith("\uFEFF")) cursor += 1;
+  if (source.startsWith("#!", cursor) && source[cursor + 2] !== "[") {
+    const newline = source.indexOf("\n", cursor + 2);
+    cursor = newline < 0 ? source.length : newline + 1;
+  }
+  return {
+    cursor,
+    maskedSource: commentWhitespace(source.slice(0, cursor)) + source.slice(cursor),
+  };
+}
+
 function scanRustSyntax(source, {
   start = 0,
   rootDelimiter = null,
@@ -435,6 +448,11 @@ function skipProjectedWhitespace(projection, start) {
   return cursor;
 }
 
+function innerAttributeOpening(projection, start) {
+  const prefix = projection.slice(start).match(/^#\s*!\s*(?=\[)/)?.[0];
+  return prefix === undefined ? null : start + prefix.length;
+}
+
 function moduleAttributeInfo(attributes, file, moduleName) {
   let conditional = false;
   let path = null;
@@ -517,16 +535,22 @@ function innerModuleAttributeInfo(attributes, file, modulePath) {
     if (!scanned.valid) {
       throw new Error(`cannot scan inner module attribute ${file}::${moduleName}: ${scanned.error}`);
     }
-    const name = scanned.projection.match(/^#!\[\s*([A-Za-z_][A-Za-z0-9_]*)\b/)?.[1];
+    const name = scanned.projection.match(
+      /^#\s*!\s*\[\s*([A-Za-z_][A-Za-z0-9_]*)\b/,
+    )?.[1];
     if (name === "cfg") {
-      const cfg = attribute.match(/^#!\[\s*cfg\s*\(([\s\S]*)\)\s*\]$/);
+      const cfg = scanned.projection.match(
+        /^#\s*!\s*\[\s*cfg\s*\(([\s\S]*)\)\s*\]$/,
+      );
       if (!cfg) throw new Error(`malformed inner cfg attribute for ${file}::${moduleName}`);
       validateCfgBody(cfg[1], file, moduleName, "cfg");
       conditional = true;
       continue;
     }
     if (name === "cfg_attr") {
-      const cfgAttr = attribute.match(/^#!\[\s*cfg_attr\s*\(([\s\S]*)\)\s*\]$/);
+      const cfgAttr = scanned.projection.match(
+        /^#\s*!\s*\[\s*cfg_attr\s*\(([\s\S]*)\)\s*\]$/,
+      );
       if (!cfgAttr) {
         throw new Error(`malformed inner cfg_attr attribute for ${file}::${moduleName}`);
       }
@@ -543,8 +567,10 @@ function innerModuleAttributeInfo(attributes, file, modulePath) {
 function moduleScopeHead(source, projection, start, end, file, modulePath) {
   let cursor = skipProjectedWhitespace(projection, start);
   const attributes = [];
-  while (projection.startsWith("#![", cursor)) {
-    const group = scanRustSyntax(projection, { start: cursor + 2, rootDelimiter: "[" });
+  for (let opening = innerAttributeOpening(projection, cursor);
+    opening !== null;
+    opening = innerAttributeOpening(projection, cursor)) {
+    const group = scanRustSyntax(projection, { start: opening, rootDelimiter: "[" });
     if (!group.valid || group.closing >= end) {
       throw new Error(
         `cannot scan Rust inner module attributes ${file}: ${group.error ?? "attribute escapes module"}`,
@@ -552,6 +578,9 @@ function moduleScopeHead(source, projection, start, end, file, modulePath) {
     }
     attributes.push(source.slice(cursor, group.closing + 1));
     cursor = skipProjectedWhitespace(projection, group.closing + 1);
+  }
+  if (/^#\s*!/.test(projection.slice(cursor))) {
+    throw new Error(`Rust shebang outside the start of a file in ${file}`);
   }
   return { cursor, ...innerModuleAttributeInfo(attributes, file, modulePath) };
 }
@@ -593,6 +622,7 @@ function moduleScopes(
   rootModulePath,
   rootConditional,
   rootPathRemapped,
+  rootStart,
 ) {
   const scopes = [];
   const outlined = [];
@@ -666,13 +696,16 @@ function moduleScopes(
       index += 1;
     }
     const joined = surface.join("");
+    if (/#\s*!/.test(joined)) {
+      throw new Error(`Rust shebang or inner attribute outside the start of a module in ${file}`);
+    }
     const imports = [];
     USE.lastIndex = 0;
     let useMatch;
     while ((useMatch = USE.exec(joined)) !== null) imports.push(...parseUseTree(useMatch[1]));
     scopes.push({ start, end, modulePath, surface: joined, imports, conditional: scopeConditional });
   };
-  visit(0, source.length, rootModulePath, rootConditional, rootModuleDirectory, false);
+  visit(rootStart, source.length, rootModulePath, rootConditional, rootModuleDirectory, false);
   return { scopes, outlined };
 }
 
@@ -744,9 +777,13 @@ function parseEnum(attributes, body) {
 function parseItems(source, file, absoluteFile, backendRoot, identity) {
   const structs = [];
   const enums = [];
-  const projected = scanRustSyntax(source, { projectCode: true });
+  const prelude = rustFilePrelude(source);
+  const projected = scanRustSyntax(prelude.maskedSource, { projectCode: true });
   if (!projected.valid) {
     throw new Error(`cannot scan Rust source ${file}: ${projected.error}`);
+  }
+  if (projected.projection.includes("\uFEFF")) {
+    throw new Error(`UTF-8 BOM outside the start of a Rust file in ${file}`);
   }
   const { scopes, outlined } = moduleScopes(
     source,
@@ -757,6 +794,7 @@ function parseItems(source, file, absoluteFile, backendRoot, identity) {
     identity.modulePath,
     identity.conditional,
     identity.pathRemapped,
+    prelude.cursor,
   );
   for (const scope of scopes) {
     ITEM.lastIndex = 0;

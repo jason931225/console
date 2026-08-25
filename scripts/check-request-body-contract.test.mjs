@@ -1317,6 +1317,162 @@ fn main() {
     assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous");
   });
 
+  it("propagates inner cfg_attr after Rust file shebang and BOM preludes", () => {
+    const preludes = [
+      {
+        name: "shebang",
+        source: "#!/usr/bin/env rustx\n// projected line whitespace\n/* projected block whitespace */\n",
+      },
+      {
+        name: "bom",
+        source: "\uFEFF// projected line whitespace\n/* projected block whitespace */\n",
+      },
+      {
+        name: "bom_shebang",
+        source: "\uFEFF#!/usr/bin/env rustx\n// projected line whitespace\n/* projected block whitespace */\n",
+      },
+      {
+        name: "shebang_commented_attribute",
+        source: "#!/usr/bin/env rustx\n",
+        attribute: '#/* projected attribute whitespace */![cfg_attr(feature = "hostile", cfg(not(feature = "hostile")))]',
+      },
+    ];
+
+    for (const prelude of preludes) {
+      const innerAttribute = prelude.attribute
+        ?? '#![cfg_attr(feature = "hostile", cfg(not(feature = "hostile")))]';
+      const root = enumFixture({
+        fieldType: "modes::WidgetMode",
+        enumSource: `#[path = "actual.rs"]
+mod modes;
+
+#[cfg(feature = "hostile")]
+macro_rules! hostile_modes {
+    () => {
+        mod modes {
+            #[derive(Debug, Deserialize)]
+            #[serde(rename_all = "snake_case")]
+            pub enum WidgetMode { FastMode, OtherMode }
+        }
+    };
+}
+#[cfg(feature = "hostile")]
+hostile_modes!();
+`,
+        property: "{ type: string, enum: [fast_mode, safe_mode] }",
+      });
+      writeFileSync(
+        join(root, "backend/crates/widget/rest/src/actual.rs"),
+        `${prelude.source}${innerAttribute}
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { FastMode, SafeMode }
+`,
+      );
+
+      const controlRoot = join(root, "rustc-file-prelude-control");
+      mkdirSync(controlRoot, { recursive: true });
+      writeFileSync(
+        join(controlRoot, "actual.rs"),
+        `${prelude.source}${innerAttribute}
+pub enum WidgetMode { FastMode, SafeMode }
+`,
+      );
+      const controlSource = join(controlRoot, "main.rs");
+      writeFileSync(controlSource, `#[path = "actual.rs"]
+mod modes;
+
+#[cfg(feature = "hostile")]
+macro_rules! hostile_modes {
+    () => {
+        mod modes {
+            pub enum WidgetMode { FastMode, OtherMode }
+        }
+    };
+}
+#[cfg(feature = "hostile")]
+hostile_modes!();
+
+fn main() {
+    let _ = modes::WidgetMode::FastMode;
+    #[cfg(not(feature = "hostile"))]
+    let _ = modes::WidgetMode::SafeMode;
+    #[cfg(feature = "hostile")]
+    let _ = modes::WidgetMode::OtherMode;
+}
+`);
+      const compile = (configuration, cfg = []) => spawnSync("rustc", [
+        "--edition=2021",
+        "--crate-name",
+        `request_body_prelude_${prelude.name}_${configuration}`,
+        ...cfg,
+        controlSource,
+        "-o",
+        join(controlRoot, configuration),
+      ], { encoding: "utf8" });
+      const defaultBuild = compile("default");
+      assert.equal(
+        defaultBuild.status,
+        0,
+        `${prelude.name} default: ${defaultBuild.stdout}${defaultBuild.stderr}`,
+      );
+      const hostileBuild = compile("hostile", ["--cfg", 'feature="hostile"']);
+      assert.equal(
+        hostileBuild.status,
+        0,
+        `${prelude.name} hostile: ${hostileBuild.stdout}${hostileBuild.stderr}`,
+      );
+
+      const report = evaluateRequestBodyContract({ repoRoot: root });
+
+      assert.equal(report.enumResolved, 0, `${prelude.name}: ${JSON.stringify(report, null, 2)}`);
+      assert.equal(report.enumSkipped, 1, prelude.name);
+      assert.deepEqual(report.findings, [], prelude.name);
+      assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous", prelude.name);
+    }
+  });
+
+  it("fails closed on misplaced, duplicate, or unsupported Rust file preludes", () => {
+    const conditionalEnum = `#![cfg_attr(feature = "hostile", cfg(not(feature = "hostile")))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { FastMode, SafeMode }
+`;
+    const fileCases = [
+      ` #!/usr/bin/env rustx\n${conditionalEnum}`,
+      `// shebang is no longer at the start of the file\n#!/usr/bin/env rustx\n${conditionalEnum}`,
+      `\uFEFF\uFEFF${conditionalEnum}`,
+      ` \uFEFF${conditionalEnum}`,
+      `#![allow(dead_code)]\n#!/usr/bin/env rustx\n${conditionalEnum}`,
+      `const BEFORE_SHEBANG: () = ();\n#!/usr/bin/env rustx\n${conditionalEnum}`,
+    ];
+    for (const source of fileCases) {
+      const root = enumFixture({
+        fieldType: "modes::WidgetMode",
+        enumSource: `#[path = "actual.rs"]\nmod modes;\n`,
+      });
+      writeFileSync(join(root, "backend/crates/widget/rest/src/actual.rs"), source);
+      assert.throws(
+        () => evaluateRequestBodyContract({ repoRoot: root }),
+        /Rust shebang|UTF-8 BOM/,
+        source,
+      );
+    }
+
+    const inlineRoot = enumFixture({
+      fieldType: "modes::WidgetMode",
+      enumSource: `mod modes {
+    #!/usr/bin/env rustx
+    ${conditionalEnum}
+}
+`,
+    });
+    assert.throws(
+      () => evaluateRequestBodyContract({ repoRoot: inlineRoot }),
+      /Rust shebang/,
+    );
+  });
+
   it("propagates direct, conditional, duplicate, and conflicting inner cfg attributes", () => {
     const innerAttributes = [
       "#![cfg(any())]",
