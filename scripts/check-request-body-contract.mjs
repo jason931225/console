@@ -199,37 +199,156 @@ function parseStructFields(body) {
   return fields;
 }
 
+// Rust comments are whitespace, not deletion, and block comments nest. Keep that boundary while
+// finding only real top-level commas so a comment cannot join tokens, hide the next variant, or
+// make punctuation inside a literal look like enum structure.
+function rawStringOpening(source, index) {
+  if (
+    source[index] !== "r"
+    && !((source[index] === "b" || source[index] === "c") && source[index + 1] === "r")
+  ) return null;
+  const match = source.slice(index).match(/^(?:br|cr|r)(#*)"/);
+  return match && match[1].length <= 255
+    ? { opening: match[0], closing: `"${match[1]}` }
+    : null;
+}
+
+function characterLiteralClosing(source, opening) {
+  let index = opening + 1;
+  if (index >= source.length || source[index] === "\n" || source[index] === "\r") return -1;
+  if (source[index] === "\\") {
+    index += 1;
+    if (source[index] === "u" && source[index + 1] === "{") {
+      const closingBrace = source.indexOf("}", index + 2);
+      if (closingBrace < 0 || /[\r\n]/.test(source.slice(index, closingBrace))) return -1;
+      const digits = source.slice(index + 2, closingBrace);
+      if (!/^[0-9A-Fa-f_]+$/.test(digits) || !/[0-9A-Fa-f]/.test(digits)) return -1;
+      const scalar = Number.parseInt(digits.replaceAll("_", ""), 16);
+      if (scalar > 0x10FFFF || (scalar >= 0xD800 && scalar <= 0xDFFF)) return -1;
+      index = closingBrace + 1;
+    } else if (source[index] === "x") {
+      if (!/^[0-9A-Fa-f]{2}$/.test(source.slice(index + 1, index + 3))) return -1;
+      index += 3;
+    } else {
+      if (!/[0nrt\\'\"]/.test(source[index] ?? "")) return -1;
+      index += 1;
+    }
+  } else {
+    const point = source.codePointAt(index);
+    if (point === undefined) return -1;
+    index += point > 0xFFFF ? 2 : 1;
+  }
+  return source[index] === "'" ? index : -1;
+}
+
 function topLevelSegments(body) {
   const segments = [];
-  let start = 0;
+  let segment = "";
   let round = 0;
   let square = 0;
   let curly = 0;
   let string = false;
   let escaped = false;
+  let rawClosing = null;
+  let lineComment = false;
+  let blockComment = 0;
+  let valid = true;
   for (let index = 0; index < body.length; index += 1) {
     const character = body[index];
+    const next = body[index + 1];
+    if (lineComment) {
+      segment += character === "\n" ? "\n" : " ";
+      if (character === "\n") lineComment = false;
+      continue;
+    }
+    if (blockComment > 0) {
+      if (character === "/" && next === "*") {
+        segment += "  ";
+        blockComment += 1;
+        index += 1;
+      } else if (character === "*" && next === "/") {
+        segment += "  ";
+        blockComment -= 1;
+        index += 1;
+      } else {
+        segment += character === "\n" ? "\n" : " ";
+      }
+      continue;
+    }
+    if (rawClosing !== null) {
+      if (body.startsWith(rawClosing, index)) {
+        segment += rawClosing;
+        index += rawClosing.length - 1;
+        rawClosing = null;
+      } else {
+        segment += character;
+      }
+      continue;
+    }
     if (string) {
+      segment += character;
       if (escaped) escaped = false;
       else if (character === "\\") escaped = true;
       else if (character === '"') string = false;
       continue;
     }
-    if (character === '"') string = true;
-    else if (character === "(") round += 1;
-    else if (character === ")") round -= 1;
-    else if (character === "[") square += 1;
-    else if (character === "]") square -= 1;
-    else if (character === "{") curly += 1;
-    else if (character === "}") curly -= 1;
-    else if (character === "," && round === 0 && square === 0 && curly === 0) {
-      segments.push(body.slice(start, index).trim());
-      start = index + 1;
+    const raw = rawStringOpening(body, index);
+    if (raw) {
+      segment += raw.opening;
+      index += raw.opening.length - 1;
+      rawClosing = raw.closing;
+      continue;
     }
+    if (character === "/" && next === "/") {
+      segment += "  ";
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      segment += "  ";
+      blockComment = 1;
+      index += 1;
+      continue;
+    }
+    if (character === '"') {
+      segment += character;
+      string = true;
+      continue;
+    }
+    if (character === "'") {
+      const closing = characterLiteralClosing(body, index);
+      if (closing >= 0) {
+        segment += body.slice(index, closing + 1);
+        index = closing;
+        continue;
+      }
+    }
+    if (character === "(") round += 1;
+    else if (character === ")") {
+      if (round === 0) valid = false;
+      else round -= 1;
+    } else if (character === "[") square += 1;
+    else if (character === "]") {
+      if (square === 0) valid = false;
+      else square -= 1;
+    } else if (character === "{") curly += 1;
+    else if (character === "}") {
+      if (curly === 0) valid = false;
+      else curly -= 1;
+    } else if (character === "," && round === 0 && square === 0 && curly === 0) {
+      segments.push(segment.trim());
+      segment = "";
+      continue;
+    }
+    segment += character;
   }
-  const tail = body.slice(start).trim();
+  if (string || rawClosing !== null || blockComment > 0 || round !== 0 || square !== 0 || curly !== 0) {
+    valid = false;
+  }
+  const tail = segment.trim();
   if (tail) segments.push(tail);
-  return segments;
+  return { segments, valid };
 }
 
 function serdeAttributes(attributes) {
@@ -240,20 +359,27 @@ function parseEnum(attributes, body) {
   const serde = serdeAttributes(attributes);
   const derivesDeserialize = [...attributes.matchAll(/#\[derive\(([^\]]*)\)\]/g)]
     .some((match) => /(?:^|[,:\s])(?:serde::)?Deserialize(?:$|[,:\s])/.test(match[1]));
-  const segments = topLevelSegments(body).filter((segment) => segment && !segment.startsWith("//"));
+  const parsed = topLevelSegments(body);
   const variants = [];
   let hasVariantAttribute = false;
   let hasData = false;
-  for (const segment of segments) {
-    const cleaned = segment.replace(/^(?:\s*#\[[^\]]*\]\s*)+/, (attributesText) => {
+  let hasUnsupportedSyntax = !parsed.valid;
+  for (const segment of parsed.segments) {
+    const cleaned = segment.trim();
+    if (!cleaned) continue;
+    if (cleaned.startsWith("#")) {
       hasVariantAttribute = true;
-      return "";
-    }).trim();
+      continue;
+    }
     const variant = cleaned.match(/^([A-Za-z_][A-Za-z0-9_]*)/);
-    if (!variant) continue;
+    if (!variant) {
+      hasUnsupportedSyntax = true;
+      continue;
+    }
     variants.push(variant[1]);
     const suffix = cleaned.slice(variant[0].length).trim();
     if (suffix.startsWith("(") || suffix.startsWith("{")) hasData = true;
+    else if (suffix && !suffix.startsWith("=")) hasUnsupportedSyntax = true;
   }
   let reason = null;
   if (hasData || /(?:^|,)\s*(?:tag|content|untagged)\b/.test(serde)) {
@@ -261,6 +387,7 @@ function parseEnum(attributes, body) {
   } else if (
     !derivesDeserialize
     || hasVariantAttribute
+    || hasUnsupportedSyntax
     || /(?:^|,)\s*(?:remote|from|try_from)\b/.test(serde)
     || variants.length === 0
   ) {

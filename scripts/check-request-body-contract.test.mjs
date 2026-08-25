@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -38,6 +38,35 @@ function fixture(files) {
     const absolute = join(root, relative);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, contents);
+  }
+  return root;
+}
+
+function copyRustSources(source, destination) {
+  for (const entry of readdirSync(source, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name))) {
+    if ([".git", "node_modules", "target"].includes(entry.name)) continue;
+    const sourcePath = join(source, entry.name);
+    const destinationPath = join(destination, entry.name);
+    if (entry.isDirectory()) copyRustSources(sourcePath, destinationPath);
+    else if (entry.name.endsWith(".rs")) {
+      mkdirSync(dirname(destinationPath), { recursive: true });
+      writeFileSync(destinationPath, readFileSync(sourcePath));
+    }
+  }
+}
+
+function liveSourceFixture() {
+  const root = mkdtempSync(join(tmpdir(), "request-body-contract-live-"));
+  fixtureRoots.push(root);
+  copyRustSources(join(repoRoot, "backend"), join(root, "backend"));
+  for (const path of [
+    "backend/openapi/openapi.yaml",
+    "scripts/request-body-contract-undecidable.json",
+  ]) {
+    const destination = join(root, path);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, readFileSync(join(repoRoot, path)));
   }
   return root;
 }
@@ -716,6 +745,151 @@ describe("request body enum-variant contract", () => {
     assert.equal(report.enumResolved, 1);
     assert.equal(report.findings.length, 1, JSON.stringify(report.findings, null, 2));
     assert.match(report.findings[0].message, /Rust-only enum variant.*safe_mode/);
+  });
+
+  it("does not let a top-level line comment hide the following Rust enum variant", () => {
+    const root = liveSourceFixture();
+    const rustPath = join(root, "backend/crates/evaluation/domain/src/lib.rs");
+    const rustSource = readFileSync(rustPath, "utf8");
+    const commentedRust = rustSource.replace(
+      "    Regular,\n    Probation,",
+      "    Regular,\n    // A top-level comment must not consume the next variant.\n    Probation,",
+    );
+    assert.notEqual(commentedRust, rustSource, "CycleKind fixture no longer matches the reviewed source");
+    writeFileSync(rustPath, commentedRust);
+
+    const openapiPath = join(root, "backend/openapi/openapi.yaml");
+    const openapi = readFileSync(openapiPath, "utf8");
+    const narrowedOpenapi = openapi.replace(
+      "    EvaluationCycleKind:\n      type: string\n      enum: [REGULAR, PROBATION]",
+      "    EvaluationCycleKind:\n      type: string\n      enum: [REGULAR]",
+    );
+    assert.notEqual(narrowedOpenapi, openapi, "EvaluationCycleKind fixture no longer matches OpenAPI");
+    writeFileSync(openapiPath, narrowedOpenapi);
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.deepEqual(
+      {
+        population: report.population,
+        resolved: report.resolved,
+        skipped: report.skipped,
+        enumCandidates: report.enumCandidates,
+        enumResolved: report.enumResolved,
+        enumSkipped: report.enumSkipped,
+      },
+      {
+        population: 291,
+        resolved: 53,
+        skipped: 238,
+        enumCandidates: 22,
+        enumResolved: 7,
+        enumSkipped: 15,
+      },
+    );
+    assert.deepEqual(report.registerFindings, []);
+    assert.deepEqual(report.findings, [{
+      operation: "POST /api/v1/evaluation/cycles",
+      message: 'Rust-only enum variant "PROBATION" for kind',
+    }]);
+
+    const result = spawnSync(process.execPath, [cli, root], { encoding: "utf8" });
+
+    assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+    assert.match(result.stderr, /Rust-only enum variant "PROBATION" for kind/);
+  });
+
+  it("keeps variants visible across line, doc, comma-bearing, and nested block comments", () => {
+    const bodies = [
+      ["line comment after comma", "    FastMode, // comma, /* text */\n    SafeMode,"],
+      ["comma on the next line", "    FastMode // comma, /* text */\n    ,\n    SafeMode,"],
+      ["outer doc line", "    FastMode,\n    /// docs, with punctuation\n    SafeMode,"],
+      ["nested block doc", "    FastMode,\n    /** docs, /* nested, comment */ still docs */\n    SafeMode,"],
+    ];
+    for (const [label, body] of bodies) {
+      const report = evaluateRequestBodyContract({
+        repoRoot: enumFixture({
+          enumSource: `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+${body}
+}
+`,
+          property: "{ type: string, enum: [fast_mode] }",
+        }),
+      });
+
+      assert.equal(report.enumResolved, 1, label);
+      assert.deepEqual(report.findings, [{
+        operation: widgetOperation,
+        message: 'Rust-only enum variant "safe_mode" for mode',
+      }], label);
+    }
+  });
+
+  it("treats comments as whitespace instead of fabricating joined variant names", () => {
+    for (const separator of ["/* comment */", "// comment\n    "]) {
+      const report = evaluateRequestBodyContract({
+        repoRoot: enumFixture({
+          enumSource: `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+    Fast${separator}Mode,
+    SafeMode,
+}
+`,
+        }),
+      });
+
+      assert.equal(report.enumResolved, 0);
+      assert.equal(report.enumSkipped, 1);
+      assert.equal(report.observedRegister.enum[0].reason, "rust_enum_unsupported");
+    }
+  });
+
+  it("does not read comment syntax or commas inside discriminant literals as enum structure", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+    FastMode = {
+        const COOKED: &str = "\\\", // comma, /* block */";
+        const RAW: &str = r#"}, // comma, /* block */"#;
+        let _ = (COOKED, RAW);
+        1
+    },
+    SafeMode = b',' as isize,
+}
+`,
+        property: "{ type: string, enum: [fast_mode] }",
+      }),
+    });
+
+    assert.equal(report.enumResolved, 1);
+    assert.deepEqual(report.findings, [{
+      operation: widgetOperation,
+      message: 'Rust-only enum variant "safe_mode" for mode',
+    }]);
+  });
+
+  it("fails closed on syntax-bearing attributes even when their strings look like comments", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+    FastMode,
+    #[doc = "], // comma, /* block */"]
+    SafeMode,
+}
+`,
+      }),
+    });
+
+    assert.equal(report.enumResolved, 0);
+    assert.equal(report.enumSkipped, 1);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_unsupported");
   });
 
   it("reports a serde enum when OpenAPI leaves the string unrestricted", () => {
