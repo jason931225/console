@@ -43,6 +43,10 @@ use uuid::Uuid;
 time::serde::format_description!(iso_date, Date, "[year]-[month]-[day]");
 
 pub const ORG_CHANGE_ROUTE_PATHS: &[&str] = &[
+    "/api/v1/regions",
+    "/api/v1/regions/{id}",
+    "/api/v1/branches",
+    "/api/v1/branches/{id}",
     "/api/v1/org-changes",
     "/api/v1/org-changes/{id}",
     "/api/v1/org-changes/{id}/preflight",
