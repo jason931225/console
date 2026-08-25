@@ -132,51 +132,6 @@ function rustFiles(directory, collected = []) {
   return collected;
 }
 
-function closingBrace(source, opening) {
-  let depth = 0;
-  let string = false;
-  let escaped = false;
-  let lineComment = false;
-  let blockComment = 0;
-  for (let index = opening; index < source.length; index += 1) {
-    const character = source[index];
-    const next = source[index + 1];
-    if (lineComment) {
-      if (character === "\n") lineComment = false;
-      continue;
-    }
-    if (blockComment > 0) {
-      if (character === "/" && next === "*") {
-        blockComment += 1;
-        index += 1;
-      } else if (character === "*" && next === "/") {
-        blockComment -= 1;
-        index += 1;
-      }
-      continue;
-    }
-    if (string) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === '"') string = false;
-      continue;
-    }
-    if (character === "/" && next === "/") {
-      lineComment = true;
-      index += 1;
-    } else if (character === "/" && next === "*") {
-      blockComment = 1;
-      index += 1;
-    } else if (character === '"') string = true;
-    else if (character === "{") depth += 1;
-    else if (character === "}") {
-      depth -= 1;
-      if (depth === 0) return index;
-    }
-  }
-  return -1;
-}
-
 function parseStructFields(body) {
   const fields = [];
   let pendingRename = null;
@@ -199,18 +154,46 @@ function parseStructFields(body) {
   return fields;
 }
 
-// Rust comments are whitespace, not deletion, and block comments nest. Keep that boundary while
-// finding only real top-level commas so a comment cannot join tokens, hide the next variant, or
-// make punctuation inside a literal look like enum structure.
+// This deliberately small lexical scanner is shared by item-body discovery and enum-variant
+// splitting. Rust comments are whitespace, block comments nest, literals are indivisible, and
+// (), [], and {} must balance. Keeping those rules in one place prevents either caller from
+// interpreting braces or commas that the other caller correctly knows are literal bytes.
+function codePointBefore(source, index) {
+  if (index <= 0) return null;
+  let start = index - 1;
+  const trailing = source.charCodeAt(start);
+  if (trailing >= 0xDC00 && trailing <= 0xDFFF && start > 0) {
+    const leading = source.charCodeAt(start - 1);
+    if (leading >= 0xD800 && leading <= 0xDBFF) start -= 1;
+  }
+  return source.slice(start, index);
+}
+
 function rawStringOpening(source, index) {
-  if (
-    source[index] !== "r"
-    && !((source[index] === "b" || source[index] === "c") && source[index + 1] === "r")
-  ) return null;
-  const match = source.slice(index).match(/^(?:br|cr|r)(#*)"/);
-  return match && match[1].length <= 255
-    ? { opening: match[0], closing: `"${match[1]}` }
-    : null;
+  let cursor;
+  if (source[index] === "r") cursor = index + 1;
+  else if ((source[index] === "b" || source[index] === "c") && source[index + 1] === "r") {
+    cursor = index + 2;
+  } else return null;
+  if (/^[_\p{ID_Continue}]$/u.test(codePointBefore(source, index) ?? "")) return null;
+  const hashStart = cursor;
+  while (source[cursor] === "#") cursor += 1;
+  if (source[cursor] !== '"') return null;
+  const hashes = source.slice(hashStart, cursor);
+  return hashes.length <= 255
+    ? { valid: true, opening: source.slice(index, cursor + 1), closing: `"${hashes}` }
+    : { valid: false };
+}
+
+function cookedStringClosing(source, opening) {
+  let escaped = false;
+  for (let index = opening + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (escaped) escaped = false;
+    else if (character === "\\") escaped = true;
+    else if (character === '"') return index;
+  }
+  return -1;
 }
 
 function characterLiteralClosing(source, opening) {
@@ -241,114 +224,144 @@ function characterLiteralClosing(source, opening) {
   return source[index] === "'" ? index : -1;
 }
 
-function topLevelSegments(body) {
+function rustIdentifierStartsAt(source, index) {
+  const point = source.codePointAt(index);
+  return point !== undefined && /^[_\p{ID_Start}]$/u.test(String.fromCodePoint(point));
+}
+
+function commentWhitespace(comment) {
+  return comment.replace(/[^\r\n]/g, " ");
+}
+
+function scanRustSyntax(source, {
+  start = 0,
+  rootDelimiter = null,
+  splitTopLevel = false,
+  projectCode = false,
+} = {}) {
+  const closes = { "(": ")", "[": "]", "{": "}" };
+  const opens = new Set(Object.keys(closes));
+  const closing = new Set(Object.values(closes));
+  const delimiters = [];
   const segments = [];
   let segment = "";
-  let round = 0;
-  let square = 0;
-  let curly = 0;
-  let string = false;
-  let escaped = false;
-  let rawClosing = null;
-  let lineComment = false;
-  let blockComment = 0;
-  let valid = true;
-  for (let index = 0; index < body.length; index += 1) {
-    const character = body[index];
-    const next = body[index + 1];
-    if (lineComment) {
-      segment += character === "\n" ? "\n" : " ";
-      if (character === "\n") lineComment = false;
-      continue;
-    }
-    if (blockComment > 0) {
-      if (character === "/" && next === "*") {
-        segment += "  ";
-        blockComment += 1;
-        index += 1;
-      } else if (character === "*" && next === "/") {
-        segment += "  ";
-        blockComment -= 1;
-        index += 1;
-      } else {
-        segment += character === "\n" ? "\n" : " ";
-      }
-      continue;
-    }
-    if (rawClosing !== null) {
-      if (body.startsWith(rawClosing, index)) {
-        segment += rawClosing;
-        index += rawClosing.length - 1;
-        rawClosing = null;
-      } else {
-        segment += character;
-      }
-      continue;
-    }
-    if (string) {
-      segment += character;
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === '"') string = false;
-      continue;
-    }
-    const raw = rawStringOpening(body, index);
-    if (raw) {
-      segment += raw.opening;
-      index += raw.opening.length - 1;
-      rawClosing = raw.closing;
-      continue;
-    }
+  let projection = "";
+  const append = (text) => {
+    if (splitTopLevel) segment += text;
+  };
+  const project = (text) => {
+    if (projectCode) projection += text;
+  };
+  const invalid = (error) => ({ valid: false, closing: -1, segments: [], projection: null, error });
+
+  if (rootDelimiter !== null && source[start] !== rootDelimiter) {
+    return invalid(`expected root delimiter ${rootDelimiter}`);
+  }
+
+  for (let index = start; index < source.length;) {
+    const character = source[index];
+    const next = source[index + 1];
+
     if (character === "/" && next === "/") {
-      segment += "  ";
-      lineComment = true;
-      index += 1;
+      const newline = source.indexOf("\n", index + 2);
+      const end = newline < 0 ? source.length : newline + 1;
+      const whitespace = commentWhitespace(source.slice(index, end));
+      append(whitespace);
+      project(whitespace);
+      index = end;
       continue;
     }
     if (character === "/" && next === "*") {
-      segment += "  ";
-      blockComment = 1;
+      let depth = 1;
+      let cursor = index + 2;
+      while (cursor < source.length && depth > 0) {
+        if (source[cursor] === "/" && source[cursor + 1] === "*") {
+          depth += 1;
+          cursor += 2;
+        } else if (source[cursor] === "*" && source[cursor + 1] === "/") {
+          depth -= 1;
+          cursor += 2;
+        } else {
+          cursor += 1;
+        }
+      }
+      if (depth > 0) return invalid("unterminated block comment");
+      const whitespace = commentWhitespace(source.slice(index, cursor));
+      append(whitespace);
+      project(whitespace);
+      index = cursor;
+      continue;
+    }
+
+    const raw = rawStringOpening(source, index);
+    if (raw) {
+      if (!raw.valid) return invalid("raw string delimiter exceeds Rust's 255-hash limit");
+      const rawEnd = source.indexOf(raw.closing, index + raw.opening.length);
+      if (rawEnd < 0) return invalid("unterminated raw string literal");
+      const end = rawEnd + raw.closing.length;
+      const literal = source.slice(index, end);
+      append(literal);
+      project(commentWhitespace(literal));
+      index = end;
+      continue;
+    }
+
+    if (character === '"') {
+      const stringEnd = cookedStringClosing(source, index);
+      if (stringEnd < 0) return invalid("unterminated cooked string literal");
+      const literal = source.slice(index, stringEnd + 1);
+      append(literal);
+      project(commentWhitespace(literal));
+      index = stringEnd + 1;
+      continue;
+    }
+
+    if (character === "'") {
+      const literalEnd = characterLiteralClosing(source, index);
+      if (literalEnd >= 0) {
+        const literal = source.slice(index, literalEnd + 1);
+        append(literal);
+        project(commentWhitespace(literal));
+        index = literalEnd + 1;
+        continue;
+      }
+      if (!rustIdentifierStartsAt(source, index + 1)) {
+        return invalid("unsupported or unterminated character literal");
+      }
+    }
+
+    if (opens.has(character)) {
+      delimiters.push(character);
+    } else if (closing.has(character)) {
+      const opening = delimiters.at(-1);
+      if (!opening || closes[opening] !== character) {
+        return invalid(`unbalanced closing delimiter ${character}`);
+      }
+      delimiters.pop();
+      if (rootDelimiter !== null && delimiters.length === 0) {
+        return { valid: true, closing: index, segments: [], projection: null, error: null };
+      }
+    } else if (character === "," && splitTopLevel && delimiters.length === 0) {
+      segments.push(segment.trim());
+      segment = "";
+      project(character);
       index += 1;
       continue;
     }
-    if (character === '"') {
-      segment += character;
-      string = true;
-      continue;
-    }
-    if (character === "'") {
-      const closing = characterLiteralClosing(body, index);
-      if (closing >= 0) {
-        segment += body.slice(index, closing + 1);
-        index = closing;
-        continue;
-      }
-    }
-    if (character === "(") round += 1;
-    else if (character === ")") {
-      if (round === 0) valid = false;
-      else round -= 1;
-    } else if (character === "[") square += 1;
-    else if (character === "]") {
-      if (square === 0) valid = false;
-      else square -= 1;
-    } else if (character === "{") curly += 1;
-    else if (character === "}") {
-      if (curly === 0) valid = false;
-      else curly -= 1;
-    } else if (character === "," && round === 0 && square === 0 && curly === 0) {
-      segments.push(segment.trim());
-      segment = "";
-      continue;
-    }
-    segment += character;
+    append(character);
+    project(character);
+    index += 1;
   }
-  if (string || rawClosing !== null || blockComment > 0 || round !== 0 || square !== 0 || curly !== 0) {
-    valid = false;
-  }
+
+  if (rootDelimiter !== null) return invalid(`unterminated root delimiter ${rootDelimiter}`);
+  if (delimiters.length > 0) return invalid(`unterminated delimiter ${delimiters.at(-1)}`);
   const tail = segment.trim();
   if (tail) segments.push(tail);
-  return { segments, valid };
+  return { valid: true, closing: -1, segments, projection, error: null };
+}
+
+function topLevelSegments(body) {
+  return scanRustSyntax(body, { splitTopLevel: true });
 }
 
 function serdeAttributes(attributes) {
@@ -403,13 +416,20 @@ function parseEnum(attributes, body) {
 function parseItems(source, file) {
   const structs = [];
   const enums = [];
+  const projected = scanRustSyntax(source, { projectCode: true });
+  if (!projected.valid) {
+    throw new Error(`cannot scan Rust source ${file}: ${projected.error}`);
+  }
   ITEM.lastIndex = 0;
   let match;
-  while ((match = ITEM.exec(source)) !== null) {
+  while ((match = ITEM.exec(projected.projection)) !== null) {
     const opening = ITEM.lastIndex - 1;
-    const closing = closingBrace(source, opening);
-    if (closing < 0) break;
-    const attributes = match[1];
+    const scan = scanRustSyntax(source, { start: opening, rootDelimiter: "{" });
+    if (!scan.valid) {
+      throw new Error(`cannot scan Rust item body ${file}::${match[3]}: ${scan.error}`);
+    }
+    const closing = scan.closing;
+    const attributes = source.slice(match.index, match.index + match[1].length);
     const body = source.slice(opening + 1, closing);
     if (match[2] === "struct") {
       const serde = serdeAttributes(attributes);

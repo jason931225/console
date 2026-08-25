@@ -71,6 +71,61 @@ function liveSourceFixture() {
   return root;
 }
 
+function liveCycleKindBoundaryFixture(discriminant) {
+  const root = liveSourceFixture();
+  const rustPath = join(root, "backend/crates/evaluation/domain/src/lib.rs");
+  const rustSource = readFileSync(rustPath, "utf8");
+  const discriminatedRust = rustSource.replace(
+    "    Regular,\n    Probation,",
+    `    Regular = ${discriminant} as isize,\n    Probation,`,
+  );
+  assert.notEqual(discriminatedRust, rustSource, "CycleKind fixture no longer matches the reviewed source");
+  writeFileSync(rustPath, discriminatedRust);
+
+  const openapiPath = join(root, "backend/openapi/openapi.yaml");
+  const openapi = readFileSync(openapiPath, "utf8");
+  const narrowedOpenapi = openapi.replace(
+    "    EvaluationCycleKind:\n      type: string\n      enum: [REGULAR, PROBATION]",
+    "    EvaluationCycleKind:\n      type: string\n      enum: [REGULAR]",
+  );
+  assert.notEqual(narrowedOpenapi, openapi, "EvaluationCycleKind fixture no longer matches OpenAPI");
+  writeFileSync(openapiPath, narrowedOpenapi);
+  return root;
+}
+
+function assertLiveCycleKindProbationFinding(root) {
+  const report = evaluateRequestBodyContract({ repoRoot: root });
+
+  assert.deepEqual(
+    {
+      population: report.population,
+      resolved: report.resolved,
+      skipped: report.skipped,
+      enumCandidates: report.enumCandidates,
+      enumResolved: report.enumResolved,
+      enumSkipped: report.enumSkipped,
+    },
+    {
+      population: 291,
+      resolved: 53,
+      skipped: 238,
+      enumCandidates: 22,
+      enumResolved: 7,
+      enumSkipped: 15,
+    },
+  );
+  assert.deepEqual(report.registerFindings, []);
+  assert.deepEqual(report.findings, [{
+    operation: "POST /api/v1/evaluation/cycles",
+    message: 'Rust-only enum variant "PROBATION" for kind',
+  }]);
+
+  const result = spawnSync(process.execPath, [cli, root], { encoding: "utf8" });
+
+  assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+  assert.match(result.stderr, /Rust-only enum variant "PROBATION" for kind/);
+}
+
 // Both wrapped-const and multi-method route forms, because both appear in the real surface and
 // both have already broken a resolver silently.
 function widgetCrate({ derive, fields }) {
@@ -799,6 +854,120 @@ describe("request body enum-variant contract", () => {
     assert.match(result.stderr, /Rust-only enum variant "PROBATION" for kind/);
   });
 
+  it("does not let a char literal close an outer Rust enum body", () => {
+    assertLiveCycleKindProbationFinding(liveCycleKindBoundaryFixture("'}'"));
+  });
+
+  it("does not let a byte-char literal close an outer Rust enum body", () => {
+    assertLiveCycleKindProbationFinding(liveCycleKindBoundaryFixture("b'}'"));
+  });
+
+  it("keeps the outer enum boundary across every supported Rust lexical form", () => {
+    const bodies = [
+      ["line, doc, and nested block comments", `
+    /// docs containing a closing brace } and comma,
+    FastMode = 0, // a closing brace } stays inside the comment
+    /** docs containing } /* and a nested } comment */ still docs */
+    SafeMode,
+`],
+      ["cooked and byte strings with escapes", `
+    FastMode = {
+        const COOKED: &str = "\\\" } // comma, /* block */";
+        const BYTES: &[u8] = b"\\\" } // comma, /* block */";
+        let _ = (COOKED, BYTES);
+        0
+    },
+    SafeMode,
+`],
+      ["raw and raw byte strings", `
+    FastMode = {
+        const RAW: &str = r##"quote " then } and "# still raw"##;
+        const RAW_BYTES: &[u8] = br##"quote " then } and "# still raw"##;
+        let _ = (RAW, RAW_BYTES);
+        0
+    },
+    SafeMode,
+`],
+      ["escaped characters and nested delimiters", `
+    FastMode = {
+        const CLOSE: char = '\\u{7d}';
+        const BYTE_CLOSE: u8 = b'\\x7d';
+        let _ = ([{ (CLOSE, BYTE_CLOSE) }],);
+        0
+    },
+    SafeMode,
+`],
+    ];
+
+    for (const [label, body] of bodies) {
+      const report = evaluateRequestBodyContract({
+        repoRoot: enumFixture({
+          enumSource: `#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+${body}}
+`,
+          property: "{ type: string, enum: [fast_mode] }",
+        }),
+      });
+
+      assert.equal(report.enumResolved, 1, label);
+      assert.deepEqual(report.findings, [{
+        operation: widgetOperation,
+        message: 'Rust-only enum variant "safe_mode" for mode',
+      }], label);
+    }
+  });
+
+  it("does not discover enum items fabricated inside comments or literals", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        enumSource: `const COOKED_FAKE: &str = "pub enum WidgetMode { Phantom, }";
+const RAW_FAKE: &str = r##"pub enum WidgetMode { Phantom = '}', }"##;
+/* pub enum WidgetMode { Phantom, } */
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WidgetMode {
+    FastMode,
+    SafeMode,
+}
+`,
+        property: "{ type: string, enum: [fast_mode] }",
+      }),
+    });
+
+    assert.equal(report.enumResolved, 1);
+    assert.deepEqual(report.findings, [{
+      operation: widgetOperation,
+      message: 'Rust-only enum variant "safe_mode" for mode',
+    }]);
+  });
+
+  it("fails closed on lexically invalid or unbalanced Rust item bodies", () => {
+    const invalidEnums = [
+      ["unterminated block comment", `#[derive(Deserialize)]
+enum WidgetMode { FastMode, /* never closed
+`],
+      ["unterminated cooked string", `#[derive(Deserialize)]
+enum WidgetMode { FastMode = "never closed, SafeMode }
+`],
+      ["mismatched nested delimiter", `#[derive(Deserialize)]
+enum WidgetMode { FastMode = (0], SafeMode }
+`],
+      ["unterminated character literal", `#[derive(Deserialize)]
+enum WidgetMode { FastMode = '} as isize, SafeMode }
+`],
+    ];
+
+    for (const [label, enumSource] of invalidEnums) {
+      assert.throws(
+        () => evaluateRequestBodyContract({ repoRoot: enumFixture({ enumSource }) }),
+        /cannot scan Rust source/,
+        label,
+      );
+    }
+  });
+
   it("keeps variants visible across line, doc, comma-bearing, and nested block comments", () => {
     const bodies = [
       ["line comment after comma", "    FastMode, // comma, /* text */\n    SafeMode,"],
@@ -880,7 +1049,7 @@ enum WidgetMode {
 #[serde(rename_all = "snake_case")]
 enum WidgetMode {
     FastMode,
-    #[doc = "], // comma, /* block */"]
+    #[doc = r##"quote " then ], } and "# still raw"##]
     SafeMode,
 }
 `,
