@@ -91,8 +91,13 @@ function compactRustFunction(source, name) {
   return "";
 }
 
+function normalizeRustRawIdentifiers(source) {
+  return source.replace(/\br#([A-Za-z_][A-Za-z0-9_]*)\b/g, "$1");
+}
+
 function hasWorkflowApprovalLifecycle(source) {
   const body = compactRustFunction(source, "approve_next");
+  const normalizedBody = normalizeRustRawIdentifiers(body);
   const roleSelection = "letrole=self.approval_line.next_pending_non_mechanic_role()";
   const approvalClone = "letmutnext_line=self.approval_line.clone();";
   const approval = "next_line.approve(role,actor_id,at)?;";
@@ -118,7 +123,7 @@ function hasWorkflowApprovalLifecycle(source) {
     guardedTransition,
     approvalCommit,
   ];
-  const hasPresenceAffectingCfg = /#!?\[cfg(?:_attr)?\(/.test(body);
+  const hasPresenceAffectingCfg = /#!?\[cfg(?:_attr)?\(/.test(normalizedBody);
   const criticalAnchorsAreUnique = orderedPredicates.every(
     (predicate) => body.split(predicate).length === 2,
   );

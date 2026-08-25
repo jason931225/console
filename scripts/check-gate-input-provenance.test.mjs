@@ -493,6 +493,76 @@ test("G005 workflow and scoped approval-feed controls come from executable sourc
     );
     writeFileSync(workflowPath, originalWorkflow);
 
+    const workflowRawCfgDecoyText = workflowText.replace(
+      workflowOrderAnchor,
+      [
+        "        #[r#cfg(any())]",
+        "        let transition = self.apply_transition(to, at, context)?;",
+        "        self.approval_line = next_line;",
+        "        let transition: Transition<WorkOrderStatus> =",
+        "            self.apply_transition(to, at, context)?;",
+      ].join("\n"),
+    );
+    const workflowTypedApplyAnchor = [
+      "        let transition: Transition<WorkOrderStatus> =",
+      "            self.apply_transition(to, at, context)?;",
+    ].join("\n");
+    assert.equal(
+      workflowRawCfgDecoyText.split("        #[r#cfg(any())]").length - 1,
+      1,
+      "G005-ADV-05 fixture must carry exactly one raw cfg attribute on the canonical guarded apply",
+    );
+    assert.equal(
+      workflowRawCfgDecoyText.split(workflowAnchor).length - 1,
+      1,
+      "G005-ADV-05 fixture must retain exactly one canonical guarded-apply token sequence",
+    );
+    assert.equal(
+      workflowRawCfgDecoyText.split(workflowTypedApplyAnchor).length - 1,
+      1,
+      "G005-ADV-05 fixture must retain exactly one real compiled type-annotated guarded apply",
+    );
+    writeFileSync(workflowPath, workflowRawCfgDecoyText);
+    const workflowRawCfgDecoyMutation = runG005();
+    const workflowRawCfgDecoyOutput = `${workflowRawCfgDecoyMutation.stdout}\n${workflowRawCfgDecoyMutation.stderr}`;
+    assert.equal(
+      workflowRawCfgDecoyMutation.status,
+      1,
+      `G005-ADV-05 must normalize and reject raw cfg evidence while the compiled approval commit precedes the real guarded transition\n${workflowRawCfgDecoyOutput}`,
+    );
+    assert.ok(
+      workflowRawCfgDecoyOutput.includes(
+        "G005 executable workflow/approval lifecycle must preserve ordered approval and guarded transition application",
+      ),
+      workflowRawCfgDecoyOutput,
+    );
+    writeFileSync(workflowPath, originalWorkflow);
+
+    writeFileSync(
+      workflowPath,
+      workflowText.replace(
+        workflowCfgAttrAnchor,
+        [
+          "            #[r#cfg_attr(any(), cfg(any()))]",
+          workflowCfgAttrAnchor,
+        ].join("\n"),
+      ),
+    );
+    const workflowRawCfgAttrMutation = runG005();
+    const workflowRawCfgAttrOutput = `${workflowRawCfgAttrMutation.stdout}\n${workflowRawCfgAttrMutation.stderr}`;
+    assert.equal(
+      workflowRawCfgAttrMutation.status,
+      1,
+      `G005-ADV-06 must normalize and reject raw cfg_attr presence control within bounded lifecycle evidence\n${workflowRawCfgAttrOutput}`,
+    );
+    assert.ok(
+      workflowRawCfgAttrOutput.includes(
+        "G005 executable workflow/approval lifecycle must preserve ordered approval and guarded transition application",
+      ),
+      workflowRawCfgAttrOutput,
+    );
+    writeFileSync(workflowPath, originalWorkflow);
+
     const approvalFeedText = originalApprovalFeed.toString("utf8");
     const approvalFeedAnchor =
       "    let visibility = approval_source_visibility(&principal)?;";
