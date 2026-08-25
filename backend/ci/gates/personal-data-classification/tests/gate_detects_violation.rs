@@ -728,6 +728,95 @@ fn gate_rejects_a_body_that_adds_a_column() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
+/// Every comma-separated action in an opaque `ALTER TABLE` must be proven
+/// column-neutral. A neutral first action cannot buy a pass for a later column
+/// mutation, while a body made entirely of the existing neutral vocabulary
+/// must remain accepted.
+#[test]
+fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
+-> Result<(), Box<dyn std::error::Error>> {
+    let hostile_actions = [
+        (
+            "later-add-column",
+            "ENABLE ROW LEVEL SECURITY, ADD COLUMN medical_certificate_no TEXT",
+        ),
+        (
+            "later-drop-column",
+            "ENABLE ROW LEVEL SECURITY, DROP COLUMN id",
+        ),
+        (
+            "later-implicit-add",
+            "ENABLE ROW LEVEL SECURITY, ADD medical_certificate_no TEXT",
+        ),
+        (
+            "later-rename",
+            "ENABLE ROW LEVEL SECURITY, RENAME COLUMN id TO staff_id",
+        ),
+        (
+            "later-unknown",
+            "ENABLE ROW LEVEL SECURITY, ATTACH PARTITION staff_archive",
+        ),
+        (
+            "later-malformed",
+            "ENABLE ROW LEVEL SECURITY, , FORCE ROW LEVEL SECURITY",
+        ),
+    ];
+
+    for (name, actions) in hostile_actions {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $$ BEGIN
+                     EXECUTE format('ALTER TABLE %I {actions}', 'staff');
+                 END $$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "opaque multi-action ALTER '{name}' must fail when any action can change columns; \
+             got a pass"
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("dollar-quoted body builds `alter table`")),
+            "'{name}' must be UnsupportedDdl naming the opaque ALTER, got {:#?}",
+            result.violations
+        );
+    }
+
+    let neutral_actions = [
+        "ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY",
+        "ADD CONSTRAINT staff_id_check CHECK (id IS NOT NULL), \
+         VALIDATE CONSTRAINT staff_id_check, DROP CONSTRAINT staff_id_check",
+        "ALTER COLUMN id SET NOT NULL, OWNER TO console_app",
+    ];
+    for (index, actions) in neutral_actions.into_iter().enumerate() {
+        let dir = tree(
+            &format!("opaque-neutral-multi-action-{index}"),
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $$ BEGIN
+                     EXECUTE format('ALTER TABLE %I {actions}', 'staff');
+                 END $$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            result.passed(),
+            "opaque ALTER containing only existing neutral actions must pass, got {:#?}",
+            result.violations
+        );
+    }
+    Ok(())
+}
+
 /// THE INVERSION ITSELF.
 ///
 /// Round 2 made unparseable mean FAIL by enumerating the constructs known to

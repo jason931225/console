@@ -2,14 +2,15 @@
 //!
 //! The other is `every_application_column_is_classified_or_its_table_is_declared`
 //! in `backend/crates/platform/db/tests/personal_data_classification.rs`.
-//! THIS GATE IS DEFENCE IN DEPTH, AND IS NOT BEING HARDENED FURTHER. Six rounds
-//! of hardening its parser each closed one spelling and each was followed by
-//! another, so the owner's decision was to change what the OTHER check needs
-//! instead. Its baseline used to pin a per-table unclassified COUNT, and a count
-//! is payable: every one of those criticals needed two things at once — a
-//! spelling this parser misreads, AND a compensating classification in the same
-//! migration that left the count where it was. That baseline is now the SET of
-//! unclassified column NAMES, which has nothing to trade with.
+//! THIS GATE IS DEFENCE IN DEPTH. Six rounds of hardening its parser each closed
+//! one spelling and each was followed by another, so the other check no longer
+//! depends on this parser being complete. Its baseline used to pin a per-table
+//! unclassified COUNT, and a count is payable: every one of those criticals
+//! needed two things at once — a spelling this parser misreads, AND a
+//! compensating classification in the same migration that left the count where
+//! it was. That baseline is now the SET of unclassified column NAMES, which has
+//! nothing to trade with. Bounded, measured parser corrections still strengthen
+//! the earlier write-time edge without replacing that independent control.
 //!
 //! What follows from that, stated as narrowly as the measurement supports: for
 //! ANY RELATION THE CATALOG SWEEP READS, a blind spot in this parser no longer
@@ -37,10 +38,10 @@
 //! are in it, not by syntax.
 //!
 //! WHERE THIS GATE IS BLIND — constructs it reads WRONG, so it prints PASSED on
-//! a column that is really unclassified. This list is a RESIDUAL REGISTER now,
-//! not a work queue: a new entry gets written down and left alone. The first two
-//! and the last two were planted as migrations and confirmed by execution; the
-//! middle two are read from this file's own code, not planted:
+//! a column that is really unclassified. This list is a RESIDUAL REGISTER, not
+//! standing authority to widen a correction. The schema, quoted-identifier and
+//! concatenation cases were planted as migrations and confirmed by execution;
+//! the other two are read from this file's own code, not planted:
 //!
 //! * **Schema qualification is discarded.** `read_qualified_name` keeps only
 //!   the last component, so `shadow.employees` registers as `employees` and
@@ -66,18 +67,20 @@
 //!   against the SET baseline: gate EXIT=0, **catalog EXIT=101**, naming
 //!   `medical_certificate_no` as landed and `reason` as no longer unclassified.
 //!   This parser still cannot reach it; it no longer needs to.
-//! * **A multi-action `ALTER TABLE` is judged from its FIRST action.**
-//!   `alter_action_is_column_neutral` (see `apply_statement`) reads one action
-//!   and rules on the whole statement, so this repository's house idiom —
-//!   `EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY, ADD COLUMN
-//!   medical_certificate_no TEXT', 'leave_requests')`, the shape used in 25
-//!   migrations, with one comma appended — is read as column-neutral. Nothing is
-//!   concatenated and every keyword is spelled whole. Under the count baseline it
-//!   measured gate EXIT=0, catalog EXIT=0, `3268 / 668 / 2600` against a clean
-//!   `3267 / 667 / 2600`, with all 243 pins unmoved and the column confirmed live
-//!   in `pg_attribute`. It was the sixth consecutive round's critical and the
-//!   reason the count became a set. Replanted against the SET baseline: gate
-//!   EXIT=0, **catalog EXIT=101**, both halves named.
+//!
+//! WHAT THIS CORRECTION CLOSES. A multi-action `ALTER TABLE` used to be judged
+//! from its FIRST action. `alter_action_is_column_neutral` read one action and
+//! ruled on the whole statement, so this repository's house idiom —
+//! `EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY, ADD COLUMN
+//! medical_certificate_no TEXT', 'leave_requests')`, the shape used in 25
+//! migrations, with one comma appended — was read as column-neutral. Nothing
+//! was concatenated and every keyword was spelled whole. Under the count
+//! baseline it measured gate EXIT=0, catalog EXIT=0, `3268 / 668 / 2600`
+//! against a clean `3267 / 667 / 2600`, with all 243 pins unmoved and the column
+//! confirmed live in `pg_attribute`. Replanted against the SET baseline, the
+//! gate still exited 0 while the catalog exited 101 and named both halves. The
+//! quoted SQL fragment is now lexed without discarding its commas, and every
+//! top-level action must independently match the neutral allow-list.
 //!
 //! WHAT THE QUOTED-BODY SCAN COVERS. `DO 'BEGIN CREATE TABLE … ; END'` used to
 //! be on the list above: the scan ran on `Tok::Body` alone, so a single-quoted
@@ -993,7 +996,7 @@ fn select_into_target(statement: &[Tok]) -> Option<String> {
 /// written, and a gate that demands a waiver for the house idiom is a gate
 /// someone eventually deletes.
 ///
-/// ponytail: word-window scan, not a plpgsql parse. Known ceiling — a body that
+/// ponytail: token/word-window scan, not a plpgsql parse. Known ceiling — a body that
 /// assembles the keyword from fragments (`'CREA' || 'TE TABLE'`,
 /// `'ALTER TA' || 'BLE …'`), or one whose action verb sits more than three words
 /// past `TABLE`, is not read correctly; the second case errs closed. The first
@@ -1003,11 +1006,34 @@ fn select_into_target(statement: &[Tok]) -> Option<String> {
 /// is the residual this code has. The upgrade path is a real plpgsql parser,
 /// which nothing here justifies.
 fn body_builds_table_ddl(body: &str) -> Option<String> {
-    let words: Vec<&str> = body
-        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        .filter(|word| !word.is_empty())
+    let tokens = lex(body);
+    for statement in statements(&tokens) {
+        if let Some(construct) = token_stream_builds_table_ddl(statement) {
+            return Some(construct);
+        }
+    }
+    // DDL assembled by `EXECUTE format('ALTER TABLE …', ...)` lives in a
+    // string token inside the opaque body. Scan each complete literal on its
+    // own so its comma/action boundaries survive, while deliberately not
+    // joining adjacent literals (the registered concatenation-split ceiling).
+    tokens.iter().find_map(|token| match token {
+        Tok::Str(fragment) => {
+            let fragment_tokens = lex(fragment);
+            statements(&fragment_tokens)
+                .into_iter()
+                .find_map(token_stream_builds_table_ddl)
+        }
+        _ => None,
+    })
+}
+
+fn token_stream_builds_table_ddl(tokens: &[Tok]) -> Option<String> {
+    let words: Vec<(usize, &str)> = tokens
+        .iter()
+        .enumerate()
+        .filter_map(|(index, token)| token.word().map(|word| (index, word)))
         .collect();
-    for (index, word) in words.iter().enumerate() {
+    for (index, (_, word)) in words.iter().enumerate() {
         let creates = word.eq_ignore_ascii_case("create");
         if !creates && !word.eq_ignore_ascii_case("alter") {
             continue;
@@ -1017,58 +1043,85 @@ fn body_builds_table_ddl(body: &str) -> Option<String> {
         let window_end = index.saturating_add(4).min(words.len());
         let Some(offset) = words[index + 1..window_end]
             .iter()
-            .position(|word| word.eq_ignore_ascii_case("table"))
+            .position(|(_, word)| word.eq_ignore_ascii_case("table"))
         else {
             continue;
         };
-        let phrase = words[index..=index + 1 + offset].join(" ").to_lowercase();
+        let table_word = index + 1 + offset;
+        let phrase = words[index..=table_word]
+            .iter()
+            .map(|(_, word)| *word)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
         // Any `CREATE … TABLE` makes a relation whose name this parser never
         // learns — 0005 computes a partition name per day.
-        if creates || !alter_action_is_column_neutral(&words[index + 2 + offset..]) {
+        if creates || !opaque_alter_actions_are_column_neutral(&tokens[words[table_word].0 + 1..]) {
             return Some(phrase);
         }
     }
     None
 }
 
-/// `words` begins just past `ALTER … TABLE`. The table name is one to three
-/// words (`%I`, `foo`, `public.foo` after splitting), so the action verb is
-/// searched for rather than assumed to sit first.
-///
-/// ponytail: FIRST ACTION ONLY, and that is a registered residual, not a TODO.
-/// `ALTER TABLE t ENABLE ROW LEVEL SECURITY, ADD COLUMN c TEXT` returns `true`
-/// off `ENABLE` and the `ADD COLUMN` is never read — the house idiom in 25
-/// migrations with one comma appended, measured passing this gate over a live
-/// column. It is the sixth bullet in the crate doc's blind-spot register. It is
-/// deliberately NOT fixed here: six rounds of closing one spelling each produced
-/// a seventh, and the catalog assertion's baseline is a SET of column names now,
-/// so this misreading no longer composes into a silent live column for any
-/// relation that sweep reads. Upgrade path, if one is ever justified: a real
-/// plpgsql/DDL parse, not another word window.
-fn alter_action_is_column_neutral(words: &[&str]) -> bool {
-    for (index, word) in words.iter().take(3).enumerate() {
-        if COLUMN_NEUTRAL_ALTER_ACTIONS
-            .iter()
-            .any(|action| word.eq_ignore_ascii_case(action))
-        {
-            return true;
-        }
-        // `ADD`/`DROP CONSTRAINT` is neutral, `ADD`/`DROP COLUMN` is not, and a
-        // bare `ADD colname TYPE` is the implicit column form: the same
-        // distinction `apply_alter_table` draws on parsed SQL, drawn here on
-        // text.
-        if word.eq_ignore_ascii_case("add") || word.eq_ignore_ascii_case("drop") {
-            return words.get(index + 1).is_some_and(|next| {
-                CONSTRAINT_HEADS
-                    .iter()
-                    .any(|head| next.eq_ignore_ascii_case(head))
-            });
-        }
-        if word.eq_ignore_ascii_case("rename") {
-            return false;
+/// `tokens` begins just past `ALTER … TABLE`. The table name is one to three
+/// words (`%I`, `foo`, `public.foo` after lexing), so the action verb is searched
+/// for rather than assumed to sit first. Once found, every top-level
+/// comma-separated action must independently match the neutral allow-list.
+fn opaque_alter_actions_are_column_neutral(tokens: &[Tok]) -> bool {
+    let action_start = tokens
+        .iter()
+        .enumerate()
+        .filter_map(|(index, token)| token.word().map(|word| (index, word)))
+        .take(3)
+        .find(|(_, word)| {
+            COLUMN_NEUTRAL_ALTER_ACTIONS.contains(word)
+                || matches!(*word, "add" | "drop" | "rename")
+        })
+        .map(|(index, _)| index);
+    let Some(action_start) = action_start else {
+        return false;
+    };
+    let action_tokens = &tokens[action_start..];
+    let Some(expected_actions) = top_level_action_count(action_tokens) else {
+        return false;
+    };
+    let actions = split_top_level_commas(action_tokens);
+    actions.len() == expected_actions && actions.into_iter().all(alter_action_is_column_neutral)
+}
+
+fn top_level_action_count(tokens: &[Tok]) -> Option<usize> {
+    if tokens.is_empty() {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut commas = 0usize;
+    for token in tokens {
+        if token.is_punct('(') {
+            depth += 1;
+        } else if token.is_punct(')') {
+            depth = depth.checked_sub(1)?;
+        } else if token.is_punct(',') && depth == 0 {
+            commas += 1;
         }
     }
-    false
+    (depth == 0).then_some(commas + 1)
+}
+
+fn alter_action_is_column_neutral(action: &[Tok]) -> bool {
+    let mut words = action.iter().filter_map(Tok::word);
+    let Some(head) = words.next() else {
+        return false;
+    };
+    if COLUMN_NEUTRAL_ALTER_ACTIONS.contains(&head) {
+        return true;
+    }
+    // `ADD`/`DROP CONSTRAINT` is neutral, `ADD`/`DROP COLUMN` is not, and a
+    // bare `ADD colname TYPE` is the implicit column form: the same distinction
+    // `apply_alter_table` draws on parsed SQL, drawn here on opaque text.
+    matches!(head, "add" | "drop")
+        && words
+            .next()
+            .is_some_and(|next| CONSTRAINT_HEADS.contains(&next))
 }
 
 /// Consume `[IF NOT EXISTS]` / `[IF EXISTS]` and return the index of the name.
