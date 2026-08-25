@@ -392,7 +392,7 @@ async fn draft_legacy_org_proposal(
     });
     let (detail, replayed) = s
         .store
-        .create(
+        .create_legacy_org_setup_proposal(
             actor,
             CreateOrgChange {
                 kind,

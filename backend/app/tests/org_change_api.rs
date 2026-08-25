@@ -144,7 +144,7 @@ async fn assert_legacy_org_setup_mutations_create_governed_drafts_without_direct
         "POST",
         "/api/v1/branches",
         &admin_token,
-        Some(branch_body),
+        Some(branch_body.clone()),
         Some(branch_key),
     )
     .await;
@@ -171,6 +171,21 @@ async fn assert_legacy_org_setup_mutations_create_governed_drafts_without_direct
         renamed_region["proposal"][0]["regionId"],
         parent_region.to_string()
     );
+    let (status, mismatched_region) = send(
+        rt,
+        keys,
+        "PATCH",
+        &format!("/api/v1/regions/{parent_region}"),
+        &admin_token,
+        Some(json!({"name": "legacy-proposal-different-name"})),
+        Some("legacy-region-rename-0001"),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "PATCH idempotency mismatch: {mismatched_region}"
+    );
     let applied_region_name: String = sqlx::query_scalar("SELECT name FROM regions WHERE id = $1")
         .bind(parent_region)
         .fetch_one(pool)
@@ -194,6 +209,21 @@ async fn assert_legacy_org_setup_mutations_create_governed_drafts_without_direct
         "region deactivate: {deactivated_region}"
     );
     assert_eq!(deactivated_region["proposal"][0]["op"], "DEACTIVATE_REGION");
+    let (status, missing_region_key) = send(
+        rt,
+        keys,
+        "DELETE",
+        &format!("/api/v1/regions/{parent_region}"),
+        &admin_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "region DELETE requires Idempotency-Key: {missing_region_key}"
+    );
     let applied_region_deactivated_at: Option<OffsetDateTime> =
         sqlx::query_scalar("SELECT deactivated_at FROM regions WHERE id = $1")
             .bind(parent_region)
@@ -245,6 +275,21 @@ async fn assert_legacy_org_setup_mutations_create_governed_drafts_without_direct
         "branch deactivate: {deactivated_branch}"
     );
     assert_eq!(deactivated_branch["proposal"][0]["op"], "DEACTIVATE_BRANCH");
+    let (status, missing_branch_key) = send(
+        rt,
+        keys,
+        "DELETE",
+        &format!("/api/v1/branches/{admin_branch}"),
+        &admin_token,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "branch DELETE requires Idempotency-Key: {missing_branch_key}"
+    );
     let applied_branch_deactivated_at: Option<OffsetDateTime> =
         sqlx::query_scalar("SELECT deactivated_at FROM branches WHERE id = $1")
             .bind(admin_branch)
@@ -261,6 +306,161 @@ async fn assert_legacy_org_setup_mutations_create_governed_drafts_without_direct
         proposals,
         proposals_before + 6,
         "each exact replay must reuse its single draft"
+    );
+
+    // Target-state parity with the removed direct mutators: tenant-hidden or
+    // missing targets are 404, while already-deactivated targets and inactive
+    // branch destinations are 409. None may create a seventh proposal.
+    let super_admin = seed_user(pool, org, "SUPER_ADMIN").await;
+    let super_token = keys.token(super_admin, org, &["SUPER_ADMIN"]);
+    let other_org = seed_org(pool, "legacy-proposal-other").await;
+    let other_region = seed_region(pool, other_org, "legacy-other-region").await;
+    let other_branch = seed_branch(pool, other_org, other_region, "legacy-other-branch").await;
+    let missing_region = Uuid::new_v4();
+    let missing_branch = Uuid::new_v4();
+    let inactive_region = seed_region(pool, org, "legacy-inactive-region").await;
+    let inactive_branch = seed_branch(pool, org, parent_region, "legacy-inactive-branch").await;
+    sqlx::query("UPDATE regions SET deactivated_at = now() WHERE id = $1")
+        .bind(inactive_region)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE branches SET deactivated_at = now() WHERE id = $1")
+        .bind(inactive_branch)
+        .execute(pool)
+        .await
+        .unwrap();
+
+    for (id, label) in [
+        (missing_region, "missing region"),
+        (other_region, "cross-tenant region"),
+    ] {
+        let (status, body) = send(
+            rt,
+            keys,
+            "PATCH",
+            &format!("/api/v1/regions/{id}"),
+            &super_token,
+            Some(json!({"name": "must-not-draft"})),
+            Some(&format!("legacy-invalid-region-{id}")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{label}: {body}");
+        let (status, body) = send(
+            rt,
+            keys,
+            "DELETE",
+            &format!("/api/v1/regions/{id}"),
+            &super_token,
+            None,
+            Some(&format!("legacy-invalid-region-delete-{id}")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{label} delete: {body}");
+    }
+    let (status, body) = send(
+        rt,
+        keys,
+        "DELETE",
+        &format!("/api/v1/regions/{inactive_region}"),
+        &super_token,
+        None,
+        Some("legacy-inactive-region-0001"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "inactive region: {body}");
+
+    for (region_id, expected, label) in [
+        (missing_region, StatusCode::NOT_FOUND, "missing destination"),
+        (
+            other_region,
+            StatusCode::NOT_FOUND,
+            "cross-tenant destination",
+        ),
+        (
+            inactive_region,
+            StatusCode::CONFLICT,
+            "inactive destination",
+        ),
+    ] {
+        let (status, body) = send(
+            rt,
+            keys,
+            "POST",
+            "/api/v1/branches",
+            &super_token,
+            Some(json!({"region_id": region_id, "name": "must-not-draft"})),
+            Some(&format!("legacy-invalid-branch-region-{region_id}")),
+        )
+        .await;
+        assert_eq!(status, expected, "{label}: {body}");
+    }
+
+    for (branch_id, expected, label) in [
+        (missing_branch, StatusCode::NOT_FOUND, "missing branch"),
+        (other_branch, StatusCode::NOT_FOUND, "cross-tenant branch"),
+        (inactive_branch, StatusCode::CONFLICT, "inactive branch"),
+    ] {
+        let (status, body) = send(
+            rt,
+            keys,
+            "DELETE",
+            &format!("/api/v1/branches/{branch_id}"),
+            &super_token,
+            None,
+            Some(&format!("legacy-invalid-branch-{branch_id}")),
+        )
+        .await;
+        assert_eq!(status, expected, "{label}: {body}");
+    }
+    for (branch_id, label) in [
+        (missing_branch, "missing branch"),
+        (other_branch, "cross-tenant branch"),
+    ] {
+        let (status, body) = send(
+            rt,
+            keys,
+            "PATCH",
+            &format!("/api/v1/branches/{branch_id}"),
+            &super_token,
+            Some(json!({"name": "must-not-draft"})),
+            Some(&format!("legacy-invalid-branch-patch-{branch_id}")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{label} patch: {body}");
+    }
+    for (region_id, expected, label) in [
+        (missing_region, StatusCode::NOT_FOUND, "missing move target"),
+        (
+            other_region,
+            StatusCode::NOT_FOUND,
+            "cross-tenant move target",
+        ),
+        (
+            inactive_region,
+            StatusCode::CONFLICT,
+            "inactive move target",
+        ),
+    ] {
+        let (status, body) = send(
+            rt,
+            keys,
+            "PATCH",
+            &format!("/api/v1/branches/{admin_branch}"),
+            &super_token,
+            Some(json!({"region_id": region_id})),
+            Some(&format!("legacy-invalid-branch-move-{region_id}")),
+        )
+        .await;
+        assert_eq!(status, expected, "{label}: {body}");
+    }
+    let after_invalid_targets: i64 = sqlx::query_scalar("SELECT count(*) FROM org_change_requests")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        after_invalid_targets, proposals,
+        "invalid or tenant-hidden targets must write no draft"
     );
 
     let other_branch = seed_branch(pool, org, parent_region, "legacy-proposal-outside").await;
@@ -301,6 +501,36 @@ async fn assert_legacy_org_setup_mutations_create_governed_drafts_without_direct
         after_denial, proposals,
         "authorization denial must write no draft"
     );
+
+    // Replay lookup precedes live target validation. The original CreateBranch
+    // DRAFT remains replayable after its destination is deactivated, and its
+    // server-owned KST effective date/fingerprint remain the original values.
+    sqlx::query("UPDATE regions SET deactivated_at = now() WHERE id = $1")
+        .bind(parent_region)
+        .execute(pool)
+        .await
+        .unwrap();
+    let (status, replay_after_target_change) = send(
+        rt,
+        keys,
+        "POST",
+        "/api/v1/branches",
+        &admin_token,
+        Some(branch_body),
+        Some(branch_key),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "exact replay must survive later target deactivation: {replay_after_target_change}"
+    );
+    assert_eq!(replay_after_target_change["id"], branch_draft["id"]);
+    let after_late_replay: i64 = sqlx::query_scalar("SELECT count(*) FROM org_change_requests")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(after_late_replay, proposals);
 }
 
 /// Full REORG lifecycle: idempotent create, preflight as a zero-write READ,
