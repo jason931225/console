@@ -790,6 +790,48 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
         );
     }
 
+    let nested_dollar_hostile_actions = [
+        (
+            "nested-dollar-later-add-column",
+            "ENABLE ROW LEVEL SECURITY, ADD COLUMN medical_certificate_no TEXT",
+        ),
+        (
+            "nested-dollar-later-drop-column",
+            "ENABLE ROW LEVEL SECURITY, DROP COLUMN id",
+        ),
+        (
+            "nested-dollar-later-rename",
+            "ENABLE ROW LEVEL SECURITY, RENAME COLUMN id TO staff_id",
+        ),
+    ];
+    for (name, actions) in nested_dollar_hostile_actions {
+        let dir = tree(
+            name,
+            &format!(
+                "CREATE TABLE staff(id UUID PRIMARY KEY);
+                 COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+                 DO $outer$ BEGIN
+                     EXECUTE $ddl$ALTER TABLE staff {actions}$ddl$;
+                 END $outer$;"
+            ),
+        )?;
+        let result = check_tree(&dir, &empty_baseline())?;
+        assert!(
+            !result.passed(),
+            "opaque nested-dollar ALTER '{name}' must fail when any action can change columns; \
+             got a pass"
+        );
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                    && v.detail.contains("dollar-quoted body builds `alter table`")),
+            "'{name}' must be UnsupportedDdl naming the nested opaque ALTER, got {:#?}",
+            result.violations
+        );
+    }
+
     let neutral_actions = [
         "ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY",
         "ADD CONSTRAINT staff_id_check CHECK (id IS NOT NULL), \
@@ -814,6 +856,61 @@ fn gate_rejects_any_non_neutral_action_in_an_opaque_multi_action_alter()
             result.violations
         );
     }
+
+    let nested_dollar_neutral = tree(
+        "opaque-nested-dollar-neutral-multi-action",
+        "CREATE TABLE staff(id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         DO $outer$ BEGIN
+             EXECUTE $ddl$ALTER TABLE staff ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY$ddl$;
+         END $outer$;",
+    )?;
+    let result = check_tree(&nested_dollar_neutral, &empty_baseline())?;
+    assert!(
+        result.passed(),
+        "nested-dollar opaque ALTER containing only existing neutral actions must pass, got \
+         {:#?}",
+        result.violations
+    );
+
+    let adjacent_split = tree(
+        "opaque-adjacent-split-remains-registered",
+        "CREATE TABLE staff(id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         DO $$ BEGIN
+             EXECUTE 'ALTER TA' || 'BLE staff ENABLE ROW LEVEL SECURITY, ADD COLUMN secret TEXT';
+         END $$;",
+    )?;
+    let result = check_tree(&adjacent_split, &empty_baseline())?;
+    assert!(
+        result.passed(),
+        "independently inspected adjacent fragments must not be joined into a claimed fix, got \
+         {:#?}",
+        result.violations
+    );
+
+    let malformed_nested_dollar = tree(
+        "opaque-malformed-nested-dollar",
+        "CREATE TABLE staff(id UUID PRIMARY KEY);
+         COMMENT ON COLUMN staff.id IS 'pd:personal — surrogate key of a person row';
+         DO $outer$ BEGIN
+             EXECUTE $ddl$SELECT 1;
+         END $outer$;",
+    )?;
+    let result = check_tree(&malformed_nested_dollar, &empty_baseline())?;
+    assert!(
+        !result.passed(),
+        "an incomplete nested dollar quote must fail closed instead of ending work early"
+    );
+    assert!(
+        result
+            .violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::UnsupportedDdl
+                && v.detail.contains("cannot be inspected safely")),
+        "the malformed nested quote must be reported as unreadable opaque input, got {:#?}",
+        result.violations
+    );
     Ok(())
 }
 

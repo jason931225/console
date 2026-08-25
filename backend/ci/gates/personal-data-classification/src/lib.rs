@@ -570,8 +570,17 @@ impl Tok {
 /// and drop real ones. It is kept whole as `Tok::Body` instead of discarded,
 /// because a body that is discarded is a body that cannot be refused.
 fn lex(sql: &str) -> Vec<Tok> {
+    lex_with_completeness(sql).0
+}
+
+/// Lex SQL while retaining whether every quoted construct and block comment
+/// closed. Ordinary schema parsing preserves its existing token-only behavior;
+/// opaque-body recursion uses the second value to fail closed instead of
+/// treating a truncated nested fragment as harmless.
+fn lex_with_completeness(sql: &str) -> (Vec<Tok>, bool) {
     let bytes = sql.as_bytes();
     let mut tokens = Vec::new();
+    let mut complete = true;
     let mut i = 0usize;
 
     while i < bytes.len() {
@@ -600,6 +609,9 @@ fn lex(sql: &str) -> Vec<Tok> {
                     i += 1;
                 }
             }
+            if depth > 0 {
+                complete = false;
+            }
             continue;
         }
         // $tag$ … $tag$
@@ -608,10 +620,11 @@ fn lex(sql: &str) -> Vec<Tok> {
         {
             let tag = &sql[i..tag_end];
             let body_start = tag_end;
-            let body_end = match sql[body_start..].find(tag) {
-                Some(offset) => body_start + offset,
-                None => bytes.len(),
+            let (body_end, closed) = match sql[body_start..].find(tag) {
+                Some(offset) => (body_start + offset, true),
+                None => (bytes.len(), false),
             };
+            complete &= closed;
             i = body_end.saturating_add(tag.len()).min(bytes.len());
             tokens.push(Tok::Body(sql[body_start..body_end].to_owned()));
             continue;
@@ -619,6 +632,7 @@ fn lex(sql: &str) -> Vec<Tok> {
         // 'string', with '' as the embedded quote.
         if b == b'\'' {
             let mut body = String::new();
+            let mut closed = false;
             i += 1;
             while i < bytes.len() {
                 if bytes[i] == b'\'' {
@@ -628,6 +642,7 @@ fn lex(sql: &str) -> Vec<Tok> {
                         continue;
                     }
                     i += 1;
+                    closed = true;
                     break;
                 }
                 let ch_start = i;
@@ -638,12 +653,14 @@ fn lex(sql: &str) -> Vec<Tok> {
                 body.push_str(&sql[ch_start..ch_end]);
                 i = ch_end;
             }
+            complete &= closed;
             tokens.push(Tok::Str(body));
             continue;
         }
         // "quoted identifier"
         if b == b'"' {
             let mut body = String::new();
+            let mut closed = false;
             i += 1;
             while i < bytes.len() {
                 if bytes[i] == b'"' {
@@ -653,11 +670,13 @@ fn lex(sql: &str) -> Vec<Tok> {
                         continue;
                     }
                     i += 1;
+                    closed = true;
                     break;
                 }
                 body.push(bytes[i] as char);
                 i += 1;
             }
+            complete &= closed;
             tokens.push(Tok::Word(body.to_ascii_lowercase()));
             continue;
         }
@@ -679,7 +698,7 @@ fn lex(sql: &str) -> Vec<Tok> {
         i += 1;
     }
 
-    tokens
+    (tokens, complete)
 }
 
 /// If a `$` at `start` opens a dollar quote, return the index just past its tag.
@@ -827,20 +846,24 @@ fn apply_statement(statement: &[Tok], file: &Path, schema: &mut Schema) {
     // head, is what makes the two quotings equal; a refusal written per head
     // has to be written again for every head that can carry a body.
     for token in statement {
-        if let Tok::Body(body) | Tok::Str(body) = token
-            && let Some(construct) = body_builds_table_ddl(body)
-        {
-            let quoting = match token {
-                Tok::Body(_) => "dollar-quoted",
-                _ => "single-quoted",
-            };
-            schema.unsupported(
+        let (body, quoting) = match token {
+            Tok::Body(body) => (body, "dollar-quoted"),
+            Tok::Str(body) => (body, "single-quoted"),
+            _ => continue,
+        };
+        match body_builds_table_ddl(body) {
+            Ok(Some(construct)) => schema.unsupported(
                 file,
                 format!(
                     "a {quoting} body builds `{construct}` — DDL inside plpgsql is not read by \
                      this parser, so the columns it creates cannot be proved classified"
                 ),
-            );
+            ),
+            Ok(None) => {}
+            Err(reason) => schema.unsupported(
+                file,
+                format!("a {quoting} body cannot be inspected safely — {reason}"),
+            ),
         }
     }
 
@@ -982,7 +1005,10 @@ fn select_into_target(statement: &[Tok]) -> Option<String> {
 /// is refuse to call a body harmless. The scan runs over the body's whole text,
 /// code and string literals alike, because this repo builds DDL by string —
 /// `EXECUTE format('CREATE TABLE %I …')` — so the DDL is inside a literal and a
-/// scan that skipped literals would see nothing.
+/// scan that skipped literals would see nothing. Every complete single- or
+/// dollar-quoted fragment found inside that body is inspected independently;
+/// adjacent fragments are never joined, preserving the registered
+/// concatenation-split ceiling.
 ///
 /// A leading `DROP … TABLE` is deliberately not flagged. A body that drops a
 /// table leaves the parser believing in a table that is gone, so the gate
@@ -1005,26 +1031,43 @@ fn select_into_target(statement: &[Tok]) -> Option<String> {
 /// `docs/CI-GATES.md` and `unclassified-tables.txt` so the residual stated there
 /// is the residual this code has. The upgrade path is a real plpgsql parser,
 /// which nothing here justifies.
-fn body_builds_table_ddl(body: &str) -> Option<String> {
-    let tokens = lex(body);
-    for statement in statements(&tokens) {
-        if let Some(construct) = token_stream_builds_table_ddl(statement) {
-            return Some(construct);
+///
+/// The explicit worklist avoids recursive stack growth. Every nested item must
+/// be strictly smaller in bytes than its parent, and incomplete lexing or a
+/// non-shrinking item is an error the caller records as unsupported DDL. That
+/// invariant makes termination independent of the fragment contents.
+fn body_builds_table_ddl(body: &str) -> Result<Option<String>, &'static str> {
+    let mut pending = vec![(body.to_owned(), None)];
+    while let Some((fragment, parent_size)) = pending.pop() {
+        if parent_size.is_some_and(|size| fragment.len() >= size) {
+            return Err("a nested quoted fragment did not strictly shrink");
+        }
+
+        let fragment_size = fragment.len();
+        let (tokens, complete) = lex_with_completeness(&fragment);
+        if !complete {
+            return Err("a nested quoted fragment or comment is incomplete");
+        }
+        for statement in statements(&tokens) {
+            if let Some(construct) = token_stream_builds_table_ddl(statement) {
+                return Ok(Some(construct));
+            }
+        }
+
+        // DDL assembled by `EXECUTE format('ALTER TABLE …', ...)` or by a
+        // complete dollar-quoted command fragment lives in an opaque token.
+        // Push in reverse so the worklist still inspects fragments in lexical
+        // order, one at a time, without ever joining neighbors.
+        for token in tokens.into_iter().rev() {
+            if let Tok::Str(nested) | Tok::Body(nested) = token {
+                if nested.len() >= fragment_size {
+                    return Err("a nested quoted fragment did not strictly shrink");
+                }
+                pending.push((nested, Some(fragment_size)));
+            }
         }
     }
-    // DDL assembled by `EXECUTE format('ALTER TABLE …', ...)` lives in a
-    // string token inside the opaque body. Scan each complete literal on its
-    // own so its comma/action boundaries survive, while deliberately not
-    // joining adjacent literals (the registered concatenation-split ceiling).
-    tokens.iter().find_map(|token| match token {
-        Tok::Str(fragment) => {
-            let fragment_tokens = lex(fragment);
-            statements(&fragment_tokens)
-                .into_iter()
-                .find_map(token_stream_builds_table_ddl)
-        }
-        _ => None,
-    })
+    Ok(None)
 }
 
 fn token_stream_builds_table_ddl(tokens: &[Tok]) -> Option<String> {
