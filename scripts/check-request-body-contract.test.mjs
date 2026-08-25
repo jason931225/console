@@ -1240,6 +1240,161 @@ mod modes;
     assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous");
   });
 
+  it("propagates inner cfg_attr uncertainty from a path target with valid rustc configurations", () => {
+    const root = enumFixture({
+      fieldType: "modes::WidgetMode",
+      enumSource: `#[path = "actual.rs"]
+mod modes;
+
+#[cfg(feature = "hostile")]
+macro_rules! hostile_modes {
+    () => {
+        mod modes {
+            #[derive(Debug, Deserialize)]
+            #[serde(rename_all = "snake_case")]
+            pub enum WidgetMode { FastMode, OtherMode }
+        }
+    };
+}
+#[cfg(feature = "hostile")]
+hostile_modes!();
+`,
+      property: "{ type: string, enum: [fast_mode, safe_mode] }",
+    });
+    writeFileSync(join(root, "backend/crates/widget/rest/src/actual.rs"), `#![cfg_attr(feature = "hostile", cfg(not(feature = "hostile")))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetMode { FastMode, SafeMode }
+`);
+
+    const controlRoot = join(root, "rustc-inner-attribute-control");
+    mkdirSync(controlRoot, { recursive: true });
+    writeFileSync(join(controlRoot, "actual.rs"), `#![cfg_attr(feature = "hostile", cfg(not(feature = "hostile")))]
+pub enum WidgetMode { FastMode, SafeMode }
+`);
+    const controlSource = join(controlRoot, "main.rs");
+    writeFileSync(controlSource, `#[path = "actual.rs"]
+mod modes;
+
+#[cfg(feature = "hostile")]
+macro_rules! hostile_modes {
+    () => {
+        mod modes {
+            pub enum WidgetMode { FastMode, OtherMode }
+        }
+    };
+}
+#[cfg(feature = "hostile")]
+hostile_modes!();
+
+fn main() {
+    let _ = modes::WidgetMode::FastMode;
+    #[cfg(not(feature = "hostile"))]
+    let _ = modes::WidgetMode::SafeMode;
+    #[cfg(feature = "hostile")]
+    let _ = modes::WidgetMode::OtherMode;
+}
+`);
+    const compile = (name, cfg = []) => spawnSync("rustc", [
+      "--edition=2021",
+      "--crate-name",
+      `request_body_inner_${name}`,
+      ...cfg,
+      controlSource,
+      "-o",
+      join(controlRoot, name),
+    ], { encoding: "utf8" });
+    const defaultBuild = compile("default");
+    assert.equal(defaultBuild.status, 0, `${defaultBuild.stdout}${defaultBuild.stderr}`);
+    const hostileBuild = compile("hostile", ["--cfg", 'feature="hostile"']);
+    assert.equal(hostileBuild.status, 0, `${hostileBuild.stdout}${hostileBuild.stderr}`);
+
+    const report = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.equal(report.enumResolved, 0, JSON.stringify(report, null, 2));
+    assert.equal(report.enumSkipped, 1);
+    assert.deepEqual(report.findings, []);
+    assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous");
+  });
+
+  it("propagates direct, conditional, duplicate, and conflicting inner cfg attributes", () => {
+    const innerAttributes = [
+      "#![cfg(any())]",
+      '#![cfg_attr(feature = "hostile", cfg(not(feature = "hostile")))]',
+      `#![cfg(any())]
+#![cfg_attr(feature = "hostile", cfg(not(feature = "hostile")))]`,
+    ];
+    for (const innerAttribute of innerAttributes) {
+      const report = evaluateRequestBodyContract({
+        repoRoot: enumFixture({
+          fieldType: "modes::WidgetMode",
+          enumSource: `mod modes {
+    ${innerAttribute}
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, SafeMode }
+}
+`,
+        }),
+      });
+
+      assert.equal(report.enumResolved, 0, innerAttribute);
+      assert.equal(report.enumSkipped, 1, innerAttribute);
+      assert.equal(report.observedRegister.enum[0].reason, "rust_enum_ambiguous", innerAttribute);
+    }
+  });
+
+  it("keeps lint-only inner cfg_attr modules resolvable", () => {
+    const report = evaluateRequestBodyContract({
+      repoRoot: enumFixture({
+        fieldType: "modes::WidgetMode",
+        enumSource: `mod modes {
+    #![cfg_attr(test, allow(dead_code))]
+    const INNER_ATTRIBUTE_DECOY: &str = "#![cfg(any())]";
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, SafeMode }
+}
+`,
+        property: "{ type: string, enum: [fast_mode] }",
+      }),
+    });
+
+    assert.equal(report.enumResolved, 1, JSON.stringify(report, null, 2));
+    assert.deepEqual(report.findings, [{
+      operation: widgetOperation,
+      message: 'Rust-only enum variant "safe_mode" for mode',
+    }]);
+  });
+
+  it("fails closed on malformed or unsupported inner module attributes", () => {
+    const innerAttributes = [
+      "#![request_body_transform]",
+      '#![path = "actual.rs"]',
+      "#![cfg()]",
+      '#![cfg_attr(feature = "hostile")]',
+      '#![cfg_attr(feature = "hostile", path = "actual.rs")]',
+      '#![cfg_attr(feature = "hostile", request_body_transform)]',
+    ];
+    for (const innerAttribute of innerAttributes) {
+      const root = enumFixture({
+        fieldType: "modes::WidgetMode",
+        enumSource: `mod modes {
+    ${innerAttribute}
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WidgetMode { FastMode, SafeMode }
+}
+`,
+      });
+      assert.throws(
+        () => evaluateRequestBodyContract({ repoRoot: root }),
+        /inner (?:cfg|cfg_attr|module) attribute|unsupported inner module attribute/,
+        innerAttribute,
+      );
+    }
+  });
+
   it("fails closed on unknown, duplicate, conflicting, conditional, or malformed path mappings", () => {
     const cases = [
       `#[request_body_transform]

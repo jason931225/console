@@ -472,18 +472,103 @@ function moduleAttributeInfo(attributes, file, moduleName) {
   return { conditional, path };
 }
 
+function validateCfgBody(body, file, moduleName, attributeName) {
+  const parsed = topLevelSegments(body);
+  if (!parsed.valid || parsed.segments.length !== 1 || !parsed.segments[0]?.trim()) {
+    throw new Error(`malformed inner ${attributeName} attribute for ${file}::${moduleName}`);
+  }
+}
+
+function innerCfgAttrConditional(body, file, moduleName) {
+  const parsed = topLevelSegments(body);
+  if (!parsed.valid || parsed.segments.length < 2 || !parsed.segments[0]?.trim()) {
+    throw new Error(`malformed inner cfg_attr attribute for ${file}::${moduleName}`);
+  }
+  let conditional = false;
+  for (const nested of parsed.segments.slice(1)) {
+    const name = nested.match(/^([A-Za-z_][A-Za-z0-9_]*)\b/)?.[1];
+    if (name === "cfg") {
+      const cfg = nested.match(/^cfg\s*\(([\s\S]*)\)$/);
+      if (!cfg) throw new Error(`malformed inner cfg attribute for ${file}::${moduleName}`);
+      validateCfgBody(cfg[1], file, moduleName, "cfg");
+      conditional = true;
+      continue;
+    }
+    if (name === "cfg_attr") {
+      const cfgAttr = nested.match(/^cfg_attr\s*\(([\s\S]*)\)$/);
+      if (!cfgAttr) {
+        throw new Error(`malformed inner cfg_attr attribute for ${file}::${moduleName}`);
+      }
+      conditional = innerCfgAttrConditional(cfgAttr[1], file, moduleName) || conditional;
+      continue;
+    }
+    if (!INERT_MODULE_ATTRIBUTES.has(name)) {
+      throw new Error(`unsupported inner module attribute for ${file}::${moduleName}`);
+    }
+  }
+  return conditional;
+}
+
+function innerModuleAttributeInfo(attributes, file, modulePath) {
+  let conditional = false;
+  const moduleName = modulePath.join("::") || "<crate>";
+  for (const attribute of attributes) {
+    const scanned = scanRustSyntax(attribute, { projectCode: true });
+    if (!scanned.valid) {
+      throw new Error(`cannot scan inner module attribute ${file}::${moduleName}: ${scanned.error}`);
+    }
+    const name = scanned.projection.match(/^#!\[\s*([A-Za-z_][A-Za-z0-9_]*)\b/)?.[1];
+    if (name === "cfg") {
+      const cfg = attribute.match(/^#!\[\s*cfg\s*\(([\s\S]*)\)\s*\]$/);
+      if (!cfg) throw new Error(`malformed inner cfg attribute for ${file}::${moduleName}`);
+      validateCfgBody(cfg[1], file, moduleName, "cfg");
+      conditional = true;
+      continue;
+    }
+    if (name === "cfg_attr") {
+      const cfgAttr = attribute.match(/^#!\[\s*cfg_attr\s*\(([\s\S]*)\)\s*\]$/);
+      if (!cfgAttr) {
+        throw new Error(`malformed inner cfg_attr attribute for ${file}::${moduleName}`);
+      }
+      conditional = innerCfgAttrConditional(cfgAttr[1], file, moduleName) || conditional;
+      continue;
+    }
+    if (!INERT_MODULE_ATTRIBUTES.has(name)) {
+      throw new Error(`unsupported inner module attribute for ${file}::${moduleName}`);
+    }
+  }
+  return { conditional };
+}
+
+function moduleScopeHead(source, projection, start, end, file, modulePath) {
+  let cursor = skipProjectedWhitespace(projection, start);
+  const attributes = [];
+  while (projection.startsWith("#![", cursor)) {
+    const group = scanRustSyntax(projection, { start: cursor + 2, rootDelimiter: "[" });
+    if (!group.valid || group.closing >= end) {
+      throw new Error(
+        `cannot scan Rust inner module attributes ${file}: ${group.error ?? "attribute escapes module"}`,
+      );
+    }
+    attributes.push(source.slice(cursor, group.closing + 1));
+    cursor = skipProjectedWhitespace(projection, group.closing + 1);
+  }
+  return { cursor, ...innerModuleAttributeInfo(attributes, file, modulePath) };
+}
+
 function moduleHead(authored, projection, file, terminator) {
   let cursor = skipProjectedWhitespace(projection, 0);
   const attributes = [];
-  while (projection.startsWith("#[", cursor) || projection.startsWith("#![", cursor)) {
-    const inner = projection.startsWith("#![", cursor);
-    const bracket = cursor + (inner ? 2 : 1);
-    const group = scanRustSyntax(projection, { start: bracket, rootDelimiter: "[" });
+  while (projection.startsWith("#[", cursor)) {
+    const group = scanRustSyntax(projection, { start: cursor + 1, rootDelimiter: "[" });
     if (!group.valid) {
       throw new Error(`cannot scan Rust module attributes ${file}: ${group.error}`);
     }
-    if (!inner) attributes.push(authored.slice(cursor, group.closing + 1));
+    attributes.push(authored.slice(cursor, group.closing + 1));
     cursor = skipProjectedWhitespace(projection, group.closing + 1);
+  }
+  if (projection.startsWith("#![", cursor)) {
+    throw new Error(`inner module attribute outside the start of a scope in ${file}`);
   }
   const ending = terminator === ";" ? ";" : "";
   const declaration = projection.slice(cursor).match(new RegExp(
@@ -518,8 +603,10 @@ function moduleScopes(
     : join(dirname(absoluteFile), fileStem);
   const visit = (start, end, modulePath, conditional, moduleDirectory, insideInline) => {
     const surface = Array(end - start).fill(" ");
-    let itemStart = start;
-    for (let index = start; index < end;) {
+    const scopeHead = moduleScopeHead(source, projection, start, end, file, modulePath);
+    const scopeConditional = conditional || scopeHead.conditional;
+    let itemStart = scopeHead.cursor;
+    for (let index = scopeHead.cursor; index < end;) {
       const character = projection[index];
       if (character === "(" || character === "[" || character === "{") {
         const group = scanRustSyntax(projection, { start: index, rootDelimiter: character });
@@ -545,7 +632,7 @@ function moduleScopes(
               index + 1,
               group.closing,
               [...modulePath, inlineModule.name],
-              conditional || inlineModule.conditional,
+              scopeConditional || inlineModule.conditional,
               childDirectory,
               true,
             );
@@ -569,7 +656,7 @@ function moduleScopes(
           outlined.push({
             ...declaration,
             modulePath,
-            conditional: conditional || declaration.conditional,
+            conditional: scopeConditional || declaration.conditional,
             moduleDirectory,
             pathBase: insideInline ? moduleDirectory : dirname(absoluteFile),
           });
@@ -583,7 +670,7 @@ function moduleScopes(
     USE.lastIndex = 0;
     let useMatch;
     while ((useMatch = USE.exec(joined)) !== null) imports.push(...parseUseTree(useMatch[1]));
-    scopes.push({ start, end, modulePath, surface: joined, imports, conditional });
+    scopes.push({ start, end, modulePath, surface: joined, imports, conditional: scopeConditional });
   };
   visit(0, source.length, rootModulePath, rootConditional, rootModuleDirectory, false);
   return { scopes, outlined };
