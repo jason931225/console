@@ -10,7 +10,8 @@
 //!     required), and a valid step-up confirms + unlocks + is idempotent;
 //!   * ESS 명세서 lives here (`filter=payslip`/`filter=pay`, `kind=payslip`),
 //!     not `/payroll/payslips/me`: a MEMBER sees their own body without
-//!     receipt/passkey, a legal notice is excluded, and another user is omitted.
+//!     receipt/passkey, `filter=payslip` excludes a co-emitted legal notice,
+//!     `filter=all` returns both, and another user is omitted.
 
 use axum::body::{Body, to_bytes};
 use console_inbox_adapter_postgres::PgInboxStore;
@@ -331,6 +332,7 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
         &["MEMBER"],
     );
     let payslip_id = payslip.id.to_string();
+    let legal_id = legal.id.to_string();
 
     // MEMBER A lists 급여명세 via both aliases: own payslip only, never locked.
     for filter in ["payslip", "pay"] {
@@ -350,6 +352,44 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
             items[0].get("payload").is_none(),
             "list is metadata only: {:?}",
             items[0]
+        );
+    }
+
+    // 전체 returns the payslip and the co-emitted legal_notice.
+    let all = get_json(
+        service.clone(),
+        "/api/v1/me/inbox-docs?filter=all",
+        &token_a,
+    )
+    .await;
+    assert_eq!(all.status, StatusCode::OK, "{:?}", all.json);
+    let all_items = all.json["items"].as_array().unwrap();
+    assert_eq!(
+        all_items.len(),
+        2,
+        "filter=all must return payslip and legal_notice: {:?}",
+        all.json
+    );
+    let mut got: Vec<_> = all_items
+        .iter()
+        .map(|item| {
+            (
+                item["id"].as_str().unwrap().to_owned(),
+                item["kind"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    got.sort_unstable();
+    let mut expected = vec![
+        (payslip_id.clone(), "payslip".to_owned()),
+        (legal_id.clone(), "legal_notice".to_owned()),
+    ];
+    expected.sort_unstable();
+    assert_eq!(got, expected, "filter=all: {:?}", all.json);
+    for item in all_items {
+        assert!(
+            item.get("payload").is_none(),
+            "list is metadata only: {item:?}"
         );
     }
 
@@ -375,32 +415,36 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
     );
     assert_eq!(self_read.json["payload"]["net"], json!(3_120_000));
 
-    // B lists empty (deny-by-omission) and cannot read A's payslip.
-    let b_list = get_json(
-        service.clone(),
-        "/api/v1/me/inbox-docs?filter=payslip",
-        &token_b,
-    )
-    .await;
-    assert_eq!(b_list.status, StatusCode::OK, "{:?}", b_list.json);
-    assert_eq!(
-        b_list.json["items"].as_array().unwrap().len(),
-        0,
-        "B must not see A's payslip: {:?}",
-        b_list.json
-    );
-    let cross_read = get_json(
-        service.clone(),
-        &format!("/api/v1/me/inbox-docs/{}", payslip.id),
-        &token_b,
-    )
-    .await;
-    assert_eq!(
-        cross_read.status,
-        StatusCode::NOT_FOUND,
-        "B cannot read A's payslip: {:?}",
-        cross_read.json
-    );
+    // B lists empty (deny-by-omission) and cannot read A's documents.
+    for filter in ["payslip", "all"] {
+        let b_list = get_json(
+            service.clone(),
+            &format!("/api/v1/me/inbox-docs?filter={filter}"),
+            &token_b,
+        )
+        .await;
+        assert_eq!(b_list.status, StatusCode::OK, "{filter}: {:?}", b_list.json);
+        assert_eq!(
+            b_list.json["items"].as_array().unwrap().len(),
+            0,
+            "B must not see A's docs via {filter}: {:?}",
+            b_list.json
+        );
+    }
+    for (label, id) in [("payslip", &payslip_id), ("legal_notice", &legal_id)] {
+        let cross_read = get_json(
+            service.clone(),
+            &format!("/api/v1/me/inbox-docs/{id}"),
+            &token_b,
+        )
+        .await;
+        assert_eq!(
+            cross_read.status,
+            StatusCode::NOT_FOUND,
+            "B cannot read A's {label}: {:?}",
+            cross_read.json
+        );
+    }
 }
 
 fn legal_notice_to(recipient: UserId) -> EmitInboxDocCommand {
