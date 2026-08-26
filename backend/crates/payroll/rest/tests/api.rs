@@ -354,7 +354,7 @@ fn object_keys(value: &Value) -> BTreeSet<&str> {
 }
 
 /// Item keys plus one nested object (or array-of-object) level.
-fn object_keys_one_level<'a>(value: &'a Value) -> BTreeSet<&'a str> {
+fn object_keys_one_level(value: &Value) -> BTreeSet<&str> {
     let mut keys = BTreeSet::new();
     let Some(map) = value.as_object() else {
         return keys;
