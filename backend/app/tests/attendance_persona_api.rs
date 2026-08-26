@@ -1,11 +1,14 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 //! Attendance REST persona contract for payroll-vertical handoff (PR-5 REST).
 //!
-//! CONFIRM is `AttendanceExceptionManage` `[D,D,D,A,D,A]` — built-in ADMIN Allow,
-//! EXECUTIVE Deny. A branch-scoped ADMIN CONFIRM on another branch is 404
-//! (`not_found`, same as absent) and writes no resolution. Month close is
-//! `PeriodLockManage` `[D,D,D,A,A,A]` — ADMIN and EXECUTIVE Allow, MEMBER Deny.
-//! Drives the assembled router on `console_rt`.
+//! CONFIRM is `AttendanceExceptionManage` `[D,D,D,A,D,A]` — MEMBER Deny,
+//! EXECUTIVE Deny, ADMIN Allow. Production looks up the in-org exception first,
+//! then denies the feature, so MEMBER CONFIRM is 403 (not 404-omit). A
+//! branch-scoped ADMIN CONFIRM on another branch is 404 (`not_found`, same as
+//! absent) and writes no resolution. Other-org CONFIRM is omit (404), not
+//! 403-with-existence. Month close is `PeriodLockManage` `[D,D,D,A,A,A]` —
+//! ADMIN and EXECUTIVE Allow, MEMBER Deny. Drives the assembled router on
+//! `console_rt`.
 
 use axum::body::{Body, to_bytes};
 use console_app::{AppConfig, AppRole, AppState, DatabaseDependency, build_router};
@@ -53,10 +56,18 @@ async fn executive_cannot_confirm_exception_admin_can(pool: PgPool) {
     let exception_id = seed_open_late_exception(&pool, personas.branch, personas.admin).await;
     let other_branch = seed_named_branch(&pool, "attendance-persona-other-branch").await;
     let other_exception_id = seed_open_late_exception(&pool, other_branch, personas.admin).await;
+    let other_org = OrgId::from_uuid(Uuid::new_v4());
+    seed_org(&pool, other_org).await;
+    let foreign_branch =
+        seed_named_branch_in(&pool, other_org, "attendance-persona-foreign-branch").await;
+    let foreign_actor = seed_user_in(&pool, other_org, "ADMIN", Some(foreign_branch)).await;
+    let foreign_exception_id =
+        seed_open_late_exception_in(&pool, other_org, foreign_branch, foreign_actor).await;
     let app =
         build_router(app_state(runtime_role_pool(&pool).await, keys.public_pem.clone()).unwrap());
     let resolve = format!("{EXCEPTIONS}/{exception_id}/resolve");
     let other_resolve = format!("{EXCEPTIONS}/{other_exception_id}/resolve");
+    let foreign_resolve = format!("{EXCEPTIONS}/{foreign_exception_id}/resolve");
     let confirm = json!({"action": "CONFIRM", "reason": "verified arrival"});
 
     let seen = get(
@@ -75,7 +86,7 @@ async fn executive_cannot_confirm_exception_admin_can(pool: PgPool) {
         confirm.clone(),
     )
     .await;
-    assert_forbidden(executive_denied);
+    assert_forbidden(&executive_denied);
     assert_eq!(open_resolutions(&pool, exception_id).await, 0);
     let still_open = get(
         app.clone(),
@@ -94,7 +105,9 @@ async fn executive_cannot_confirm_exception_admin_can(pool: PgPool) {
         confirm.clone(),
     )
     .await;
-    assert_forbidden(member_denied);
+    // In-org MEMBER CONFIRM is feature Deny after the row is visible: 403, not
+    // 404-omit. Production 403 JSON must not carry employee/payroll figures.
+    assert_forbidden(&member_denied);
     assert_eq!(open_resolutions(&pool, exception_id).await, 0);
 
     let other_denied = post(
@@ -105,8 +118,30 @@ async fn executive_cannot_confirm_exception_admin_can(pool: PgPool) {
     )
     .await;
     // Out-of-scope resource ids are 404, not 403, so existence is not leaked.
-    assert_not_found(other_denied);
+    assert_not_found(&other_denied);
     assert_eq!(open_resolutions(&pool, other_exception_id).await, 0);
+    assert_eq!(open_resolutions(&pool, exception_id).await, 0);
+
+    let foreign_admin = post(
+        app.clone(),
+        &foreign_resolve,
+        &personas.admin_token,
+        confirm.clone(),
+    )
+    .await;
+    let foreign_member = post(
+        app.clone(),
+        &foreign_resolve,
+        &personas.member_token,
+        confirm.clone(),
+    )
+    .await;
+    // Other-org CONFIRM is omit (404), including for MEMBER — not 403-with-existence.
+    assert_not_found(&foreign_admin);
+    assert_omits_exception(&foreign_admin, foreign_exception_id);
+    assert_not_found(&foreign_member);
+    assert_omits_exception(&foreign_member, foreign_exception_id);
+    assert_eq!(open_resolutions(&pool, foreign_exception_id).await, 0);
     assert_eq!(open_resolutions(&pool, exception_id).await, 0);
 
     let admin_ok = post(app, &resolve, &personas.admin_token, confirm).await;
@@ -115,6 +150,7 @@ async fn executive_cannot_confirm_exception_admin_can(pool: PgPool) {
     assert_eq!(admin_ok.json["resolution"]["action"], "CONFIRM");
     assert_eq!(open_resolutions(&pool, exception_id).await, 1);
     assert_eq!(open_resolutions(&pool, other_exception_id).await, 0);
+    assert_eq!(open_resolutions(&pool, foreign_exception_id).await, 0);
 }
 
 #[sqlx::test(migrations = "../crates/platform/db/migrations")]
@@ -136,7 +172,7 @@ async fn period_lock_month_close_allows_admin_and_executive_forbids_member(pool:
         admin_body.clone(),
     )
     .await;
-    assert_forbidden(member_denied);
+    assert_forbidden(&member_denied);
     assert_eq!(close_count(&pool, month).await, 0);
 
     let admin_ok = post(app.clone(), CLOSES, &personas.admin_token, admin_body).await;
@@ -171,7 +207,7 @@ async fn period_lock_month_close_allows_admin_and_executive_forbids_member(pool:
     assert_eq!(close_count(&pool, month).await, 2);
 }
 
-fn assert_forbidden(response: Response) {
+fn assert_forbidden(response: &Response) {
     assert_eq!(
         response.status,
         StatusCode::FORBIDDEN,
@@ -179,9 +215,10 @@ fn assert_forbidden(response: Response) {
         response.json
     );
     assert_eq!(response.json["error"]["code"], "forbidden");
+    assert_no_employee_or_payroll_figures(response);
 }
 
-fn assert_not_found(response: Response) {
+fn assert_not_found(response: &Response) {
     assert_eq!(
         response.status,
         StatusCode::NOT_FOUND,
@@ -189,6 +226,41 @@ fn assert_not_found(response: Response) {
         response.json
     );
     assert_eq!(response.json["error"]["code"], "not_found");
+    assert_no_employee_or_payroll_figures(response);
+}
+
+fn assert_omits_exception(response: &Response, exception_id: Uuid) {
+    let body = response.json.to_string();
+    assert!(
+        !body.contains(&exception_id.to_string()),
+        "omit body leaked exception id: {body}"
+    );
+    assert_no_employee_or_payroll_figures(response);
+}
+
+fn assert_no_employee_or_payroll_figures(response: &Response) {
+    let body = response.json.to_string();
+    let lower = body.to_ascii_lowercase();
+    for needle in [
+        "employee_id",
+        "employeeid",
+        "employee_name",
+        "employeename",
+        "employee_number",
+        "persona-employee",
+        "ot_hours",
+        "othours",
+        "base_pay",
+        "basepay",
+        "payroll",
+        "period_lock",
+        "worker_rate",
+    ] {
+        assert!(
+            !lower.contains(needle),
+            "error body leaked {needle}: {body}"
+        );
+    }
 }
 
 async fn seed_personas(pool: &PgPool, keys: &Keys) -> Personas {
@@ -209,8 +281,24 @@ async fn seed_branch(pool: &PgPool) -> Uuid {
     seed_named_branch(pool, "attendance-persona-branch").await
 }
 
+async fn seed_org(pool: &PgPool, org: OrgId) {
+    let id = *org.as_uuid();
+    let slug = format!("att-xorg-{}", &id.to_string()[..8]);
+    sqlx::query("INSERT INTO organizations (id, slug, name) VALUES ($1, $2, $3)")
+        .bind(id)
+        .bind(slug)
+        .bind("Attendance persona other org")
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
 async fn seed_named_branch(pool: &PgPool, name: &str) -> Uuid {
-    let org = *OrgId::knl().as_uuid();
+    seed_named_branch_in(pool, OrgId::knl(), name).await
+}
+
+async fn seed_named_branch_in(pool: &PgPool, org: OrgId, name: &str) -> Uuid {
+    let org = *org.as_uuid();
     let region: Uuid =
         sqlx::query_scalar("INSERT INTO regions (name, org_id) VALUES ($1, $2) RETURNING id")
             .bind(format!("{name}-region"))
@@ -230,12 +318,16 @@ async fn seed_named_branch(pool: &PgPool, name: &str) -> Uuid {
 }
 
 async fn seed_user(pool: &PgPool, role: &str, branch: Option<Uuid>) -> UserId {
+    seed_user_in(pool, OrgId::knl(), role, branch).await
+}
+
+async fn seed_user_in(pool: &PgPool, org: OrgId, role: &str, branch: Option<Uuid>) -> UserId {
     let user = UserId::new();
     sqlx::query("INSERT INTO users (id, display_name, roles, org_id) VALUES ($1, $2, $3, $4)")
         .bind(*user.as_uuid())
         .bind(format!("attendance-persona-{role}-{}", user.as_uuid()))
         .bind(vec![role])
-        .bind(*OrgId::knl().as_uuid())
+        .bind(*org.as_uuid())
         .execute(pool)
         .await
         .unwrap();
@@ -243,7 +335,7 @@ async fn seed_user(pool: &PgPool, role: &str, branch: Option<Uuid>) -> UserId {
         sqlx::query("INSERT INTO user_branches (user_id, branch_id, org_id) VALUES ($1, $2, $3)")
             .bind(*user.as_uuid())
             .bind(branch)
-            .bind(*OrgId::knl().as_uuid())
+            .bind(*org.as_uuid())
             .execute(pool)
             .await
             .unwrap();
@@ -252,6 +344,15 @@ async fn seed_user(pool: &PgPool, role: &str, branch: Option<Uuid>) -> UserId {
 }
 
 async fn seed_open_late_exception(pool: &PgPool, branch: Uuid, actor: UserId) -> Uuid {
+    seed_open_late_exception_in(pool, OrgId::knl(), branch, actor).await
+}
+
+async fn seed_open_late_exception_in(
+    pool: &PgPool,
+    org: OrgId,
+    branch: Uuid,
+    actor: UserId,
+) -> Uuid {
     let employee = Uuid::new_v4();
     sqlx::query(
         r#"
@@ -263,7 +364,7 @@ async fn seed_open_late_exception(pool: &PgPool, branch: Uuid, actor: UserId) ->
         "#,
     )
     .bind(employee)
-    .bind(*OrgId::knl().as_uuid())
+    .bind(*org.as_uuid())
     .bind(format!("employee-row-{employee}"))
     .execute(pool)
     .await
@@ -275,7 +376,7 @@ async fn seed_open_late_exception(pool: &PgPool, branch: Uuid, actor: UserId) ->
          VALUES ($1, $2, $3, 'LATE', $4, $5, DATE '2026-07-20', 'late arrival', $6, $7, $8)",
     )
     .bind(exception_id)
-    .bind(*OrgId::knl().as_uuid())
+    .bind(*org.as_uuid())
     .bind(format!("AT-{exception_id}"))
     .bind(employee)
     .bind(branch)
