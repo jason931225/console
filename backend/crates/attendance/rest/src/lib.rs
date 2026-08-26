@@ -1627,8 +1627,8 @@ mod tests {
             "reason": "park until next review"
         }))
         .expect("HOLD is valid wire shape; action parse is separate");
-        let hold_err = parse_resolve_action(&hold.action)
-            .expect_err("handler maps HOLD through parse to 422");
+        let hold_err =
+            parse_resolve_action(&hold.action).expect_err("handler maps HOLD through parse to 422");
         assert_eq!(hold_err.status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(hold_err.code, "validation");
         let empty_hold = serde_json::from_value::<ResolveBody>(json!({
