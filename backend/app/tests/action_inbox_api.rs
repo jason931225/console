@@ -24,6 +24,7 @@ use sqlx::postgres::PgPoolOptions;
 use time::{Duration, OffsetDateTime};
 use tower::ServiceExt;
 
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU16, Ordering};
 
 const TEST_ISSUER: &str = "console-platform-auth";
@@ -786,9 +787,15 @@ async fn action_inbox_governance_source_enforces_requester_sod(pool: PgPool) {
         "{:?}",
         approver_workbench.json
     );
+    // Workbench merges sources; membership is the SoD lock, not inter-source
+    // sort order. `/action-inbox` above already pins created_at order.
+    let workbench_ids: BTreeSet<String> =
+        governance_ids(&approver_workbench.json["action_inbox"])
+            .into_iter()
+            .collect();
+    let expected_ids: BTreeSet<String> = expected_governance.iter().cloned().collect();
     assert_eq!(
-        governance_ids(&approver_workbench.json["action_inbox"]),
-        expected_governance,
+        workbench_ids, expected_ids,
         "{:?}",
         approver_workbench.json
     );
