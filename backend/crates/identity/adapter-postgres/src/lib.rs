@@ -1893,8 +1893,9 @@ const USER_SELECT_WITH_PASSKEY: &str = r#"
 
 /// Directory page projection. Keep the column list aligned with
 /// `USER_SELECT_WITH_PASSKEY` except `users.phone`, which must not be selected
-/// into a directory page. `user_from_directory_row` maps `phone: None` without
-/// reading a phone column.
+/// into a directory page. The SELECT text must not mention phone, salary, bank,
+/// or rrn. `user_from_directory_row` maps `phone: None` without reading a phone
+/// column.
 const USER_SELECT_DIRECTORY: &str = r#"
     SELECT
            u.id,
@@ -2641,10 +2642,13 @@ mod ensure_branch_rewrite_in_scope_tests {
         let requested = vec![*branch_a.as_uuid()];
         ensure_branch_rewrite_in_scope(&BranchScope::All, &current, &requested)
             .expect("BranchScope::All must not gate membership rewrites");
-        assert!(
-            !USER_SELECT_DIRECTORY.contains("phone"),
-            "directory hydration must not SELECT users.phone"
-        );
+        let directory_sql = USER_SELECT_DIRECTORY.to_ascii_lowercase();
+        for fragment in ["phone", "salary", "bank", "rrn"] {
+            assert!(
+                !directory_sql.contains(fragment),
+                "directory hydration must not mention {fragment}"
+            );
+        }
         assert!(
             USER_SELECT_WITH_PASSKEY.contains("u.phone"),
             "get_user / list_users must keep reading users.phone"
