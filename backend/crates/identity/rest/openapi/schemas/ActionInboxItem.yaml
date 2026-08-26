@@ -23,8 +23,6 @@ properties:
     - dispatch
     - work
     - support
-    - payroll
-    - governance
   urg:
     type: string
     enum:

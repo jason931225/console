@@ -4240,19 +4240,8 @@ mod directory_query_tests {
         let directory_person = include_str!("../openapi/schemas/DirectoryPerson.yaml");
         let property_names = yaml_map_keys(directory_person, "properties:");
         assert!(
-            !property_names.iter().any(|name| *name == "phone"),
+            !property_names.contains(&"phone"),
             "DirectoryPerson OpenAPI must not include phone; properties={property_names:?}"
-        );
-
-        let action_inbox = include_str!("../openapi/schemas/ActionInboxItem.yaml");
-        let kind_enum = yaml_field_enum_values(action_inbox, "kind");
-        assert!(
-            kind_enum.iter().any(|value| *value == "payroll"),
-            "ActionInboxItem.kind must include payroll; enum={kind_enum:?}"
-        );
-        assert!(
-            kind_enum.iter().any(|value| *value == "governance"),
-            "ActionInboxItem.kind must include governance; enum={kind_enum:?}"
         );
     }
 
@@ -4268,21 +4257,6 @@ mod directory_query_tests {
                 }
                 name.strip_suffix(':')
             })
-            .collect()
-    }
-
-    fn yaml_field_enum_values<'a>(schema: &'a str, field: &str) -> Vec<&'a str> {
-        let header = format!("\n  {field}:\n");
-        let Some((_, field_body)) = schema.split_once(&header) else {
-            return Vec::new();
-        };
-        let Some((_, enum_block)) = field_body.split_once("    enum:\n") else {
-            return Vec::new();
-        };
-        enum_block
-            .lines()
-            .map(str::trim)
-            .map_while(|line| line.strip_prefix("- "))
             .collect()
     }
 }
