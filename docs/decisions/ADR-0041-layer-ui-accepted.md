@@ -4,12 +4,12 @@ status: accepted
 doc_status: review
 date: 2026-08-25
 owner: jasonlee
-decision: layer-ui-accepted-payroll-vertical-implementation-gate
+decision: layer-ui-accepted
 amends: [ADR-0001, ADR-0030]
 related: [ADR-0001, ADR-0025, ADR-0030, ADR-0031]
 ---
 
-# ADR-0041 — Accept `Layer::Ui`; open the Leptos implementation gate for payroll
+# ADR-0041 — Accept `Layer::Ui`
 
 ## Status
 
@@ -81,11 +81,14 @@ existence. Those three facts are why a crate cannot land yet.
    `//third-party/rust:<name>`. This record does not invent `App → Ui` edges
    in generated faces.
 
-8. **Vertical and exclusions.** The owner resumed frontend work. The first
-   full-depth vertical is **payroll execution**. Import/export is not the
-   data-entry base; 자료실 is a later exception and is not in this gate.
-   The comms rail is not in this slice. ADR-0025 §4's nine-item evidence bar
-   still governs every screen.
+8. **Vertical and exclusions.** Crate existence is legal. Frontend
+   implementation is not resumed. Screens are not authorized until PRODUCT
+   HOLD conditions — a mounted contracts-backed SSR shell and persona-based
+   real-backend E2E evidence — are actually satisfied. The first full-depth
+   vertical, when those conditions clear, is **payroll execution**.
+   Import/export is not the data-entry base; 자료실 is a later exception and
+   is not in this record. The comms rail is not in this slice. ADR-0025 §4's
+   nine-item evidence bar still governs every screen.
 
 ## Consequences
 
@@ -95,8 +98,8 @@ existence. Those three facts are why a crate cannot land yet.
   still fails.
 - Lockfile Leptos is no longer a planning-only violation; introducing it
   remains a frontend-lane lockfile change.
-- − No Ui crate, Leptos pin, SSR shell, or E2E evidence lands here. Those are
-  frontend-lane work against this gate.
+- − No Ui crate, Leptos pin, SSR shell, or E2E evidence lands here. Frontend
+  implementation remains HOLD until PRODUCT conditions are actually satisfied.
 - − 0.9.0-beta remains beta; 0.8.x is the recorded rollback, not a second
   supported production pin.
 

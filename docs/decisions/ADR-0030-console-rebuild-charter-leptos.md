@@ -29,7 +29,8 @@ everything §3 does not name.
 
 > **Current observation (2026-08-25):** The accepted text below is still preserved
 > as written. ADR-0041 accepts `Layer::Ui` so `console-<domain>-ui` members may
-> exist — the ADR-0001 amendment §6 named. This observation does not rewrite the
+> exist — the ADR-0001 amendment §6 named. ADR-0041 does not resume frontend
+> implementation or authorize shipping screens. This observation does not rewrite the
 > Decision and does **not** retire §8's planning-only CI assertion. Inventory may
 > allow `-ui` members and lockfile Leptos. Absence of a mounted shell remains
 > green: `scripts/console/route-inventory.test.mjs` still asserts HEAD tracks
