@@ -427,6 +427,7 @@ async fn people_directory_filters_scope_orders_and_counts_truthfully(pool: PgPoo
     assert_eq!(linked["employee_id"], employee_id.to_string());
     assert_eq!(linked["employee_link_status"], "LINKED");
     assert_eq!(linked["employee_name"], "Alpha Employee");
+    assert_directory_items_omit_phone(&page);
 
     let (status, second_page) = send(
         &harness,
@@ -760,6 +761,107 @@ async fn people_directory_custom_role_resolution_is_active_only_and_membership_b
         .await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{status_name}: {body:?}");
     }
+}
+
+/// Directory is a scrape surface: items must omit `phone` even when a number is
+/// stored. User GET / users list keep `UserSummary.phone`.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn directory_people_omits_phone_while_user_get_keeps_it(pool: PgPool) {
+    let harness = Harness::new(pool.clone()).await;
+    let branch = seed_branch(&pool).await;
+    let admin = seed_user(&pool, "Directory Dto Admin", &["ADMIN"], Some(branch)).await;
+    let admin_token = harness.token(admin, &["ADMIN"], vec![branch]);
+    let stored_phone = "010-1234-5678";
+
+    let (status, created) = send(
+        &harness,
+        "POST",
+        "/api/v1/users",
+        &admin_token,
+        Some(json!({
+            "display_name": "DirectoryDtoSubject",
+            "phone": stored_phone,
+            "team": "MAINTENANCE",
+            "roles": ["MECHANIC"],
+            "branch_ids": [branch.to_string()],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created:?}");
+    let subject_id = created["id"].as_str().expect("created user id").to_owned();
+    assert_eq!(created["phone"], stored_phone);
+
+    let (status, admin_page) = send(
+        &harness,
+        "GET",
+        "/api/v1/directory/people?search=directorydtosubject",
+        &admin_token,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{admin_page:?}");
+    assert_eq!(admin_page["total"], 1, "{admin_page:?}");
+    assert_eq!(admin_page["items"][0]["id"], subject_id);
+    assert_directory_items_omit_phone(&admin_page);
+
+    let (status, fetched) = send(
+        &harness,
+        "GET",
+        &format!("/api/v1/users/{subject_id}"),
+        &admin_token,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{fetched:?}");
+    assert_eq!(fetched["phone"], stored_phone);
+
+    let (status, users) = send(&harness, "GET", "/api/v1/users", &admin_token, None).await;
+    assert_eq!(status, StatusCode::OK, "{users:?}");
+    let listed = users["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["id"] == subject_id)
+        .expect("created user on users list");
+    assert_eq!(listed["phone"], stored_phone);
+
+    let owner = seed_user(&pool, "Directory Dto Policy Owner", &["SUPER_ADMIN"], None).await;
+    let reader = seed_user(&pool, "Directory Dto Reader", &["MEMBER"], Some(branch)).await;
+    let reader_role = seed_policy_role(
+        &pool,
+        owner,
+        "directory_dto_reader",
+        "구성원 조회",
+        "ACTIVE",
+        false,
+        &[("employee_directory_read", "allow")],
+    )
+    .await;
+    let branch_value = branch.to_string();
+    seed_policy_role_condition(
+        &pool,
+        reader_role,
+        "branch_scope",
+        "branch",
+        "equals",
+        &[branch_value.as_str()],
+    )
+    .await;
+    seed_policy_assignment(&pool, reader, reader_role, owner).await;
+    let reader_token = harness.token(reader, &["MEMBER"], vec![branch]);
+
+    let (status, reader_page) = send(
+        &harness,
+        "GET",
+        "/api/v1/directory/people?search=directorydtosubject",
+        &reader_token,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader_page:?}");
+    assert_eq!(reader_page["total"], 1, "{reader_page:?}");
+    assert_eq!(reader_page["items"][0]["id"], subject_id);
+    assert_directory_items_omit_phone(&reader_page);
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -3182,6 +3284,23 @@ async fn me_authz_narrows_capability_to_the_grants_own_branch_scope(pool: PgPool
         "grant-derived capability must stay scoped to the grant's own branch, \
          not widen to the caller's full scope: {body}"
     );
+}
+
+fn assert_directory_items_omit_phone(page: &Value) {
+    let items = page["items"]
+        .as_array()
+        .expect("directory page items must be an array");
+    assert!(
+        !items.is_empty(),
+        "directory page must include at least one person"
+    );
+    for item in items {
+        assert!(
+            item.get("phone").is_none(),
+            "directory item must omit phone; keys={:?}",
+            item.as_object().map(|obj| obj.keys().collect::<Vec<_>>())
+        );
+    }
 }
 
 async fn send(
