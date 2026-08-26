@@ -687,6 +687,48 @@ mod tests {
         .unwrap();
         assert!(event.branch_id.is_none());
         assert_eq!(event.target_type, "user");
+
+        let user = UserSummary {
+            id: UserId::new(),
+            display_name: "홍길동".to_owned(),
+            employee_id: None,
+            employee_name: None,
+            employee_number: None,
+            employee_company: None,
+            employee_org_unit: None,
+            employee_position: None,
+            employee_identity_review_required: None,
+            employee_identity_resolution_confidence: None,
+            employee_link_status: EmployeeLinkStatus::Unlinked,
+            phone: Some("010-1234-5678".to_owned()),
+            team: None,
+            roles: Vec::new(),
+            branch_ids: Vec::new(),
+            is_active: true,
+            has_passkey: true,
+            account_status: AccountStatus::Active,
+            created_at: Timestamp::now_utc(),
+        };
+        assert_eq!(
+            serde_json::to_value(&user).unwrap()["phone"],
+            "010-1234-5678"
+        );
+        let person_json = serde_json::to_value(DirectoryPerson::from(user.clone())).unwrap();
+        assert!(
+            person_json.get("phone").is_none(),
+            "DirectoryPerson must omit phone, got {person_json}"
+        );
+        let page_json = serde_json::to_value(DirectoryPage::from(UserPage {
+            items: vec![user],
+            limit: 1,
+            offset: 0,
+            total: 1,
+        }))
+        .unwrap();
+        assert!(
+            page_json["items"][0].get("phone").is_none(),
+            "DirectoryPage items must omit phone, got {page_json}"
+        );
     }
 
     #[test]
