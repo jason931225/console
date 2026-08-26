@@ -7,7 +7,10 @@
 //!     reading/confirming A's legal notice — deny-by-omission, not a leak);
 //!   * a locked legal notice's body is withheld until receipt is confirmed;
 //!   * confirm-receipt without a fresh passkey step-up is 428 (precondition
-//!     required), and a valid step-up confirms + unlocks + is idempotent.
+//!     required), and a valid step-up confirms + unlocks + is idempotent;
+//!   * ESS 명세서 lives here (`filter=payslip`/`filter=pay`, `kind=payslip`),
+//!     not `/payroll/payslips/me`: a MEMBER sees their own body without
+//!     receipt/passkey, a legal notice is excluded, and another user is omitted.
 
 use axum::body::{Body, to_bytes};
 use console_inbox_adapter_postgres::PgInboxStore;
@@ -108,8 +111,8 @@ async fn inbox_receipt_flow_is_person_scoped_and_passkey_gated(pool: PgPool) {
 
     let user_a = UserId::new();
     let user_b = UserId::new();
-    seed_user(&pool, user_a, "Employee A").await;
-    seed_user(&pool, user_b, "Employee B").await;
+    seed_user(&pool, user_a, "Employee A", &["ADMIN"]).await;
+    seed_user(&pool, user_b, "Employee B", &["ADMIN"]).await;
 
     // Seed a legal notice for A via the write port (owner pool, scoped to knl).
     let doc = console_platform_request_context::scope_org(OrgId::knl(), async {
@@ -134,8 +137,18 @@ async fn inbox_receipt_flow_is_person_scoped_and_passkey_gated(pool: PgPool) {
         InboxRestState::new(PgInboxStore::new(rt_pool), Some(verifier))
             .with_passkey_step_up(Some(passkey_service())),
     );
-    let token_a = issue_token(private_pem.as_bytes(), public_key_pem.as_bytes(), user_a);
-    let token_b = issue_token(private_pem.as_bytes(), public_key_pem.as_bytes(), user_b);
+    let token_a = issue_token(
+        private_pem.as_bytes(),
+        public_key_pem.as_bytes(),
+        user_a,
+        &["ADMIN"],
+    );
+    let token_b = issue_token(
+        private_pem.as_bytes(),
+        public_key_pem.as_bytes(),
+        user_b,
+        &["ADMIN"],
+    );
 
     // A lists action-required: sees exactly its own locked legal notice.
     let list = get_json(
@@ -261,6 +274,135 @@ async fn inbox_receipt_flow_is_person_scoped_and_passkey_gated(pool: PgPool) {
     assert_eq!(anon.status(), StatusCode::UNAUTHORIZED);
 }
 
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPool) {
+    let signing_key = SigningKey::random(&mut OsRng);
+    let private_pem = signing_key.to_pkcs8_pem(LineEnding::LF).unwrap();
+    let public_key_pem = signing_key
+        .verifying_key()
+        .to_public_key_pem(LineEnding::LF)
+        .unwrap();
+
+    let user_a = UserId::new();
+    let user_b = UserId::new();
+    seed_user(&pool, user_a, "Employee A", &["MEMBER"]).await;
+    seed_user(&pool, user_b, "Employee B", &["MEMBER"]).await;
+
+    let payslip = console_platform_request_context::scope_org(OrgId::knl(), async {
+        PgInboxStore::new(pool.clone())
+            .emit_inbox_doc(payslip_to(user_a))
+            .await
+    })
+    .await
+    .expect("emit payslip to A");
+    let legal = console_platform_request_context::scope_org(OrgId::knl(), async {
+        PgInboxStore::new(pool.clone())
+            .emit_inbox_doc(legal_notice_to(user_a))
+            .await
+    })
+    .await
+    .expect("emit legal notice to A");
+    assert_ne!(payslip.id, legal.id);
+
+    let verifier = JwtVerifier::from_es256_public_pem(
+        JwtSettings {
+            issuer: TEST_ISSUER.to_owned(),
+            audience: TEST_AUDIENCE.to_owned(),
+            access_token_ttl: Duration::minutes(15),
+        },
+        public_key_pem.as_bytes(),
+    )
+    .unwrap();
+    let rt_pool = runtime_role_pool(&pool).await;
+    let service = router(
+        InboxRestState::new(PgInboxStore::new(rt_pool), Some(verifier))
+            .with_passkey_step_up(Some(passkey_service())),
+    );
+    let token_a = issue_token(
+        private_pem.as_bytes(),
+        public_key_pem.as_bytes(),
+        user_a,
+        &["MEMBER"],
+    );
+    let token_b = issue_token(
+        private_pem.as_bytes(),
+        public_key_pem.as_bytes(),
+        user_b,
+        &["MEMBER"],
+    );
+    let payslip_id = payslip.id.to_string();
+
+    // MEMBER A lists 급여명세 via both aliases: own payslip only, never locked.
+    for filter in ["payslip", "pay"] {
+        let list = get_json(
+            service.clone(),
+            &format!("/api/v1/me/inbox-docs?filter={filter}"),
+            &token_a,
+        )
+        .await;
+        assert_eq!(list.status, StatusCode::OK, "{filter}: {:?}", list.json);
+        let items = list.json["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1, "{filter} must exclude legal_notice");
+        assert_eq!(items[0]["id"].as_str().unwrap(), payslip_id);
+        assert_eq!(items[0]["kind"].as_str(), Some("payslip"));
+        assert_eq!(items[0]["locked"].as_bool(), Some(false));
+        assert!(
+            items[0].get("payload").is_none(),
+            "list is metadata only: {:?}",
+            items[0]
+        );
+    }
+
+    // Body is disclosed on GET with no receipt confirm and no passkey 428.
+    let self_read = get_json(
+        service.clone(),
+        &format!("/api/v1/me/inbox-docs/{}", payslip.id),
+        &token_a,
+    )
+    .await;
+    assert_eq!(
+        self_read.status,
+        StatusCode::OK,
+        "payslip self-view must not demand passkey step-up: {:?}",
+        self_read.json
+    );
+    assert_eq!(self_read.json["kind"].as_str(), Some("payslip"));
+    assert_eq!(self_read.json["locked"].as_bool(), Some(false));
+    assert!(
+        self_read.json.get("payload").is_some(),
+        "payslip body is not receipt-gated: {:?}",
+        self_read.json
+    );
+    assert_eq!(self_read.json["payload"]["net"], json!(3_120_000));
+
+    // B lists empty (deny-by-omission) and cannot read A's payslip.
+    let b_list = get_json(
+        service.clone(),
+        "/api/v1/me/inbox-docs?filter=payslip",
+        &token_b,
+    )
+    .await;
+    assert_eq!(b_list.status, StatusCode::OK, "{:?}", b_list.json);
+    assert_eq!(
+        b_list.json["items"].as_array().unwrap().len(),
+        0,
+        "B must not see A's payslip: {:?}",
+        b_list.json
+    );
+    let cross_read = get_json(
+        service.clone(),
+        &format!("/api/v1/me/inbox-docs/{}", payslip.id),
+        &token_b,
+    )
+    .await;
+    assert_eq!(
+        cross_read.status,
+        StatusCode::NOT_FOUND,
+        "B cannot read A's payslip: {:?}",
+        cross_read.json
+    );
+}
+
 fn legal_notice_to(recipient: UserId) -> EmitInboxDocCommand {
     EmitInboxDocCommand {
         actor: None,
@@ -273,6 +415,26 @@ fn legal_notice_to(recipient: UserId) -> EmitInboxDocCommand {
             Some("workflow_run"),
             Some("AP-3111"),
             json!({ "paragraphs": ["귀하의 미사용 연차 사용을 촉진합니다."] }),
+        )
+        .unwrap(),
+        dedup_key: None,
+        trace: TraceContext::generate(),
+        occurred_at: OffsetDateTime::now_utc(),
+    }
+}
+
+fn payslip_to(recipient: UserId) -> EmitInboxDocCommand {
+    EmitInboxDocCommand {
+        actor: None,
+        recipient,
+        doc: NewInboxDoc::new(
+            InboxDocKind::Payslip,
+            "6월 급여명세",
+            None,
+            None,
+            Some("payroll_run"),
+            Some("PR-2026-06"),
+            json!({ "net": 3_120_000, "base": 2_800_000 }),
         )
         .unwrap(),
         dedup_key: None,
@@ -328,7 +490,12 @@ async fn into_json(response: axum::response::Response) -> JsonResponse {
     JsonResponse { status, json }
 }
 
-fn issue_token(private_key_pem: &[u8], public_key_pem: &[u8], user_id: UserId) -> String {
+fn issue_token(
+    private_key_pem: &[u8],
+    public_key_pem: &[u8],
+    user_id: UserId,
+    roles: &[&str],
+) -> String {
     let issuer = JwtIssuer::from_es256_pem(
         JwtSettings {
             issuer: TEST_ISSUER.to_owned(),
@@ -343,7 +510,7 @@ fn issue_token(private_key_pem: &[u8], public_key_pem: &[u8], user_id: UserId) -
         .issue_access_token(AccessTokenInput {
             subject: user_id,
             org_id: OrgId::knl(),
-            roles: vec!["ADMIN".to_owned()],
+            roles: roles.iter().map(|role| (*role).to_owned()).collect(),
             branches: Vec::new(),
             platform: false,
             view_as: false,
@@ -358,8 +525,12 @@ fn issue_token(private_key_pem: &[u8], public_key_pem: &[u8], user_id: UserId) -
         .unwrap()
 }
 
-async fn seed_user(pool: &PgPool, user_id: UserId, name: &str) {
+async fn seed_user(pool: &PgPool, user_id: UserId, name: &str, roles: &[&str]) {
     let name = name.to_owned();
+    let roles = roles
+        .iter()
+        .map(|role| (*role).to_owned())
+        .collect::<Vec<_>>();
     let event = AuditEvent::new(
         None,
         AuditAction::new("test.seed_user").unwrap(),
@@ -376,7 +547,7 @@ async fn seed_user(pool: &PgPool, user_id: UserId, name: &str) {
             )
             .bind(user_id.as_uuid())
             .bind(format!("{name} {}", uuid::Uuid::new_v4()))
-            .bind(Vec::from(["ADMIN"]))
+            .bind(roles)
             .bind(OrgId::knl().as_uuid())
             .execute(tx.as_mut())
             .await
