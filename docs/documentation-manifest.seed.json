@@ -596,7 +596,7 @@
     "status": "active",
     "replacement": null,
     "retention": "retain",
-    "blob_sha": "b49a256b416d831714a057fc9e5666fbb1d4aa29",
+    "blob_sha": "17643bca65875ca55b56356f88376aa109c74ed9",
     "archive_tag": null
   },
   {
@@ -616,7 +616,7 @@
     "status": "active",
     "replacement": null,
     "retention": "retain",
-    "blob_sha": "2b1611445f14146b370f75d87d7daaac6448c234",
+    "blob_sha": "c6f0d5b445f7bdcc2b8759e67cf5dfbb20f57ab6",
     "archive_tag": null
   },
   {
@@ -896,7 +896,7 @@
     "status": "active",
     "replacement": null,
     "retention": "retain",
-    "blob_sha": "4a4a38bbc59a5ac276d28b7078a7086c1a94fffa",
+    "blob_sha": "0b5df5b96142d6234074ace38dfb6388b63f7deb",
     "archive_tag": null
   },
   {
@@ -1000,13 +1000,23 @@
     "archive_tag": null
   },
   {
+    "path": "docs/decisions/ADR-0041-layer-ui-accepted.md",
+    "class": "decision",
+    "owner": "repository maintainers",
+    "status": "active",
+    "replacement": null,
+    "retention": "retain",
+    "blob_sha": "cc2aae9b99d07a8c982478932640e4d9081b4d91",
+    "archive_tag": null
+  },
+  {
     "path": "docs/decisions/README.md",
     "class": "decision",
     "owner": "repository maintainers",
     "status": "active",
     "replacement": null,
     "retention": "retain",
-    "blob_sha": "91f8c30f962a984add3da9a625fe636b4fec5ea2",
+    "blob_sha": "09889e7ba653399a304aa968466457013e72795a",
     "archive_tag": null
   },
   {

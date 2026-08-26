@@ -46,31 +46,16 @@ export function extractConsoleRouteFacts(repoRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// ADR-0030 §8 planning-only: the Rust/Leptos side of the inventory.
+// ADR-0041: the Rust/Leptos side of the inventory.
 //
-// The two tombstone paths above pin the deleted React stack, but ADR-0030 §1
-// makes the console "a Leptos application composed of workspace crates", so
-// the §8-forbidden artifact is a Rust workspace member — invisible to any
-// web/** path assertion. The subject that can see it is the build graph
-// itself: a console crate must be a workspace member to build, and Cargo is
-// the only authority on what the member set is (the real manifest discovers
-// members through `crates/<domain>/*` globs, so a crate becomes a member with
-// zero manifest edits; manifest-text parsing would never see it).
+// The two tombstone paths above pin the deleted React stack. ADR-0041 allows
+// `console-<domain>-ui` members and lockfile Leptos; a machine-readable route
+// facts file is a frontend-lane follow-up. Until that lands, inventory may
+// report zero Leptos packages and must not fail HEAD for that absence.
 //
-// Deliberately NOT a grep over Rust source text: a source-text gate catches
-// one spelling in one position and fails open (console-9ze). Three
-// build-graph tiers instead, each dodging a different evasion:
-//   1. member names ending in `-ui` — ADR-0030 §6 charters
-//      `console-<domain>-ui` as the surface-crate name, so the chartered name
-//      may not exist while the §7 gate is closed (catches a hand-rolled,
-//      leptos-free UI crate under the chartered name);
-//   2. any workspace member declaring a Leptos-family dependency — cargo
-//      metadata reports the TRUE package name, so
-//      `view = { package = "leptos" }` renames cannot hide it;
-//   3. any Leptos-family package in backend/Cargo.lock — a member cannot
-//      build without its graph in the lockfile (CI's `cargo metadata
-//      --locked` step keeps it honest), so leptos smuggled in as a path
-//      dependency of an existing member is still visible here.
+// What still fails: a non-ui workspace member declaring a Leptos-family
+// dependency. Cargo metadata reports the TRUE package name, so
+// `view = { package = "leptos" }` renames cannot hide it.
 // Unreadable inventory (missing manifest/lockfile, cargo failure, zero
 // members, zero locked packages) throws — the gate fails closed, never
 // reports a clean state it did not observe.
@@ -84,41 +69,39 @@ export const BACKEND_WORKSPACE_LOCKFILE = 'backend/Cargo.lock';
 
 // Matches the framework's package namespace (leptos, leptos_axum,
 // leptos_meta, leptos-use, ...) on a separator boundary, so `leptose`-style
-// strangers do not match. Wrappers that carry other names (e.g. `leptonic`)
-// cannot dodge: they depend on `leptos` itself, which tier 3 sees
-// transitively through the lockfile.
+// strangers do not match. Lockfile leptos is allowed (ADR-0041); a non-ui
+// member must still declare the true package name to be flagged.
 export const LEPTOS_PACKAGE_FAMILY = /^leptos(?:[_-]|$)/;
 
 // ADR-0030 §6: the chartered per-domain surface crate is console-<domain>-ui.
 export const CONSOLE_UI_MEMBER_NAME = /(?:^|-)ui$/;
 
-const ADR = 'ADR-0030 §8 planning-only violation';
+const ADR = 'ADR-0041 non-ui Leptos violation';
 
 /**
- * Pure tier 1+2 classifier over `cargo metadata` packages. Throws instead of
- * returning clean when handed nothing or anything it cannot read: a scan that
- * examined zero members has observed nothing and must not pass.
+ * Classifier over `cargo metadata` packages. Ui members may declare Leptos.
+ * A non-ui member that declares a Leptos-family dependency is a violation.
+ * Throws instead of returning clean when handed nothing or anything it cannot
+ * read: a scan that examined zero members has observed nothing and must not pass.
  */
 export function workspaceMemberViolations(packages, { repoRoot } = {}) {
   if (!Array.isArray(packages) || packages.length === 0) {
-    throw new Error('planning-only workspace scan examined zero workspace members; refusing to report a clean state it did not observe');
+    throw new Error('workspace scan examined zero workspace members; refusing to report a clean state it did not observe');
   }
   const violations = [];
   for (const pkg of packages) {
     if (typeof pkg?.name !== 'string' || pkg.name === '' || typeof pkg?.manifest_path !== 'string' || !Array.isArray(pkg?.dependencies)) {
-      throw new Error('planning-only workspace scan met a member missing name/manifest_path/dependencies; refusing to classify what it cannot read');
+      throw new Error('workspace scan met a member missing name/manifest_path/dependencies; refusing to classify what it cannot read');
     }
     const where = repoRoot ? path.relative(repoRoot, pkg.manifest_path) : pkg.manifest_path;
-    if (CONSOLE_UI_MEMBER_NAME.test(pkg.name)) {
-      violations.push(`${ADR}: workspace member '${pkg.name}' (${where}) carries the §6-chartered console surface-crate name '-ui' while the §7 gate is closed`);
-    }
+    const uiMember = CONSOLE_UI_MEMBER_NAME.test(pkg.name);
     for (const dep of pkg.dependencies) {
       if (typeof dep?.name !== 'string' || dep.name === '') {
-        throw new Error(`planning-only workspace scan met an unreadable dependency of '${pkg.name}'; refusing to classify what it cannot read`);
+        throw new Error(`workspace scan met an unreadable dependency of '${pkg.name}'; refusing to classify what it cannot read`);
       }
-      if (LEPTOS_PACKAGE_FAMILY.test(dep.name)) {
+      if (!uiMember && LEPTOS_PACKAGE_FAMILY.test(dep.name)) {
         const alias = typeof dep.rename === 'string' && dep.rename ? ` (renamed locally to '${dep.rename}')` : '';
-        violations.push(`${ADR}: workspace member '${pkg.name}' (${where}) declares Leptos-family dependency '${dep.name}'${alias}; §1 makes Leptos the console stack, so this is a console implementation artifact`);
+        violations.push(`${ADR}: workspace member '${pkg.name}' (${where}) declares Leptos-family dependency '${dep.name}'${alias}; Leptos is legal only on Layer::Ui members (package name ending in -ui)`);
       }
     }
   }
@@ -143,15 +126,14 @@ export function lockedPackageNames(lockfileText) {
 /**
  * The Rust-side inventory: enumerate workspace members through Cargo's own
  * authority (`cargo metadata --no-deps`, glob-aware, rename-transparent) and
- * the locked graph, and classify against the ADR-0030 §8 planning-only
- * invariant. Every unreadable input throws. This check may be retired only in
- * the change that opens the §7 gate (ADR-0030 §8).
+ * the locked graph. Ui members and lockfile Leptos are allowed (ADR-0041).
+ * A non-ui member declaring Leptos is a violation. Every unreadable input throws.
  */
 export function extractConsoleWorkspaceFacts(repoRoot) {
   const manifestPath = path.join(repoRoot, BACKEND_WORKSPACE_MANIFEST);
   const lockfilePath = path.join(repoRoot, BACKEND_WORKSPACE_LOCKFILE);
-  if (!existsSync(manifestPath)) throw new Error(`${BACKEND_WORKSPACE_MANIFEST} is missing under ${repoRoot}; the planning-only gate cannot see its subject and unreadable must fail`);
-  if (!existsSync(lockfilePath)) throw new Error(`${BACKEND_WORKSPACE_LOCKFILE} is missing under ${repoRoot}; the planning-only gate cannot see the locked graph and unreadable must fail`);
+  if (!existsSync(manifestPath)) throw new Error(`${BACKEND_WORKSPACE_MANIFEST} is missing under ${repoRoot}; the workspace inventory cannot see its subject and unreadable must fail`);
+  if (!existsSync(lockfilePath)) throw new Error(`${BACKEND_WORKSPACE_LOCKFILE} is missing under ${repoRoot}; the workspace inventory cannot see the locked graph and unreadable must fail`);
   let stdout;
   try {
     stdout = execFileSync(
@@ -161,23 +143,25 @@ export function extractConsoleWorkspaceFacts(repoRoot) {
     );
   } catch (error) {
     const stderr = typeof error?.stderr === 'string' ? error.stderr.trim() : '';
-    throw new Error(`cargo metadata failed; the planning-only gate cannot enumerate workspace members and unreadable must fail: ${stderr || error.message}`);
+    throw new Error(`cargo metadata failed; the workspace inventory cannot enumerate workspace members and unreadable must fail: ${stderr || error.message}`);
   }
   let metadata;
   try {
     metadata = JSON.parse(stdout);
   } catch {
-    throw new Error('cargo metadata emitted unparseable JSON; the planning-only gate cannot enumerate workspace members and unreadable must fail');
+    throw new Error('cargo metadata emitted unparseable JSON; the workspace inventory cannot enumerate workspace members and unreadable must fail');
   }
-  const memberViolations = workspaceMemberViolations(metadata.packages, { repoRoot });
+  const packages = Array.isArray(metadata.packages) ? metadata.packages : [];
+  const memberViolations = workspaceMemberViolations(packages, { repoRoot });
   const lockedNames = lockedPackageNames(readFileSync(lockfilePath, 'utf8'));
-  const lockedViolations = lockedNames
-    .filter((name) => LEPTOS_PACKAGE_FAMILY.test(name))
-    .map((name) => `${ADR}: ${BACKEND_WORKSPACE_LOCKFILE} resolves Leptos-family package '${name}' — a console implementation artifact is in the build graph (possibly transitive; \`cargo tree -i ${name}\` in backend/ names the introducer)`);
+  const uiMemberCount = packages.filter((pkg) => typeof pkg?.name === 'string' && CONSOLE_UI_MEMBER_NAME.test(pkg.name)).length;
+  const leptosLockedPackageCount = lockedNames.filter((name) => LEPTOS_PACKAGE_FAMILY.test(name)).length;
   return {
     workspace_scanned: true,
-    member_count: metadata.packages.length,
+    member_count: packages.length,
     locked_package_count: lockedNames.length,
-    violations: [...memberViolations, ...lockedViolations],
+    ui_member_count: uiMemberCount,
+    leptos_locked_package_count: leptosLockedPackageCount,
+    violations: memberViolations,
   };
 }

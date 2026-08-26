@@ -19,6 +19,23 @@ SPEC.loader.exec_module(GENERATOR)
 
 
 class FirstPartyBuckGeneratorTests(unittest.TestCase):
+    def test_ui_package_members_are_skipped_because_leptos_is_not_vendored(self) -> None:
+        self.assertTrue(
+            GENERATOR.skip_workspace_member({"package": {"name": "console-payroll-ui"}})
+        )
+        self.assertTrue(
+            GENERATOR.skip_workspace_member({"package": {"name": "console-platform-ui"}})
+        )
+        self.assertFalse(
+            GENERATOR.skip_workspace_member({"package": {"name": "console-payroll-rest"}})
+        )
+        self.assertFalse(
+            GENERATOR.skip_workspace_member({"package": {"name": "console-platform-auth"}})
+        )
+        self.assertFalse(GENERATOR.skip_workspace_member({"package": {"name": "ui"}}))
+        self.assertFalse(GENERATOR.skip_workspace_member({}))
+        self.assertFalse(GENERATOR.skip_workspace_member({"package": {}}))
+
     def test_repo_source_layout_uses_mapped_sources_and_explicit_crate_root(self) -> None:
         block = "\n".join(
             GENERATOR._block(

@@ -97,23 +97,22 @@ test('extracted facts classify mounted, exposed, nav-declared and registry-bodie
 });
 
 // ---------------------------------------------------------------------------
-// ADR-0030 §8 planning-only, Rust side (console-9ze). The tombstone assertion
-// above pins the deleted React paths; ADR-0030 §1 makes the console a Leptos
-// WORKSPACE CRATE, so the forbidden artifact class is a Rust workspace member
-// that no web/** assertion can observe. RED baseline recorded on
-// 7b568df9db961fa8aa3f36917eaa13c6af2c3023: with a live `console-payroll-ui`
-// member declaring leptos + leptos_axum planted under the `crates/payroll/*`
-// member glob (zero Cargo.toml edits needed), this file passed 4/4. The three
-// tests below are the sighted replacement.
+// ADR-0041, Rust side. React tombstone paths stay absent (test above).
+// Ui members are allowed; lockfile leptos is allowed; a machine-readable
+// route-facts file will be added by the frontend lane later. Until then,
+// inventory may report zero leptos packages and must not fail HEAD for that
+// absence. A non-ui crate that declares leptos still fails.
 
-test('the workspace holds no console implementation artifact (ADR-0030 §8 planning-only)', () => {
+test('HEAD allows ui members and lockfile leptos; non-ui leptos is forbidden', () => {
   const facts = extractConsoleWorkspaceFacts(repoRoot);
   assert.ok(facts.member_count > 0, 'workspace scan examined zero members; a gate that saw nothing must not pass');
   assert.ok(facts.locked_package_count > 0, 'lockfile scan examined zero packages; a gate that saw nothing must not pass');
+  assert.ok(Number.isInteger(facts.ui_member_count), 'inventory must report ui member count (zero is allowed until FE lands)');
+  assert.ok(Number.isInteger(facts.leptos_locked_package_count), 'inventory must report lockfile leptos count (zero is allowed until FE lands)');
   assert.deepEqual(
     facts.violations,
     [],
-    'ADR-0030 §8 forbids console implementation artifacts until every §7 condition is measured green; this check may be retired only in the change that opens the gate',
+    'a non-ui workspace member must not declare a Leptos-family dependency',
   );
 });
 
@@ -137,49 +136,44 @@ const writeWorkspaceFixture = (root, crates, { lockfilePackages } = {}) => {
   }
 };
 
-test('the planning-only scan sees the Rust artifact class the tombstone paths cannot', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'console-planning-only-'));
+test('the workspace scan flags non-ui leptos and allows ui members plus lockfile leptos', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'console-ui-inventory-'));
   try {
     writeWorkspaceFixture(root, [
-      // the §6-chartered artifact exactly as ADR-0030 describes it
+      // chartered -ui member with leptos: allowed
       { path: 'crates/payroll/ui', name: 'console-payroll-ui', dependencies: 'leptos = "0.9.0-beta"\nleptos_axum = "0.9.0-beta"\n' },
-      // rename dodge: crate name conforms to backend shapes, dependency aliased
+      // rename dodge on a non-ui crate: forbidden
       { path: 'crates/payroll/widgets', name: 'console-payroll-widgets', dependencies: 'view-framework = { package = "leptos", version = "0.9.0-beta" }\n' },
-      // hand-rolled dodge: chartered -ui name with no leptos at all
+      // leptos-free -ui crate: allowed
       { path: 'crates/hr/ui', name: 'console-hr-ui' },
       // near-misses that must NOT be flagged: -gui name; lettre/leptonic deps
-      // (leptonic's transitive leptos belongs to the lockfile tier, which the
-      // fixture lockfile below exercises)
       { path: 'crates/payroll/gui', name: 'console-payroll-gui', dependencies: 'lettre = "0.11"\nleptonic = "0.5"\n' },
     ], { lockfilePackages: ['console-payroll-ui', 'leptos', 'leptos_axum', 'leptose', 'leptonic'] });
-    // the old subject is blind here: neither tombstone path exists in this tree
     assert.equal(existsSync(path.join(root, CONSOLE_NAV_SOURCE)), false);
     assert.equal(existsSync(path.join(root, CONSOLE_REGISTRY_SOURCE)), false);
     const facts = extractConsoleWorkspaceFacts(root);
     const text = facts.violations.join('\n');
-    assert.equal(facts.violations.length, 7, `expected the 3 name/dep members plus 2 locked packages to yield 7 violations, got:\n${text}`);
-    assert.ok(facts.violations.every((violation) => violation.startsWith('ADR-0030 §8 planning-only violation')), text);
-    assert.match(text, /'console-payroll-ui' \(backend\/crates\/payroll\/ui\/Cargo\.toml\) carries the §6-chartered console surface-crate name/, 'the chartered -ui name must be named');
-    assert.match(text, /'console-payroll-ui' .* declares Leptos-family dependency 'leptos'/, 'the leptos dependency must be named');
-    assert.match(text, /'console-payroll-ui' .* declares Leptos-family dependency 'leptos_axum'/, 'the leptos_axum dependency must be named');
-    assert.match(text, /'console-payroll-widgets' .* declares Leptos-family dependency 'leptos' \(renamed locally to 'view-framework'\)/, 'a renamed dependency must be reported under its TRUE package name');
-    assert.match(text, /'console-hr-ui' .* carries the §6-chartered console surface-crate name/, 'a leptos-free -ui crate must still be named');
-    assert.match(text, /backend\/Cargo\.lock resolves Leptos-family package 'leptos'/, 'the locked graph tier must flag leptos');
-    assert.match(text, /backend\/Cargo\.lock resolves Leptos-family package 'leptos_axum'/, 'the locked graph tier must flag leptos_axum');
+    assert.equal(facts.ui_member_count, 2, `expected two -ui members, got ${facts.ui_member_count}`);
+    assert.equal(facts.leptos_locked_package_count, 2, `lockfile leptos+leptos_axum must be counted, not failed; got ${facts.leptos_locked_package_count}`);
+    assert.equal(facts.violations.length, 1, `expected only the non-ui leptos rename, got:\n${text}`);
+    assert.ok(facts.violations.every((violation) => violation.startsWith('ADR-0041 non-ui Leptos violation')), text);
+    assert.match(text, /'console-payroll-widgets' .* declares Leptos-family dependency 'leptos' \(renamed locally to 'view-framework'\)/, 'a renamed dependency on a non-ui crate must be reported under its TRUE package name');
+    assert.doesNotMatch(text, /console-payroll-ui|console-hr-ui/, 'ui members must not be violations');
+    assert.doesNotMatch(text, /Cargo\.lock resolves/, 'lockfile leptos must not be a violation');
     assert.doesNotMatch(text, /console-payroll-gui|'leptonic'|'leptose'|'lettre'/, 'near-miss names and dependencies must not be flagged');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('the planning-only scan fails closed on anything it cannot read', () => {
+test('the workspace scan fails closed on anything it cannot read', () => {
   assert.throws(() => workspaceMemberViolations([]), /examined zero workspace members/, 'zero members must fail, never pass');
   assert.throws(() => workspaceMemberViolations([{ name: 'x' }]), /cannot read/, 'an unreadable member must fail, never be skipped');
   assert.throws(() => workspaceMemberViolations([{ name: 'x', manifest_path: '/x/Cargo.toml', dependencies: [{}] }]), /unreadable dependency/, 'an unreadable dependency must fail, never be skipped');
   assert.throws(() => lockedPackageNames(''), /unreadable must fail/, 'an empty lockfile must fail, never scan clean');
   assert.throws(() => lockedPackageNames('[[package]]\nversion = "1.0.0"\n'), /carries no name/, 'a nameless package block must fail, never be skipped');
-  assert.throws(() => extractConsoleWorkspaceFacts(path.join(tmpdir(), 'console-planning-only-absent-root')), /backend\/Cargo\.toml is missing/, 'a missing manifest must fail, never pass');
-  const root = mkdtempSync(path.join(tmpdir(), 'console-planning-only-closed-'));
+  assert.throws(() => extractConsoleWorkspaceFacts(path.join(tmpdir(), 'console-ui-inventory-absent-root')), /backend\/Cargo\.toml is missing/, 'a missing manifest must fail, never pass');
+  const root = mkdtempSync(path.join(tmpdir(), 'console-ui-inventory-closed-'));
   try {
     writeWorkspaceFixture(root, [{ path: 'crates/hr/domain', name: 'console-hr-domain' }]);
     assert.throws(() => extractConsoleWorkspaceFacts(root), /backend\/Cargo\.lock is missing/, 'a missing lockfile must fail, never pass');

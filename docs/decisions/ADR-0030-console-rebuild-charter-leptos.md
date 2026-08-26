@@ -6,7 +6,8 @@ date: 2026-07-30
 owner: jasonlee
 decision: console-rebuild-chartered-on-leptos-planning-only
 amends: [ADR-0025]
-related: [ADR-0001, ADR-0009, ADR-0012, ADR-0018, ADR-0021, ADR-0022, ADR-0023, ADR-0025]
+amended_by: [ADR-0041]
+related: [ADR-0001, ADR-0009, ADR-0012, ADR-0018, ADR-0021, ADR-0022, ADR-0023, ADR-0025, ADR-0041]
 ---
 
 # ADR-0030: Console rebuild chartered on Leptos; planning authorized, implementation gated
@@ -25,6 +26,13 @@ everything §3 does not name.
 > changed to `Console API`; no contracts-crate emitter or schema-to-wire fidelity
 > proof exists. These observations do not rewrite the Decision or open its frontend
 > implementation gate.
+
+> **Current observation (2026-08-25):** The accepted text below is still preserved
+> as written. ADR-0041 accepts `Layer::Ui` and opens the implementation gate for
+> the payroll vertical — the ADR-0001 amendment §6 named as the missing
+> dependency. This observation does not rewrite the Decision. The first
+> full-depth vertical is payroll execution; a machine-readable Leptos route-facts
+> file remains a frontend-lane follow-up.
 
 ## Context
 

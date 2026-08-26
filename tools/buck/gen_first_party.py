@@ -1230,13 +1230,23 @@ def test_labels(package, test_type, uses_postgres):
     return labels
 
 
+def skip_workspace_member(manifest):
+    """Skip `-ui` packages: Leptos is not in the vendored third-party graph."""
+    package = manifest.get("package")
+    if not isinstance(package, dict):
+        return False
+    name = package.get("name")
+    return isinstance(name, str) and name.endswith("-ui")
+
+
 def find_members():
     dirs = []
     for root in MEMBER_ROOTS:
         for dirpath, _, files in os.walk(os.path.join(REPO, root)):
             if "Cargo.toml" in files and os.path.basename(dirpath) != "rust":
                 with open(os.path.join(dirpath, "Cargo.toml"), "rb") as f:
-                    if "package" in tomllib.load(f):
+                    manifest = tomllib.load(f)
+                    if "package" in manifest and not skip_workspace_member(manifest):
                         dirs.append(dirpath)
     return sorted(dirs)
 
