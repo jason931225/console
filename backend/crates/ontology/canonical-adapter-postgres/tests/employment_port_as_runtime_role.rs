@@ -674,10 +674,13 @@ async fn an_exited_promote_closes_the_employment_head_window(owner_pool: PgPool)
         get(&port, org, employment_id).await.unwrap().is_none(),
         "the EXITED head stays omitted after a sibling ACTIVE promote"
     );
-    let listed = list(&port, org).await.unwrap();
+    let sibling = get(&port, org, employment_open)
+        .await
+        .unwrap()
+        .expect("sibling ACTIVE employment remains queryable after EXITED omit");
     assert_eq!(
-        listed.iter().map(|head| head.id).collect::<Vec<_>>(),
-        vec![employment_open],
+        list(&port, org).await.unwrap(),
+        vec![sibling],
         "list is open heads only"
     );
 }
