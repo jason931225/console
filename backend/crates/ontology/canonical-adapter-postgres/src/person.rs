@@ -63,7 +63,7 @@ use console_ontology_canonical_domain::{
     CanonicalPort, CanonicalPortError, CanonicalQuery, CommandId, CommandReceipt, DispatchTarget,
     ObjectKey, Person, Preflight, ReceiptOwner,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -173,7 +173,12 @@ impl CanonicalPortError for PersonError {
 
 /// Current canonical Person head. Display/legal names are parsed from the
 /// latest revision's attributes; a missing key is omitted, never invented.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// The head is a closed four-field projection. `get`/`list` never copy
+/// `person_revisions.attributes` onto the wire, so a stored `phone` (or
+/// payroll-ish `salary` / `bank_account` / `rrn`) cannot appear even when
+/// those keys sit on the revision JSON.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PersonHead {
     pub id: Uuid,
     pub display_name: Option<String>,
@@ -248,12 +253,7 @@ impl PgPersonPort {
             .into_iter()
             .map(|row| {
                 let attributes: serde_json::Value = row.get("attributes");
-                PersonHead {
-                    id: row.get("id"),
-                    display_name: attr_string(&attributes, "display_name"),
-                    legal_name: attr_string(&attributes, "legal_name"),
-                    version: row.get("version"),
-                }
+                person_head(row.get("id"), row.get("version"), &attributes)
             })
             .collect())
     }
@@ -560,6 +560,18 @@ fn canonical_json(value: &serde_json::Value) -> serde_json::Value {
             serde_json::Value::Object(entries.into_iter().collect())
         }
         primitive => primitive.clone(),
+    }
+}
+
+/// Closed head projection: names only. Does not flatten or pass through the
+/// attributes object, so `phone` / `salary` / `bank_account` / `rrn` cannot
+/// ride along even when they are present on the revision.
+fn person_head(id: Uuid, version: i64, attributes: &serde_json::Value) -> PersonHead {
+    PersonHead {
+        id,
+        display_name: attr_string(attributes, "display_name"),
+        legal_name: attr_string(attributes, "legal_name"),
+        version,
     }
 }
 

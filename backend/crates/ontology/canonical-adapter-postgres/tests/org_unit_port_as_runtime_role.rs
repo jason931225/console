@@ -359,9 +359,10 @@ async fn an_org_unit_is_created_and_read_back(owner_pool: PgPool) {
     );
     assert_eq!(head.version, 1);
     assert_eq!(list(&port, org).await.unwrap(), vec![head]);
+    let unknown = get(&port, org, Uuid::new_v4()).await;
     assert!(
-        get(&port, org, Uuid::new_v4()).await.unwrap().is_none(),
-        "an unknown id must not invent an OrgUnit"
+        matches!(unknown, Ok(None)),
+        "an unknown id must be Ok(None) on the runtime-role pool, never a distinct error; got {unknown:?}"
     );
 }
 
@@ -576,7 +577,16 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
     drop(tx);
 
     assert!(list(&port, org).await.unwrap().is_empty());
-    assert!(get(&port, org, foreign_unit).await.unwrap().is_none());
+    let foreign_head = get(&port, org, foreign_unit).await;
+    assert!(
+        matches!(foreign_head, Ok(None)),
+        "foreign OrgUnit id is Ok(None) on the runtime-role pool, never a wrong-tenant error; got {foreign_head:?}"
+    );
+    let unknown = get(&port, org, Uuid::new_v4()).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown OrgUnit id is indistinguishable from a foreign tenant: Ok(None); got {unknown:?}"
+    );
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]

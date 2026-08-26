@@ -349,7 +349,11 @@ async fn a_person_is_created_and_read_back(owner_pool: PgPool) {
     );
     assert_eq!(head.version, 1);
     assert_eq!(list(&port, org).await.unwrap(), vec![head]);
-    assert!(get(&port, org, Uuid::new_v4()).await.unwrap().is_none());
+    let unknown = get(&port, org, Uuid::new_v4()).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown Person id is Ok(None) on the runtime-role pool, never a distinct error; got {unknown:?}"
+    );
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -551,7 +555,16 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
     drop(tx);
 
     assert!(list(&port, org).await.unwrap().is_empty());
-    assert!(get(&port, org, foreign_person).await.unwrap().is_none());
+    let foreign_head = get(&port, org, foreign_person).await;
+    assert!(
+        matches!(foreign_head, Ok(None)),
+        "foreign Person id is Ok(None) on the runtime-role pool, never a wrong-tenant error; got {foreign_head:?}"
+    );
+    let unknown = get(&port, org, Uuid::new_v4()).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown Person id is indistinguishable from a foreign tenant: Ok(None); got {unknown:?}"
+    );
 }
 
 /// P5 handoff: a trusted uniquely-resolved employee binds with
@@ -606,6 +619,9 @@ async fn create_without_employee_id_stays_unbound_despite_name_phone_org_attribu
         attributes: json!({
             "legal_name": "동명이인",
             "phone": "+82-10-1234-5678",
+            "salary": 50_000_000,
+            "bank_account": "123-456-789012",
+            "rrn": "900101-1234567",
             "org_text": "ACME / 서울지사",
             "source_key": "동명이인-peer",
         }),
@@ -636,6 +652,27 @@ async fn create_without_employee_id_stays_unbound_despite_name_phone_org_attribu
     .unwrap();
     assert_eq!(person_bindings, 0);
 
+    let stored: serde_json::Value = sqlx::query_scalar(
+        "SELECT attributes FROM person_revisions \
+         WHERE org_id = $1 AND person_id = $2 AND version = 1",
+    )
+    .bind(ORG)
+    .bind(person_id)
+    .fetch_one(&owner_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored.get("phone").and_then(serde_json::Value::as_str),
+        Some("+82-10-1234-5678"),
+        "create may persist phone on the revision; get/list must still omit it"
+    );
+    for key in ["salary", "bank_account", "rrn"] {
+        assert!(
+            stored.get(key).is_some(),
+            "create stored {key} on the revision, so a leaking head would be observable"
+        );
+    }
+
     let head = get(&port, org, person_id)
         .await
         .unwrap()
@@ -643,9 +680,39 @@ async fn create_without_employee_id_stays_unbound_despite_name_phone_org_attribu
     assert_eq!(head.id, person_id);
     assert_eq!(head.legal_name.as_deref(), Some("동명이인"));
     assert_eq!(head.display_name, None);
-    // PersonHead has no phone (or RRN) field: stored attributes must not leak
-    // onto the operator head. The type itself is the omit.
-    assert_eq!(list(&port, org).await.unwrap(), vec![head]);
+    let listed = list(&port, org).await.unwrap();
+    assert_eq!(listed, vec![head.clone()]);
+    for (label, wire) in [
+        ("get", serde_json::to_value(&head).unwrap()),
+        ("list", serde_json::to_value(&listed).unwrap()),
+    ] {
+        let blob = wire.to_string();
+        for key in ["phone", "salary", "bank_account", "rrn"] {
+            assert!(
+                !blob.contains(key),
+                "{label} PersonHead must not surface {key}; got {blob}"
+            );
+        }
+        assert!(
+            !blob.contains("+82-10-1234-5678"),
+            "{label} PersonHead must not surface the stored phone value; got {blob}"
+        );
+        let object = if label == "get" {
+            wire.as_object().expect("get PersonHead is a JSON object")
+        } else {
+            wire.as_array()
+                .and_then(|rows| rows.first())
+                .and_then(serde_json::Value::as_object)
+                .expect("list PersonHead is a JSON object")
+        };
+        let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            ["display_name", "id", "legal_name", "version"],
+            "{label} PersonHead field set must stay the closed four-field projection; got {blob}"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]

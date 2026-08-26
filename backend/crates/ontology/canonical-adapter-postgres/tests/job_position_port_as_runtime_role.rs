@@ -383,6 +383,11 @@ async fn a_job_position_is_created_and_read_back(owner_pool: PgPool) {
     assert_eq!(listed_unit, vec![viewed.clone()]);
     let listed = list(&port, org).await.unwrap();
     assert_eq!(listed, vec![viewed]);
+    let unknown = get(&port, org, Uuid::new_v4()).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown JobPosition id is Ok(None) on the runtime-role pool, never a distinct error; got {unknown:?}"
+    );
 }
 
 /// Free-text `employees.position` and `recruit_postings` are excluded by the
@@ -425,9 +430,10 @@ async fn free_text_and_recruiting_are_never_inferred_as_job_positions(owner_pool
         0,
         "legacy free-text / recruiting must not materialize job_positions"
     );
+    let unknown = get(&port, org, Uuid::new_v4()).await;
     assert!(
-        get(&port, org, Uuid::new_v4()).await.unwrap().is_none(),
-        "querying an unknown id must not invent a JobPosition"
+        matches!(unknown, Ok(None)),
+        "querying an unknown id must be Ok(None) on the runtime-role pool, never a distinct error; got {unknown:?}"
     );
 
     let created = execute(&port, command(org, actor, create(unit, "정규 직위")))
@@ -703,7 +709,23 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
     drop(tx);
 
     assert!(list(&port, org).await.unwrap().is_empty());
-    assert!(get(&port, org, foreign_position).await.unwrap().is_none());
+    let foreign_head = get(&port, org, foreign_position).await;
+    assert!(
+        matches!(foreign_head, Ok(None)),
+        "foreign JobPosition id is Ok(None) on the runtime-role pool, never a wrong-tenant error; got {foreign_head:?}"
+    );
+    let unknown = get(&port, org, Uuid::new_v4()).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown JobPosition id is indistinguishable from a foreign tenant: Ok(None); got {unknown:?}"
+    );
+    assert!(
+        list_for_org_unit(&port, org, foreign_unit)
+            .await
+            .unwrap()
+            .is_empty(),
+        "list_for_org_unit of a foreign unit is empty, not a wrong-tenant error"
+    );
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]

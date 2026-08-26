@@ -507,7 +507,11 @@ async fn an_appointment_opens_a_head_binds_the_legacy_row_and_appends_revision_o
     assert_eq!(head.job_position_id, Some(JOB_STAFF));
     assert_eq!(head.appointed_on, at(0));
     assert_eq!(list(&port, org).await.unwrap(), vec![head]);
-    assert!(get(&port, org, Uuid::new_v4()).await.unwrap().is_none());
+    let unknown = get(&port, org, Uuid::new_v4()).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown Employment id is Ok(None) on the runtime-role pool, never a distinct error; got {unknown:?}"
+    );
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -1137,7 +1141,16 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
     drop(tx);
 
     assert!(list(&port, org).await.unwrap().is_empty());
-    assert!(get(&port, org, foreign_employment).await.unwrap().is_none());
+    let foreign_head = get(&port, org, foreign_employment).await;
+    assert!(
+        matches!(foreign_head, Ok(None)),
+        "foreign Employment id is Ok(None) on the runtime-role pool, never a wrong-tenant error; got {foreign_head:?}"
+    );
+    let unknown = get(&port, org, Uuid::new_v4()).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown Employment id is indistinguishable from a foreign tenant: Ok(None); got {unknown:?}"
+    );
 }
 
 /// Operator data-repair can leave one `employment_id` on N bindings (PK is

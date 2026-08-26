@@ -558,8 +558,19 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
     drop(tx);
 
     // Armed for ORG: the foreign revision is not a fabricated local head.
-    assert!(get(&port, org).await.unwrap().is_none());
+    // Deny-by-omission: a missing or other-tenant company is Ok(None) on the
+    // runtime-role pool, never a distinct "wrong tenant" error.
+    let foreign_as_local = get(&port, org).await;
+    assert!(
+        matches!(foreign_as_local, Ok(None)),
+        "foreign Company is Ok(None) when armed for this org; got {foreign_as_local:?}"
+    );
     assert!(list(&port, org).await.unwrap().is_empty());
+    let unknown = get(&port, OrgId::from_uuid(Uuid::new_v4())).await;
+    assert!(
+        matches!(unknown, Ok(None)),
+        "unknown org id is Ok(None) on the runtime-role pool, never a distinct error; got {unknown:?}"
+    );
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
