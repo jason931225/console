@@ -1597,6 +1597,10 @@ mod tests {
             ResolutionAction::parse(&overtime.action),
             Ok(ResolutionAction::ApproveOvertime)
         );
+        assert_eq!(
+            ResolutionAction::parse("CONFIRM"),
+            Ok(ResolutionAction::Confirm)
+        );
         assert!(
             ResolutionAction::parse("confirm").is_err(),
             "resolution actions are exact SCREAMING_SNAKE_CASE tokens"
