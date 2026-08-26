@@ -545,6 +545,33 @@ async fn action_inbox_payroll_source_enforces_sod_and_org_wide_manage(pool: PgPo
     );
     assert_eq!(submitter_resp.json["total"], 0);
 
+    // Workbench reuses PgActionInboxSources via list_complete_action_inbox.
+    let submitter_workbench = get(
+        service.clone(),
+        "/api/v1/me/workbench",
+        &bearer(&keys, OrgId::knl(), submitter, "EXECUTIVE", branch),
+    )
+    .await;
+    assert_eq!(
+        submitter_workbench.status,
+        StatusCode::OK,
+        "{:?}",
+        submitter_workbench.json
+    );
+    assert_eq!(
+        submitter_workbench.json["action_inbox"]["status"],
+        "ok",
+        "{:?}",
+        submitter_workbench.json
+    );
+    assert_eq!(
+        payroll_ids(&submitter_workbench.json["action_inbox"]),
+        Vec::<String>::new(),
+        "submitter must not see their own SUBMITTED run through workbench list_source_page: {:?}",
+        submitter_workbench.json
+    );
+    assert_eq!(submitter_workbench.json["action_inbox"]["total"], 0);
+
     let approver_resp = get(
         service.clone(),
         PATH,
@@ -566,6 +593,32 @@ async fn action_inbox_payroll_source_enforces_sod_and_org_wide_manage(pool: PgPo
     assert_eq!(approver_resp.json["items"][0]["kind"], "payroll");
     assert_eq!(approver_resp.json["items"][0]["ref"], "inbox-sod-run");
     assert_eq!(approver_resp.json["total"], 1);
+
+    let approver_workbench = get(
+        service.clone(),
+        "/api/v1/me/workbench",
+        &bearer(&keys, OrgId::knl(), approver, "EXECUTIVE", branch),
+    )
+    .await;
+    assert_eq!(
+        approver_workbench.status,
+        StatusCode::OK,
+        "{:?}",
+        approver_workbench.json
+    );
+    assert_eq!(
+        approver_workbench.json["action_inbox"]["status"],
+        "ok",
+        "{:?}",
+        approver_workbench.json
+    );
+    assert_eq!(
+        payroll_ids(&approver_workbench.json["action_inbox"]),
+        vec![format!("payroll:{run}")],
+        "{:?}",
+        approver_workbench.json
+    );
+    assert_eq!(approver_workbench.json["action_inbox"]["total"], 1);
 
     let admin_resp = get(
         service,
