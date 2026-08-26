@@ -763,8 +763,9 @@ async fn people_directory_custom_role_resolution_is_active_only_and_membership_b
     }
 }
 
-/// Directory is a scrape surface: items must omit `phone` even when a number is
-/// stored. User GET / users list keep `UserSummary.phone`.
+/// Directory is a scrape surface: items must keep `id` / `display_name` and omit
+/// `phone` plus payroll-ish keys even when a number is stored. User GET / users
+/// list keep `UserSummary.phone`.
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn directory_people_omits_phone_while_user_get_keeps_it(pool: PgPool) {
     let harness = Harness::new(pool.clone()).await;
@@ -802,6 +803,10 @@ async fn directory_people_omits_phone_while_user_get_keeps_it(pool: PgPool) {
     assert_eq!(status, StatusCode::OK, "{admin_page:?}");
     assert_eq!(admin_page["total"], 1, "{admin_page:?}");
     assert_eq!(admin_page["items"][0]["id"], subject_id);
+    assert_eq!(
+        admin_page["items"][0]["display_name"],
+        "DirectoryDtoSubject"
+    );
     assert_directory_items_omit_phone(&admin_page);
 
     let (status, fetched) = send(
@@ -861,6 +866,10 @@ async fn directory_people_omits_phone_while_user_get_keeps_it(pool: PgPool) {
     assert_eq!(status, StatusCode::OK, "{reader_page:?}");
     assert_eq!(reader_page["total"], 1, "{reader_page:?}");
     assert_eq!(reader_page["items"][0]["id"], subject_id);
+    assert_eq!(
+        reader_page["items"][0]["display_name"],
+        "DirectoryDtoSubject"
+    );
     assert_directory_items_omit_phone(&reader_page);
 }
 
@@ -3287,6 +3296,18 @@ async fn me_authz_narrows_capability_to_the_grants_own_branch_scope(pool: PgPool
 }
 
 fn assert_directory_items_omit_phone(page: &Value) {
+    const PAYROLL_ISH_KEYS: &[&str] = &[
+        "phone",
+        "phone_e164",
+        "compensation",
+        "base_pay",
+        "currency",
+        "bank_account",
+        "account_number",
+        "wage",
+        "salary",
+        "payroll",
+    ];
     let items = page["items"]
         .as_array()
         .expect("directory page items must be an array");
@@ -3295,11 +3316,26 @@ fn assert_directory_items_omit_phone(page: &Value) {
         "directory page must include at least one person"
     );
     for item in items {
+        let keys = item
+            .as_object()
+            .map(|obj| obj.keys().cloned().collect::<Vec<_>>())
+            .expect("directory item must be an object");
         assert!(
-            item.get("phone").is_none(),
-            "directory item must omit phone; keys={:?}",
-            item.as_object().map(|obj| obj.keys().collect::<Vec<_>>())
+            item.get("id").is_some(),
+            "directory item must have id; keys={keys:?}"
         );
+        assert!(
+            item.get("display_name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| !name.is_empty()),
+            "directory item must have display_name; keys={keys:?}"
+        );
+        for forbidden in PAYROLL_ISH_KEYS {
+            assert!(
+                item.get(*forbidden).is_none(),
+                "directory item must omit {forbidden}; keys={keys:?}"
+            );
+        }
     }
 }
 
