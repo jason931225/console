@@ -427,7 +427,7 @@ async fn people_directory_filters_scope_orders_and_counts_truthfully(pool: PgPoo
     assert_eq!(linked["employee_id"], employee_id.to_string());
     assert_eq!(linked["employee_link_status"], "LINKED");
     assert_eq!(linked["employee_name"], "Alpha Employee");
-    assert_directory_items_omit_phone(&page);
+    assert_directory_item_json_allowlist(&page);
 
     let (status, second_page) = send(
         &harness,
@@ -763,9 +763,9 @@ async fn people_directory_custom_role_resolution_is_active_only_and_membership_b
     }
 }
 
-/// Directory is a scrape surface: items must keep `id` / `display_name` and omit
-/// `phone` plus payroll-ish keys even when a number is stored. User GET / users
-/// list keep `UserSummary.phone`.
+/// Directory is a scrape surface: HTTP items are a DirectoryPerson key
+/// allowlist (no `phone` / `salary` / `bank_account` / `rrn` / `won`) even when
+/// a number is stored. User GET / users list keep `UserSummary.phone`.
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn directory_people_omits_phone_while_user_get_keeps_it(pool: PgPool) {
     let harness = Harness::new(pool.clone()).await;
@@ -807,7 +807,7 @@ async fn directory_people_omits_phone_while_user_get_keeps_it(pool: PgPool) {
         admin_page["items"][0]["display_name"],
         "DirectoryDtoSubject"
     );
-    assert_directory_items_omit_phone(&admin_page);
+    assert_directory_item_json_allowlist(&admin_page);
 
     let (status, fetched) = send(
         &harness,
@@ -870,7 +870,7 @@ async fn directory_people_omits_phone_while_user_get_keeps_it(pool: PgPool) {
         reader_page["items"][0]["display_name"],
         "DirectoryDtoSubject"
     );
-    assert_directory_items_omit_phone(&reader_page);
+    assert_directory_item_json_allowlist(&reader_page);
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -3295,8 +3295,28 @@ async fn me_authz_narrows_capability_to_the_grants_own_branch_scope(pool: PgPool
     );
 }
 
-fn assert_directory_items_omit_phone(page: &Value) {
-    const PAYROLL_ISH_KEYS: &[&str] = &[
+fn assert_directory_item_json_allowlist(page: &Value) {
+    const ALLOWED_KEYS: &[&str] = &[
+        "id",
+        "display_name",
+        "employee_id",
+        "employee_name",
+        "employee_number",
+        "employee_company",
+        "employee_org_unit",
+        "employee_position",
+        "employee_identity_review_required",
+        "employee_identity_resolution_confidence",
+        "employee_link_status",
+        "team",
+        "roles",
+        "branch_ids",
+        "is_active",
+        "has_passkey",
+        "account_status",
+        "created_at",
+    ];
+    const FORBIDDEN_KEYS: &[&str] = &[
         "phone",
         "phone_e164",
         "compensation",
@@ -3307,7 +3327,10 @@ fn assert_directory_items_omit_phone(page: &Value) {
         "wage",
         "salary",
         "payroll",
+        "rrn",
+        "won",
     ];
+    let allowed = ALLOWED_KEYS.iter().copied().collect::<BTreeSet<_>>();
     let items = page["items"]
         .as_array()
         .expect("directory page items must be an array");
@@ -3316,10 +3339,8 @@ fn assert_directory_items_omit_phone(page: &Value) {
         "directory page must include at least one person"
     );
     for item in items {
-        let keys = item
-            .as_object()
-            .map(|obj| obj.keys().cloned().collect::<Vec<_>>())
-            .expect("directory item must be an object");
+        let object = item.as_object().expect("directory item must be an object");
+        let keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
         assert!(
             item.get("id").is_some(),
             "directory item must have id; keys={keys:?}"
@@ -3330,7 +3351,11 @@ fn assert_directory_items_omit_phone(page: &Value) {
                 .is_some_and(|name| !name.is_empty()),
             "directory item must have display_name; keys={keys:?}"
         );
-        for forbidden in PAYROLL_ISH_KEYS {
+        assert_eq!(
+            keys, allowed,
+            "directory item JSON keys must match the DirectoryPerson allowlist"
+        );
+        for forbidden in FORBIDDEN_KEYS {
             assert!(
                 item.get(*forbidden).is_none(),
                 "directory item must omit {forbidden}; keys={keys:?}"

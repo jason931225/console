@@ -4184,11 +4184,44 @@ mod directory_query_tests {
         }))
         .expect("directory page json");
         let item = &directory_json["items"][0];
-        assert!(
-            item.get("phone").is_none(),
-            "directory item must omit phone; keys={:?}",
-            item.as_object().map(|obj| obj.keys().collect::<Vec<_>>())
+        let keys = item
+            .as_object()
+            .expect("directory item must be an object")
+            .keys()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let allowed = [
+            "id",
+            "display_name",
+            "employee_id",
+            "employee_name",
+            "employee_number",
+            "employee_company",
+            "employee_org_unit",
+            "employee_position",
+            "employee_identity_review_required",
+            "employee_identity_resolution_confidence",
+            "employee_link_status",
+            "team",
+            "roles",
+            "branch_ids",
+            "is_active",
+            "has_passkey",
+            "account_status",
+            "created_at",
+        ]
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+        assert_eq!(
+            keys, allowed,
+            "directory item JSON keys must match the DirectoryPerson allowlist"
         );
+        for forbidden in ["phone", "salary", "bank_account", "rrn", "won"] {
+            assert!(
+                item.get(forbidden).is_none(),
+                "directory item must omit {forbidden}; keys={keys:?}"
+            );
+        }
         assert_eq!(item["display_name"], "directory subject");
     }
 
@@ -4203,6 +4236,54 @@ mod directory_query_tests {
             composed.contains("    DirectoryPage:\n"),
             "composed fragment missing DirectoryPage"
         );
+
+        let directory_person = include_str!("../openapi/schemas/DirectoryPerson.yaml");
+        let property_names = yaml_map_keys(directory_person, "properties:");
+        assert!(
+            !property_names.iter().any(|name| *name == "phone"),
+            "DirectoryPerson OpenAPI must not include phone; properties={property_names:?}"
+        );
+
+        let action_inbox = include_str!("../openapi/schemas/ActionInboxItem.yaml");
+        let kind_enum = yaml_field_enum_values(action_inbox, "kind");
+        assert!(
+            kind_enum.iter().any(|value| *value == "payroll"),
+            "ActionInboxItem.kind must include payroll; enum={kind_enum:?}"
+        );
+        assert!(
+            kind_enum.iter().any(|value| *value == "governance"),
+            "ActionInboxItem.kind must include governance; enum={kind_enum:?}"
+        );
+    }
+
+    fn yaml_map_keys<'a>(schema: &'a str, header: &str) -> Vec<&'a str> {
+        let Some((_, body)) = schema.split_once(header) else {
+            return Vec::new();
+        };
+        body.lines()
+            .filter_map(|line| {
+                let name = line.strip_prefix("  ")?;
+                if name.starts_with(' ') || name.starts_with('#') {
+                    return None;
+                }
+                name.strip_suffix(':')
+            })
+            .collect()
+    }
+
+    fn yaml_field_enum_values<'a>(schema: &'a str, field: &str) -> Vec<&'a str> {
+        let header = format!("\n  {field}:\n");
+        let Some((_, field_body)) = schema.split_once(&header) else {
+            return Vec::new();
+        };
+        let Some((_, enum_block)) = field_body.split_once("    enum:\n") else {
+            return Vec::new();
+        };
+        enum_block
+            .lines()
+            .map(str::trim)
+            .map_while(|line| line.strip_prefix("- "))
+            .collect()
     }
 }
 
