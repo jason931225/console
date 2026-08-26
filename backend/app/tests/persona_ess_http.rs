@@ -6,8 +6,13 @@
 //! must be forbidden on org-wide payroll run list:
 //!   * `GET /api/v1/me/inbox-docs?filter=payslip` → 200 (empty or own docs),
 //!     never 403 — ESS vault, not payroll REST `/payslips/me`;
+//!   * `GET /api/v1/payroll/payslips/me` → 200, never 403 — self-scoped
+//!     readiness (hours / `*_source_present`), never a won amount, never
+//!     `PayrollRunRead`; unlinked MEMBER is an empty page;
 //!   * `GET /api/v1/attendance/me/exceptions` → 200, never 403 — self-scoped,
 //!     not manager `AttendanceExceptionManage`;
+//!   * `GET /api/v1/attendance/me/week52` → 200, never 403 — self-scoped;
+//!     unlinked MEMBER is `status=not_available` with `projection` omitted;
 //!   * `GET /api/v1/payroll/runs` → 403 — `authorize_org_wide(PayrollRunRead)`.
 //!
 //! Status lock only: does not emit a payslip (see inbox-rest filter=payslip
@@ -31,8 +36,11 @@ use tower::ServiceExt;
 const TEST_ISSUER: &str = "console-platform-auth";
 const TEST_AUDIENCE: &str = "console-api";
 const INBOX_PAYSLIP_PATH: &str = "/api/v1/me/inbox-docs?filter=payslip";
+const MY_PAYSLIPS_PATH: &str = "/api/v1/payroll/payslips/me";
 // Date selector is list validation (422 without it), not an authz grant.
 const MY_EXCEPTIONS_PATH: &str = "/api/v1/attendance/me/exceptions?work_date=2026-07-20";
+// Monday — week52 start validation, not an authz grant.
+const MY_WEEK52_PATH: &str = "/api/v1/attendance/me/week52?week_start=2026-07-20";
 const PAYROLL_RUNS_PATH: &str = "/api/v1/payroll/runs";
 
 struct Keys {
@@ -107,6 +115,42 @@ async fn member_login_only_ess_is_200_and_payroll_runs_are_403(pool: PgPool) {
         exceptions.json
     );
 
+    let payslips = get(service.clone(), MY_PAYSLIPS_PATH, &token).await;
+    assert_eq!(
+        payslips.status,
+        StatusCode::OK,
+        "MEMBER Login-only own payslip readiness must be 200, not 403: {:?}",
+        payslips.json
+    );
+    let payslip_items = payslips.json["items"]
+        .as_array()
+        .expect("payslips/me items");
+    for item in payslip_items {
+        let won = keys_containing_won(item);
+        assert!(
+            won.is_empty(),
+            "payslips/me items are readiness (hours / *_source_present), never won: {won:?} in {item}"
+        );
+    }
+
+    let week52 = get(service.clone(), MY_WEEK52_PATH, &token).await;
+    assert_eq!(
+        week52.status,
+        StatusCode::OK,
+        "MEMBER Login-only own week52 must be 200, not 403: {:?}",
+        week52.json
+    );
+    assert_eq!(
+        week52.json["status"], "not_available",
+        "unlinked MEMBER week52 must be not_available: {:?}",
+        week52.json
+    );
+    assert!(
+        week52.json.get("projection").is_none(),
+        "unlinked MEMBER week52 must omit projection (deny-by-omission): {:?}",
+        week52.json
+    );
+
     let runs = get(service, PAYROLL_RUNS_PATH, &token).await;
     assert_eq!(
         runs.status,
@@ -139,6 +183,31 @@ async fn get(service: axum::Router, uri: &str, token: &str) -> JsonResponse {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let json = serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({}));
     JsonResponse { status, json }
+}
+
+fn keys_containing_won(value: &Value) -> Vec<String> {
+    let mut found = Vec::new();
+    collect_keys_containing_won(value, &mut found);
+    found
+}
+
+fn collect_keys_containing_won(value: &Value, found: &mut Vec<String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, nested) in map {
+                if key.to_ascii_lowercase().contains("won") {
+                    found.push(key.clone());
+                }
+                collect_keys_containing_won(nested, found);
+            }
+        }
+        Value::Array(items) => {
+            for nested in items {
+                collect_keys_containing_won(nested, found);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn keys() -> Keys {
