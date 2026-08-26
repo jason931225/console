@@ -674,6 +674,64 @@ pub fn branch_audit_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+
+    /// Closed DirectoryPerson JSON keys: directory fields only, never phone or
+    /// payroll-ish scrape keys.
+    const DIRECTORY_PERSON_JSON_KEYS: &[&str] = &[
+        "id",
+        "display_name",
+        "employee_id",
+        "employee_name",
+        "employee_number",
+        "employee_company",
+        "employee_org_unit",
+        "employee_position",
+        "employee_identity_review_required",
+        "employee_identity_resolution_confidence",
+        "employee_link_status",
+        "team",
+        "roles",
+        "branch_ids",
+        "is_active",
+        "has_passkey",
+        "account_status",
+        "created_at",
+    ];
+
+    const DIRECTORY_PERSON_FORBIDDEN_JSON_KEYS: &[&str] = &[
+        "phone",
+        "salary",
+        "bank_account",
+        "rrn",
+        "resident_registration_number",
+        "payroll",
+        "won",
+    ];
+
+    fn directory_person_json_keys(value: &serde_json::Value) -> BTreeSet<&str> {
+        value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect()
+    }
+
+    fn assert_directory_person_closed_json_keys(person_json: &serde_json::Value) {
+        let keys = directory_person_json_keys(person_json);
+        let allowed: BTreeSet<&str> = DIRECTORY_PERSON_JSON_KEYS.iter().copied().collect();
+        assert_eq!(
+            keys, allowed,
+            "DirectoryPerson JSON keys must be the closed directory allowlist, got {person_json}"
+        );
+        for &forbidden in DIRECTORY_PERSON_FORBIDDEN_JSON_KEYS {
+            assert!(
+                !keys.contains(forbidden),
+                "DirectoryPerson must omit {forbidden}, got {person_json}"
+            );
+        }
+    }
 
     #[test]
     fn user_audit_event_is_org_global() {
@@ -714,10 +772,7 @@ mod tests {
             "010-1234-5678"
         );
         let person_json = serde_json::to_value(DirectoryPerson::from(user.clone())).unwrap();
-        assert!(
-            person_json.get("phone").is_none(),
-            "DirectoryPerson must omit phone, got {person_json}"
-        );
+        assert_directory_person_closed_json_keys(&person_json);
         let page_json = serde_json::to_value(DirectoryPage::from(UserPage {
             items: vec![user],
             limit: 1,
@@ -725,10 +780,7 @@ mod tests {
             total: 1,
         }))
         .unwrap();
-        assert!(
-            page_json["items"][0].get("phone").is_none(),
-            "DirectoryPage items must omit phone, got {page_json}"
-        );
+        assert_directory_person_closed_json_keys(&page_json["items"][0]);
     }
 
     #[test]
