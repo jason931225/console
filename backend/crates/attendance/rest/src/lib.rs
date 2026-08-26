@@ -722,6 +722,17 @@ struct ResolveBody {
     linked_work_ref: Option<String>,
     ot_hours: Option<f64>,
 }
+
+fn parse_resolve_action(action: &str) -> Result<ResolutionAction, RestError> {
+    ResolutionAction::parse(action).map_err(|e| {
+        RestError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "validation",
+            e.to_string(),
+        )
+    })
+}
+
 async fn resolve_exception(
     State(state): State<AttendanceRestState>,
     headers: HeaderMap,
@@ -744,13 +755,7 @@ async fn resolve_exception(
             &scope(&p),
             ResolveException {
                 exception_id,
-                action: ResolutionAction::parse(&body.action).map_err(|e| {
-                    RestError::new(
-                        StatusCode::UNPROCESSABLE_ENTITY,
-                        "validation",
-                        e.to_string(),
-                    )
-                })?,
+                action: parse_resolve_action(&body.action)?,
                 reason: body.reason,
                 linked_work_ref: body.linked_work_ref,
                 overtime_minutes: body.ot_hours.map(|hours| (hours * 60.0).round() as i32),
@@ -1588,6 +1593,10 @@ mod tests {
             ResolutionAction::parse(&confirm.action),
             Ok(ResolutionAction::Confirm)
         );
+        assert_eq!(
+            parse_resolve_action(&confirm.action).expect("CONFIRM is a domain action"),
+            ResolutionAction::Confirm
+        );
         let overtime = serde_json::from_value::<ResolveBody>(json!({
             "action": "APPROVE_OVERTIME",
             "reason": "approved"
@@ -1598,6 +1607,10 @@ mod tests {
             Ok(ResolutionAction::ApproveOvertime)
         );
         assert_eq!(
+            parse_resolve_action(&overtime.action).expect("APPROVE_OVERTIME is a domain action"),
+            ResolutionAction::ApproveOvertime
+        );
+        assert_eq!(
             ResolutionAction::parse("CONFIRM"),
             Ok(ResolutionAction::Confirm)
         );
@@ -1605,6 +1618,41 @@ mod tests {
             ResolutionAction::parse("confirm").is_err(),
             "resolution actions are exact SCREAMING_SNAKE_CASE tokens"
         );
+        assert!(
+            ResolutionAction::parse("HOLD").is_err(),
+            "HOLD is not an attendance ResolutionAction"
+        );
+        let hold = serde_json::from_value::<ResolveBody>(json!({
+            "action": "HOLD",
+            "reason": "park until next review"
+        }))
+        .expect("HOLD is valid wire shape; action parse is separate");
+        let hold_err = parse_resolve_action(&hold.action)
+            .expect_err("handler maps HOLD through parse to 422");
+        assert_eq!(hold_err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(hold_err.code, "validation");
+        let empty_hold = serde_json::from_value::<ResolveBody>(json!({
+            "action": "HOLD",
+            "reason": ""
+        }))
+        .expect("empty reason still deserializes at ResolveBody");
+        let empty_hold_err = parse_resolve_action(&empty_hold.action)
+            .expect_err("empty reason + HOLD is rejected at the handler parse path");
+        assert_eq!(empty_hold_err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(empty_hold_err.code, "validation");
+        assert!(
+            serde_json::from_value::<ResolveBody>(json!({ "action": "HOLD" })).is_err(),
+            "ResolveBody requires a reason field for every action"
+        );
+        for token in ["approve", "YES", "confirm"] {
+            assert!(
+                ResolutionAction::parse(token).is_err(),
+                "{token} is not an exact SCREAMING_SNAKE_CASE resolution token"
+            );
+            let err = parse_resolve_action(token).expect_err(token);
+            assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY, "{token}");
+            assert_eq!(err.code, "validation", "{token}");
+        }
     }
 
     #[test]
