@@ -29,7 +29,7 @@ Status: active roadmap authority. Product scope comes from [`PRODUCT.md`](PRODUC
 ## Explicit HOLDs
 
 - Bulk documentation moves, deletion, or graveyard copies are **HOLD** until custody and recoverability are proven with the full manifest and signed archive references.
-- Leptos and other frontend work are **HOLD** until the remaining PRODUCT frontend conditions are satisfied (mounted SSR shell and real E2E evidence). `Layer::Ui` being accepted does not clear this HOLD.
+- Leptos and other frontend work remain **HOLD** until the PRODUCT frontend conditions are actually satisfied (a mounted contracts-backed SSR shell and persona-based real-backend E2E evidence). `Layer::Ui` being accepted does not clear this HOLD, does not resume frontend implementation, and does not authorize shipping screens.
 - Live or production promotion, DNS, TLS, secrets, exposure, payment, credential-reset, and compliance claims are **HOLD** absent separate authority. A source release follows repository release authority and evidence; it does not authorize live promotion or exposure.
 - Destruction, termination, resize, or reprovisioning of the grandfathered OCI Ampere A1 instance (4 OCPU / 24 GB) is permanently **HOLD** because the reserved capacity cannot be recreated.
 - Workstation erase is **HOLD** until the reviewed Console candidate is on `main` and the PRODUCT custody gate has an itemized, read-back-verified preservation or explicit discard/reissue disposition for every local-only P0 item.

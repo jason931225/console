@@ -56,8 +56,9 @@ export function extractConsoleRouteFacts(repoRoot) {
 //
 // What still fails: a non-ui workspace member declaring a Leptos-family
 // dependency. HEAD classification uses git-tracked manifests so docs-only
-// preflight does not require cargo. `package = "leptos"` rename is parsed
-// from the manifest table.
+// preflight does not require cargo. True package names come from member
+// `package =` and from `[workspace.dependencies]` when `workspace = true`.
+// Dotted tables such as `[dependencies.leptos]` are the same classifier.
 // Unreadable inventory (missing lockfile, zero members, zero locked packages)
 // throws — the gate fails closed, never reports a clean state it did not observe.
 //
@@ -78,39 +79,119 @@ export const LEPTOS_PACKAGE_FAMILY = /^leptos(?:[_-]|$)/;
 export const CONSOLE_UI_MEMBER_NAME = /(?:^|-)ui$/;
 
 const ADR = 'ADR-0041 non-ui Leptos violation';
+const DEP_TABLE = /^(dependencies|dev-dependencies|build-dependencies)$/;
+const DEP_DOTTED = /^(dependencies|dev-dependencies|build-dependencies)\.([A-Za-z0-9_-]+)$/;
+const WORKSPACE_DEP_TABLE = 'workspace.dependencies';
+const WORKSPACE_DEP_DOTTED = /^workspace\.dependencies\.([A-Za-z0-9_-]+)$/;
 
-function parseDependencySection(text, section) {
-  const header = new RegExp(`^\\[${section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*$`, 'm');
-  const start = text.search(header);
-  if (start < 0) return [];
+function tomlTables(text) {
+  const headers = [...text.matchAll(/^\[([^\]]+)\][ \t]*$/gm)];
+  return headers.map((match, index) => ({
+    name: match[1],
+    body: text.slice(match.index + match[0].length, headers[index + 1]?.index),
+  }));
+}
+
+function depRecord(key, packageName) {
+  return packageName === key ? { name: packageName } : { name: packageName, rename: key };
+}
+
+function truePackageName(key, inlineBody, workspacePackageByKey, context) {
+  const pkg = inlineBody.match(/package\s*=\s*"([^"]+)"/)?.[1];
+  if (pkg) return pkg;
+  if (/\bworkspace\s*=/.test(inlineBody)) {
+    const workspaceName = workspacePackageByKey[key];
+    if (typeof workspaceName !== 'string' || workspaceName === '') {
+      throw new Error(`${context} declares '${key}' via workspace = true but [workspace.dependencies] does not name a package for it; refusing to classify what it cannot read`);
+    }
+    return workspaceName;
+  }
+  return key;
+}
+
+function parseInlineDependencyLines(body, workspacePackageByKey, context) {
   const deps = [];
-  for (const line of text.slice(start).split('\n').slice(1)) {
-    if (/^\s*\[/.test(line)) break;
-    const trimmed = line.split('#')[0].trim();
+  const lines = body.split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index].split('#')[0].trim();
     if (!trimmed) continue;
-    const table = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*\{([^}]*)\}/);
-    if (table) {
-      const key = table[1];
-      const pkg = table[2].match(/package\s*=\s*"([^"]+)"/)?.[1] ?? key;
-      deps.push(pkg === key ? { name: pkg } : { name: pkg, rename: key });
+    const tableStart = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*\{(.*)$/);
+    if (tableStart) {
+      let inner = tableStart[2];
+      while (!inner.includes('}') && index + 1 < lines.length) {
+        index += 1;
+        inner += ` ${lines[index].split('#')[0].trim()}`;
+      }
+      if (!inner.includes('}')) {
+        throw new Error(`${context} has an unclosed inline table for '${tableStart[1]}'; refusing to classify what it cannot read`);
+      }
+      deps.push(depRecord(tableStart[1], truePackageName(tableStart[1], inner, workspacePackageByKey, context)));
       continue;
     }
     const workspaceDot = trimmed.match(/^([A-Za-z0-9_-]+)\.workspace\s*=/);
     if (workspaceDot) {
-      deps.push({ name: workspaceDot[1] });
+      deps.push(depRecord(workspaceDot[1], truePackageName(workspaceDot[1], 'workspace = true', workspacePackageByKey, context)));
       continue;
     }
     const simple = trimmed.match(/^([A-Za-z0-9_-]+)\s*=/);
-    if (simple) deps.push({ name: simple[1] });
+    if (simple) deps.push(depRecord(simple[1], truePackageName(simple[1], '', workspacePackageByKey, context)));
+  }
+  return deps;
+}
+
+function asWorkspacePackageByKey(workspaceDependencies) {
+  if (workspaceDependencies == null) return Object.create(null);
+  if (typeof workspaceDependencies === 'string') return parseWorkspaceDependencies(workspaceDependencies);
+  if (typeof workspaceDependencies !== 'object' || Array.isArray(workspaceDependencies)) {
+    throw new Error('workspace.dependencies map is unreadable; refusing to classify what it cannot read');
+  }
+  return workspaceDependencies;
+}
+
+/**
+ * Cargo-free `[workspace.dependencies]` map: local key → true package name.
+ * `foo = { package = "leptos" }` stores leptos under foo so members that
+ * write `foo.workspace = true` cannot hide the family from HEAD classification.
+ */
+export function parseWorkspaceDependencies(text) {
+  if (typeof text !== 'string') {
+    throw new Error('workspace manifest is unreadable; refusing to classify what it cannot read');
+  }
+  const map = Object.create(null);
+  const context = BACKEND_WORKSPACE_MANIFEST;
+  for (const table of tomlTables(text)) {
+    if (table.name === WORKSPACE_DEP_TABLE) {
+      for (const dep of parseInlineDependencyLines(table.body, {}, context)) {
+        map[dep.rename ?? dep.name] = dep.name;
+      }
+      continue;
+    }
+    const dotted = table.name.match(WORKSPACE_DEP_DOTTED);
+    if (dotted) map[dotted[1]] = truePackageName(dotted[1], table.body, {}, context);
+  }
+  return map;
+}
+
+function parseMemberDependencies(text, workspacePackageByKey, manifestPath) {
+  const context = `workspace member manifest ${manifestPath || ''}`.trim();
+  const deps = [];
+  for (const table of tomlTables(text)) {
+    if (DEP_TABLE.test(table.name)) {
+      deps.push(...parseInlineDependencyLines(table.body, workspacePackageByKey, context));
+      continue;
+    }
+    const dotted = table.name.match(DEP_DOTTED);
+    if (dotted) deps.push(depRecord(dotted[2], truePackageName(dotted[2], table.body, workspacePackageByKey, context)));
   }
   return deps;
 }
 
 /**
  * Cargo-free member parse for docs-only preflight (no rustup).
- * `package = "leptos"` rename is visible without `cargo metadata`.
+ * Resolves `package = "leptos"` and `foo.workspace = true` via the workspace
+ * dependency map so a rename cannot hide Leptos from the HEAD classifier.
  */
-export function parseWorkspaceMemberManifest(text, manifestPath) {
+export function parseWorkspaceMemberManifest(text, manifestPath, workspaceDependencies) {
   if (typeof text !== 'string' || !/^\[package\]/m.test(text)) {
     throw new Error(`workspace member manifest ${manifestPath || ''} is unreadable; refusing to classify what it cannot read`);
   }
@@ -121,29 +202,34 @@ export function parseWorkspaceMemberManifest(text, manifestPath) {
   return {
     name,
     manifest_path: manifestPath || '',
-    dependencies: [
-      ...parseDependencySection(text, 'dependencies'),
-      ...parseDependencySection(text, 'dev-dependencies'),
-      ...parseDependencySection(text, 'build-dependencies'),
-    ],
+    dependencies: parseMemberDependencies(text, asWorkspacePackageByKey(workspaceDependencies), manifestPath),
   };
 }
 
 /** Git-tracked backend Cargo.toml members. Does not invoke cargo. */
 export function trackedWorkspaceMembers(repoRoot) {
+  const workspacePath = path.join(repoRoot, BACKEND_WORKSPACE_MANIFEST);
+  if (!existsSync(workspacePath)) {
+    throw new Error(`${BACKEND_WORKSPACE_MANIFEST} is missing under ${repoRoot}; the workspace inventory cannot see [workspace.dependencies] and unreadable must fail`);
+  }
   let listing;
   try {
     listing = execFileSync('git', ['-C', repoRoot, 'ls-files', '-z', '--', 'backend'], { encoding: 'utf8' });
   } catch (error) {
     throw new Error(`git ls-files failed; the workspace inventory cannot enumerate members and unreadable must fail: ${error.message}`);
   }
-  const manifests = listing.split('\0').filter((entry) => entry.endsWith('Cargo.toml') && entry !== BACKEND_WORKSPACE_MANIFEST);
+  const tracked = listing.split('\0').filter(Boolean);
+  if (!tracked.includes(BACKEND_WORKSPACE_MANIFEST)) {
+    throw new Error(`${BACKEND_WORKSPACE_MANIFEST} is not git-tracked; the workspace inventory cannot see [workspace.dependencies] and unreadable must fail`);
+  }
+  const workspacePackageByKey = parseWorkspaceDependencies(readFileSync(workspacePath, 'utf8'));
+  const manifests = tracked.filter((entry) => entry.endsWith('Cargo.toml') && entry !== BACKEND_WORKSPACE_MANIFEST);
   const packages = [];
   for (const relativePath of manifests) {
     const abs = path.join(repoRoot, relativePath);
     const text = readFileSync(abs, 'utf8');
     if (!/^\[package\]/m.test(text)) continue;
-    packages.push(parseWorkspaceMemberManifest(text, abs));
+    packages.push(parseWorkspaceMemberManifest(text, abs, workspacePackageByKey));
   }
   if (packages.length === 0) {
     throw new Error('workspace scan examined zero workspace members; refusing to report a clean state it did not observe');
