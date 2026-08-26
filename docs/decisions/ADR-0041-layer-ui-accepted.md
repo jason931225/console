@@ -14,10 +14,11 @@ related: [ADR-0001, ADR-0025, ADR-0030, ADR-0031]
 ## Status
 
 **Accepted 2026-08-25.** Amends ADR-0001 by adding `ui` to the enumerated crate
-family and declaring its legal edges. Amends ADR-0030 by opening the §6/§8
-implementation gate for `console-<domain>-ui` members. ADR-0030's Decision text
-is retained as accepted history; this record is the additive opening, not a
-silent rewrite.
+family and declaring its legal edges. Amends ADR-0030 by accepting `Layer::Ui`
+so `-ui` members may exist. ADR-0030 §8's absence-as-green (no mounted shell /
+no React route source) is **not** retired here. ADR-0030's Decision text is
+retained as accepted history; this record is the additive layer legalization,
+not a silent rewrite.
 
 ## Context
 
@@ -41,8 +42,10 @@ existence. Those three facts are why a crate cannot land yet.
    `-ui` is `Layer::Ui`. `allowed_deps` is `[Contracts, Ui]`. `Layer::App`
    `allowed_deps` gains `Ui`. Ui may not depend on that domain's `domain`,
    `application`, `adapter-*`, `rest`, `worker`, `platform`, or `kernel`
-   crates. The compiler still refuses absent edges; the layer-boundary gate
-   refuses illegal ones.
+   crates. Ui may not depend on `sqlx` (no database authority). `tokio` and
+   `axum` remain allowed because SSR islands run on the server runtime; leaving
+   `forbidden_external_deps` empty would fail-open `sqlx`. The compiler still
+   refuses absent edges; the layer-boundary gate refuses illegal ones.
 
 2. **Classify the `-ui` suffix before the `crates/platform/` path.** A future
    `console-platform-ui` is Ui, not Platform. Gate, App, and Kernel path
@@ -64,13 +67,19 @@ existence. Those three facts are why a crate cannot land yet.
    markup for a denied surface is never generated.
 
 6. **Route inventory.** React tombstone paths stay absent. `-ui` members are
-   allowed. Lockfile `leptos*` is allowed. Until the frontend lane lands a
-   machine-readable route-facts file, inventory may report zero Leptos
+   allowed. Lockfile `leptos*` is allowed. **Absence of a mounted shell remains
+   green** until the change that mounts one: the HEAD assertion that neither
+   React route source is tracked is not retired here. Until the frontend lane
+   lands a machine-readable route-facts file, inventory may report zero Leptos
    packages and must not fail HEAD for that absence. A **non-ui** crate that
-   declares a Leptos-family dependency still fails.
+   declares a Leptos-family dependency still fails. HEAD classification of
+   members must not require `cargo` — docs-only preflight has no rustup.
 
 7. **Buck.** First-party Buck generation skips members whose package name ends
-   in `-ui` because Leptos is not vendored in `third-party/rust`.
+   in `-ui` because Leptos is not vendored in `third-party/rust`. A skipped
+   `-ui` dependency must be omitted from generated BUCK, not rewritten as
+   `//third-party/rust:<name>`. This record does not invent `App → Ui` edges
+   in generated faces.
 
 8. **Vertical and exclusions.** The owner resumed frontend work. The first
    full-depth vertical is **payroll execution**. Import/export is not the

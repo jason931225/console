@@ -13,6 +13,8 @@
 //!   gate → (exempt from layer checks)
 //!
 //! Purity rule: domain and application crates may NOT depend on sqlx, axum, or tokio.
+//! Ui may not depend on sqlx (no database authority). tokio/axum stay allowed
+//! for SSR; an empty Ui forbidden list would fail-open sqlx.
 //!
 //! Manifest hygiene:
 //!   - Every workspace crate name starts with `console-`
@@ -149,10 +151,14 @@ impl Layer {
         }
     }
 
-    /// External crates that domain/application may not depend on (purity rule).
+    /// External crates this layer may not depend on (purity rule).
+    ///
+    /// Ui forbids `sqlx` so a `-ui` crate cannot take a database client.
+    /// `tokio`/`axum` stay allowed: SSR islands run on the server runtime.
     pub fn forbidden_external_deps(&self) -> &'static [&'static str] {
         match self {
             Layer::Domain | Layer::Application => &["sqlx", "axum", "tokio"],
+            Layer::Ui => &["sqlx"],
             _ => &[],
         }
     }
@@ -786,6 +792,23 @@ mod tests {
         assert!(forbidden.contains(&"sqlx"));
         assert!(forbidden.contains(&"axum"));
         assert!(forbidden.contains(&"tokio"));
+    }
+
+    #[test]
+    fn ui_forbids_sqlx_and_allows_tokio_axum() {
+        let forbidden = Layer::Ui.forbidden_external_deps();
+        assert!(
+            forbidden.contains(&"sqlx"),
+            "empty Ui forbidden list would fail-open sqlx; got {forbidden:?}"
+        );
+        assert!(
+            !forbidden.contains(&"tokio"),
+            "SSR islands need the server runtime; tokio must stay allowed"
+        );
+        assert!(
+            !forbidden.contains(&"axum"),
+            "SSR composition may touch axum; axum must stay allowed"
+        );
     }
 
     #[test]

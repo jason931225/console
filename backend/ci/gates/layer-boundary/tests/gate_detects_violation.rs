@@ -868,6 +868,68 @@ workspace = true
 }
 
 #[test]
+fn gate_detects_ui_depending_on_sqlx() -> Result<(), Box<dyn std::error::Error>> {
+    let ws = temp_workspace("ui-sqlx")?;
+
+    write_file(
+        &ws.join("Cargo.toml"),
+        r#"
+[workspace]
+resolver = "3"
+members = ["crates/demo/ui"]
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+"#,
+    )?;
+
+    let ui_dir = ws.join("crates/demo/ui");
+    write_file(
+        &ui_dir.join("Cargo.toml"),
+        r#"
+[package]
+name = "console-demo-ui"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+sqlx = "0.8"
+
+[lints]
+workspace = true
+"#,
+    )?;
+    write_file(&ui_dir.join("src/lib.rs"), "// ui must not take sqlx\n")?;
+
+    let (metadata, edition) = load_metadata(&ws)?;
+    let result = check(&metadata, &edition);
+    let forbidden = result
+        .violations
+        .iter()
+        .find(|v| v.kind == ViolationKind::ForbiddenExternalDep);
+    assert!(
+        forbidden.is_some(),
+        "expected ForbiddenExternalDep for ui → sqlx, got: {:#?}",
+        result.violations
+    );
+    assert_eq!(
+        forbidden.map(|v| v.crate_name.as_str()),
+        Some("console-demo-ui")
+    );
+    let detail = forbidden.map(|v| v.detail.clone()).unwrap_or_default();
+    assert!(
+        detail.contains("sqlx"),
+        "violation must name sqlx, got: {detail}"
+    );
+    Ok(())
+}
+
+#[test]
 fn gate_allows_ui_to_contracts_and_app_to_ui() -> Result<(), Box<dyn std::error::Error>> {
     let ws = temp_workspace("ui-legal")?;
 

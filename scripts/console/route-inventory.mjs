@@ -48,17 +48,18 @@ export function extractConsoleRouteFacts(repoRoot) {
 // ---------------------------------------------------------------------------
 // ADR-0041: the Rust/Leptos side of the inventory.
 //
-// The two tombstone paths above pin the deleted React stack. ADR-0041 allows
+// The two tombstone paths above pin the deleted React stack and keep
+// absence-as-green until a mounted shell lands. ADR-0041 allows
 // `console-<domain>-ui` members and lockfile Leptos; a machine-readable route
 // facts file is a frontend-lane follow-up. Until that lands, inventory may
 // report zero Leptos packages and must not fail HEAD for that absence.
 //
 // What still fails: a non-ui workspace member declaring a Leptos-family
-// dependency. Cargo metadata reports the TRUE package name, so
-// `view = { package = "leptos" }` renames cannot hide it.
-// Unreadable inventory (missing manifest/lockfile, cargo failure, zero
-// members, zero locked packages) throws — the gate fails closed, never
-// reports a clean state it did not observe.
+// dependency. HEAD classification uses git-tracked manifests so docs-only
+// preflight does not require cargo. `package = "leptos"` rename is parsed
+// from the manifest table.
+// Unreadable inventory (missing lockfile, zero members, zero locked packages)
+// throws — the gate fails closed, never reports a clean state it did not observe.
 //
 // The import lives down here so the tombstone constants above keep their
 // lines: ADR-0030 cites route-inventory.mjs:4-5 verbatim. ESM hoists it.
@@ -77,6 +78,97 @@ export const LEPTOS_PACKAGE_FAMILY = /^leptos(?:[_-]|$)/;
 export const CONSOLE_UI_MEMBER_NAME = /(?:^|-)ui$/;
 
 const ADR = 'ADR-0041 non-ui Leptos violation';
+
+function parseDependencySection(text, section) {
+  const header = new RegExp(`^\\[${section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*$`, 'm');
+  const start = text.search(header);
+  if (start < 0) return [];
+  const deps = [];
+  for (const line of text.slice(start).split('\n').slice(1)) {
+    if (/^\s*\[/.test(line)) break;
+    const trimmed = line.split('#')[0].trim();
+    if (!trimmed) continue;
+    const table = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*\{([^}]*)\}/);
+    if (table) {
+      const key = table[1];
+      const pkg = table[2].match(/package\s*=\s*"([^"]+)"/)?.[1] ?? key;
+      deps.push(pkg === key ? { name: pkg } : { name: pkg, rename: key });
+      continue;
+    }
+    const workspaceDot = trimmed.match(/^([A-Za-z0-9_-]+)\.workspace\s*=/);
+    if (workspaceDot) {
+      deps.push({ name: workspaceDot[1] });
+      continue;
+    }
+    const simple = trimmed.match(/^([A-Za-z0-9_-]+)\s*=/);
+    if (simple) deps.push({ name: simple[1] });
+  }
+  return deps;
+}
+
+/**
+ * Cargo-free member parse for docs-only preflight (no rustup).
+ * `package = "leptos"` rename is visible without `cargo metadata`.
+ */
+export function parseWorkspaceMemberManifest(text, manifestPath) {
+  if (typeof text !== 'string' || !/^\[package\]/m.test(text)) {
+    throw new Error(`workspace member manifest ${manifestPath || ''} is unreadable; refusing to classify what it cannot read`);
+  }
+  const name = text.match(/^\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m)?.[1];
+  if (!name) {
+    throw new Error(`workspace member manifest ${manifestPath || ''} carries no package name; refusing to classify what it cannot read`);
+  }
+  return {
+    name,
+    manifest_path: manifestPath || '',
+    dependencies: [
+      ...parseDependencySection(text, 'dependencies'),
+      ...parseDependencySection(text, 'dev-dependencies'),
+      ...parseDependencySection(text, 'build-dependencies'),
+    ],
+  };
+}
+
+/** Git-tracked backend Cargo.toml members. Does not invoke cargo. */
+export function trackedWorkspaceMembers(repoRoot) {
+  let listing;
+  try {
+    listing = execFileSync('git', ['-C', repoRoot, 'ls-files', '-z', '--', 'backend'], { encoding: 'utf8' });
+  } catch (error) {
+    throw new Error(`git ls-files failed; the workspace inventory cannot enumerate members and unreadable must fail: ${error.message}`);
+  }
+  const manifests = listing.split('\0').filter((entry) => entry.endsWith('Cargo.toml') && entry !== BACKEND_WORKSPACE_MANIFEST);
+  const packages = [];
+  for (const relativePath of manifests) {
+    const abs = path.join(repoRoot, relativePath);
+    const text = readFileSync(abs, 'utf8');
+    if (!/^\[package\]/m.test(text)) continue;
+    packages.push(parseWorkspaceMemberManifest(text, abs));
+  }
+  if (packages.length === 0) {
+    throw new Error('workspace scan examined zero workspace members; refusing to report a clean state it did not observe');
+  }
+  return packages;
+}
+
+/**
+ * HEAD inventory for docs-only preflight: git + lockfile text, no cargo.
+ */
+export function extractConsoleHeadWorkspaceFacts(repoRoot) {
+  const lockfilePath = path.join(repoRoot, BACKEND_WORKSPACE_LOCKFILE);
+  if (!existsSync(lockfilePath)) throw new Error(`${BACKEND_WORKSPACE_LOCKFILE} is missing under ${repoRoot}; the workspace inventory cannot see the locked graph and unreadable must fail`);
+  const packages = trackedWorkspaceMembers(repoRoot);
+  const memberViolations = workspaceMemberViolations(packages, { repoRoot });
+  const lockedNames = lockedPackageNames(readFileSync(lockfilePath, 'utf8'));
+  return {
+    workspace_scanned: true,
+    member_count: packages.length,
+    locked_package_count: lockedNames.length,
+    ui_member_count: packages.filter((pkg) => CONSOLE_UI_MEMBER_NAME.test(pkg.name)).length,
+    leptos_locked_package_count: lockedNames.filter((name) => LEPTOS_PACKAGE_FAMILY.test(name)).length,
+    violations: memberViolations,
+  };
+}
 
 /**
  * Classifier over `cargo metadata` packages. Ui members may declare Leptos.
@@ -124,10 +216,9 @@ export function lockedPackageNames(lockfileText) {
 }
 
 /**
- * The Rust-side inventory: enumerate workspace members through Cargo's own
- * authority (`cargo metadata --no-deps`, glob-aware, rename-transparent) and
- * the locked graph. Ui members and lockfile Leptos are allowed (ADR-0041).
- * A non-ui member declaring Leptos is a violation. Every unreadable input throws.
+ * Cargo-metadata inventory. Not for docs-only preflight — use
+ * [`extractConsoleHeadWorkspaceFacts`]. Keep this for fail-closed cargo paths
+ * when rustup is on PATH.
  */
 export function extractConsoleWorkspaceFacts(repoRoot) {
   const manifestPath = path.join(repoRoot, BACKEND_WORKSPACE_MANIFEST);

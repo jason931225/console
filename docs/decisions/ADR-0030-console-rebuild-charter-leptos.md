@@ -28,11 +28,15 @@ everything §3 does not name.
 > implementation gate.
 
 > **Current observation (2026-08-25):** The accepted text below is still preserved
-> as written. ADR-0041 accepts `Layer::Ui` and opens the implementation gate for
-> the payroll vertical — the ADR-0001 amendment §6 named as the missing
-> dependency. This observation does not rewrite the Decision. The first
-> full-depth vertical is payroll execution; a machine-readable Leptos route-facts
-> file remains a frontend-lane follow-up.
+> as written. ADR-0041 accepts `Layer::Ui` so `console-<domain>-ui` members may
+> exist — the ADR-0001 amendment §6 named. This observation does not rewrite the
+> Decision and does **not** retire §8's planning-only CI assertion. Inventory may
+> allow `-ui` members and lockfile Leptos. Absence of a mounted shell remains
+> green: `scripts/console/route-inventory.test.mjs` still asserts HEAD tracks
+> neither React route source, and that absence-as-green assertion is retired only
+> by the change that mounts a shell. The first full-depth vertical is payroll
+> execution; a machine-readable Leptos route-facts file remains a frontend-lane
+> follow-up.
 
 ## Context
 

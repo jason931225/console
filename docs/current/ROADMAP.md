@@ -24,12 +24,12 @@ Status: active roadmap authority. Product scope comes from [`PRODUCT.md`](PRODUC
 6. **Payroll**
    - Project the existing payroll writer without a second write path; preserve deterministic rounding, golden cases, immutable receipts, and payslip drafts.
 7. **Leptos acceptance surface**
-   - Only after its holds clear, land the contracts-only SSR shell and real organization, HR, and payroll surfaces using deny-by-omission.
+   - `Layer::Ui` is accepted (ADR-0041); first full-depth vertical is payroll execution. This item stays gated on remaining PRODUCT frontend conditions — a mounted contracts-backed SSR shell and real E2E evidence — and does not start while item 2 is the first incomplete item. Import/export is not the data-entry base except 자료실; the comms rail is out of this slice.
 
 ## Explicit HOLDs
 
 - Bulk documentation moves, deletion, or graveyard copies are **HOLD** until custody and recoverability are proven with the full manifest and signed archive references.
-- Leptos and other frontend work are **HOLD** until the PRODUCT frontend conditions are satisfied.
+- Leptos and other frontend work are **HOLD** until the remaining PRODUCT frontend conditions are satisfied (mounted SSR shell and real E2E evidence). `Layer::Ui` being accepted does not clear this HOLD.
 - Live or production promotion, DNS, TLS, secrets, exposure, payment, credential-reset, and compliance claims are **HOLD** absent separate authority. A source release follows repository release authority and evidence; it does not authorize live promotion or exposure.
 - Destruction, termination, resize, or reprovisioning of the grandfathered OCI Ampere A1 instance (4 OCPU / 24 GB) is permanently **HOLD** because the reserved capacity cannot be recreated.
 - Workstation erase is **HOLD** until the reviewed Console candidate is on `main` and the PRODUCT custody gate has an itemized, read-back-verified preservation or explicit discard/reissue disposition for every local-only P0 item.
