@@ -13,7 +13,9 @@
 //!     `feature_grants` (no `PayrollRunRead`) still GETs 200 with their
 //!     payslip and body without receipt/passkey, `filter=payslip` excludes a
 //!     co-emitted legal notice, `filter=all` returns both, and another user
-//!     is omitted.
+//!     is omitted. `/api/v1` is Bearer-only: missing Authorization is 401,
+//!     including `Cookie: console_access=<valid access JWT>`. Recipient is
+//!     the JWT subject; `recipient=` query or body does not override it.
 
 use axum::body::{Body, to_bytes};
 use console_inbox_adapter_postgres::PgInboxStore;
@@ -452,6 +454,8 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
     assert_eq!(self_read.json["payload"]["net"], json!(3_120_000));
 
     // B lists empty (deny-by-omission) and cannot read A's documents.
+    // Recipient is the JWT subject: B's token omits A's payslip even when
+    // query/body try to name A.
     for filter in ["payslip", "all"] {
         let b_list = get_json(
             service.clone(),
@@ -467,6 +471,72 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
             b_list.json
         );
     }
+    let b_recipient_query = get_json(
+        service.clone(),
+        &format!("{ME_INBOX_DOCS_PATH}?filter=payslip&recipient={user_a}"),
+        &token_b,
+    )
+    .await;
+    assert_eq!(
+        b_recipient_query.status,
+        StatusCode::OK,
+        "recipient query must not change authz: {:?}",
+        b_recipient_query.json
+    );
+    assert_eq!(
+        b_recipient_query.json["items"].as_array().unwrap().len(),
+        0,
+        "recipient= must not widen B onto A's payslip: {:?}",
+        b_recipient_query.json
+    );
+    let a_recipient_query = get_json(
+        service.clone(),
+        &format!("{ME_INBOX_DOCS_PATH}?filter=payslip&recipient={user_b}"),
+        &token_a,
+    )
+    .await;
+    assert_eq!(
+        a_recipient_query.status,
+        StatusCode::OK,
+        "{:?}",
+        a_recipient_query.json
+    );
+    let a_override_items = a_recipient_query.json["items"].as_array().unwrap();
+    assert_eq!(
+        a_override_items.len(),
+        1,
+        "recipient= must not switch A off their own payslip: {:?}",
+        a_recipient_query.json
+    );
+    assert_eq!(a_override_items[0]["id"].as_str().unwrap(), payslip_id);
+    let b_recipient_body = service
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("{ME_INBOX_DOCS_PATH}?filter=payslip"))
+                .header(header::AUTHORIZATION, format!("Bearer {token_b}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "recipient": user_a })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let b_recipient_body = into_json(b_recipient_body).await;
+    assert_eq!(
+        b_recipient_body.status,
+        StatusCode::OK,
+        "recipient body must not change authz: {:?}",
+        b_recipient_body.json
+    );
+    assert_eq!(
+        b_recipient_body.json["items"].as_array().unwrap().len(),
+        0,
+        "JSON recipient body must not widen B onto A's payslip: {:?}",
+        b_recipient_body.json
+    );
     for (label, id) in [("payslip", &payslip_id), ("legal_notice", &legal_id)] {
         let cross_read = get_json(
             service.clone(),
@@ -481,6 +551,30 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
             cross_read.json
         );
     }
+
+    // /api/v1 is Bearer-only. Missing Authorization is 401; an access cookie
+    // (valid JWT or garbage) must not authorize REST.
+    let payslip_uri = format!("{ME_INBOX_DOCS_PATH}?filter=payslip");
+    let anon = get_without_authorization(service.clone(), &payslip_uri, None).await;
+    assert_eq!(anon.status(), StatusCode::UNAUTHORIZED);
+    let cookie_only = get_without_authorization(
+        service.clone(),
+        &payslip_uri,
+        Some(&format!("console_access={token_a}")),
+    )
+    .await;
+    assert_eq!(
+        cookie_only.status(),
+        StatusCode::UNAUTHORIZED,
+        "/api/v1 is Bearer-only; access cookie must not authorize REST"
+    );
+    let garbage_cookie = get_without_authorization(
+        service.clone(),
+        &payslip_uri,
+        Some("console_access=not-a-jwt"),
+    )
+    .await;
+    assert_eq!(garbage_cookie.status(), StatusCode::UNAUTHORIZED);
 }
 
 fn legal_notice_to(recipient: UserId) -> EmitInboxDocCommand {
@@ -541,6 +635,21 @@ async fn get_json(service: axum::Router, uri: &str, token: &str) -> JsonResponse
         .await
         .unwrap();
     into_json(response).await
+}
+
+async fn get_without_authorization(
+    service: axum::Router,
+    uri: &str,
+    cookie: Option<&str>,
+) -> axum::response::Response {
+    let mut builder = Request::builder().method("GET").uri(uri);
+    if let Some(cookie) = cookie {
+        builder = builder.header(header::COOKIE, cookie);
+    }
+    service
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
 }
 
 async fn post_json(service: axum::Router, uri: &str, token: &str, body: Value) -> JsonResponse {
