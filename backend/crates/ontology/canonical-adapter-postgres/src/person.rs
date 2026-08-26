@@ -171,6 +171,16 @@ impl CanonicalPortError for PersonError {
     }
 }
 
+/// Current canonical Person head. Display/legal names are parsed from the
+/// latest revision's attributes; a missing key is omitted, never invented.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonHead {
+    pub id: Uuid,
+    pub display_name: Option<String>,
+    pub legal_name: Option<String>,
+    pub version: i64,
+}
+
 /// The one permitted holder of production DML against `persons`,
 /// `person_revisions` and `employee_person_bindings`.
 #[derive(Debug, Clone)]
@@ -183,6 +193,69 @@ impl PgPersonPort {
     #[must_use]
     pub const fn new(pool: PgPool, runtime: tokio::runtime::Handle) -> Self {
         Self { pool, runtime }
+    }
+
+    /// Current head of one Person. A foreign tenant's id is omit-by-RLS
+    /// (`None`), never a fabricated row.
+    pub fn get(&self, org_id: OrgId, person_id: Uuid) -> Result<Option<PersonHead>, PersonError> {
+        self.runtime
+            .block_on(self.read_heads(*org_id.as_uuid(), Some(person_id)))
+            .map(|heads| heads.into_iter().next())
+    }
+
+    /// Current heads in the armed tenant. Empty when none are visible.
+    pub fn list(&self, org_id: OrgId) -> Result<Vec<PersonHead>, PersonError> {
+        self.runtime
+            .block_on(self.read_heads(*org_id.as_uuid(), None))
+    }
+
+    async fn arm_org<'e, E>(&self, executor: E, org: Uuid) -> Result<(), PersonError>
+    where
+        E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+    {
+        sqlx::query("SELECT set_config('app.current_org', $1, true)")
+            .bind(org.to_string())
+            .execute(executor)
+            .await?;
+        Ok(())
+    }
+
+    async fn read_heads(
+        &self,
+        org: Uuid,
+        person_id: Option<Uuid>,
+    ) -> Result<Vec<PersonHead>, PersonError> {
+        let mut tx = self.pool.begin().await?;
+        self.arm_org(&mut *tx, org).await?;
+        let rows = sqlx::query(
+            "SELECT p.id, r.version, r.attributes \
+             FROM persons p \
+             JOIN person_revisions r \
+               ON r.org_id = p.org_id AND r.person_id = p.id \
+             WHERE p.org_id = $1 AND ($2::uuid IS NULL OR p.id = $2) \
+               AND r.version = ( \
+                 SELECT MAX(version) FROM person_revisions \
+                 WHERE org_id = p.org_id AND person_id = p.id \
+               ) \
+             ORDER BY p.id",
+        )
+        .bind(org)
+        .bind(person_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let attributes: serde_json::Value = row.get("attributes");
+                PersonHead {
+                    id: row.get("id"),
+                    display_name: attr_string(&attributes, "display_name"),
+                    legal_name: attr_string(&attributes, "legal_name"),
+                    version: row.get("version"),
+                }
+            })
+            .collect())
     }
 
     async fn write(&self, command: &PersonCommand) -> Result<CommandReceipt, PersonError> {
@@ -488,4 +561,12 @@ fn canonical_json(value: &serde_json::Value) -> serde_json::Value {
         }
         primitive => primitive.clone(),
     }
+}
+
+fn attr_string(attributes: &serde_json::Value, key: &str) -> Option<String> {
+    attributes
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
 }

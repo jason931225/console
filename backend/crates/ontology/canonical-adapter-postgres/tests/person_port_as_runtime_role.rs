@@ -40,7 +40,7 @@
 
 use console_kernel_core::{OrgId, UserId};
 use console_ontology_canonical_adapter_postgres::person::{
-    PersonCommand, PersonError, PersonQuery, PgPersonPort,
+    PersonCommand, PersonError, PersonHead, PersonQuery, PgPersonPort,
 };
 use console_ontology_canonical_domain::{
     CanonicalPort, CommandId, CommandReceipt, DispatchTarget, ObjectKey, PersonPort, ReceiptOwner,
@@ -118,6 +118,24 @@ async fn execute(
 ) -> Result<CommandReceipt, PersonError> {
     let port = port.clone();
     tokio::task::spawn_blocking(move || port.execute(&command))
+        .await
+        .unwrap()
+}
+
+async fn get(
+    port: &PgPersonPort,
+    org: OrgId,
+    person_id: Uuid,
+) -> Result<Option<PersonHead>, PersonError> {
+    let port = port.clone();
+    tokio::task::spawn_blocking(move || port.get(org, person_id))
+        .await
+        .unwrap()
+}
+
+async fn list(port: &PgPersonPort, org: OrgId) -> Result<Vec<PersonHead>, PersonError> {
+    let port = port.clone();
+    tokio::task::spawn_blocking(move || port.list(org))
         .await
         .unwrap()
 }
@@ -318,6 +336,20 @@ async fn a_person_is_created_and_read_back(owner_pool: PgPool) {
         receipt.payload_digest().to_vec(),
         "the stored digest is the 32 bytes the receipt carries"
     );
+
+    let head = get(&port, org, person_id)
+        .await
+        .unwrap()
+        .expect("created Person must be queryable");
+    assert_eq!(head.id, person_id);
+    assert_eq!(head.legal_name.as_deref(), Some("김철수"));
+    assert_eq!(
+        head.display_name, None,
+        "display_name was not stored and must not be invented from legal_name"
+    );
+    assert_eq!(head.version, 1);
+    assert_eq!(list(&port, org).await.unwrap(), vec![head]);
+    assert!(get(&port, org, Uuid::new_v4()).await.unwrap().is_none());
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -338,6 +370,13 @@ async fn a_revision_is_appended_and_the_prior_revision_is_unchanged(owner_pool: 
     .unwrap();
     assert_eq!(revised.target(), DispatchTarget::PeopleRevisePerson);
     assert_eq!(revised.result()["version"].as_i64(), Some(2));
+
+    let head = get(&port, org, person_id)
+        .await
+        .unwrap()
+        .expect("latest head");
+    assert_eq!(head.version, 2);
+    assert_eq!(head.legal_name.as_deref(), Some("이영희(개명)"));
 
     let after = revision_snapshot(&owner_pool, person_id, 1).await;
     assert_eq!(before, after, "appending a revision rewrote revision 1");
@@ -433,7 +472,7 @@ async fn an_update_of_a_revision_row_is_refused_by_the_trigger(owner_pool: PgPoo
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_pool: PgPool) {
-    let (_org, _actor, _port) = fixture(&owner_pool).await;
+    let (org, _actor, port) = fixture(&owner_pool).await;
     let foreign_actor = seed_org_and_super_admin(&owner_pool, FOREIGN_ORG, "foreign").await;
     let foreign_employee = seed_employee(&owner_pool, FOREIGN_ORG, "foreign-1").await;
 
@@ -509,6 +548,10 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
         error.message(),
         "new row violates row-level security policy for table \"persons\""
     );
+    drop(tx);
+
+    assert!(list(&port, org).await.unwrap().is_empty());
+    assert!(get(&port, org, foreign_person).await.unwrap().is_none());
 }
 
 /// P5 handoff: a trusted uniquely-resolved employee binds with

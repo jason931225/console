@@ -40,8 +40,9 @@
 
 use console_kernel_core::{ErrorKind, OrgId, UserId};
 use console_ontology_canonical_adapter_postgres::employment::{
-    EmploymentAttributes, EmploymentChange, EmploymentCommand, EmploymentError, EmploymentQuery,
-    PgEmploymentPort, apply_employment_change, reassign_org_unit_via_transfers_in_tx,
+    EmploymentAttributes, EmploymentChange, EmploymentCommand, EmploymentError, EmploymentHead,
+    EmploymentQuery, PgEmploymentPort, apply_employment_change,
+    reassign_org_unit_via_transfers_in_tx,
 };
 use console_ontology_canonical_domain::{
     CanonicalPort, CommandId, CommandReceipt, DispatchTarget, EmploymentPort, ObjectKey,
@@ -166,6 +167,24 @@ async fn execute(
 ) -> Result<CommandReceipt, EmploymentError> {
     let port = port.clone();
     tokio::task::spawn_blocking(move || port.execute(&command))
+        .await
+        .unwrap()
+}
+
+async fn get(
+    port: &PgEmploymentPort,
+    org: OrgId,
+    employment_id: Uuid,
+) -> Result<Option<EmploymentHead>, EmploymentError> {
+    let port = port.clone();
+    tokio::task::spawn_blocking(move || port.get(org, employment_id))
+        .await
+        .unwrap()
+}
+
+async fn list(port: &PgEmploymentPort, org: OrgId) -> Result<Vec<EmploymentHead>, EmploymentError> {
+    let port = port.clone();
+    tokio::task::spawn_blocking(move || port.list(org))
         .await
         .unwrap()
 }
@@ -471,6 +490,21 @@ async fn an_appointment_opens_a_head_binds_the_legacy_row_and_appends_revision_o
         receipt.payload_digest().to_vec(),
         "the stored digest is the 32 bytes the receipt carries"
     );
+
+    let head = get(&port, org, employment_id)
+        .await
+        .unwrap()
+        .expect("created Employment must be queryable");
+    assert_eq!(head.id, employment_id);
+    assert_eq!(
+        head.person_id, None,
+        "person_id must come from employee_person_bindings, never invented from employee_id"
+    );
+    assert_eq!(head.org_unit_id, Some(ORG_UNIT_SALES));
+    assert_eq!(head.job_position_id, Some(JOB_STAFF));
+    assert_eq!(head.appointed_on, at(0));
+    assert_eq!(list(&port, org).await.unwrap(), vec![head]);
+    assert!(get(&port, org, Uuid::new_v4()).await.unwrap().is_none());
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -511,6 +545,18 @@ async fn a_promotion_carries_the_new_state_onto_the_legacy_employees_head(owner_
             "ACTIVE".to_owned()
         ),
         "the promotion must reach `employees`, the legacy compatibility head"
+    );
+
+    let head = get(&port, org, employment_id)
+        .await
+        .unwrap()
+        .expect("promoted Employment must be queryable");
+    assert_eq!(head.job_position_id, Some(JOB_LEAD));
+    assert_eq!(head.org_unit_id, Some(ORG_UNIT_SALES));
+    assert_eq!(
+        head.appointed_on,
+        at(0),
+        "appointed_on is the head opening, not the promote revision's valid_from"
     );
 }
 
@@ -916,7 +962,7 @@ async fn a_revision_is_append_only_and_the_trigger_is_what_refuses_the_update(ow
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_pool: PgPool) {
-    let (_org, _actor, _port) = fixture(&owner_pool).await;
+    let (org, _actor, port) = fixture(&owner_pool).await;
     let foreign_actor = seed_org_and_super_admin(&owner_pool, FOREIGN_ORG, "foreign").await;
     let foreign_employee = seed_employee(&owner_pool, FOREIGN_ORG, "foreign-1").await;
 
@@ -996,6 +1042,10 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
         error.message(),
         "new row violates row-level security policy for table \"employment_heads\""
     );
+    drop(tx);
+
+    assert!(list(&port, org).await.unwrap().is_empty());
+    assert!(get(&port, org, foreign_employment).await.unwrap().is_none());
 }
 
 /// Operator data-repair can leave one `employment_id` on N bindings (PK is

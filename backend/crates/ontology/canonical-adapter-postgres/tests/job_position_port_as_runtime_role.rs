@@ -147,6 +147,16 @@ async fn list_for_org_unit(
         .unwrap()
 }
 
+async fn list(
+    port: &PgJobPositionPort,
+    org: OrgId,
+) -> Result<Vec<JobPositionView>, JobPositionError> {
+    let port = port.clone();
+    tokio::task::spawn_blocking(move || port.list(org))
+        .await
+        .unwrap()
+}
+
 const COUNT_POSITIONS: &str = "SELECT count(*)::bigint FROM job_positions";
 const COUNT_REVISIONS: &str = "SELECT count(*)::bigint FROM job_position_revisions";
 const COUNT_RECEIPTS: &str = "SELECT count(*)::bigint FROM ont_action_command_receipts";
@@ -369,7 +379,9 @@ async fn a_job_position_is_created_and_read_back(owner_pool: PgPool) {
     assert_eq!(viewed.org_unit_id, unit);
     assert_eq!(viewed.version, 1);
     assert_eq!(viewed.attributes, json!({ "title": "백엔드 엔지니어" }));
-    let listed = list_for_org_unit(&port, org, unit).await.unwrap();
+    let listed_unit = list_for_org_unit(&port, org, unit).await.unwrap();
+    assert_eq!(listed_unit, vec![viewed.clone()]);
+    let listed = list(&port, org).await.unwrap();
     assert_eq!(listed, vec![viewed]);
 }
 
@@ -517,6 +529,25 @@ async fn a_reorganisation_moves_the_head_and_the_history_survives_it(owner_pool:
     .await
     .unwrap();
     assert_eq!(versions, vec![1, 2]);
+
+    let viewed = get(&port, org, position_id)
+        .await
+        .unwrap()
+        .expect("moved JobPosition must remain queryable");
+    assert_eq!(viewed.org_unit_id, other_unit);
+    assert_eq!(viewed.version, 2);
+    assert!(
+        list_for_org_unit(&port, org, unit)
+            .await
+            .unwrap()
+            .is_empty(),
+        "the old unit must no longer list the moved position"
+    );
+    assert_eq!(
+        list_for_org_unit(&port, org, other_unit).await.unwrap(),
+        vec![viewed.clone()]
+    );
+    assert_eq!(list(&port, org).await.unwrap(), vec![viewed]);
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
@@ -601,7 +632,7 @@ async fn an_update_of_a_revision_row_is_refused_by_the_trigger(owner_pool: PgPoo
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
 async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_pool: PgPool) {
-    let (_org, _actor, _unit, _port) = fixture(&owner_pool).await;
+    let (org, _actor, _unit, port) = fixture(&owner_pool).await;
     let foreign_actor = seed_org_and_super_admin(&owner_pool, FOREIGN_ORG, "foreign").await;
     let foreign_unit = seed_org_unit(&owner_pool, FOREIGN_ORG).await;
 
@@ -669,6 +700,10 @@ async fn a_foreign_tenant_is_invisible_and_unwritable_to_the_runtime_role(owner_
         error.message(),
         "new row violates row-level security policy for table \"job_positions\""
     );
+    drop(tx);
+
+    assert!(list(&port, org).await.unwrap().is_empty());
+    assert!(get(&port, org, foreign_position).await.unwrap().is_none());
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
