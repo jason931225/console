@@ -9,20 +9,23 @@
 //!   * confirm-receipt without a fresh passkey step-up is 428 (precondition
 //!     required), and a valid step-up confirms + unlocks + is idempotent;
 //!   * ESS 명세서 lives here (`filter=payslip`/`filter=pay`, `kind=payslip`),
-//!     not `/payroll/payslips/me`: a MEMBER sees their own body without
-//!     receipt/passkey, `filter=payslip` excludes a co-emitted legal notice,
-//!     `filter=all` returns both, and another user is omitted.
+//!     not payroll REST `/payroll/payslips/me`: a MEMBER JWT with empty
+//!     `feature_grants` (no `PayrollRunRead`) still GETs 200 with their
+//!     payslip and body without receipt/passkey, `filter=payslip` excludes a
+//!     co-emitted legal notice, `filter=all` returns both, and another user
+//!     is omitted.
 
 use axum::body::{Body, to_bytes};
 use console_inbox_adapter_postgres::PgInboxStore;
 use console_inbox_application::EmitInboxDocCommand;
 use console_inbox_domain::{InboxDocKind, NewInboxDoc};
-use console_inbox_rest::{InboxRestState, router};
+use console_inbox_rest::{InboxRestState, ME_INBOX_DOCS_PATH, router};
 use console_kernel_core::{AuditAction, AuditEvent, OrgId, TraceContext, UserId};
 use console_platform_auth::{
     AccessTokenInput, JwtIssuer, JwtSettings, JwtVerifier, PasskeyRegistrationStart,
     PasskeyService, WebauthnSettings,
 };
+use console_platform_authz::Feature;
 use console_platform_db::{DbError, with_audit};
 use console_platform_test_support::runtime_role_pool;
 use http::{Request, StatusCode, header};
@@ -305,20 +308,6 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
     .expect("emit legal notice to A");
     assert_ne!(payslip.id, legal.id);
 
-    let verifier = JwtVerifier::from_es256_public_pem(
-        JwtSettings {
-            issuer: TEST_ISSUER.to_owned(),
-            audience: TEST_AUDIENCE.to_owned(),
-            access_token_ttl: Duration::minutes(15),
-        },
-        public_key_pem.as_bytes(),
-    )
-    .unwrap();
-    let rt_pool = runtime_role_pool(&pool).await;
-    let service = router(
-        InboxRestState::new(PgInboxStore::new(rt_pool), Some(verifier))
-            .with_passkey_step_up(Some(passkey_service())),
-    );
     let token_a = issue_token(
         private_pem.as_bytes(),
         public_key_pem.as_bytes(),
@@ -331,23 +320,70 @@ async fn inbox_payslip_filter_is_person_scoped_and_not_receipt_gated(pool: PgPoo
         user_b,
         &["MEMBER"],
     );
+    let verifier = JwtVerifier::from_es256_public_pem(
+        JwtSettings {
+            issuer: TEST_ISSUER.to_owned(),
+            audience: TEST_AUDIENCE.to_owned(),
+            access_token_ttl: Duration::minutes(15),
+        },
+        public_key_pem.as_bytes(),
+    )
+    .unwrap();
+    // Recipient JWT already has empty feature_grants — no PayrollRunRead.
+    // GET filter=payslip must still be 200 with the issued 명세서: this is
+    // ESS vault (`/api/v1/me/inbox-docs`), not payroll REST `/payslips/me`.
+    let recipient_claims = verifier
+        .verify_access_token(&token_a)
+        .expect("recipient JWT");
+    assert!(
+        recipient_claims.feature_grants.is_empty(),
+        "ESS vault recipient JWT must carry empty feature_grants (no {}): {:?}",
+        Feature::PayrollRunRead.as_str(),
+        recipient_claims.feature_grants
+    );
+    assert!(
+        !recipient_claims
+            .feature_grants
+            .iter()
+            .any(|grant| grant == Feature::PayrollRunRead.as_str()),
+        "GET filter=payslip must not require {}: {:?}",
+        Feature::PayrollRunRead.as_str(),
+        recipient_claims.feature_grants
+    );
+    let rt_pool = runtime_role_pool(&pool).await;
+    let service = router(
+        InboxRestState::new(PgInboxStore::new(rt_pool), Some(verifier))
+            .with_passkey_step_up(Some(passkey_service())),
+    );
     let payslip_id = payslip.id.to_string();
     let legal_id = legal.id.to_string();
 
-    // MEMBER A lists 급여명세 via both aliases: own payslip only, never locked.
+    // MEMBER A lists 급여명세 via both aliases without PayrollRunRead: own
+    // payslip only, never locked. ESS vault, not payroll REST.
     for filter in ["payslip", "pay"] {
         let list = get_json(
             service.clone(),
-            &format!("/api/v1/me/inbox-docs?filter={filter}"),
+            &format!("{ME_INBOX_DOCS_PATH}?filter={filter}"),
             &token_a,
         )
         .await;
-        assert_eq!(list.status, StatusCode::OK, "{filter}: {:?}", list.json);
+        assert_eq!(
+            list.status,
+            StatusCode::OK,
+            "GET {ME_INBOX_DOCS_PATH}?filter={filter} is ESS vault, not payroll REST, and must be 200 without {}: {:?}",
+            Feature::PayrollRunRead.as_str(),
+            list.json
+        );
         let items = list.json["items"].as_array().unwrap();
         assert_eq!(items.len(), 1, "{filter} must exclude legal_notice");
         assert_eq!(items[0]["id"].as_str().unwrap(), payslip_id);
         assert_eq!(items[0]["kind"].as_str(), Some("payslip"));
         assert_eq!(items[0]["locked"].as_bool(), Some(false));
+        assert!(
+            items[0].get("run_id").is_none(),
+            "ESS vault list is not payroll REST /payslips/me: {:?}",
+            items[0]
+        );
         assert!(
             items[0].get("payload").is_none(),
             "list is metadata only: {:?}",
