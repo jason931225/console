@@ -635,6 +635,17 @@ async fn create_without_employee_id_stays_unbound_despite_name_phone_org_attribu
     .await
     .unwrap();
     assert_eq!(person_bindings, 0);
+
+    let head = get(&port, org, person_id)
+        .await
+        .unwrap()
+        .expect("unbound create is still a queryable Person head");
+    assert_eq!(head.id, person_id);
+    assert_eq!(head.legal_name.as_deref(), Some("동명이인"));
+    assert_eq!(head.display_name, None);
+    // PersonHead has no phone (or RRN) field: stored attributes must not leak
+    // onto the operator head. The type itself is the omit.
+    assert_eq!(list(&port, org).await.unwrap(), vec![head]);
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]

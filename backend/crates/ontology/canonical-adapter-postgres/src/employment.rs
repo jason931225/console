@@ -454,13 +454,16 @@ impl CanonicalPortError for EmploymentError {
     }
 }
 
-/// Current canonical Employment head.
+/// Current canonical Employment head — an *open* head (`valid_to IS NULL`).
 ///
-/// `org_unit_id` / `job_position_id` come from the latest *effective* revision
-/// (`MAX(valid_from)` — a backdated history insert is a later version with an
-/// earlier effect). `person_id` is the unique source-binding → person-binding
-/// path; ambiguous or unbound identities are omitted, never invented from
-/// `employee_id`. `appointed_on` is the head's opening `valid_from`.
+/// Closed (EXITED) windows are omitted by list/get: `valid_to` is the half-open
+/// bound that exists so a temporal reader does not treat an exited assignment
+/// as current. `org_unit_id` / `job_position_id` come from the latest
+/// *effective* revision (`MAX(valid_from)` — a backdated history insert is a
+/// later version with an earlier effect). `person_id` is the unique
+/// source-binding → person-binding path; ambiguous or unbound identities are
+/// omitted, never invented from `employee_id`. `appointed_on` is the head's
+/// opening `valid_from`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmploymentHead {
     pub id: Uuid,
@@ -485,8 +488,8 @@ impl PgEmploymentPort {
         Self { pool, runtime }
     }
 
-    /// Current head of one Employment. A foreign tenant's id is omit-by-RLS
-    /// (`None`), never a fabricated row.
+    /// Current *open* head of one Employment. A closed window (`valid_to` set),
+    /// a foreign tenant's id, or unset RLS is `None` — never a fabricated row.
     pub fn get(
         &self,
         org_id: OrgId,
@@ -497,7 +500,7 @@ impl PgEmploymentPort {
             .map(|heads| heads.into_iter().next())
     }
 
-    /// Current heads in the armed tenant. Empty when none are visible.
+    /// Current open heads in the armed tenant. Empty when none are visible.
     pub fn list(&self, org_id: OrgId) -> Result<Vec<EmploymentHead>, EmploymentError> {
         self.runtime
             .block_on(self.read_heads(*org_id.as_uuid(), None))
@@ -539,6 +542,7 @@ impl PgEmploymentPort {
                WHERE b.org_id = h.org_id AND b.employment_id = h.id \
              ) bind ON true \
              WHERE h.org_id = $1 AND ($2::uuid IS NULL OR h.id = $2) \
+               AND h.valid_to IS NULL \
              ORDER BY h.id",
         )
         .bind(org)

@@ -44,6 +44,9 @@ use console_ontology_canonical_adapter_postgres::employment::{
     EmploymentQuery, PgEmploymentPort, apply_employment_change,
     reassign_org_unit_via_transfers_in_tx,
 };
+use console_ontology_canonical_adapter_postgres::person::{
+    PersonCommand, PersonQuery, PgPersonPort,
+};
 use console_ontology_canonical_domain::{
     CanonicalPort, CommandId, CommandReceipt, DispatchTarget, EmploymentPort, ObjectKey,
     ReceiptOwner,
@@ -577,6 +580,10 @@ async fn an_exited_promote_closes_the_employment_head_window(owner_pool: PgPool)
             .await
             .unwrap();
     assert_eq!(open, None, "a newly appointed head must still be open");
+    assert!(
+        get(&port, org, employment_id).await.unwrap().is_some(),
+        "an open appointed head must be queryable before EXITED, or the omit below is vacuous"
+    );
 
     let exit_at = at(86_400);
     execute(
@@ -605,6 +612,14 @@ async fn an_exited_promote_closes_the_employment_head_window(owner_pool: PgPool)
         closed,
         Some(exit_at),
         "EXITED must set employment_heads.valid_to to the exit revision's valid_from"
+    );
+    assert!(
+        get(&port, org, employment_id).await.unwrap().is_none(),
+        "a closed head is not a current head — list/get must not surface EXITED assignments"
+    );
+    assert!(
+        list(&port, org).await.unwrap().is_empty(),
+        "list must omit the closed head, not return it with EXITED revision pointers"
     );
 
     let (status, exit_date): (String, Option<String>) = {
@@ -655,6 +670,80 @@ async fn an_exited_promote_closes_the_employment_head_window(owner_pool: PgPool)
         still_open, None,
         "ACTIVE promote must not close employment_heads.valid_to"
     );
+    assert!(
+        get(&port, org, employment_id).await.unwrap().is_none(),
+        "the EXITED head stays omitted after a sibling ACTIVE promote"
+    );
+    let listed = list(&port, org).await.unwrap();
+    assert_eq!(
+        listed.iter().map(|head| head.id).collect::<Vec<_>>(),
+        vec![employment_open],
+        "list is open heads only"
+    );
+}
+
+/// A trusted uniquely-resolved person bind is the employment head's person_id.
+/// Unbound appoint (the other list/get test) leaves person_id None; this is
+/// the Some(_) arm, via PersonQuery::Create { employee_id: Some(...) }.
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn a_bound_person_is_the_employment_head_person_id(owner_pool: PgPool) {
+    let (org, actor, port) = fixture(&owner_pool).await;
+    let person_port = PgPersonPort::new(
+        runtime_role_pool(&owner_pool).await,
+        tokio::runtime::Handle::current(),
+    );
+    let employee = seed_employee(&owner_pool, ORG, "bound-person-1").await;
+
+    let person_command = PersonCommand {
+        org_id: org,
+        command_id: CommandId::from_uuid(Uuid::new_v4()),
+        actor_id: actor,
+        query: PersonQuery::Create {
+            employee_id: Some(employee),
+            attributes: serde_json::json!({ "legal_name": "김바인드" }),
+        },
+        action_key: "revise".to_owned(),
+        object_type_id: Uuid::nil(),
+    };
+    let person_receipt = {
+        let person_port = person_port.clone();
+        tokio::task::spawn_blocking(move || person_port.execute(&person_command))
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    let person_id: Uuid = person_receipt.result()["person_id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(person_id, employee);
+
+    let appointed = execute(
+        &port,
+        command(
+            org,
+            actor,
+            EmploymentQuery::Appoint {
+                employee_id: employee,
+                valid_from: at(0),
+                attributes: attributes(ORG_UNIT_SALES, JOB_STAFF, "ACTIVE"),
+            },
+        ),
+    )
+    .await
+    .unwrap();
+    let employment_id = employment_of(&appointed);
+    let head = get(&port, org, employment_id)
+        .await
+        .unwrap()
+        .expect("open bound employment must be queryable");
+    assert_eq!(
+        head.person_id,
+        Some(person_id),
+        "person_id is the bound natural person, not an invented employee_id alias"
+    );
+    assert_eq!(list(&port, org).await.unwrap(), vec![head]);
 }
 
 /// Reactivation (EXITED → ACTIVE|UNKNOWN) must clear legacy `exit_date`.
