@@ -1574,6 +1574,33 @@ mod tests {
             "the legacy singular acknowledgement route must not remain mounted"
         );
         assert_eq!(BRANCH_BOUND_ENDPOINT_FAMILIES.len(), 14);
+        assert!(
+            BRANCH_BOUND_ENDPOINT_FAMILIES.contains(&"exception resolve resource lookup"),
+            "resolve is branch-bound; extra query coverage is not a separate family"
+        );
+        assert!(ATTENDANCE_ROUTE_PATHS.contains(&ATTENDANCE_EXCEPTION_RESOLVE_PATH));
+        let confirm = serde_json::from_value::<ResolveBody>(json!({
+            "action": "CONFIRM",
+            "reason": "verified arrival"
+        }))
+        .expect("CONFIRM resolve body is valid wire input");
+        assert_eq!(
+            ResolutionAction::parse(&confirm.action),
+            Ok(ResolutionAction::Confirm)
+        );
+        let overtime = serde_json::from_value::<ResolveBody>(json!({
+            "action": "APPROVE_OVERTIME",
+            "reason": "approved"
+        }))
+        .expect("APPROVE_OVERTIME resolve body is valid wire input");
+        assert_eq!(
+            ResolutionAction::parse(&overtime.action),
+            Ok(ResolutionAction::ApproveOvertime)
+        );
+        assert!(
+            ResolutionAction::parse("confirm").is_err(),
+            "resolution actions are exact SCREAMING_SNAKE_CASE tokens"
+        );
     }
 
     #[test]
