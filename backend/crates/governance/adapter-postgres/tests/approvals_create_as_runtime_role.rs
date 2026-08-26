@@ -551,8 +551,25 @@ async fn generic_kind_still_allows_null_employee_id_accounts(pool: PgPool) {
 async fn pending_inbox_page_excludes_requester_decided_and_other_org(pool: PgPool) {
     seed_org(&pool, ORG_A, "inbox-a").await;
     seed_org(&pool, ORG_B, "inbox-b").await;
-    let requester = seed_user(&pool, ORG_A, "Inbox-Req").await;
-    let approver = seed_user(&pool, ORG_A, "Inbox-App").await;
+    let binder = seed_user(&pool, ORG_A, "Inbox-Binder").await;
+    let requester = seed_person_bound_user(
+        &pool,
+        ORG_A,
+        "Inbox-Req",
+        seed_employee(&pool, ORG_A, "inbox-req").await,
+        seed_person(&pool, ORG_A).await,
+        binder,
+    )
+    .await;
+    let approver = seed_person_bound_user(
+        &pool,
+        ORG_A,
+        "Inbox-App",
+        seed_employee(&pool, ORG_A, "inbox-app").await,
+        seed_person(&pool, ORG_A).await,
+        binder,
+    )
+    .await;
     let other_org_user = seed_user(&pool, ORG_B, "Inbox-B").await;
     let store = PgGovernanceStore::new(runtime_role_pool(&pool).await);
     let pending_ref = Uuid::new_v4();
@@ -565,7 +582,7 @@ async fn pending_inbox_page_excludes_requester_decided_and_other_org(pool: PgPoo
             .create_approval(CreateApprovalCommand {
                 requester,
                 request_ref: pending_ref,
-                kind: "override".to_owned(),
+                kind: "company.revise".to_owned(),
                 target_ref: None,
                 payload_summary: json!({"case": "pending"}),
                 trace: trace(),
@@ -639,6 +656,7 @@ async fn pending_inbox_page_excludes_requester_decided_and_other_org(pool: PgPoo
     assert_eq!(for_approver.0.len(), 1);
     assert_eq!(for_approver.0[0].id, pending.id);
     assert_eq!(for_approver.0[0].request_ref, pending_ref);
+    assert_eq!(for_approver.0[0].kind, "company.revise");
     assert!(!for_approver.2);
 
     let other_org_for_approver = scope_org(OrgId::from_uuid(ORG_B), async {

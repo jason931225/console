@@ -145,7 +145,8 @@ pub struct PayrollLineSummary {
     pub blockers: serde_json::Value,
 }
 
-/// A caller's own draft-line rows across runs (self-service). Trimmed of the
+/// A caller's own draft-line rows across runs (self-service). Readiness only:
+/// hours and `*_source_present`. Never a `*_won` amount. Trimmed of the
 /// admin-only source-import bookkeeping columns.
 #[derive(Debug, Clone, Serialize)]
 pub struct MyPayrollLine {
@@ -284,6 +285,7 @@ impl PgPayrollStore {
                 .fetch_one(tx.as_mut())
                 .await?;
 
+                // Readiness projection: hours + *_source_present. Never SELECT *_won.
                 let rows = sqlx::query(
                     r#"
                     SELECT r.id AS run_id, r.period_start, r.period_end, r.status AS run_status,

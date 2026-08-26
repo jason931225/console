@@ -17,12 +17,38 @@
 //!    read-only tenant prerequisite before any future approval write exists.
 
 use console_kernel_core::{ErrorKind, OrgId, UserId};
-use console_payroll_adapter_postgres::PgPayrollStore;
+use console_payroll_adapter_postgres::{MyPayrollLine, PgPayrollStore};
 use console_platform_test_support::runtime_role_pool;
 use sqlx::PgPool;
 use time::OffsetDateTime;
 use time::macros::date;
 use uuid::Uuid;
+
+#[cfg(test)]
+fn assert_my_payroll_line_is_readiness_not_won(line: &MyPayrollLine) {
+    let value = serde_json::to_value(line).unwrap();
+    let object = value
+        .as_object()
+        .expect("MyPayrollLine serializes as a JSON object");
+    let won_keys: Vec<&String> = object.keys().filter(|key| key.contains("won")).collect();
+    assert!(
+        won_keys.is_empty(),
+        "MyPayrollLine is readiness, not won; unexpected keys {won_keys:?} in {value}"
+    );
+    for key in [
+        "regular_hours",
+        "overtime_hours",
+        "night_hours",
+        "holiday_hours",
+        "gross_pay_source_present",
+        "net_pay_source_present",
+    ] {
+        assert!(
+            object.contains_key(key),
+            "MyPayrollLine must keep hours / *_source_present ({key} missing) in {value}"
+        );
+    }
+}
 
 async fn seed_org(owner_pool: &PgPool, org: Uuid, tag: &str) {
     sqlx::query(
@@ -210,6 +236,7 @@ async fn my_lines_are_employee_scoped_never_a_coworkers(pool: PgPool) {
     .unwrap();
     assert_eq!(alice_lines.total, 1);
     assert_eq!(alice_lines.items[0].run_id, run);
+    assert_my_payroll_line_is_readiness_not_won(&alice_lines.items[0]);
 
     // An account with no employee link resolves to `None` (the REST layer
     // turns this into an empty page, never a 403 — mirrors
@@ -234,6 +261,7 @@ async fn my_lines_are_employee_scoped_never_a_coworkers(pool: PgPool) {
         bob_lines.total, 1,
         "Bob must see exactly his own line, not Alice's too"
     );
+    assert_my_payroll_line_is_readiness_not_won(&bob_lines.items[0]);
 }
 
 #[sqlx::test(migrations = "../../platform/db/migrations")]
