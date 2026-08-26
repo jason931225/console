@@ -2,8 +2,10 @@
 //! Attendance REST persona contract for payroll-vertical handoff (PR-5 REST).
 //!
 //! CONFIRM is `AttendanceExceptionManage` `[D,D,D,A,D,A]` — built-in ADMIN Allow,
-//! EXECUTIVE Deny. Month close is `PeriodLockManage` `[D,D,D,A,A,A]` — ADMIN and
-//! EXECUTIVE Allow, MEMBER Deny. Drives the assembled router on `console_rt`.
+//! EXECUTIVE Deny. A branch-scoped ADMIN CONFIRM on another branch is 404
+//! (`not_found`, same as absent) and writes no resolution. Month close is
+//! `PeriodLockManage` `[D,D,D,A,A,A]` — ADMIN and EXECUTIVE Allow, MEMBER Deny.
+//! Drives the assembled router on `console_rt`.
 
 use axum::body::{Body, to_bytes};
 use console_app::{AppConfig, AppRole, AppState, DatabaseDependency, build_router};
@@ -49,9 +51,12 @@ async fn executive_cannot_confirm_exception_admin_can(pool: PgPool) {
     let keys = keys();
     let personas = seed_personas(&pool, &keys).await;
     let exception_id = seed_open_late_exception(&pool, personas.branch, personas.admin).await;
+    let other_branch = seed_named_branch(&pool, "attendance-persona-other-branch").await;
+    let other_exception_id = seed_open_late_exception(&pool, other_branch, personas.admin).await;
     let app =
         build_router(app_state(runtime_role_pool(&pool).await, keys.public_pem.clone()).unwrap());
     let resolve = format!("{EXCEPTIONS}/{exception_id}/resolve");
+    let other_resolve = format!("{EXCEPTIONS}/{other_exception_id}/resolve");
     let confirm = json!({"action": "CONFIRM", "reason": "verified arrival"});
 
     let seen = get(
@@ -92,11 +97,24 @@ async fn executive_cannot_confirm_exception_admin_can(pool: PgPool) {
     assert_forbidden(member_denied);
     assert_eq!(open_resolutions(&pool, exception_id).await, 0);
 
+    let other_denied = post(
+        app.clone(),
+        &other_resolve,
+        &personas.admin_token,
+        confirm.clone(),
+    )
+    .await;
+    // Out-of-scope resource ids are 404, not 403, so existence is not leaked.
+    assert_not_found(other_denied);
+    assert_eq!(open_resolutions(&pool, other_exception_id).await, 0);
+    assert_eq!(open_resolutions(&pool, exception_id).await, 0);
+
     let admin_ok = post(app, &resolve, &personas.admin_token, confirm).await;
     assert_eq!(admin_ok.status, StatusCode::OK, "{:?}", admin_ok.json);
     assert_eq!(admin_ok.json["status"], "RESOLVED");
     assert_eq!(admin_ok.json["resolution"]["action"], "CONFIRM");
     assert_eq!(open_resolutions(&pool, exception_id).await, 1);
+    assert_eq!(open_resolutions(&pool, other_exception_id).await, 0);
 }
 
 #[sqlx::test(migrations = "../crates/platform/db/migrations")]
@@ -163,6 +181,16 @@ fn assert_forbidden(response: Response) {
     assert_eq!(response.json["error"]["code"], "forbidden");
 }
 
+fn assert_not_found(response: Response) {
+    assert_eq!(
+        response.status,
+        StatusCode::NOT_FOUND,
+        "{:?}",
+        response.json
+    );
+    assert_eq!(response.json["error"]["code"], "not_found");
+}
+
 async fn seed_personas(pool: &PgPool, keys: &Keys) -> Personas {
     let branch = seed_branch(pool).await;
     let admin = seed_user(pool, "ADMIN", Some(branch)).await;
@@ -178,10 +206,14 @@ async fn seed_personas(pool: &PgPool, keys: &Keys) -> Personas {
 }
 
 async fn seed_branch(pool: &PgPool) -> Uuid {
+    seed_named_branch(pool, "attendance-persona-branch").await
+}
+
+async fn seed_named_branch(pool: &PgPool, name: &str) -> Uuid {
     let org = *OrgId::knl().as_uuid();
     let region: Uuid =
         sqlx::query_scalar("INSERT INTO regions (name, org_id) VALUES ($1, $2) RETURNING id")
-            .bind("attendance-persona-region")
+            .bind(format!("{name}-region"))
             .bind(org)
             .fetch_one(pool)
             .await
@@ -190,7 +222,7 @@ async fn seed_branch(pool: &PgPool) -> Uuid {
         "INSERT INTO branches (region_id, name, org_id) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(region)
-    .bind("attendance-persona-branch")
+    .bind(name)
     .bind(org)
     .fetch_one(pool)
     .await
