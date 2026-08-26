@@ -546,3 +546,119 @@ async fn generic_kind_still_allows_null_employee_id_accounts(pool: PgPool) {
     })
     .await;
 }
+
+#[sqlx::test(migrations = "../../platform/db/migrations")]
+async fn pending_inbox_page_excludes_requester_decided_and_other_org(pool: PgPool) {
+    seed_org(&pool, ORG_A, "inbox-a").await;
+    seed_org(&pool, ORG_B, "inbox-b").await;
+    let requester = seed_user(&pool, ORG_A, "Inbox-Req").await;
+    let approver = seed_user(&pool, ORG_A, "Inbox-App").await;
+    let other_org_user = seed_user(&pool, ORG_B, "Inbox-B").await;
+    let store = PgGovernanceStore::new(runtime_role_pool(&pool).await);
+    let pending_ref = Uuid::new_v4();
+    let decided_ref = Uuid::new_v4();
+    let foreign_ref = Uuid::new_v4();
+    let created_at = now();
+
+    let pending = scope_org(OrgId::from_uuid(ORG_A), async {
+        store
+            .create_approval(CreateApprovalCommand {
+                requester,
+                request_ref: pending_ref,
+                kind: "override".to_owned(),
+                target_ref: None,
+                payload_summary: json!({"case": "pending"}),
+                trace: trace(),
+                occurred_at: created_at,
+            })
+            .await
+    })
+    .await
+    .unwrap();
+    scope_org(OrgId::from_uuid(ORG_A), async {
+        store
+            .create_approval(CreateApprovalCommand {
+                requester,
+                request_ref: decided_ref,
+                kind: "override".to_owned(),
+                target_ref: None,
+                payload_summary: json!({"case": "decided"}),
+                trace: trace(),
+                occurred_at: created_at,
+            })
+            .await
+            .unwrap();
+        store
+            .decide_pending_approval(DecidePendingApprovalCommand {
+                approver,
+                request_ref: decided_ref,
+                kind: "override".to_owned(),
+                decision: ApprovalDecision::Approved,
+                trace: trace(),
+                occurred_at: now(),
+            })
+            .await
+            .unwrap();
+    })
+    .await;
+    scope_org(OrgId::from_uuid(ORG_B), async {
+        store
+            .create_approval(CreateApprovalCommand {
+                requester: other_org_user,
+                request_ref: foreign_ref,
+                kind: "override".to_owned(),
+                target_ref: None,
+                payload_summary: json!({"case": "foreign"}),
+                trace: trace(),
+                occurred_at: created_at,
+            })
+            .await
+            .unwrap()
+    })
+    .await;
+
+    let as_of = created_at + time::Duration::seconds(1);
+    let for_requester = scope_org(OrgId::from_uuid(ORG_A), async {
+        store
+            .list_pending_action_inbox_page(requester, as_of, None, 50)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(for_requester.1, 0);
+    assert!(for_requester.0.is_empty());
+
+    let for_approver = scope_org(OrgId::from_uuid(ORG_A), async {
+        store
+            .list_pending_action_inbox_page(approver, as_of, None, 50)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(for_approver.1, 1);
+    assert_eq!(for_approver.0.len(), 1);
+    assert_eq!(for_approver.0[0].id, pending.id);
+    assert_eq!(for_approver.0[0].request_ref, pending_ref);
+    assert!(!for_approver.2);
+
+    let other_org_for_approver = scope_org(OrgId::from_uuid(ORG_B), async {
+        store
+            .list_pending_action_inbox_page(approver, as_of, None, 50)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(other_org_for_approver.1, 1);
+    assert_eq!(other_org_for_approver.0[0].request_ref, foreign_ref);
+    assert_ne!(other_org_for_approver.0[0].id, pending.id);
+
+    let other_org_for_requester = scope_org(OrgId::from_uuid(ORG_B), async {
+        store
+            .list_pending_action_inbox_page(other_org_user, as_of, None, 50)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(other_org_for_requester.1, 0);
+    assert!(other_org_for_requester.0.is_empty());
+}
