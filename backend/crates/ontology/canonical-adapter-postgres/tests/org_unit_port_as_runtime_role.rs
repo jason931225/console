@@ -1058,9 +1058,19 @@ async fn empty_tenant_company_org_unit_and_job_position_round_trip(owner_pool: P
     assert_eq!(head.legal_name.as_deref(), Some("주식회사 아크메"));
     assert_eq!(head.version, 1);
 
-    let created = execute(&units, command(org, actor, create(None, "영업본부")))
-        .await
-        .unwrap();
+    let created = execute(
+        &units,
+        OrgUnitCommand {
+            org_id: org,
+            command_id: CommandId::from_uuid(Uuid::new_v4()),
+            actor_id: actor,
+            query: create(None, "영업본부"),
+            action_key: "create_org_unit".to_owned(),
+            object_type_id: Uuid::nil(),
+        },
+    )
+    .await
+    .unwrap();
     let unit = unit_of(&created);
     let unit_head = get(&units, org, unit)
         .await
