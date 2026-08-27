@@ -789,16 +789,11 @@ async fn action_inbox_governance_source_enforces_requester_sod(pool: PgPool) {
     );
     // Workbench merges sources; membership is the SoD lock, not inter-source
     // sort order. `/action-inbox` above already pins created_at order.
-    let workbench_ids: BTreeSet<String> =
-        governance_ids(&approver_workbench.json["action_inbox"])
-            .into_iter()
-            .collect();
+    let workbench_ids: BTreeSet<String> = governance_ids(&approver_workbench.json["action_inbox"])
+        .into_iter()
+        .collect();
     let expected_ids: BTreeSet<String> = expected_governance.iter().cloned().collect();
-    assert_eq!(
-        workbench_ids, expected_ids,
-        "{:?}",
-        approver_workbench.json
-    );
+    assert_eq!(workbench_ids, expected_ids, "{:?}", approver_workbench.json);
     assert_eq!(approver_workbench.json["action_inbox"]["total"], 3);
 
     let member_resp = get(
