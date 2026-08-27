@@ -17,6 +17,7 @@ use console_ontology_adapter_postgres::{
 };
 use console_ontology_canonical_adapter_postgres::catalog;
 use console_ontology_canonical_adapter_postgres::company::PgCompanyPort;
+use console_ontology_canonical_adapter_postgres::employment::PgEmploymentPort;
 use console_ontology_canonical_adapter_postgres::job_position::PgJobPositionPort;
 use console_ontology_canonical_adapter_postgres::org_unit::PgOrgUnitPort;
 use console_ontology_canonical_domain::{
@@ -409,12 +410,27 @@ async fn seeded_org_actions_write_canonical_heads_through_owning_ports(owner_poo
         DispatchTarget::OrganizationCreateJobPosition.as_str(),
     )
     .await;
+    let employment_type = seed_canonical_org_action(
+        &owner_pool,
+        org,
+        actor,
+        "canonical.employment",
+        "고용",
+        "employment_heads",
+        "id",
+        "company",
+        "회사",
+        "appoint",
+        DispatchTarget::HrAppoint.as_str(),
+    )
+    .await;
 
     let handle = tokio::runtime::Handle::current();
     let registry = ProjectedDispatchRegistry::new()
         .register_port(PgCompanyPort::new(rt.clone(), handle.clone()))
         .register_port(PgOrgUnitPort::new(rt.clone(), handle.clone()))
-        .register_port(PgJobPositionPort::new(rt.clone(), handle));
+        .register_port(PgJobPositionPort::new(rt.clone(), handle.clone()))
+        .register_port(PgEmploymentPort::new(rt.clone(), handle));
     let state = OntologyRestState::new(
         PgOntologyStore::new(rt.clone()).with_command_pool(cmd),
         PgInstanceStore::new(rt.clone()),
@@ -520,6 +536,17 @@ async fn seeded_org_actions_write_canonical_heads_through_owning_ports(owner_poo
         }),
         Some(&Value::String(org_unit_id.to_string()))
     );
+    let job_position_id = position_outcome
+        .projected
+        .as_ref()
+        .and_then(|value| {
+            value
+                .get("result")
+                .and_then(|result| result.get("job_position_id"))
+                .and_then(Value::as_str)
+                .and_then(|raw| Uuid::parse_str(raw).ok())
+        })
+        .expect("create_job_position receipt must name job_position_id");
 
     let legal_name: serde_json::Value = sqlx::query_scalar(
         "SELECT attributes FROM company_revisions \
@@ -550,6 +577,75 @@ async fn seeded_org_actions_write_canonical_heads_through_owning_ports(owner_poo
         instances, 0,
         "canonical org writes must not create ont_instances rows (arch §9.3)"
     );
+
+    let employee_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO employees \
+         (org_id, company, name, source_filename, source_sheet, source_row, source_key) \
+         VALUES ($1, 'ACME', '김직원', 'seed.xlsx', 'Sheet1', 1, 'foundry-hr') RETURNING id",
+    )
+    .bind(org_uuid)
+    .fetch_one(&owner_pool)
+    .await
+    .unwrap();
+
+    let appoint_outcome = console_platform_request_context::scope_org(org, async {
+        state
+            .execute_action(
+                &principal,
+                "appoint",
+                ActionCommand {
+                    object_type_id: employment_type,
+                    instance_id: None,
+                    title: None,
+                    params: json!({
+                        "employee_id": employee_id,
+                        "valid_from": "2026-07-10T12:00:00Z",
+                        "attributes": {
+                            "company": "ACME",
+                            "org_unit_id": org_unit_id,
+                            "job_position_id": job_position_id,
+                            "employment_status": "ACTIVE"
+                        }
+                    }),
+                    reason: Some("foundry hr assignment".to_owned()),
+                    valid_from: Some(AT),
+                    checklist_all_acknowledged: None,
+                    four_eyes_request_ref: None,
+                    command_id: Some(Uuid::new_v4()),
+                    expected_revision: None,
+                },
+            )
+            .await
+    })
+    .await
+    .expect("hr.appoint through the seeded action must succeed");
+    assert_eq!(
+        appoint_outcome
+            .projected
+            .as_ref()
+            .and_then(|value| value.get("target")),
+        Some(&Value::String(
+            DispatchTarget::HrAppoint.as_str().to_owned()
+        ))
+    );
+    let employment_id = appoint_outcome.projected.as_ref().and_then(|value| {
+        value
+            .get("result")
+            .and_then(|result| result.get("employment_id"))
+            .and_then(Value::as_str)
+    });
+    assert!(
+        employment_id.is_some(),
+        "hr.appoint receipt must name employment_id"
+    );
+
+    let after_appoint: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ont_instances WHERE org_id = $1")
+            .bind(org_uuid)
+            .fetch_one(&owner_pool)
+            .await
+            .unwrap();
+    assert_eq!(after_appoint, 0, "hr.appoint must not write ont_instances");
 }
 
 #[allow(clippy::too_many_arguments)]
