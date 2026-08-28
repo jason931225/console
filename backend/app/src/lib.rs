@@ -19,7 +19,7 @@ use axum::body::Body;
 use axum::extract::{MatchedPath, Query, State};
 use axum::http::{HeaderMap, Request, Response, StatusCode, header};
 use axum::middleware::Next;
-use axum::response::{Html, IntoResponse};
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use base64::Engine as _;
@@ -3556,7 +3556,7 @@ pub fn build_router(state: AppState) -> Router {
     with_metrics(router, &state)
 }
 
-async fn ui_shell(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+async fn ui_shell(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let runs = match (&state.database, &state.jwt_verifier) {
         (DatabaseDependency::Postgres(pool), Some(verifier)) => {
             let rest =
@@ -3566,7 +3566,7 @@ async fn ui_shell(State(state): State<AppState>, headers: HeaderMap) -> Html<Str
         _ => Vec::new(),
     };
     let views: Vec<console_payroll_ui::RunSummary> = runs.iter().map(ui_run_summary).collect();
-    Html(console_payroll_ui::render_shell_with(&views))
+    console_payroll_ui::html_shell_with(&views)
 }
 
 fn ui_run_summary(

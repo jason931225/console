@@ -84,8 +84,16 @@ pub fn render_shell_with(runs: &[RunSummary]) -> String {
     html
 }
 
-async fn get_shell() -> Html<String> {
+pub fn html_shell() -> Html<String> {
     Html(render_shell())
+}
+
+pub fn html_shell_with(runs: &[RunSummary]) -> Html<String> {
+    Html(render_shell_with(runs))
+}
+
+async fn get_shell() -> Html<String> {
+    html_shell()
 }
 
 pub fn router() -> Router {
