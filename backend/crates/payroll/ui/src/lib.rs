@@ -2,11 +2,8 @@
 //!
 //! Unauthenticated markup is empty deny-by-omission. Authorized run summaries
 //! are composed server-side from OpenAPI `PayrollRunSummary` required fields
-//! (no won amounts). `AuthorizedRuns` is a Leptos island so WASM hydration can
-//! attach later; this slice does not serve WASM.
-use axum::Router;
-use axum::response::Html;
-use axum::routing::get;
+//! (no won amounts). `AuthorizedRuns` is a Leptos island. WASM hydration loads
+//! `/_ui/pkg/*` only on the authorized shell.
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +59,7 @@ pub fn AuthorizedShell(runs: Vec<RunSummary>) -> impl IntoView {
         <html>
             <head>
                 <meta charset="utf-8" />
+                <script type="module" src="/_ui/pkg/hydrate.js"></script>
             </head>
             <body>
                 <AuthorizedRuns runs=runs />
@@ -90,24 +88,45 @@ pub fn render_shell_with(runs: &[RunSummary]) -> String {
     html
 }
 
-pub fn html_shell() -> Html<String> {
-    Html(render_shell())
+#[cfg(feature = "ssr")]
+mod ssr {
+    use super::{RunSummary, render_shell, render_shell_with};
+    use axum::response::Html;
+
+    pub fn html_shell() -> Html<String> {
+        Html(render_shell())
+    }
+
+    pub fn html_shell_with(runs: &[RunSummary]) -> Html<String> {
+        Html(render_shell_with(runs))
+    }
+
+    pub fn hydrate_js() -> &'static str {
+        include_str!("../hydrate.js")
+    }
+
+    pub fn payroll_ui_js() -> &'static [u8] {
+        include_bytes!("../pkg/console_payroll_ui.js")
+    }
+
+    pub fn payroll_ui_wasm() -> &'static [u8] {
+        include_bytes!("../pkg/console_payroll_ui_bg.wasm")
+    }
 }
 
-pub fn html_shell_with(runs: &[RunSummary]) -> Html<String> {
-    Html(render_shell_with(runs))
-}
+#[cfg(feature = "ssr")]
+pub use ssr::{html_shell, html_shell_with, hydrate_js, payroll_ui_js, payroll_ui_wasm};
 
-async fn get_shell() -> Html<String> {
-    html_shell()
-}
-
-pub fn router() -> Router {
-    Router::new().route("/", get(get_shell))
+#[cfg(feature = "hydrate")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn hydrate() {
+    leptos::mount::hydrate_islands();
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::panic)]
+
     use super::*;
 
     const PAYROLL_RUN_SUMMARY_SCHEMA: &str =
@@ -154,6 +173,11 @@ mod tests {
             "empty shell must omit run markup: {}",
             render_shell()
         );
+        assert!(
+            !render_shell().contains("/_ui/pkg/"),
+            "empty shell must not load WASM: {}",
+            render_shell()
+        );
     }
 
     #[test]
@@ -179,13 +203,48 @@ mod tests {
         assert!(!html.contains("291_520"), "golden won leaked: {html}");
         assert!(!lowered.contains("payslip"), "payslip leaked: {html}");
         assert!(
-            html.contains("AuthorizedRuns"),
-            "authorized markup must name the island for later WASM hydrate: {html}"
+            html.contains("/_ui/pkg/hydrate.js"),
+            "authorized markup must load the hydrate module: {html}"
+        );
+        let component = island_component(&html);
+        assert!(
+            component.starts_with("AuthorizedRuns_"),
+            "island data-component must be the wasm-bindgen export: {html}"
+        );
+        let js = std::str::from_utf8(payroll_ui_js()).expect("bindgen js is utf-8");
+        assert!(
+            js.contains(&format!("export function {component}")),
+            "committed bindgen js must export {component}"
+        );
+        assert_eq!(
+            &payroll_ui_wasm()[..4],
+            b"\0asm",
+            "committed wasm must be a Wasm module"
+        );
+        assert!(
+            hydrate_js().contains("/_ui/pkg/console_payroll_ui.js"),
+            "hydrate.js must import bindgen js"
+        );
+        assert!(
+            hydrate_js().contains("/_ui/pkg/console_payroll_ui_bg.wasm"),
+            "hydrate.js must fetch the wasm module"
         );
         assert!(
             !render_shell().contains("AuthorizedRuns"),
             "empty shell must not emit an island: {}",
             render_shell()
         );
+    }
+
+    fn island_component(html: &str) -> &str {
+        let marker = "data-component=\"";
+        let start = html
+            .find(marker)
+            .unwrap_or_else(|| panic!("authorized markup must set data-component: {html}"));
+        let rest = &html[start + marker.len()..];
+        let end = rest
+            .find('"')
+            .unwrap_or_else(|| panic!("data-component must be quoted: {html}"));
+        &rest[..end]
     }
 }

@@ -132,6 +132,74 @@ async fn ui_shell_serves_empty_ssr_html() -> Result<(), Box<dyn std::error::Erro
     Err(format!("/_ui did not return 200 ({last})").into())
 }
 
+#[tokio::test]
+async fn ui_pkg_serves_committed_hydrate_assets() -> Result<(), Box<dyn std::error::Error>> {
+    let config = app_config(AppRole::Api)?;
+    let state = AppState::new(config, DatabaseDependency::NotConfigured)?;
+    let app = build_router(state);
+    let js_type = "text/javascript; charset=utf-8";
+
+    let hydrate = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/_ui/pkg/hydrate.js")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(hydrate.status(), StatusCode::OK);
+    assert_eq!(
+        hydrate
+            .headers()
+            .get(http::header::CONTENT_TYPE)
+            .map(http::HeaderValue::as_bytes),
+        Some(js_type.as_bytes())
+    );
+    let hydrate_body = axum::body::to_bytes(hydrate.into_body(), usize::MAX).await?;
+    assert_eq!(
+        hydrate_body.as_ref(),
+        console_payroll_ui::hydrate_js().as_bytes()
+    );
+
+    let bindgen = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/_ui/pkg/console_payroll_ui.js")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(bindgen.status(), StatusCode::OK);
+    assert_eq!(
+        bindgen
+            .headers()
+            .get(http::header::CONTENT_TYPE)
+            .map(http::HeaderValue::as_bytes),
+        Some(js_type.as_bytes())
+    );
+    let bindgen_body = axum::body::to_bytes(bindgen.into_body(), usize::MAX).await?;
+    assert_eq!(bindgen_body.as_ref(), console_payroll_ui::payroll_ui_js());
+
+    let wasm = app
+        .oneshot(
+            Request::builder()
+                .uri("/_ui/pkg/console_payroll_ui_bg.wasm")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(wasm.status(), StatusCode::OK);
+    assert_eq!(
+        wasm.headers()
+            .get(http::header::CONTENT_TYPE)
+            .map(http::HeaderValue::as_bytes),
+        Some(b"application/wasm".as_slice())
+    );
+    let wasm_body = axum::body::to_bytes(wasm.into_body(), usize::MAX).await?;
+    assert_eq!(&wasm_body[..4], b"\0asm");
+    assert_eq!(wasm_body.as_ref(), console_payroll_ui::payroll_ui_wasm());
+    Ok(())
+}
+
 fn app_config(role: AppRole) -> Result<AppConfig, console_app::AppError> {
     AppConfig::from_pairs([
         ("CONSOLE_APP_ROLE", role.to_string()),
@@ -312,6 +380,10 @@ mod authorized {
         let (status, unauth) = get_ui(service.clone(), None).await;
         assert_eq!(status, StatusCode::OK, "{unauth}");
         assert_eq!(unauth, console_payroll_ui::render_shell());
+        assert!(
+            !unauth.contains("/_ui/pkg/"),
+            "empty shell must not load WASM: {unauth}"
+        );
 
         let (status, member_html) =
             get_ui(service.clone(), Some(&bearer(&keys, org, member, "MEMBER"))).await;
@@ -320,6 +392,10 @@ mod authorized {
         assert!(
             !member_html.contains(&run.to_string()),
             "MEMBER must not see the run id: {member_html}"
+        );
+        assert!(
+            !member_html.contains("/_ui/pkg/"),
+            "MEMBER shell must not load WASM: {member_html}"
         );
 
         let (status, admin_html) = get_ui(
@@ -332,6 +408,10 @@ mod authorized {
         assert!(
             admin_html.contains(&format!("data-run-id=\"{run}\"")),
             "SUPER_ADMIN must see the authorized run: {admin_html}"
+        );
+        assert!(
+            admin_html.contains("/_ui/pkg/hydrate.js"),
+            "authorized shell must load hydrate.js: {admin_html}"
         );
         let lowered = admin_html.to_ascii_lowercase();
         assert!(!lowered.contains("won"), "won leaked: {admin_html}");
