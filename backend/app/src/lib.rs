@@ -3531,9 +3531,7 @@ pub fn build_router(state: AppState) -> Router {
         "/_ui",
         Router::new()
             .route("/", get(ui_shell))
-            .route("/pkg/hydrate.js", get(ui_pkg_hydrate_js))
-            .route("/pkg/console_payroll_ui.js", get(ui_pkg_bindgen_js))
-            .route("/pkg/console_payroll_ui_bg.wasm", get(ui_pkg_wasm))
+            .merge(console_payroll_ui::pkg_router())
             .with_state(state.clone()),
     );
     // Cross-cutting layers on the FULLY-merged router (base + every domain +
@@ -3557,27 +3555,6 @@ pub fn build_router(state: AppState) -> Router {
         state.config.trusted_proxy_cidrs.clone(),
     );
     with_metrics(router, &state)
-}
-
-async fn ui_pkg_hydrate_js() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        console_payroll_ui::hydrate_js(),
-    )
-}
-
-async fn ui_pkg_bindgen_js() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        console_payroll_ui::payroll_ui_js(),
-    )
-}
-
-async fn ui_pkg_wasm() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "application/wasm")],
-        console_payroll_ui::payroll_ui_wasm(),
-    )
 }
 
 async fn ui_shell(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {

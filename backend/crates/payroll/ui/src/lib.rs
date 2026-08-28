@@ -1,11 +1,13 @@
 //! Payroll `Layer::Ui` surface. SSR HTML for `/_ui`; no payroll math.
-//!
-//! Unauthenticated markup is empty deny-by-omission. Authorized run summaries
-//! are composed server-side from OpenAPI `PayrollRunSummary` required fields
-//! (no won amounts). `AuthorizedRuns` is a Leptos island. WASM hydration loads
-//! `/_ui/pkg/*` only on the authorized shell.
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
+
+const PKG_JS: &str = "/_ui/pkg/console_payroll_ui.js";
+const PKG_WASM: &str = "/_ui/pkg/console_payroll_ui_bg.wasm";
+const ISLAND_BOOTSTRAP: &str = concat!(
+    include_str!("island_script.js"),
+    "(\"/_ui\", \"pkg\", \"console_payroll_ui\", \"console_payroll_ui_bg\");"
+);
 
 /// Contract-shaped run summary for SSR composition. Field names match
 /// `PayrollRunSummary.yaml` required keys; values are already-authorized.
@@ -59,7 +61,9 @@ pub fn AuthorizedShell(runs: Vec<RunSummary>) -> impl IntoView {
         <html>
             <head>
                 <meta charset="utf-8" />
-                <script type="module" src="/_ui/pkg/hydrate.js"></script>
+                <link rel="modulepreload" href=PKG_JS />
+                <link rel="preload" href=PKG_WASM r#as="fetch" r#type="application/wasm" />
+                <script type="module">{ISLAND_BOOTSTRAP}</script>
             </head>
             <body>
                 <AuthorizedRuns runs=runs />
@@ -68,13 +72,9 @@ pub fn AuthorizedShell(runs: Vec<RunSummary>) -> impl IntoView {
     }
 }
 
-pub fn shell() -> impl IntoView {
-    Shell()
-}
-
 pub fn render_shell() -> String {
     let mut html = String::from("<!DOCTYPE html>");
-    html.push_str(&shell().to_html());
+    html.push_str(&Shell().to_html());
     html
 }
 
@@ -91,7 +91,10 @@ pub fn render_shell_with(runs: &[RunSummary]) -> String {
 #[cfg(feature = "ssr")]
 mod ssr {
     use super::{RunSummary, render_shell, render_shell_with};
-    use axum::response::Html;
+    use axum::Router;
+    use axum::http::header;
+    use axum::response::{Html, IntoResponse};
+    use axum::routing::get;
 
     pub fn html_shell() -> Html<String> {
         Html(render_shell())
@@ -101,10 +104,6 @@ mod ssr {
         Html(render_shell_with(runs))
     }
 
-    pub fn hydrate_js() -> &'static str {
-        include_str!("../hydrate.js")
-    }
-
     pub fn payroll_ui_js() -> &'static [u8] {
         include_bytes!("../pkg/console_payroll_ui.js")
     }
@@ -112,10 +111,33 @@ mod ssr {
     pub fn payroll_ui_wasm() -> &'static [u8] {
         include_bytes!("../pkg/console_payroll_ui_bg.wasm")
     }
+
+    async fn pkg_js() -> impl IntoResponse {
+        (
+            [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+            payroll_ui_js(),
+        )
+    }
+
+    async fn pkg_wasm() -> impl IntoResponse {
+        (
+            [(header::CONTENT_TYPE, "application/wasm")],
+            payroll_ui_wasm(),
+        )
+    }
+
+    pub fn pkg_router<S>() -> Router<S>
+    where
+        S: Clone + Send + Sync + 'static,
+    {
+        Router::new()
+            .route("/pkg/console_payroll_ui.js", get(pkg_js))
+            .route("/pkg/console_payroll_ui_bg.wasm", get(pkg_wasm))
+    }
 }
 
 #[cfg(feature = "ssr")]
-pub use ssr::{html_shell, html_shell_with, hydrate_js, payroll_ui_js, payroll_ui_wasm};
+pub use ssr::{html_shell, html_shell_with, payroll_ui_js, payroll_ui_wasm, pkg_router};
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -125,8 +147,6 @@ pub fn hydrate() {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::expect_used, clippy::panic)]
-
     use super::*;
 
     const PAYROLL_RUN_SUMMARY_SCHEMA: &str =
@@ -203,15 +223,23 @@ mod tests {
         assert!(!html.contains("291_520"), "golden won leaked: {html}");
         assert!(!lowered.contains("payslip"), "payslip leaked: {html}");
         assert!(
-            html.contains("/_ui/pkg/hydrate.js"),
-            "authorized markup must load the hydrate module: {html}"
+            html.contains("rel=\"modulepreload\"") && html.contains(PKG_JS),
+            "authorized markup must preload bindgen js: {html}"
         );
-        let component = island_component(&html);
+        assert!(
+            html.contains(PKG_WASM),
+            "authorized markup must preload wasm: {html}"
+        );
+        assert!(
+            html.contains("(\"/_ui\", \"pkg\", \"console_payroll_ui\", \"console_payroll_ui_bg\")"),
+            "authorized markup must invoke leptos island_script: {html}"
+        );
+        let component = island_component(&html).unwrap_or("");
         assert!(
             component.starts_with("AuthorizedRuns_"),
             "island data-component must be the wasm-bindgen export: {html}"
         );
-        let js = std::str::from_utf8(payroll_ui_js()).expect("bindgen js is utf-8");
+        let js = std::str::from_utf8(payroll_ui_js()).unwrap_or("");
         assert!(
             js.contains(&format!("export function {component}")),
             "committed bindgen js must export {component}"
@@ -222,29 +250,14 @@ mod tests {
             "committed wasm must be a Wasm module"
         );
         assert!(
-            hydrate_js().contains("/_ui/pkg/console_payroll_ui.js"),
-            "hydrate.js must import bindgen js"
-        );
-        assert!(
-            hydrate_js().contains("/_ui/pkg/console_payroll_ui_bg.wasm"),
-            "hydrate.js must fetch the wasm module"
-        );
-        assert!(
             !render_shell().contains("AuthorizedRuns"),
             "empty shell must not emit an island: {}",
             render_shell()
         );
     }
 
-    fn island_component(html: &str) -> &str {
-        let marker = "data-component=\"";
-        let start = html
-            .find(marker)
-            .unwrap_or_else(|| panic!("authorized markup must set data-component: {html}"));
-        let rest = &html[start + marker.len()..];
-        let end = rest
-            .find('"')
-            .unwrap_or_else(|| panic!("data-component must be quoted: {html}"));
-        &rest[..end]
+    fn island_component(html: &str) -> Option<&str> {
+        html.split_once("data-component=\"")
+            .and_then(|(_, rest)| rest.split_once('"').map(|(id, _)| id))
     }
 }
