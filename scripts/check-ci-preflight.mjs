@@ -514,6 +514,7 @@ const domainUnitPackages = [
   "console-ontology-adapter-postgres",
   "console-ontology-rest",
   "console-payroll-rest",
+  "console-payroll-ui",
   "console-platform-email",
   "console-platform-jobs",
   "console-platform-push",
