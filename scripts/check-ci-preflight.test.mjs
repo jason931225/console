@@ -462,6 +462,20 @@ describe("CI preflight contract", () => {
     assert.equal(classifyChangedPaths(["tools/ci/cargo_needs_postgres.sh"]).runLivePostgres, true);
     assert.equal(classifyChangedPaths([".github/workflows/ci.yml"]).runLivePostgres, true);
     assert.equal(classifyChangedPaths(["docs/program/foo.md"]).runLivePostgres, false);
+    assert.equal(classifyChangedPaths(["ops/postgres-reconcile-topology.sh"]).runLivePostgres, true);
+    assert.equal(classifyChangedPaths(["ops/postgres-topology.integration.test.sh"]).runLivePostgres, true);
+    assert.equal(classifyChangedPaths(["backend/crates/platform/db/src/lib.rs"]).runLivePostgres, true);
+    assert.equal(
+      classifyChangedPaths(["backend/crates/platform/realtime/tests/postgres_bridge.rs"]).runLivePostgres,
+      true,
+    );
+    assert.equal(classifyChangedPaths(["backend/.sqlx/query-0000.json"]).runLivePostgres, true);
+    assert.equal(
+      classifyChangedPaths(["backend/ci/gates/writer-ownership/canonical-enforce.sh"]).runLivePostgres,
+      true,
+    );
+    assert.equal(classifyChangedPaths(["backend/ci/gates/rls-arming/src/main.rs"]).runLivePostgres, true);
+    assert.equal(classifyChangedPaths(["backend/ci/gates/layer-boundary/src/lib.rs"]).runLivePostgres, false);
 
     const backendPr = resolvePathClassFromEnv({
       PATH_CLASS_EVENT_NAME: "pull_request",
@@ -1757,12 +1771,27 @@ describe("CI preflight contract", () => {
       replaceJob(workflow, "company-conformance", (block) => block.replace(postsubmitIf, "    if: false\n")),
       "company-conformance must run only on push/workflow_dispatch when run_heavy",
     );
-    for (const job of ["backend", "api-contract", "company-conformance"]) {
+    expectFailure(
+      replaceJob(workflow, "migration-expand-contract", (block) => block.replace(postsubmitIf, "    if: false\n")),
+      "migration-expand-contract must run only on push/workflow_dispatch when run_heavy",
+    );
+    for (const job of ["backend", "api-contract", "company-conformance", "migration-expand-contract", "rust-fmt"]) {
       expectFailure(
         workflow.replace(`  ${job}:\n`, `  ${job}:\n    continue-on-error: true\n`),
         `${job} must not define job-level continue-on-error`,
       );
     }
+    expectFailure(
+      workflow.replace("  rust-fmt:\n", "  rust-fmt:\n    if: always()\n"),
+      "rust-fmt must not define job-level if",
+    );
+    expectFailure(
+      replaceJob(workflow, "rust-fmt", (block) => block.replace(
+        "    runs-on: ubuntu-latest\n",
+        "    runs-on: ubuntu-latest\n    needs: preflight\n",
+      )),
+      "rust-fmt must not need preflight",
+    );
   });
 
   it("rejects job-level preflight failure bypasses", () => {

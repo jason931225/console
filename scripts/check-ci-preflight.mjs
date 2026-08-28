@@ -47,6 +47,7 @@ const postsubmitProtectedJobs = Object.freeze([
   "company-conformance",
   "domain-unit",
   "generated-face-authority",
+  "migration-expand-contract",
 ]);
 /** Preflight-local: Rust/Buck/cargo steps for heavy path classes only. */
 const preflightRunHeavyCondition = "${{ steps.path_class.outputs.run_heavy == 'true' }}";
@@ -107,7 +108,7 @@ function backendLegTopologyCondition(leg) {
   return `\${{ !cancelled() && matrix.leg == '${leg}' && steps.topology.outcome == 'success' && needs.preflight.outputs.run_heavy == 'true' }}`;
 }
 
-export const PATH_CLASS_RULES_VERSION = "5";
+export const PATH_CLASS_RULES_VERSION = "6";
 const docsOnlyRootFiles = new Set([
   "README.md",
   "CHANGELOG.md",
@@ -136,17 +137,32 @@ const releaseMetadataAllowedPaths = new Set([
  * Fail-closed path-class classifier (S-CI2 / console-7rc mechanism B).
  * Only exact docs-only and release-metadata-only classes set runHeavy=false;
  * every other class keeps the full matrix. Live Postgres is a second axis
- * (oyatie pg-gate): adapter/SQL/harness paths, or fail-closed unknown classes.
+ * (oyatie pg-gate): adapter/SQL/migrations/.sqlx/platform-db/named gates and
+ * postgres harness paths, or fail-closed unknown classes. Typical backend
+ * Rust leaves stay skip-proofed so Required / CI can finish under 5m.
  */
 export function isLivePostgresPath(path) {
   if (typeof path !== "string" || path.length === 0) return false;
   if (path.includes("adapter-postgres")) return true;
   if (path.endsWith(".sql") || /(^|\/)migrations\//.test(path)) return true;
+  if (/(^|\/)\.sqlx(\/|$)/.test(path)) return true;
+  if (path.includes("postgres_bridge")) return true;
+  if (path.startsWith("backend/crates/platform/db/")) return true;
+  if (
+    path.startsWith("backend/ci/gates/writer-ownership/")
+    || path.startsWith("backend/ci/gates/rls-arming/")
+    || path.startsWith("backend/ci/gates/tenant-isolation/")
+    || path.startsWith("backend/ci/gates/migration-safety/")
+  ) {
+    return true;
+  }
   const lower = path.toLowerCase();
   if (
     (path.startsWith("tools/ci/")
       || path.startsWith("tools/buck/")
-      || path.startsWith("ci/harness/"))
+      || path.startsWith("ci/harness/")
+      || path.startsWith("ops/")
+      || path.startsWith("tools/lanes/"))
     && lower.includes("postgres")
   ) {
     return true;
@@ -919,13 +935,16 @@ const protectedJobs = [
   // Facets need preflight and have no job-level if (skip-proof when
   // run_live_postgres is false). Aggregator is fail-closed with if: always()
   // (like required-ci) and is not in this list. backend/domain-unit/
-  // company-conformance/generated-face-authority carry a locked postsubmit if.
+  // company-conformance/generated-face-authority/migration-expand-contract
+  // carry a locked postsubmit if. rust-fmt is merge-blocking but parallel
+  // with preflight, so it is locked separately (must not need preflight).
   "postgres-reachability-app",
   "postgres-reachability-platform",
   "postgres-reachability-ontology",
   "postgres-reachability-domain-a",
   "postgres-reachability-domain-b",
   "company-conformance",
+  "migration-expand-contract",
 ];
 
 function runContract(kind, name, run, options = {}) {
@@ -2972,6 +2991,17 @@ export function evaluateCiPreflight(
     if (/^    continue-on-error:/m.test(block)) failures.push(`${job} must not define job-level continue-on-error`);
     if (hasJobDefaultShell(block)) failures.push(`${job} must not override defaults.run.shell`);
     if (hasUnsafeStepShell(block)) failures.push(`${job} may use only the default shell or canonical shell: bash`);
+  }
+
+  const rustFmt = jobBlock(workflow, "rust-fmt");
+  if (!rustFmt) {
+    failures.push("CI must define protected job rust-fmt");
+  } else {
+    if (needsPreflight(rustFmt)) failures.push("rust-fmt must not need preflight");
+    if (/^    if:/m.test(rustFmt)) failures.push("rust-fmt must not define job-level if");
+    if (/^    continue-on-error:/m.test(rustFmt)) failures.push("rust-fmt must not define job-level continue-on-error");
+    if (hasJobDefaultShell(rustFmt)) failures.push("rust-fmt must not override defaults.run.shell");
+    if (hasUnsafeStepShell(rustFmt)) failures.push("rust-fmt may use only the default shell or canonical shell: bash");
   }
 
   return { failures };
