@@ -17,7 +17,9 @@ use console_ontology_adapter_postgres::{
 };
 use console_ontology_canonical_adapter_postgres::catalog;
 use console_ontology_canonical_adapter_postgres::company::PgCompanyPort;
-use console_ontology_canonical_adapter_postgres::employment::PgEmploymentPort;
+use console_ontology_canonical_adapter_postgres::employment::{
+    NewEmployeeRecord, PgEmploymentPort, insert_employee_record,
+};
 use console_ontology_canonical_adapter_postgres::job_position::PgJobPositionPort;
 use console_ontology_canonical_adapter_postgres::org_unit::PgOrgUnitPort;
 use console_ontology_canonical_domain::{
@@ -426,11 +428,12 @@ async fn seeded_org_actions_write_canonical_heads_through_owning_ports(owner_poo
     .await;
 
     let handle = tokio::runtime::Handle::current();
+    let employment_port = PgEmploymentPort::new(rt.clone(), handle.clone());
     let registry = ProjectedDispatchRegistry::new()
         .register_port(PgCompanyPort::new(rt.clone(), handle.clone()))
         .register_port(PgOrgUnitPort::new(rt.clone(), handle.clone()))
         .register_port(PgJobPositionPort::new(rt.clone(), handle.clone()))
-        .register_port(PgEmploymentPort::new(rt.clone(), handle));
+        .register_port(employment_port.clone());
     let state = OntologyRestState::new(
         PgOntologyStore::new(rt.clone()).with_command_pool(cmd),
         PgInstanceStore::new(rt.clone()),
@@ -578,15 +581,31 @@ async fn seeded_org_actions_write_canonical_heads_through_owning_ports(owner_poo
         "canonical org writes must not create ont_instances rows (arch §9.3)"
     );
 
-    let employee_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO employees \
-         (org_id, company, name, source_filename, source_sheet, source_row, source_key) \
-         VALUES ($1, 'ACME', '김직원', 'seed.xlsx', 'Sheet1', 1, 'foundry-hr') RETURNING id",
+    let employee_id = Uuid::new_v4();
+    let unit_text = org_unit_id.to_string();
+    let position_text = job_position_id.to_string();
+    let mut tx = rt.begin().await.unwrap();
+    sqlx::query("SELECT set_config('app.current_org', $1, true)")
+        .bind(org_uuid.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    insert_employee_record(
+        &mut tx,
+        org_uuid,
+        NewEmployeeRecord {
+            employee_id,
+            company: "ACME",
+            name: "김직원",
+            employee_number: "E-FOUNDARY",
+            org_unit: &unit_text,
+            position: &position_text,
+            worksite_name: "서울",
+        },
     )
-    .bind(org_uuid)
-    .fetch_one(&owner_pool)
     .await
-    .unwrap();
+    .expect("console_rt must insert the Employment-owned employee row");
+    tx.commit().await.unwrap();
 
     let appoint_outcome = console_platform_request_context::scope_org(org, async {
         state
@@ -628,16 +647,27 @@ async fn seeded_org_actions_write_canonical_heads_through_owning_ports(owner_poo
             DispatchTarget::HrAppoint.as_str().to_owned()
         ))
     );
-    let employment_id = appoint_outcome.projected.as_ref().and_then(|value| {
-        value
-            .get("result")
-            .and_then(|result| result.get("employment_id"))
-            .and_then(Value::as_str)
-    });
-    assert!(
-        employment_id.is_some(),
-        "hr.appoint receipt must name employment_id"
-    );
+    let employment_id = appoint_outcome
+        .projected
+        .as_ref()
+        .and_then(|value| {
+            value
+                .get("result")
+                .and_then(|result| result.get("employment_id"))
+                .and_then(Value::as_str)
+                .and_then(|raw| Uuid::parse_str(raw).ok())
+        })
+        .expect("hr.appoint receipt must name employment_id");
+    let head = {
+        let port = employment_port.clone();
+        tokio::task::spawn_blocking(move || port.get(org, employment_id))
+            .await
+            .unwrap()
+            .expect("employment get")
+            .expect("hr.appoint must produce an open queryable head")
+    };
+    assert_eq!(head.org_unit_id, Some(org_unit_id));
+    assert_eq!(head.job_position_id, Some(job_position_id));
 
     let after_appoint: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM ont_instances WHERE org_id = $1")

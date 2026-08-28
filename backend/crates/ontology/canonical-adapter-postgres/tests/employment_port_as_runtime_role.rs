@@ -2405,10 +2405,11 @@ async fn empty_tenant_hr_appoint_sits_on_canonical_org_tree(owner_pool: PgPool) 
 
     let appointed = execute(
         &employment,
-        command(
-            org,
-            actor,
-            EmploymentQuery::Appoint {
+        EmploymentCommand {
+            org_id: org,
+            command_id: CommandId::from_uuid(Uuid::new_v4()),
+            actor_id: actor,
+            query: EmploymentQuery::Appoint {
                 employee_id,
                 valid_from: at(0),
                 attributes: EmploymentAttributes {
@@ -2418,7 +2419,9 @@ async fn empty_tenant_hr_appoint_sits_on_canonical_org_tree(owner_pool: PgPool) 
                     employment_status: "ACTIVE".to_owned(),
                 },
             },
-        ),
+            action_key: "appoint".to_owned(),
+            object_type_id: Uuid::nil(),
+        },
     )
     .await
     .unwrap();
