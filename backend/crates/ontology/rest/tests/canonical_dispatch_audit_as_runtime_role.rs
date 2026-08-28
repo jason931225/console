@@ -18,7 +18,7 @@ use console_ontology_adapter_postgres::{
 use console_ontology_canonical_adapter_postgres::catalog;
 use console_ontology_canonical_adapter_postgres::company::PgCompanyPort;
 use console_ontology_canonical_adapter_postgres::employment::{
-    insert_employee_record, NewEmployeeRecord, PgEmploymentPort,
+    NewEmployeeRecord, PgEmploymentPort, insert_employee_record,
 };
 use console_ontology_canonical_adapter_postgres::job_position::PgJobPositionPort;
 use console_ontology_canonical_adapter_postgres::org_unit::PgOrgUnitPort;
@@ -29,13 +29,13 @@ use console_ontology_canonical_domain::{
 use console_ontology_domain::{ActionDispatch, BackingKind, InstanceId, ObjectTypeId};
 use console_ontology_rest::{ActionCommand, OntologyRestState, ProjectedDispatchRegistry};
 use console_platform_authz::{Principal, Role};
-use console_platform_db::{with_audit, DbError};
+use console_platform_db::{DbError, with_audit};
 use serde::Deserialize;
-use serde_json::{json, Value};
-use sqlx::postgres::PgPoolOptions;
+use serde_json::{Value, json};
 use sqlx::PgPool;
-use time::macros::datetime;
+use sqlx::postgres::PgPoolOptions;
 use time::OffsetDateTime;
+use time::macros::datetime;
 use uuid::Uuid;
 
 const AT: OffsetDateTime = datetime!(2026-07-10 12:00 UTC);
