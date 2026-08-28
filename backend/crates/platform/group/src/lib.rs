@@ -293,28 +293,32 @@ mod tests {
 
         seed_group_with_two_orgs(&owner_pool, group_id, org_a, org_b, actor, "GROUP_VIEWER").await;
 
-        let members = group_member_orgs(&rt_pool, group_id, actor)
-            .await
-            .unwrap();
-        assert_eq!(members.len(), 2, "GROUP_VIEWER must resolve both member 법인");
+        let members = group_member_orgs(&rt_pool, group_id, actor).await.unwrap();
+        assert_eq!(
+            members.len(),
+            2,
+            "GROUP_VIEWER must resolve both member 법인"
+        );
 
         let rows = consolidated_read(&rt_pool, group_id, &members, |org_id, tx| {
             Box::pin(async move {
-                let armed: String = sqlx::query_scalar("SELECT current_setting('app.current_org', true)")
-                    .fetch_one(tx.as_mut())
-                    .await
-                    .map_err(DbError::Sqlx)?;
+                let armed: String =
+                    sqlx::query_scalar("SELECT current_setting('app.current_org', true)")
+                        .fetch_one(tx.as_mut())
+                        .await
+                        .map_err(DbError::Sqlx)?;
                 assert_eq!(
                     armed,
                     org_id.as_uuid().to_string(),
                     "consolidated_read must arm RLS with the member org, never the group id"
                 );
                 assert_ne!(armed, group_id.to_string());
-                let name: String = sqlx::query_scalar("SELECT name FROM organizations WHERE id = $1")
-                    .bind(*org_id.as_uuid())
-                    .fetch_one(tx.as_mut())
-                    .await
-                    .map_err(DbError::Sqlx)?;
+                let name: String =
+                    sqlx::query_scalar("SELECT name FROM organizations WHERE id = $1")
+                        .bind(*org_id.as_uuid())
+                        .fetch_one(tx.as_mut())
+                        .await
+                        .map_err(DbError::Sqlx)?;
                 Ok::<Vec<String>, DbError>(vec![name])
             })
         })
@@ -343,15 +347,13 @@ mod tests {
             0xC071_C071_C071_C071_C071_C071_C071_C071,
         ));
 
-        seed_group_with_two_orgs(&owner_pool, group_id, org_id, org_id, actor, "GROUP_VIEWER").await;
+        seed_group_with_two_orgs(&owner_pool, group_id, org_id, org_id, actor, "GROUP_VIEWER")
+            .await;
 
         let members = group_member_orgs(&rt_pool, group_id, stranger)
             .await
             .unwrap();
-        assert!(
-            members.is_empty(),
-            "no grant must resolve no member orgs"
-        );
+        assert!(members.is_empty(), "no grant must resolve no member orgs");
 
         let rows = consolidated_read(&rt_pool, group_id, &members, |_org, _tx| {
             Box::pin(async { Ok::<Vec<()>, DbError>(vec![()]) })
