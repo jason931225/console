@@ -149,7 +149,6 @@ fn assert_blocked(err: OrgUnitError, expected: &[&str]) {
             assert_eq!(
                 blockers,
                 expected.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>(),
-                "blocked messages must match the kinds design contract"
             );
         }
         other => panic!("expected OrgUnitError::Blocked, got {other:?}"),
