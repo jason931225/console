@@ -1,24 +1,4 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! OrgUnit kinds Site / Department / Team (tests-first; red on clean main).
-//!
-//! Design this suite encodes (PR body is the review surface; no new Markdown):
-//!
-//! - Closed kind set in revision `attributes`, not a column on `org_units`:
-//!   `"site" | "department" | "team"` (lowercase). Required on create and revise.
-//! - Missing / blank / unknown / non-string kind fail closed in **pure** preflight
-//!   (same shape as `name`). Kind is immutable on revise (execute compares the
-//!   bag to the stored head; preflight cannot see the stored kind).
-//! - `parent_id` lives in the same attributes object. 0215 still refuses a
-//!   parent column on the identity anchor.
-//! - Site has no parent. Department parent is a Site in this org. Team parent
-//!   is a Department or Team in this org. Parent must exist, same org, not self.
-//! - Operational `sites` / `regions` / `branches` stay the auth spine and are
-//!   not OrgUnits. Binding a branch writes `org_unit_source_bindings`.
-//! - Out of scope: `ObjectKey::Group`, UI, Intelligence, `payable`, writing
-//!   `sites`/`regions`/`branches`, a parent/kind column, GRANT changes.
-//!
-//! Setup trees use the legal chain (Site → Department → Team) so they stay
-//! valid once the port enforces these rules. Do not `#[ignore]`.
 
 use console_kernel_core::{OrgId, UserId};
 use console_ontology_canonical_adapter_postgres::org_unit::{
