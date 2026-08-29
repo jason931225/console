@@ -20,7 +20,7 @@ Status: active roadmap authority. Product scope comes from [`PRODUCT.md`](PRODUC
    - Complete branchless capability and temporal-grant contracts, contracts-crate/OpenAPI composition, true preflight, and distinct-human approval rules.
 5. **Organization and HR**
    - Done: explicit owning ports and single-writer boundaries are mechanically proven for Company, OrgUnit, JobPosition, Person, Employment, and PayRun, releasing projection fan-out only.
-   - Tenant is always a Group. Every Company mints a real Group row (standalone = Group of one). Company remains the legal entity and RLS cell; Group never arms `app.current_org`. Cross-entity HR/payroll is policy on member companies, still one `org_id` per write. Two-org `consolidated_read` as `console_rt` is proven (#954). People create binds Person (#966). UUID OrgUnit/JobPosition refs fail closed (#968). Next: mandatory `organizations.group_id` plus 1:1 mint for ungrouped companies (design, then tests-first); OrgUnit kinds Site/Department/Team under one Company; `hr.appoint` stays four-eyes, not directory create. `ObjectKey::Group` is not admitted by this record.
+   - Tenant is always a Group. Every Company mints a real Group row (standalone = Group of one). Company remains the legal entity and RLS cell; Group never arms `app.current_org`. Cross-entity HR/payroll is policy on member companies, still one `org_id` per write. Two-org `consolidated_read` as `console_rt` is proven (#954). People create binds Person (#966). UUID OrgUnit/JobPosition refs fail closed (#968). Mandatory `organizations.group_id` plus 1:1 mint is done (#971). Next: OrgUnit kinds Site/Department/Team under one Company (closed attribute set; operational sites are not OrgUnits); `hr.appoint` stays four-eyes, not directory create. `ObjectKey::Group` is not admitted by this record.
 6. **Payroll**
    - Project the existing payroll writer without a second write path; preserve deterministic rounding, golden cases, immutable receipts, and payslip drafts.
    - Draft calculate is admitted. `payable`, Korea compliance conclusions, wage-statement legal sign-off, and payment execution remain **HOLD**.
@@ -30,7 +30,7 @@ Status: active roadmap authority. Product scope comes from [`PRODUCT.md`](PRODUC
    - Shipping screens are admitted. Persona-based real-backend E2E (ADR-0025 §4) remains the bar for calling a screen shipped. Production exposure stays **HOLD**. Import/export is not the data-entry base except 자료실; the comms rail is out of this slice.
 8. **Palantir AIP / Intelligence**
    - Palantir AIP is the target intelligence layer. It is built in the separate Intelligence repository until that repository names a SHA-bound stable base; cloning it into Console is a later lane.
-   - Console-owned fail-closed seams are admitted now (same `Principal`, ontology actions, no second writer, no Palantir client, no Intelligence HTTP on Console). Not a tenant-app Intelligence product.
+   - Console-owned fail-closed seams are admitted now (same `Principal`, ontology actions, no second writer, no Palantir client). Owner lock (2026-08-29): **bind-only** Intelligence HTTP on the existing listener, `127.0.0.1` only, fail-closed if unset or non-loopback. Later implementation (not this record): `GET http://127.0.0.1:<listen-port>/internal/intelligence/bind`. Not published OpenAPI, not `/_ui`, not `/api/v1`. No chat, no inference text in tenant UX, no HR/payroll write, no autonomous merge. Not a tenant-app Intelligence product.
 
 ## Explicit HOLDs
 
