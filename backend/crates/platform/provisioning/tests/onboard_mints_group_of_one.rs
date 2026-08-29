@@ -181,3 +181,71 @@ async fn t9_onboard_with_org_conn_arms_org_id_never_group_id(owner_pool: PgPool)
         "app.current_org must never equal the group id"
     );
 }
+
+/// T14: `remove(A, org)` while the org is in B does not remint and does not snap.
+#[sqlx::test(migrations = "../db/migrations")]
+async fn t14_stale_remove_does_not_remint_or_snap(owner_pool: PgPool) {
+    let rt_pool = runtime_role_pool(&owner_pool).await;
+    let provisioner = PlatformProvisioner::new(Duration::hours(24));
+    let now = OffsetDateTime::now_utc();
+
+    let onboarded = provisioner
+        .onboard_tenant(&rt_pool, None, "t14-stay-b", "T14 Stay in B", now)
+        .await
+        .unwrap();
+    let org_id = onboarded.organization.id;
+
+    let group_a = provisioner
+        .create_group(&rt_pool, None, "t14-group-a", "T14 A", now)
+        .await
+        .unwrap();
+    let group_b = provisioner
+        .create_group(&rt_pool, None, "t14-group-b", "T14 B", now)
+        .await
+        .unwrap();
+
+    let assigned = provisioner
+        .assign_org_to_group(&rt_pool, None, group_b.id, org_id, now)
+        .await
+        .unwrap();
+    assert_eq!(assigned.group_id, Some(group_b.id));
+
+    let removed = provisioner
+        .remove_org_from_group(&rt_pool, None, group_a.id, org_id, now)
+        .await
+        .unwrap();
+    assert_eq!(
+        removed.group_id,
+        Some(group_b.id),
+        "stale remove(A) must leave group_id = B"
+    );
+
+    let membership_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM group_memberships WHERE org_id = $1")
+            .bind(org_id)
+            .fetch_one(&owner_pool)
+            .await
+            .unwrap();
+    assert_eq!(membership_count, 1);
+    let membership_group: Uuid =
+        sqlx::query_scalar("SELECT group_id FROM group_memberships WHERE org_id = $1")
+            .bind(org_id)
+            .fetch_one(&owner_pool)
+            .await
+            .unwrap();
+    assert_eq!(membership_group, group_b.id);
+
+    let after_snap: Option<serde_json::Value> = sqlx::query_scalar(
+        "SELECT after_snap FROM audit_events
+         WHERE action = 'platform.group.remove_org' AND target_id = $1
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(format!("{}:{org_id}", group_a.id))
+    .fetch_one(&owner_pool)
+    .await
+    .unwrap();
+    assert!(
+        after_snap.is_none(),
+        "stale remove must not snap a remint, got {after_snap:?}"
+    );
+}

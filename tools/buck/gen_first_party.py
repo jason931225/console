@@ -811,6 +811,7 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/code_issuance.rs': 'postgres',
             'tests/employee_leave_balances_migration_contract.rs': 'postgres',
             'tests/feature_catalog_covers_every_feature.rs': 'postgres',
+            'tests/group_of_one_expand_contract.rs': 'postgres',
             'tests/group_of_one_invariant.rs': 'postgres',
             'tests/group_resolvers.rs': 'postgres',
             'tests/lifecycle_maker_checker.rs': 'postgres',

@@ -794,6 +794,7 @@ const postgresWrapperContracts = [
   ["platform-authz-policy-pg", "//backend/crates/platform/authz:console-platform-authz-itest-policy"],
   ["platform-db-attendance-console-migration-contract-pg", "//backend/crates/platform/db:console-platform-db-itest-attendance_console_migration_contract"],
   ["platform-db-code-issuance-pg", "//backend/crates/platform/db:console-platform-db-itest-code_issuance"],
+  ["platform-db-group-of-one-expand-contract-pg", "//backend/crates/platform/db:console-platform-db-itest-group_of_one_expand_contract"],
   ["platform-db-group-of-one-invariant-pg", "//backend/crates/platform/db:console-platform-db-itest-group_of_one_invariant"],
   ["platform-db-group-resolvers-pg", "//backend/crates/platform/db:console-platform-db-itest-group_resolvers"],
   ["platform-db-lifecycle-maker-checker-pg", "//backend/crates/platform/db:console-platform-db-itest-lifecycle_maker_checker"],

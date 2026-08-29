@@ -1,10 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! Mandatory Group-of-one probes for `organizations.group_id` (PR1).
+//! Mandatory Group-of-one probes for `organizations.group_id`.
 //!
 //! After migrate, every organization has a real Group row, a unique membership,
 //! and `group_id` NOT NULL. `console_rt` remains SELECT-only on organizations
-//! and has no raw DML on membership/grants. These assertions are red on clean
-//! main until the mint migration lands.
+//! and has no raw DML or EXECUTE on mint helpers / membership/grants.
 
 use console_kernel_core::OrgId;
 use sqlx::{PgPool, Row};
@@ -353,4 +352,213 @@ async fn t11_console_rt_insert_memberships_and_update_groups_denied(pool: PgPool
         update_err.contains("permission denied"),
         "console_rt UPDATE groups must be denied, got: {update_err}"
     );
+}
+
+/// T14: stale `remove(A, org)` while the org is in B is a no-op (no remint).
+#[sqlx::test(migrations = "./migrations")]
+async fn t14_stale_remove_leaves_org_in_current_group(pool: PgPool) {
+    let org = sqlx::query(
+        "INSERT INTO organizations (slug, name)
+         VALUES ('t14-stay-b', 'T14 Stay in B')
+         RETURNING id, group_id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let org_id: Uuid = org.get("id");
+    let minted: Uuid = org.get("group_id");
+
+    let group_a: Uuid = sqlx::query_scalar("SELECT platform_create_group('t14-group-a', 'T14 A')")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let group_b: Uuid = sqlx::query_scalar("SELECT platform_create_group('t14-group-b', 'T14 B')")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_ne!(group_a, minted);
+
+    let assigned: Uuid = sqlx::query_scalar("SELECT platform_assign_org_to_group($1, $2)")
+        .bind(group_b)
+        .bind(org_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(assigned, org_id);
+    assert_eq!(
+        sqlx::query_scalar::<_, Uuid>("SELECT group_id FROM organizations WHERE id = $1")
+            .bind(org_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        group_b
+    );
+
+    let removed: Uuid = sqlx::query_scalar("SELECT platform_remove_org_from_group($1, $2)")
+        .bind(group_a)
+        .bind(org_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(removed, org_id);
+
+    let after: Uuid = sqlx::query_scalar("SELECT group_id FROM organizations WHERE id = $1")
+        .bind(org_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(after, group_b, "stale remove(A) must not remint out of B");
+
+    let membership_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM group_memberships WHERE org_id = $1")
+            .bind(org_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(membership_count, 1);
+    let membership_group: Uuid =
+        sqlx::query_scalar("SELECT group_id FROM group_memberships WHERE org_id = $1")
+            .bind(org_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(membership_group, group_b);
+}
+
+/// T15: `console_rt` cannot EXECUTE mint helpers or trigger wrappers.
+#[sqlx::test(migrations = "./migrations")]
+async fn t15_console_rt_execute_mint_helpers_denied(pool: PgPool) {
+    for (name, args) in [
+        ("platform_attach_group_of_one", "uuid"),
+        ("platform_mint_group_row", "uuid, text, text"),
+        ("platform_attach_membership", "uuid, uuid"),
+        ("platform_mint_missing_group_of_one", "uuid"),
+        ("organizations_before_insert_mint_group", ""),
+        ("organizations_after_insert_attach_membership", ""),
+    ] {
+        let reg: Option<String> = sqlx::query_scalar("SELECT to_regprocedure($1)::text")
+            .bind(format!("{name}({args})"))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(
+            reg.is_some(),
+            "mint helper {name}({args}) must exist after 0225"
+        );
+        let allowed: bool = sqlx::query_scalar(
+            "SELECT has_function_privilege('console_rt', $1::regprocedure, 'EXECUTE')",
+        )
+        .bind(reg.unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(
+            !allowed,
+            "console_rt must not have EXECUTE on {name}({args})"
+        );
+    }
+
+    const DENIED: &[&str] = &[
+        "SELECT platform_attach_group_of_one('00000000-0000-0000-0000-0000000000a1')",
+        "SELECT platform_mint_group_row('00000000-0000-0000-0000-0000000000a1', 'x', 'ACTIVE')",
+        "SELECT platform_attach_membership('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a1')",
+        "SELECT platform_mint_missing_group_of_one('00000000-0000-0000-0000-0000000000a1')",
+        "SELECT organizations_before_insert_mint_group()",
+        "SELECT organizations_after_insert_attach_membership()",
+    ];
+    for sql in DENIED {
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query(SET_RUNTIME_ROLE)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let err = sqlx::query(*sql)
+            .execute(&mut *tx)
+            .await
+            .expect_err("console_rt must not EXECUTE mint helpers")
+            .to_string();
+        assert!(
+            err.contains("permission denied"),
+            "console_rt EXECUTE must be denied, got: {err} (sql: {sql})"
+        );
+        let _ = tx.rollback().await;
+    }
+}
+
+/// T16: list_groups cardinality covers non-sentinel orgs; leftover empty go- stays listed.
+#[sqlx::test(migrations = "./migrations")]
+async fn t16_list_groups_includes_leftover_empty_group_of_ones(pool: PgPool) {
+    let non_sentinel: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM organizations
+         WHERE id <> '00000000-0000-0000-0000-00000000face'::uuid",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let listed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM platform_list_groups()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(
+        listed >= non_sentinel,
+        "platform_list_groups cardinality {listed} must be >= non-sentinel org count {non_sentinel}"
+    );
+
+    let conglomerate: Uuid =
+        sqlx::query_scalar("SELECT platform_create_group('t16-holdings', 'T16 Holdings')")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let assigned_org = sqlx::query(
+        "INSERT INTO organizations (slug, name)
+         VALUES ('t16-assign-org', 'T16 Assign')
+         RETURNING id, group_id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let assigned_id: Uuid = assigned_org.get("id");
+    let leftover_go: Uuid = assigned_org.get("group_id");
+    sqlx::query_scalar::<_, Uuid>("SELECT platform_assign_org_to_group($1, $2)")
+        .bind(conglomerate)
+        .bind(assigned_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let leftover_listed =
+        sqlx::query("SELECT id, member_count FROM platform_list_groups() WHERE id = $1")
+            .bind(leftover_go)
+            .fetch_optional(&pool)
+            .await
+            .unwrap()
+            .expect("leftover empty go- after assign must remain listed");
+    let leftover_count: i64 = leftover_listed.get("member_count");
+    assert_eq!(leftover_count, 0);
+
+    let deleted = sqlx::query(
+        "INSERT INTO organizations (slug, name)
+         VALUES ('t16-delete-org', 'T16 Delete')
+         RETURNING id, group_id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let deleted_id: Uuid = deleted.get("id");
+    let deleted_go: Uuid = deleted.get("group_id");
+    sqlx::query("DELETE FROM organizations WHERE id = $1")
+        .bind(deleted_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let after_delete =
+        sqlx::query("SELECT id, member_count FROM platform_list_groups() WHERE id = $1")
+            .bind(deleted_go)
+            .fetch_optional(&pool)
+            .await
+            .unwrap()
+            .expect("go-/gN- group must remain listed after owner DELETE of the org");
+    let after_count: i64 = after_delete.get("member_count");
+    assert_eq!(after_count, 0);
 }
