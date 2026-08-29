@@ -244,6 +244,7 @@ TEST_RESOURCE_REQUIREMENTS = {
             'tests/hr_attendance_self_read.rs': 'postgres',
             'tests/hr_ingest_checklist_gate.rs': 'postgres',
             'tests/hr_people_create_api.rs': 'postgres',
+            'tests/intelligence_bind.rs': 'none',
             'tests/logistics_pilot_story.rs': 'postgres',
             'tests/m2_real_engine_drive.rs': 'postgres',
             'tests/maintenance_chain_api.rs': 'postgres',

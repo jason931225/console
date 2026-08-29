@@ -1220,6 +1220,11 @@ fn contains_ai_assist_constructor(source: &str) -> bool {
 }
 
 fn forbids_chat_or_intelligence(path: &str) -> bool {
+    // Exact bind-only loopback route. Prefixes and any other `intelligence`
+    // or `chat` path segment stay forbidden.
+    if path == "/internal/intelligence/bind" {
+        return false;
+    }
     const PREFIXES: &[&str] = &[
         "/v1/chat",
         "/api/v1/chat",
@@ -1332,6 +1337,26 @@ fn ai_assist_action_constructors_are_absent_from_landable_http_surfaces() {
         "Action::{{new,limited,request}}(Feature::AiAssist) must stay off HTTP surfaces: {}",
         hits.join(", ")
     );
+}
+
+#[test]
+fn only_exact_internal_intelligence_bind_is_admitted() {
+    assert!(!forbids_chat_or_intelligence("/internal/intelligence/bind"));
+    for path in [
+        "/v1/chat",
+        "/api/v1/chat",
+        "/api/v1/intelligence",
+        "/api/intelligence",
+        "/intelligence",
+        "/internal/intelligence",
+        "/internal/intelligence/bind/extra",
+        "/api/v1/internal/intelligence/bind",
+    ] {
+        assert!(
+            forbids_chat_or_intelligence(path),
+            "{path} must stay forbidden"
+        );
+    }
 }
 
 #[test]
