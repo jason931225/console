@@ -31,7 +31,10 @@ async fn get_internal_intelligence_bind_succeeds_on_loopback_listen_addr() {
 #[tokio::test]
 async fn get_internal_intelligence_bind_is_absent_when_listen_addr_is_non_loopback() {
     assert_eq!(get(Some("0.0.0.0:8080"), BIND).await, StatusCode::NOT_FOUND);
-    assert_eq!(get(Some("10.0.0.1:8080"), BIND).await, StatusCode::NOT_FOUND);
+    assert_eq!(
+        get(Some("10.0.0.1:8080"), BIND).await,
+        StatusCode::NOT_FOUND
+    );
 }
 
 #[tokio::test]
