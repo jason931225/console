@@ -621,7 +621,7 @@ async fn employee_create_rejects_unknown_org_unit_uuid(pool: PgPool) {
     let refused = post(service, EMPLOYEES_PATH, &token, body).await;
     assert_eq!(
         refused.status,
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
         "{:?}",
         refused.json
     );
