@@ -72,6 +72,13 @@ OPENAPI_DRIFT_SOURCE_PACKAGES = [
     "backend/crates/notifications/rest",
     "backend/crates/orgchange/rest",
     "backend/crates/recruiting/rest",
+    "backend/crates/logistics/rest",
+    "backend/crates/facilities/rest",
+    "backend/crates/production/rest",
+    "backend/crates/inbox/rest",
+    "backend/crates/leave/rest",
+    "backend/crates/consulting/rest",
+    "backend/crates/todos/rest",
 ]
 
 
@@ -104,7 +111,7 @@ RESOURCE_CONFIG = {
         },
         "itests": {
             "tests/openapi_drift.rs": {
-                "srcs": ["src/**/*.rs"],
+                "srcs": ["src/**/*.rs", "Cargo.toml"],
                 "external": OPENAPI_DRIFT_EXTERNAL,
             },
             "tests/workbench_api.rs": {
@@ -119,6 +126,9 @@ RESOURCE_CONFIG = {
                 "srcs": ["slos/**"],
             },
         },
+    },
+    "console-intelligence-application": {
+        "srcs": ["Cargo.toml"],
     },
     "console-platform-authz": {
         "external": {
@@ -374,6 +384,9 @@ TEST_RESOURCE_REQUIREMENTS = {
         },
     },
     'console-action-inbox-application': {
+        'unit': 'none',
+    },
+    'console-intelligence-application': {
         'unit': 'none',
     },
     'console-analytics-quant-service': {

@@ -368,7 +368,7 @@ jobs:
             -p console-attendance-application -p console-compliance-domain -p console-governance-domain \
             -p console-platform-audit-chain -p console-platform-authz \
             -p console-policy-application -p console-policy-domain \
-            -p console-action-inbox-application -p console-attendance-domain -p console-benefit-application \
+            -p console-action-inbox-application -p console-intelligence-application -p console-attendance-domain -p console-benefit-application \
             -p console-benefit-domain -p console-comms-application -p console-comms-domain \
             -p console-dispatch-application -p console-dispatch-domain -p console-docs-application \
             -p console-docs-domain -p console-equipment-domain -p console-erp-domain \

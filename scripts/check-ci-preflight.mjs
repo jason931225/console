@@ -444,6 +444,7 @@ const domainUnitPackages = [
   "console-policy-application",
   "console-policy-domain",
   "console-action-inbox-application",
+  "console-intelligence-application",
   "console-attendance-domain",
   "console-benefit-application",
   "console-benefit-domain",
@@ -1020,7 +1021,7 @@ const requiredJobRunContracts = Object.freeze({
   ],
   "domain-unit": [
     proofDigest("Path-class skip proof", "1fdf99dda32af815824808d703216d2c0cf04a0adc146dd29f24746e549c44e0", { if: skipProofCondition, shell: "bash" }),
-    proofDigest("Domain crate unit tests", "826a7cf674b38f671cf42ded2a8d30fc08f8faf593b6cf20d347f195352a4644", { if: runHeavyCondition }),
+    proofDigest("Domain crate unit tests", "515c0b7236ea73360dc2abd15f05e4d350ed168ae1bd1c7a3acce0d740d2c902", { if: runHeavyCondition }),
   ],
   "backend": [
     proofDigest("Path-class skip proof", "1fdf99dda32af815824808d703216d2c0cf04a0adc146dd29f24746e549c44e0", { if: skipProofCondition, shell: "bash" }),
