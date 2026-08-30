@@ -47,11 +47,11 @@ const ENUM_ANCHORS = [
   "POST /api/v1/inventory/cycle-counts/{count_id}/decision#decision",
 ];
 
-const RESOLVED_FLOOR = 45;
+const RESOLVED_FLOOR = 75;
 const CENSUS_FLOOR = 291;
-const ENUM_RESOLVED_FLOOR = 7;
-const BODY_UNDECIDABLE_MAX = 238;
-const ENUM_UNDECIDABLE_MAX = 15;
+const ENUM_RESOLVED_FLOOR = 10;
+const BODY_UNDECIDABLE_MAX = 208;
+const ENUM_UNDECIDABLE_MAX = 22;
 const REGISTER_VERSION = 1;
 const REGISTER_PATH = "scripts/request-body-contract-undecidable.json";
 const HTTP_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
@@ -86,9 +86,12 @@ const INERT_MODULE_ATTRIBUTES = new Set([
 ]);
 
 // These expressions intentionally cover the concrete first-party route and handler forms. Any
-// new syntax falls into the exact undecidable register instead of being guessed.
+// new syntax falls into the exact undecidable register instead of being guessed. LITERAL_ROUTE
+// is the `.route("/path", …)` sibling of the CONST matcher; `router.route(path, methods)`
+// tables (todos) stay unresolved.
 const CONST_PATH = /pub const ([A-Z0-9_]+): &str =\s*"([^"]+)"/g;
 const ROUTE = /\.route\(\s*([A-Z0-9_]+)\s*,([\s\S]*?)\)\s*,?\s*\)/g;
+const LITERAL_ROUTE = /\.route\(\s*"([^"]+)"\s*,([\s\S]*?)\)\s*,?\s*\)/g;
 const METHOD = /\b(get|post|put|patch|delete)\(\s*([a-z0-9_]+)/g;
 const HANDLER = /async fn ([a-z0-9_]+)\s*\(([\s\S]*?)\)\s*->/g;
 const JSON_BODY = /Json\(\s*\w+\s*\)\s*:\s*Json<\s*((?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*)\s*>/;
@@ -993,6 +996,22 @@ function collectSources(repoRoot) {
           crateQualifier: identity.crateQualifier,
           imports: items.rootImports,
           constName: match[1],
+          literalPath: null,
+          method: method[1],
+          handler: method[2],
+        });
+      }
+    }
+    for (const match of source.matchAll(LITERAL_ROUTE)) {
+      for (const method of match[2].matchAll(METHOD)) {
+        rawRoutes.push({
+          file,
+          identityKey,
+          modulePath: identity.modulePath,
+          crateQualifier: identity.crateQualifier,
+          imports: items.rootImports,
+          constName: null,
+          literalPath: match[1],
           method: method[1],
           handler: method[2],
         });
@@ -1001,9 +1020,12 @@ function collectSources(repoRoot) {
   }
 
   const routes = rawRoutes.map((route) => {
-    const candidates = consts.get(route.constName) ?? [];
-    const local = candidates.filter((candidate) => candidate.identityKey === route.identityKey);
-    const path = local.length === 1 ? local[0].path : candidates.length === 1 ? candidates[0].path : null;
+    let path = route.literalPath;
+    if (path == null) {
+      const candidates = consts.get(route.constName) ?? [];
+      const local = candidates.filter((candidate) => candidate.identityKey === route.identityKey);
+      path = local.length === 1 ? local[0].path : candidates.length === 1 ? candidates[0].path : null;
+    }
     return {
       ...route,
       path,
