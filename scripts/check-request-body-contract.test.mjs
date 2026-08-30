@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   evaluateRequestBodyContract,
   jsonRequestSchema,
+  LITERAL_PATH_ANCHORS,
   renameField,
   renameVariant,
 } from "./check-request-body-contract.mjs";
@@ -145,6 +146,31 @@ function assertLiveCycleKindProbationFinding(root) {
 
 // Both wrapped-const and multi-method route forms, because both appear in the real surface and
 // both have already broken a resolver silently.
+function widgetLiteralCrate({ derive, fields }) {
+  return `use axum::{routing::post, Json, Router};
+
+pub fn router(state: WidgetState) -> Router {
+    Router::new()
+        .route("/api/v1/widgets/{widget_id}/consumptions", post(consume_widget))
+        .with_state(state)
+}
+
+#[derive(Debug, Deserialize)]
+${derive}
+struct ConsumeWidgetBody {
+${fields}
+}
+
+async fn consume_widget(
+    State(state): State<WidgetState>,
+    Path(widget_id): Path<Uuid>,
+    Json(body): Json<ConsumeWidgetBody>,
+) -> Result<Json<WidgetView>, RestError> {
+    todo!()
+}
+`;
+}
+
 function widgetCrate({ derive, fields }) {
   return `use axum::{routing::get, routing::post, Json, Router};
 
@@ -447,6 +473,36 @@ describe("request body contract gate", () => {
 
     assert.deepEqual(unresolvedAnchors, []);
     assert.ok(resolved >= 45, `resolver degraded: expected at least 45 resolved operations, got ${resolved}`);
+  });
+
+  it("resolves a string-literal .route() JSON body, not only a path const", () => {
+    const root = fixture({
+      "backend/crates/widget/rest/src/lib.rs": widgetLiteralCrate({
+        derive: camelDeny,
+        fields: "    quantity_consumed_milli: i64,",
+      }),
+      "backend/openapi/openapi.yaml": widgetSpec({
+        required: ["quantityConsumedMilli"],
+        properties: "quantityConsumedMilli: { type: integer }",
+      }),
+    });
+
+    const { resolved, skipped, findings } = evaluateRequestBodyContract({ repoRoot: root });
+
+    assert.deepEqual(findings, []);
+    assert.equal(resolved, 1, "string-literal .route() must bind the same deny_unknown_fields body as a path const");
+    assert.equal(skipped, 0);
+  });
+
+  it("resolves the named string-literal .route() bodies against this repository", () => {
+    const report = evaluateRequestBodyContract({ repoRoot });
+
+    assert.equal(LITERAL_PATH_ANCHORS.length, 4);
+    assert.deepEqual(
+      report.unresolvedLiteralAnchors,
+      [],
+      `string-literal .route() JSON bodies still undecidable: ${JSON.stringify(report.unresolvedLiteralAnchors)}`,
+    );
   });
 
   it("exits 1 naming the floor when the resolver finds nothing to compare", () => {

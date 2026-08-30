@@ -26,6 +26,17 @@ const ANCHORS = [
   "POST /api/v1/inventory/items/{item_id}/receipts",
 ];
 
+// String-literal `.route("/path", method(handler))` is a first-party form the CONST matcher
+// does not see. These operations have deny_unknown_fields JSON bodies today and must resolve
+// once that syntax is bound. They are checked only when present in the spec so widget
+// fixtures that copy live OpenAPI without those crates still isolate the CONST floor.
+export const LITERAL_PATH_ANCHORS = [
+  "POST /api/v1/org-changes",
+  "POST /api/v1/branches",
+  "POST /api/v1/logistics/asns",
+  "POST /api/v1/recruiting/postings",
+];
+
 const ENUM_ANCHORS = [
   "POST /api/v1/benefit-catalog/items#category",
   "PATCH /api/v1/benefit-catalog/items/{benefit_id}#category",
@@ -1549,12 +1560,17 @@ export function evaluateRequestBodyContract({ repoRoot }) {
     return operationOrder || compareText(left.message, right.message);
   });
 
+  const specOperationIds = new Set(operations.map((candidate) => candidate.operation));
+
   return {
     population: operations.length + routeOnly.size,
     resolved: resolvedOperations.size,
     skipped: bodyUndecidable.length,
     findings,
     unresolvedAnchors: ANCHORS.filter((anchor) => !resolvedOperations.has(anchor)),
+    unresolvedLiteralAnchors: LITERAL_PATH_ANCHORS.filter((anchor) => (
+      specOperationIds.has(anchor) && !resolvedOperations.has(anchor)
+    )),
     enumCandidates,
     enumResolved,
     enumSkipped: enumUndecidable.length,
@@ -1574,6 +1590,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   for (const finding of report.registerFindings) console.error(finding);
   for (const anchor of report.unresolvedAnchors) {
     console.error(`anchor operation ${anchor} no longer resolves — the resolver has silently degraded`);
+  }
+  for (const anchor of report.unresolvedLiteralAnchors) {
+    console.error(`literal-path operation ${anchor} is still undecidable — `
+      + "string-literal .route() JSON bodies are a named hole");
   }
   for (const anchor of report.unresolvedEnumAnchors) {
     console.error(`enum anchor ${anchor} no longer resolves — enum coverage has silently degraded`);
@@ -1602,6 +1622,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const failed = report.findings.length > 0
     || report.registerFindings.length > 0
     || report.unresolvedAnchors.length > 0
+    || report.unresolvedLiteralAnchors.length > 0
     || report.unresolvedEnumAnchors.length > 0
     || belowFloor
     || belowCensus
