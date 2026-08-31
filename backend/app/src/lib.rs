@@ -2639,7 +2639,8 @@ impl EmploymentTransferPort for PgEmploymentTransferPort {
                     | EmploymentError::UnknownOrgUnit(_)
                     | EmploymentError::UnknownJobPosition(_)
                     | EmploymentError::UnboundEmployeeForTransfer { .. }
-                    | EmploymentError::OrgUnitRefNotUuid => {
+                    | EmploymentError::OrgUnitRefNotUuid
+                    | EmploymentError::InvertedRange => {
                         KernelError::validation(error.to_string())
                     }
                 };
