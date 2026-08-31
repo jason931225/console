@@ -590,7 +590,7 @@ const domainUnitOpenApiGenCommands = [
     "--bin",
     "console-openapi-gen",
   ],
-  ["git", "diff", "--exit-code", "--", "backend/openapi/openapi.yaml"],
+  ["git", "diff", "--exit-code", "--", "backend/openapi/openapi.yaml", "backend/crates/ontology/rest/src/typed_action_generated.rs"],
 ];
 const domainUnitExpectedCommands = [
   [...domainCargoPrefix, "--lib", ...domainUnitPackages.flatMap((pkg) => ["-p", pkg])],
@@ -606,7 +606,8 @@ const domainUnitExpectedCommands = [
       ...tests.flatMap((test) => ["--test", test]),
     ];
     // b4z: after the fragment oracle, lock the regen+diff gate so openapi.yaml
-    // cannot be hand-edited without regenerating from Fragments.
+    // and typed_action_generated.rs cannot be hand-edited without regenerating
+    // from the semantic manifest + Fragments.
     if (pkg === "console-todos-rest" && tests.includes("openapi_fragment")) {
       return [cargoTest, ...domainUnitOpenApiGenCommands];
     }
