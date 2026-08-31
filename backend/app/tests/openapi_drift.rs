@@ -1394,7 +1394,7 @@ fn intelligence_and_chat_http_surfaces_are_absent() {
                 "{name} must not nest shipping UI under /_ui"
             );
         }
-        if name == "app src/lib.rs" {
+        if *name == "app src/lib.rs" {
             assert!(
                 source.contains(".merge(console_payroll_ui::pkg_router())"),
                 "{name} must still merge console_payroll_ui::pkg_router()"
