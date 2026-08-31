@@ -6448,19 +6448,27 @@ const ONTOLOGY_FRAGMENT_SCHEMAS: &[NamedYaml] = &[
     },
     NamedYaml {
         name: "OrganizationCreateJobPositionInput",
-        body: include_str!("../../ontology/rest/openapi/schemas/OrganizationCreateJobPositionInput.yaml"),
+        body: include_str!(
+            "../../ontology/rest/openapi/schemas/OrganizationCreateJobPositionInput.yaml"
+        ),
     },
     NamedYaml {
         name: "OrganizationCreateOrgUnitInput",
-        body: include_str!("../../ontology/rest/openapi/schemas/OrganizationCreateOrgUnitInput.yaml"),
+        body: include_str!(
+            "../../ontology/rest/openapi/schemas/OrganizationCreateOrgUnitInput.yaml"
+        ),
     },
     NamedYaml {
         name: "OrganizationReviseJobPositionInput",
-        body: include_str!("../../ontology/rest/openapi/schemas/OrganizationReviseJobPositionInput.yaml"),
+        body: include_str!(
+            "../../ontology/rest/openapi/schemas/OrganizationReviseJobPositionInput.yaml"
+        ),
     },
     NamedYaml {
         name: "OrganizationReviseOrgUnitInput",
-        body: include_str!("../../ontology/rest/openapi/schemas/OrganizationReviseOrgUnitInput.yaml"),
+        body: include_str!(
+            "../../ontology/rest/openapi/schemas/OrganizationReviseOrgUnitInput.yaml"
+        ),
     },
     NamedYaml {
         name: "OrgUnit",
