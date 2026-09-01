@@ -69,9 +69,9 @@ describe("check-current-authority-palantir-contract", () => {
   it("reads live body-gate constants from the gate source", () => {
     const constants = bodyGateConstants(ARTIFACT_BODIES[BODY_GATE_REL]);
     assert.deepEqual(constants, {
-      resolvedFloor: 91,
+      resolvedFloor: 92,
       censusFloor: 291,
-      undecidableMax: 190,
+      undecidableMax: 189,
     });
   });
 
